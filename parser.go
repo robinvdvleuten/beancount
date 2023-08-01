@@ -1,62 +1,30 @@
-package main
+package beancount
 
-import (
-	"github.com/alecthomas/participle/v2"
-	"github.com/alecthomas/participle/v2/lexer"
-)
+func parse(buffer string) (*parser, error) {
+	p := &parser{
+		Buffer: buffer,
 
-type Beancount struct {
-	Commodities  []*Commodity   `(@@`
-	Accounts     []*Account     ` | @@`
-	Transactions []*Transaction ` | @@ | ~ignore)*`
+		a: &AST{},
+	}
+
+	if err := p.Init(); err != nil {
+		return nil, err
+	}
+
+	if err := p.Parse(); err != nil {
+		return nil, err
+	}
+
+	p.Execute()
+
+	return p, nil
 }
 
-type Commodity struct {
-	Date      string `@Date`
-	Directive string `"commodity"`
-	Currency  string `@Ident`
+func Parse(buffer string) (*AST, error) {
+	p, err := parse(buffer)
+	if err != nil {
+		return nil, err
+	}
+
+	return p.a, nil
 }
-
-type Account struct {
-	Date                 string   `@Date`
-	Directive            string   `@("close" | "open")`
-	Name                 string   `@(Ident (":" Ident)*)`
-	ConstraintCurrencies []string `@Ident*`
-}
-
-type Transaction struct {
-	Date      string `@Date`
-	Directive string `( "txn"`
-	Flag      string ` | @("*" | "!") )`
-	Payee     string `@(String (?= String))?`
-	Narration string `@String?`
-
-	Postings *[]Posting `@@*`
-}
-
-type Posting struct {
-	Account string  `@(Ident (":" Ident)*)`
-	Amount  *Amount `@@`
-	Price   *Amount `( "@" "@"? @@ )?`
-}
-
-type Amount struct {
-	Value    float64 `@Number`
-	Currency string  `@Ident`
-}
-
-var (
-	beancountLexer = lexer.MustSimple([]lexer.SimpleRule{
-		{"Date", `\d\d\d\d-\d\d-\d\d`},
-		{"Ident", `[a-zA-Z](\w(-\w)?)*`},
-		{"Number", `[-+]?(\d*\.)?\d+`},
-		{"String", `"[^"]*"`},
-		{"Punct", `[-.,:;*!@#({)}]`},
-		{"whitespace", `[\s\n]+`},
-		{"ignore", `[\s\S]*`},
-	})
-
-	parser = participle.MustBuild[Beancount](
-		participle.Lexer(beancountLexer),
-	)
-)

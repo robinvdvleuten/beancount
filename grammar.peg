@@ -1,0 +1,124 @@
+package beancount
+
+type parser Peg {
+    a *AST
+    d Directive
+    m *Metadata
+    o *Option
+    p *Posting
+    i *Include
+}
+
+Beancount <- 
+    ( Comment / Directive / Option / Include / . )*
+
+Directive 
+    <- Open
+     / Close
+     / Commodity
+     / Transaction
+
+Open <-
+    { p.d = &Open{BookingMethod: "STRICT"}; p.a.Directives = append(p.a.Directives, p.d) }
+    < Date > ' ' 'open' { p.d.(*Open).Date = text }
+    _ < Account > { p.d.(*Open).Account = text }
+    _ < Currency (',' ' '? Currency)* > { p.d.(*Open).ConstraintCurrencies = strings.Split(strings.ReplaceAll(text, " ", ""), ",") }
+    (_ < 'STRICT' / 'NONE' > { p.d.(*Open).BookingMethod = text })?
+    _ Comment?
+    _ ( Metadata { p.d.AddMetadata(p.m) } )*
+    _
+
+Close <-
+    { p.d = &Close{}; p.a.Directives = append(p.a.Directives, p.d) }
+    < Date > ' ' 'close' { p.d.(*Close).Date = text }
+    _ < Account > { p.d.(*Close).Account = text }
+    _ Comment?
+    _ ( Metadata { p.d.AddMetadata(p.m) } )*
+    _
+
+Commodity <- 
+    { p.d = &Commodity{}; p.a.Directives = append(p.a.Directives, p.d) }
+    < Date > { p.d.(*Commodity).Date = text }
+    _ 'commodity' _ < Currency > { p.d.(*Commodity).Currency = text }
+    _ Comment?
+    _ ( Metadata { p.d.AddMetadata(p.m) } )*
+    _
+
+Transaction <-
+    { p.d = &Transaction{Flag: "*"}; p.a.Directives = append(p.a.Directives, p.d) }
+    < Date > { p.d.(*Transaction).Date = text }
+    ' ' ( 'txn' / (< Flag > { p.d.(*Transaction).Flag = text } ) )
+    (' "' < ( !'"' . )+ > '"' &' "' { p.d.(*Transaction).Payee = text } )?
+    (' "' < ( !'"' . )+ > '"' { p.d.(*Transaction).Narration = text } )?
+    _ Comment?
+    _ ( Metadata { p.d.AddMetadata(p.m) } )*
+    _ Posting*
+    _
+
+Posting <-
+    { p.p = &Posting{Flag: p.d.(*Transaction).Flag}; p.d.(*Transaction).Postings = append(p.d.(*Transaction).Postings, p.p) }
+    ( < Flag > { p.p.Flag = text } )?
+    _ < Account > { p.p.Account = text }
+    (
+        _ < Number > { p.p.Amount = &Amount{Value: text} } 
+        _ < Currency > { p.p.Amount.Currency = text }
+    )?
+    ( 
+        _ '{'
+        _ < Number > { p.p.Cost = &Amount{Value: text} }
+        _ < Currency > { p.p.Cost.Currency = text }
+        _ '}'
+    )?
+    ( 
+        _ < '@' '@'? > { p.p.Price = &Price{Total: text == "@@"} }
+        _ < Number > { p.p.Price.Value = text }
+        _ < Currency > { p.p.Price.Currency = text }
+    )?
+    _ Comment?
+    _ ( Metadata { p.p.AddMetadata(p.m) } )*
+    _
+
+Option <-
+    'option' { p.o = &Option{}; p.a.Options = append(p.a.Options, p.o) }
+    ' ' '"' < ( !'"' . )+ > '"' { p.o.Name = text }
+    ' ' '"' < ( !'"' . )+ > '"' { p.o.Value = text }
+    _ Comment?
+    _
+
+Include <-
+    'include' { p.i = &Include{}; p.a.Includes = append(p.a.Includes, p.i) }
+    ' ' '"' < ( !'"' . )+ > '"' { p.i.Filename = text }
+    _
+
+Comment
+    <- ';' ( !EOL . )* EOL
+
+Metadata <-
+    { p.m = &Metadata{}; }
+    < [a-z]+ ( [[a-z]] / [0-9] / '-' / '_' )* > { p.m.Key = text }
+    ':' _ '"' < ( !'"' . )+ > '"' { p.m.Value = text }
+    _
+
+Account
+    <- [A-Z] [[a-z]]* ( ':' [[a-z]]+ ( '-' [[a-z]]+ )? )*
+
+Currency 
+    <- [A-Z]+
+
+Date 
+    <- [0-9][0-9][0-9][0-9] '-' [0-9][0-9] '-' [0-9][0-9]
+
+Flag 
+    <- '*' / '!'
+
+Number 
+    <- ('+' / '-')? ( [0-9]* '.' )? [0-9]+
+
+_
+    <- Whitespace*
+
+Whitespace
+    <- ' ' / '\t' / EOL
+
+EOL 
+    <- '\n'
