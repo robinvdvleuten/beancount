@@ -1,0 +1,4 @@
+issues:
+  exclude:
+    # Common issues caused by Participle related tags.
+    - 'uses unkeyed fields'
