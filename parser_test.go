@@ -1,6 +1,7 @@
 package beancount
 
 import (
+	"os"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -274,6 +275,14 @@ func TestParse(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestParseExample(t *testing.T) {
+	data, err := os.ReadFile("./testdata/example.beancount")
+	assert.NoError(t, err)
+
+	_, err = ParseBytes(data)
+	assert.NoError(t, err)
 }
 
 func beancount(directives ...Directive) *AST {
