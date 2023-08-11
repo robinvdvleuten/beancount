@@ -48,7 +48,7 @@ func (c *Commodity) Directive() string {
 type Open struct {
 	Date                 string   `parser:"@Date 'open'"`
 	Account              string   `parser:"@Account"`
-	ConstraintCurrencies []string `parser:"@Ident (',' @Ident)*"`
+	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
 	BookingMethod        string   `parser:"@('STRICT' | 'NONE')?"`
 
 	withMetadata `parser:""`

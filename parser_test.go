@@ -18,6 +18,15 @@ func TestParse(t *testing.T) {
 		{
 			name: "Open",
 			beancount: `
+				2014-05-01 open Equity:Opening-Balances
+			`,
+			expected: beancount(
+				open("2014-05-01", "Equity:Opening-Balances", nil, ""),
+			),
+		},
+		{
+			name: "OpenWithConstraintCurrencies",
+			beancount: `
 				2014-05-01 open Liabilities:CreditCard:CapitalOne     USD
 			`,
 			expected: beancount(
