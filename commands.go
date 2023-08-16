@@ -3,6 +3,7 @@ package beancount
 import (
 	"github.com/alecthomas/kong"
 	"github.com/alecthomas/repr"
+	"github.com/robinvdvleuten/beancount/parser"
 )
 
 type CheckCmd struct {
@@ -10,7 +11,7 @@ type CheckCmd struct {
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
-	ast, err := ParseBytes(cmd.File)
+	ast, err := parser.ParseBytes(cmd.File)
 	if err != nil {
 		return err
 	}

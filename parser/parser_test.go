@@ -1,4 +1,4 @@
-package beancount
+package parser
 
 import (
 	"os"
@@ -397,7 +397,7 @@ func TestParse(t *testing.T) {
 }
 
 func TestParseExample(t *testing.T) {
-	data, err := os.ReadFile("./testdata/example.beancount")
+	data, err := os.ReadFile("../testdata/example.beancount")
 	assert.NoError(t, err)
 
 	_, err = ParseBytes(data)

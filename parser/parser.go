@@ -1,6 +1,4 @@
-//go:generate peg -inline -switch grammar.peg
-
-package beancount
+package parser
 
 import (
 	"io"
