@@ -105,6 +105,19 @@ var _ Directive = &Pad{}
 func (p *Pad) date() *Date       { return p.Date }
 func (p *Pad) Directive() string { return "pad" }
 
+type Note struct {
+	Date        *Date  `parser:"@Date 'note'"`
+	Account     string `parser:"@Account"`
+	Description string `parser:"@String"`
+
+	withMetadata
+}
+
+var _ Directive = &Note{}
+
+func (n *Note) date() *Date       { return n.Date }
+func (n *Note) Directive() string { return "note" }
+
 type Transaction struct {
 	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!' | 'P') )"`
@@ -183,7 +196,7 @@ var (
 		participle.Lexer(lex),
 		participle.Unquote("String"),
 		participle.Elide("Comment", "Whitespace"),
-		participle.Union[Directive](&Commodity{}, &Open{}, &Close{}, &Balance{}, &Pad{}, &Transaction{}),
+		participle.Union[Directive](&Commodity{}, &Open{}, &Close{}, &Balance{}, &Pad{}, &Note{}, &Transaction{}),
 		participle.UseLookahead(2),
 	)
 )

@@ -108,6 +108,15 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Note",
+			beancount: `
+				2013-11-03 note Liabilities:CreditCard "Called about fraudulent card."
+			`,
+			expected: beancount(
+				note("2013-11-03", "Liabilities:CreditCard", "Called about fraudulent card."),
+			),
+		},
+		{
 			name: "Transaction",
 			beancount: `
 				2014-05-05 txn "Cafe Mogador" "Lamb tagine with wine"
@@ -390,6 +399,10 @@ func balance(d string, account string, amount *Amount) *Balance {
 
 func pad(d string, account string, accountPad string) *Pad {
 	return &Pad{Date: date(d), Account: account, AccountPad: accountPad}
+}
+
+func note(d string, account string, description string) *Note {
+	return &Note{Date: date(d), Account: account, Description: description}
 }
 
 func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {
