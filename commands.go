@@ -10,12 +10,12 @@ type CheckCmd struct {
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
-	b, err := ParseBytes(cmd.File)
+	ast, err := ParseBytes(cmd.File)
 	if err != nil {
 		return err
 	}
 
-	repr.Println(b)
+	repr.Println(ast)
 
 	return nil
 }

@@ -4,15 +4,22 @@ package beancount
 
 import (
 	"io"
+	"sort"
 	"time"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 )
 
+type Directives []Directive
+
+func (d Directives) Len() int           { return len(d) }
+func (d Directives) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
+func (d Directives) Less(i, j int) bool { return d[i].date().Before(time.Time(d[j].date().Time)) }
+
 type AST struct {
-	Directives []Directive `parser:"(@@"`
-	Options    []*Option   `parser:"| @@ | ~ignore)*"`
+	Directives Directives `parser:"(@@"`
+	Options    []*Option  `parser:"| @@ | ~ignore)*"`
 }
 
 type WithMetadata interface {
@@ -30,6 +37,7 @@ func (w *withMetadata) AddMetadata(m ...*Metadata) {
 type Directive interface {
 	WithMetadata
 
+	date() *Date
 	Directive() string
 }
 
@@ -42,9 +50,8 @@ type Commodity struct {
 
 var _ Directive = &Commodity{}
 
-func (c *Commodity) Directive() string {
-	return "commodity"
-}
+func (c *Commodity) date() *Date       { return c.Date }
+func (c *Commodity) Directive() string { return "commodity" }
 
 type Open struct {
 	Date                 *Date    `parser:"@Date 'open'"`
@@ -57,9 +64,8 @@ type Open struct {
 
 var _ Directive = &Open{}
 
-func (o *Open) Directive() string {
-	return "open"
-}
+func (o *Open) date() *Date       { return o.Date }
+func (o *Open) Directive() string { return "open" }
 
 type Close struct {
 	Date    *Date  `parser:"@Date 'close'"`
@@ -70,9 +76,8 @@ type Close struct {
 
 var _ Directive = &Close{}
 
-func (c *Close) Directive() string {
-	return "close"
-}
+func (c *Close) date() *Date       { return c.Date }
+func (c *Close) Directive() string { return "close" }
 
 type Transaction struct {
 	Date      *Date  `parser:"@Date ('txn' | "`
@@ -87,9 +92,8 @@ type Transaction struct {
 
 var _ Directive = &Transaction{}
 
-func (t *Transaction) Directive() string {
-	return "transaction"
-}
+func (t *Transaction) date() *Date       { return t.Date }
+func (t *Transaction) Directive() string { return "transaction" }
 
 type Posting struct {
 	Flag    string  `parser:"@('*' | '!')?"`
@@ -165,7 +169,7 @@ func Parse(r io.Reader) (*AST, error) {
 		return nil, err
 	}
 
-	return ast, nil
+	return ast, SortDirectives(ast)
 }
 
 // ParseString parses AST from a string.
@@ -175,7 +179,7 @@ func ParseString(str string) (*AST, error) {
 		return nil, err
 	}
 
-	return ast, nil
+	return ast, SortDirectives(ast)
 }
 
 // ParseBytes parses AST from bytes.
@@ -185,5 +189,13 @@ func ParseBytes(data []byte) (*AST, error) {
 		return nil, err
 	}
 
-	return ast, nil
+	return ast, SortDirectives(ast)
+}
+
+// SortDirectives sort all directives by their parsed date.
+//
+// This is called automatically during Parse*(), but can be called on a manually constructed AST.
+func SortDirectives(ast *AST) error {
+	sort.Sort(ast.Directives)
+	return nil
 }

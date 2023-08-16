@@ -195,6 +195,29 @@ func TestParse(t *testing.T) {
 			expected: beancount(),
 		},
 		{
+			name: "SortDirectives",
+			beancount: `
+				1980-05-12 open Equity:Opening-Balances
+
+				1792-01-01 commodity USD
+
+				2019-01-01 txn
+					Assets:US:BofA:Checking  4135.73 USD
+					Equity:Opening-Balances
+
+				2018-01-01 open Assets:US:BofA:Checking USD
+			`,
+			expected: beancount(
+				commodity("1792-01-01", "USD"),
+				open("1980-05-12", "Equity:Opening-Balances", nil, ""),
+				open("2018-01-01", "Assets:US:BofA:Checking", []string{"USD"}, ""),
+				transaction("2019-01-01", "", "", "",
+					posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, nil),
+					posting("Equity:Opening-Balances", "", nil, nil, nil),
+				),
+			),
+		},
+		{
 			name: "Kitchensink",
 			beancount: `
 				;; -*- mode: org; mode: beancount; -*-
@@ -210,9 +233,13 @@ func TestParse(t *testing.T) {
 					export: "CASH"
 					name: "US Dollar"
 
+				* Equity Accounts
+
+				1980-05-12 open Equity:Opening-Balances
+
 				* Accounts
 
-				2019-01-01 open Equity:Opening-Balances USD
+				2019-01-01 open Assets:US:BofA:Checking USD
 
 				* Transactions
 
@@ -243,7 +270,8 @@ func TestParse(t *testing.T) {
 						meta("export", "CASH"),
 						meta("name", "US Dollar"),
 					),
-					open("2019-01-01", "Equity:Opening-Balances", []string{"USD"}, ""),
+					open("1980-05-12", "Equity:Opening-Balances", nil, ""),
+					open("2019-01-01", "Assets:US:BofA:Checking", []string{"USD"}, ""),
 					transaction("2019-01-01", "", "", "",
 						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, nil),
 						posting("Equity:Opening-Balances", "", amount("-4135.73", "USD"), nil, nil),
