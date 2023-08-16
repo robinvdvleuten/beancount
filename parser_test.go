@@ -458,7 +458,11 @@ func amount(value string, currency string) *Amount {
 
 func date(value string) *Date {
 	d := &Date{}
-	d.Capture([]string{value})
+
+	if err := d.Capture([]string{value}); err != nil {
+		panic(err)
+	}
+
 	return d
 }
 
