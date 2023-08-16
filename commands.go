@@ -1,23 +1,16 @@
 package beancount
 
 import (
-	"os"
-
 	"github.com/alecthomas/kong"
 	"github.com/alecthomas/repr"
 )
 
 type CheckCmd struct {
-	Filename string `help:"Beancount input filename." arg:"" type:"existingfile"`
+	File []byte `help:"Beancount input filename." arg:"" type:"filecontent"`
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
-	raw, err := os.ReadFile(cmd.Filename)
-	if err != nil {
-		return err
-	}
-
-	b, err := ParseBytes(raw)
+	b, err := ParseBytes(cmd.File)
 	if err != nil {
 		return err
 	}
