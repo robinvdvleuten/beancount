@@ -76,6 +76,38 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Balance",
+			beancount: `
+				2021-01-02 balance Assets:US:BofA:Checking        3793.56 USD 
+			`,
+			expected: beancount(
+				balance("2021-01-02", "Assets:US:BofA:Checking", amount("3793.56", "USD")),
+			),
+		},
+		{
+			name: "BalanceMultipleCommodities",
+			beancount: `
+				; Check cash balances from wallet
+				2014-08-09 balance Assets:Cash     562.00 USD
+				2014-08-09 balance Assets:Cash     210.00 CAD
+				2014-08-09 balance Assets:Cash      60.00 EUR
+			`,
+			expected: beancount(
+				balance("2014-08-09", "Assets:Cash", amount("562.00", "USD")),
+				balance("2014-08-09", "Assets:Cash", amount("210.00", "CAD")),
+				balance("2014-08-09", "Assets:Cash", amount("60.00", "EUR")),
+			),
+		},
+		{
+			name: "Pad",
+			beancount: `
+				2002-01-17 pad Assets:US:BofA:Checking Equity:Opening-Balances
+			`,
+			expected: beancount(
+				pad("2002-01-17", "Assets:US:BofA:Checking", "Equity:Opening-Balances"),
+			),
+		},
+		{
 			name: "Transaction",
 			beancount: `
 				2014-05-05 txn "Cafe Mogador" "Lamb tagine with wine"
@@ -174,6 +206,20 @@ func TestParse(t *testing.T) {
 				transaction("2014-02-11", "*", "", "Bought shares of S&P 500",
 					posting("Assets:ETrade:IVV", "", amount("10", "IVV"), nil, amount("183.07", "USD")),
 					posting("Assets:ETrade:Cash", "", amount("-1830.70", "USD"), nil, nil),
+				),
+			),
+		},
+		{
+			name: "TransactionWithPadding",
+			beancount: `
+				2002-01-17 P "(Padding inserted for balance of 987.34 USD)"
+					Assets:US:BofA:Checking        987.34 USD
+					Equity:Opening-Balances       -987.34 USD
+			`,
+			expected: beancount(
+				transaction("2002-01-17", "P", "", "(Padding inserted for balance of 987.34 USD)",
+					posting("Assets:US:BofA:Checking", "", amount("987.34", "USD"), nil, nil),
+					posting("Equity:Opening-Balances", "", amount("-987.34", "USD"), nil, nil),
 				),
 			),
 		},
@@ -336,6 +382,14 @@ func close(d string, account string) *Close {
 
 func commodity(d string, currency string) *Commodity {
 	return &Commodity{Date: date(d), Currency: currency}
+}
+
+func balance(d string, account string, amount *Amount) *Balance {
+	return &Balance{Date: date(d), Account: account, Amount: amount}
+}
+
+func pad(d string, account string, accountPad string) *Pad {
+	return &Pad{Date: date(d), Account: account, AccountPad: accountPad}
 }
 
 func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {

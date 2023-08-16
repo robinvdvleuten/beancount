@@ -79,9 +79,35 @@ var _ Directive = &Close{}
 func (c *Close) date() *Date       { return c.Date }
 func (c *Close) Directive() string { return "close" }
 
+type Balance struct {
+	Date    *Date   `parser:"@Date 'balance'"`
+	Account string  `parser:"@Account"`
+	Amount  *Amount `parser:"@@"`
+
+	withMetadata
+}
+
+var _ Directive = &Balance{}
+
+func (b *Balance) date() *Date       { return b.Date }
+func (b *Balance) Directive() string { return "balance" }
+
+type Pad struct {
+	Date       *Date  `parser:"@Date 'pad'"`
+	Account    string `parser:"@Account"`
+	AccountPad string `parser:"@Account"`
+
+	withMetadata
+}
+
+var _ Directive = &Pad{}
+
+func (p *Pad) date() *Date       { return p.Date }
+func (p *Pad) Directive() string { return "pad" }
+
 type Transaction struct {
 	Date      *Date  `parser:"@Date ('txn' | "`
-	Flag      string `parser:"@('*' | '!') )"`
+	Flag      string `parser:"@('*' | '!' | 'P') )"`
 	Payee     string `parser:"@(String (?= String))?"`
 	Narration string `parser:"@String?"`
 
@@ -157,7 +183,7 @@ var (
 		participle.Lexer(lex),
 		participle.Unquote("String"),
 		participle.Elide("Comment", "Whitespace"),
-		participle.Union[Directive](&Commodity{}, &Open{}, &Close{}, &Transaction{}),
+		participle.Union[Directive](&Commodity{}, &Open{}, &Close{}, &Balance{}, &Pad{}, &Transaction{}),
 		participle.UseLookahead(2),
 	)
 )
