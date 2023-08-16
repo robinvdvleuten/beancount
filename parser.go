@@ -131,6 +131,19 @@ var _ Directive = &Document{}
 func (d *Document) date() *Date       { return d.Date }
 func (d *Document) Directive() string { return "document" }
 
+type Price struct {
+	Date      *Date   `parser:"@Date 'price'"`
+	Commodity string  `parser:"@Ident"`
+	Amount    *Amount `parser:"@@"`
+
+	withMetadata
+}
+
+var _ Directive = &Price{}
+
+func (p *Price) date() *Date       { return p.Date }
+func (p *Price) Directive() string { return "price" }
+
 type Transaction struct {
 	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!' | 'P') )"`
@@ -212,6 +225,7 @@ var (
 			&Pad{},
 			&Note{},
 			&Document{},
+			&Price{},
 			&Transaction{},
 		),
 		participle.UseLookahead(2),

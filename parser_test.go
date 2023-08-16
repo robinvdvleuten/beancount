@@ -126,6 +126,15 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Price",
+			beancount: `
+				2014-07-09 price HOOL  579.18 USD
+			`,
+			expected: beancount(
+				price("2014-07-09", "HOOL", amount("579.18", "USD")),
+			),
+		},
+		{
 			name: "Transaction",
 			beancount: `
 				2014-05-05 txn "Cafe Mogador" "Lamb tagine with wine"
