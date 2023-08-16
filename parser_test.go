@@ -298,20 +298,20 @@ func beancount(directives ...Directive) *AST {
 	return &AST{Directives: directives}
 }
 
-func open(date string, account string, constraintCurrencies []string, bookingMethod string) *Open {
-	return &Open{Date: date, Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
+func open(d string, account string, constraintCurrencies []string, bookingMethod string) *Open {
+	return &Open{Date: date(d), Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
 }
 
-func close(date string, account string) *Close {
-	return &Close{Date: date, Account: account}
+func close(d string, account string) *Close {
+	return &Close{Date: date(d), Account: account}
 }
 
-func commodity(date string, currency string) *Commodity {
-	return &Commodity{Date: date, Currency: currency}
+func commodity(d string, currency string) *Commodity {
+	return &Commodity{Date: date(d), Currency: currency}
 }
 
-func transaction(date string, flag string, payee string, narration string, postings ...*Posting) *Transaction {
-	return &Transaction{Date: date, Flag: flag, Payee: payee, Narration: narration, Postings: postings}
+func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {
+	return &Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
 }
 
 func posting(account string, flag string, amount *Amount, price *Price, cost *Amount) *Posting {
@@ -324,6 +324,12 @@ func price(value string, currency string, total bool) *Price {
 
 func amount(value string, currency string) *Amount {
 	return &Amount{Value: value, Currency: currency}
+}
+
+func date(value string) *Date {
+	d := &Date{}
+	d.Capture([]string{value})
+	return d
 }
 
 func option(name string, value string) *Option {

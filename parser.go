@@ -4,6 +4,7 @@ package beancount
 
 import (
 	"io"
+	"time"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
@@ -33,7 +34,7 @@ type Directive interface {
 }
 
 type Commodity struct {
-	Date     string `parser:"@Date 'commodity'"`
+	Date     *Date  `parser:"@Date 'commodity'"`
 	Currency string `parser:"@Ident"`
 
 	withMetadata
@@ -46,7 +47,7 @@ func (c *Commodity) Directive() string {
 }
 
 type Open struct {
-	Date                 string   `parser:"@Date 'open'"`
+	Date                 *Date    `parser:"@Date 'open'"`
 	Account              string   `parser:"@Account"`
 	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
 	BookingMethod        string   `parser:"@('STRICT' | 'NONE')?"`
@@ -61,7 +62,7 @@ func (o *Open) Directive() string {
 }
 
 type Close struct {
-	Date    string `parser:"@Date 'close'"`
+	Date    *Date  `parser:"@Date 'close'"`
 	Account string `parser:"@Account"`
 
 	withMetadata
@@ -74,7 +75,7 @@ func (c *Close) Directive() string {
 }
 
 type Transaction struct {
-	Date      string `parser:"@Date ('txn' | "`
+	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!') )"`
 	Payee     string `parser:"@(String (?= String))?"`
 	Narration string `parser:"@String?"`
@@ -109,6 +110,20 @@ type Price struct {
 	Total bool `parser:"('@' | @'@@')"`
 
 	Amount
+}
+
+type Date struct {
+	time.Time
+}
+
+func (d *Date) Capture(values []string) error {
+	t, err := time.Parse("2006-01-02", values[0])
+	if err != nil {
+		return err
+	}
+
+	d.Time = t
+	return nil
 }
 
 type Metadata struct {
