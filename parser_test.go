@@ -134,8 +134,8 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2014-05-05", "", "Cafe Mogador", "Lamb tagine with wine",
-					posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, nil),
-					posting("Expenses:Restaurant", "", nil, nil, nil),
+					posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, false, nil),
+					posting("Expenses:Restaurant", "", nil, nil, false, nil),
 				),
 			),
 		},
@@ -147,7 +147,7 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2014-05-05", "!", "", "Lamb tagine with wine",
-					posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, nil),
+					posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, false, nil),
 				),
 			),
 		},
@@ -159,7 +159,7 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2014-05-05", "*", "", "Lamb tagine with wine",
-					posting("Liabilities:CreditCard:CapitalOne", "!", amount("-37.45", "USD"), nil, nil),
+					posting("Liabilities:CreditCard:CapitalOne", "!", amount("-37.45", "USD"), nil, false, nil),
 				),
 			),
 		},
@@ -172,8 +172,8 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2014-03-19", "*", "Acme Corp", "Bi-monthly salary payment",
-					posting("Assets:MyBank:Checking", "", amount("3062.68", "USD"), nil, nil),
-					posting("Income:AcmeCorp:Salary", "", amount("-4615.38", "USD"), nil, nil),
+					posting("Assets:MyBank:Checking", "", amount("3062.68", "USD"), nil, false, nil),
+					posting("Income:AcmeCorp:Salary", "", amount("-4615.38", "USD"), nil, false, nil),
 				),
 			),
 		},
@@ -190,10 +190,10 @@ func TestParse(t *testing.T) {
 				withMeta(
 					transaction("2013-08-26", "*", "", "Buying some shares of Hooli",
 						withMeta(
-							posting("Assets:BTrade:HOOLI", "", amount("10", "HOOL"), price("498.45", "USD", false), nil),
+							posting("Assets:BTrade:HOOLI", "", amount("10", "HOOL"), amount("498.45", "USD"), false, nil),
 							meta("decision", "scheduled"),
 						),
-						posting("Assets:BTrade:Cash", "", nil, nil, nil),
+						posting("Assets:BTrade:Cash", "", nil, nil, false, nil),
 					),
 					meta("statement", "confirmation-826453.pdf"),
 				),
@@ -208,8 +208,8 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2012-11-03", "*", "", "Transfer to account in Canada",
-					posting("Assets:MyBank:Checking", "", amount("-400.00", "USD"), price("436.01", "CAD", true), nil),
-					posting("Assets:FR:SocGen:Checking", "", amount("436.01", "CAD"), nil, nil),
+					posting("Assets:MyBank:Checking", "", amount("-400.00", "USD"), amount("436.01", "CAD"), true, nil),
+					posting("Assets:FR:SocGen:Checking", "", amount("436.01", "CAD"), nil, false, nil),
 				),
 			),
 		},
@@ -222,8 +222,8 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2014-02-11", "*", "", "Bought shares of S&P 500",
-					posting("Assets:ETrade:IVV", "", amount("10", "IVV"), nil, amount("183.07", "USD")),
-					posting("Assets:ETrade:Cash", "", amount("-1830.70", "USD"), nil, nil),
+					posting("Assets:ETrade:IVV", "", amount("10", "IVV"), nil, false, amount("183.07", "USD")),
+					posting("Assets:ETrade:Cash", "", amount("-1830.70", "USD"), nil, false, nil),
 				),
 			),
 		},
@@ -236,8 +236,8 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2002-01-17", "P", "", "(Padding inserted for balance of 987.34 USD)",
-					posting("Assets:US:BofA:Checking", "", amount("987.34", "USD"), nil, nil),
-					posting("Equity:Opening-Balances", "", amount("-987.34", "USD"), nil, nil),
+					posting("Assets:US:BofA:Checking", "", amount("987.34", "USD"), nil, false, nil),
+					posting("Equity:Opening-Balances", "", amount("-987.34", "USD"), nil, false, nil),
 				),
 			),
 		},
@@ -276,8 +276,8 @@ func TestParse(t *testing.T) {
 				open("1980-05-12", "Equity:Opening-Balances", nil, ""),
 				open("2018-01-01", "Assets:US:BofA:Checking", []string{"USD"}, ""),
 				transaction("2019-01-01", "", "", "",
-					posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, nil),
-					posting("Equity:Opening-Balances", "", nil, nil, nil),
+					posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, false, nil),
+					posting("Equity:Opening-Balances", "", nil, nil, false, nil),
 				),
 			),
 		},
@@ -337,20 +337,20 @@ func TestParse(t *testing.T) {
 					open("1980-05-12", "Equity:Opening-Balances", nil, ""),
 					open("2019-01-01", "Assets:US:BofA:Checking", []string{"USD"}, ""),
 					transaction("2019-01-01", "", "", "",
-						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, nil),
-						posting("Equity:Opening-Balances", "", amount("-4135.73", "USD"), nil, nil),
+						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, false, nil),
+						posting("Equity:Opening-Balances", "", amount("-4135.73", "USD"), nil, false, nil),
 					),
 					transaction("2019-01-01", "*", "", "",
-						posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, nil),
+						posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, false, nil),
 					),
 					transaction("2019-01-01", "!", "", "",
-						posting("Assets:ETrade:IVV", "", amount("+10", "IVV"), nil, nil),
+						posting("Assets:ETrade:IVV", "", amount("+10", "IVV"), nil, false, nil),
 					),
 					transaction("2019-01-01", "", "", "Lamb tagine with wine",
-						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), price("412", "EUR", false), nil),
+						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), amount("412", "EUR"), false, nil),
 					),
 					transaction("2019-01-01", "*", "", "Lamb tagine with wine",
-						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), price("488.22", "EUR", true), nil),
+						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), amount("488.22", "EUR"), true, nil),
 					),
 					transaction("2019-01-01", "*", "Cafe Mogador", "Lamb tagine with wine"),
 					transaction("2019-01-01", "*", "Cafe Mogador", ""),
@@ -418,16 +418,16 @@ func doc(d string, account string, pathToDocument string) *Document {
 	return &Document{Date: date(d), Account: account, PathToDocument: pathToDocument}
 }
 
+func price(d string, commodity string, amount *Amount) *Price {
+	return &Price{Date: date(d), Commodity: commodity, Amount: amount}
+}
+
 func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {
 	return &Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
 }
 
-func posting(account string, flag string, amount *Amount, price *Price, cost *Amount) *Posting {
-	return &Posting{Account: account, Flag: flag, Amount: amount, Price: price, Cost: cost}
-}
-
-func price(value string, currency string, total bool) *Price {
-	return &Price{Amount: *amount(value, currency), Total: total}
+func posting(account string, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Amount) *Posting {
+	return &Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
 }
 
 func amount(value string, currency string) *Amount {

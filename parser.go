@@ -148,11 +148,12 @@ func (t *Transaction) date() *Date       { return t.Date }
 func (t *Transaction) Directive() string { return "transaction" }
 
 type Posting struct {
-	Flag    string  `parser:"@('*' | '!')?"`
-	Account string  `parser:"@Account"`
-	Amount  *Amount `parser:"@@?"`
-	Price   *Price  `parser:"@@?"`
-	Cost    *Amount `parser:"('{' @@ '}')?"`
+	Flag       string  `parser:"@('*' | '!')?"`
+	Account    string  `parser:"@Account"`
+	Amount     *Amount `parser:"(@@"`
+	PriceTotal bool    `parser:"(('@' | @'@@')"`
+	Price      *Amount `parser:"@@)?"`
+	Cost       *Amount `parser:"('{' @@ '}')?)?"`
 
 	withMetadata
 }
@@ -160,12 +161,6 @@ type Posting struct {
 type Amount struct {
 	Value    string `parser:"@Number"`
 	Currency string `parser:"@Ident"`
-}
-
-type Price struct {
-	Total bool `parser:"('@' | @'@@')"`
-
-	Amount
 }
 
 type Date struct {
