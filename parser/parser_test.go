@@ -300,6 +300,13 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "InvalidAccountName",
+			beancount: `
+				1980-05-12 open Foo:Bar
+			`,
+			fail: `Open.Account: unexpected account type "Foo"`,
+		},
+		{
 			name: "Kitchensink",
 			beancount: `
 				;; -*- mode: org; mode: beancount; -*-
@@ -408,11 +415,11 @@ func beancount(directives ...Directive) *AST {
 	return &AST{Directives: directives}
 }
 
-func open(d string, account string, constraintCurrencies []string, bookingMethod string) *Open {
+func open(d string, account Account, constraintCurrencies []string, bookingMethod string) *Open {
 	return &Open{Date: date(d), Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
 }
 
-func close(d string, account string) *Close {
+func close(d string, account Account) *Close {
 	return &Close{Date: date(d), Account: account}
 }
 
@@ -420,19 +427,19 @@ func commodity(d string, currency string) *Commodity {
 	return &Commodity{Date: date(d), Currency: currency}
 }
 
-func balance(d string, account string, amount *Amount) *Balance {
+func balance(d string, account Account, amount *Amount) *Balance {
 	return &Balance{Date: date(d), Account: account, Amount: amount}
 }
 
-func pad(d string, account string, accountPad string) *Pad {
+func pad(d string, account Account, accountPad Account) *Pad {
 	return &Pad{Date: date(d), Account: account, AccountPad: accountPad}
 }
 
-func note(d string, account string, description string) *Note {
+func note(d string, account Account, description string) *Note {
 	return &Note{Date: date(d), Account: account, Description: description}
 }
 
-func doc(d string, account string, pathToDocument string) *Document {
+func doc(d string, account Account, pathToDocument string) *Document {
 	return &Document{Date: date(d), Account: account, PathToDocument: pathToDocument}
 }
 
@@ -448,7 +455,7 @@ func transaction(d string, flag string, payee string, narration string, postings
 	return &Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
 }
 
-func posting(account string, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Amount) *Posting {
+func posting(account Account, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Amount) *Posting {
 	return &Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
 }
 

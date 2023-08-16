@@ -1,12 +1,15 @@
 package parser
 
 import (
+	"fmt"
 	"io"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
+	"golang.org/x/exp/slices"
 )
 
 type Directives []Directive
@@ -53,7 +56,7 @@ func (c *Commodity) Directive() string { return "commodity" }
 
 type Open struct {
 	Date                 *Date    `parser:"@Date 'open'"`
-	Account              string   `parser:"@Account"`
+	Account              Account  `parser:"@Account"`
 	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
 	BookingMethod        string   `parser:"@('STRICT' | 'NONE')?"`
 
@@ -66,8 +69,8 @@ func (o *Open) date() *Date       { return o.Date }
 func (o *Open) Directive() string { return "open" }
 
 type Close struct {
-	Date    *Date  `parser:"@Date 'close'"`
-	Account string `parser:"@Account"`
+	Date    *Date   `parser:"@Date 'close'"`
+	Account Account `parser:"@Account"`
 
 	withMetadata
 }
@@ -79,7 +82,7 @@ func (c *Close) Directive() string { return "close" }
 
 type Balance struct {
 	Date    *Date   `parser:"@Date 'balance'"`
-	Account string  `parser:"@Account"`
+	Account Account `parser:"@Account"`
 	Amount  *Amount `parser:"@@"`
 
 	withMetadata
@@ -91,9 +94,9 @@ func (b *Balance) date() *Date       { return b.Date }
 func (b *Balance) Directive() string { return "balance" }
 
 type Pad struct {
-	Date       *Date  `parser:"@Date 'pad'"`
-	Account    string `parser:"@Account"`
-	AccountPad string `parser:"@Account"`
+	Date       *Date   `parser:"@Date 'pad'"`
+	Account    Account `parser:"@Account"`
+	AccountPad Account `parser:"@Account"`
 
 	withMetadata
 }
@@ -104,9 +107,9 @@ func (p *Pad) date() *Date       { return p.Date }
 func (p *Pad) Directive() string { return "pad" }
 
 type Note struct {
-	Date        *Date  `parser:"@Date 'note'"`
-	Account     string `parser:"@Account"`
-	Description string `parser:"@String"`
+	Date        *Date   `parser:"@Date 'note'"`
+	Account     Account `parser:"@Account"`
+	Description string  `parser:"@String"`
 
 	withMetadata
 }
@@ -117,9 +120,9 @@ func (n *Note) date() *Date       { return n.Date }
 func (n *Note) Directive() string { return "note" }
 
 type Document struct {
-	Date           *Date  `parser:"@Date 'document'"`
-	Account        string `parser:"@Account"`
-	PathToDocument string `parser:"@String"`
+	Date           *Date   `parser:"@Date 'document'"`
+	Account        Account `parser:"@Account"`
+	PathToDocument string  `parser:"@String"`
 
 	withMetadata
 }
@@ -173,7 +176,7 @@ func (t *Transaction) Directive() string { return "transaction" }
 
 type Posting struct {
 	Flag       string  `parser:"@('*' | '!')?"`
-	Account    string  `parser:"@Account"`
+	Account    Account `parser:"@Account"`
 	Amount     *Amount `parser:"(@@"`
 	PriceTotal bool    `parser:"(('@' | @'@@')"`
 	Price      *Amount `parser:"@@)?"`
@@ -185,6 +188,20 @@ type Posting struct {
 type Amount struct {
 	Value    string `parser:"@Number"`
 	Currency string `parser:"@Ident"`
+}
+
+type Account string
+
+var allowedAccountTypes = []string{"Assets", "Liabilities", "Equity", "Income", "Expenses"}
+
+func (a *Account) Capture(values []string) error {
+	t, _, _ := strings.Cut(values[0], ":")
+	if !slices.Contains(allowedAccountTypes, t) {
+		return fmt.Errorf(`unexpected account type "%s"`, t)
+	}
+
+	*a = Account(values[0])
+	return nil
 }
 
 type Date struct {
