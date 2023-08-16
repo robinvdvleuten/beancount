@@ -135,6 +135,15 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Event",
+			beancount: `
+				2014-07-09 event "location" "Paris, France"
+			`,
+			expected: beancount(
+				event("2014-07-09", "location", "Paris, France"),
+			),
+		},
+		{
 			name: "Transaction",
 			beancount: `
 				2014-05-05 txn "Cafe Mogador" "Lamb tagine with wine"
@@ -429,6 +438,10 @@ func doc(d string, account string, pathToDocument string) *Document {
 
 func price(d string, commodity string, amount *Amount) *Price {
 	return &Price{Date: date(d), Commodity: commodity, Amount: amount}
+}
+
+func event(d string, name string, value string) *Event {
+	return &Event{Date: date(d), Name: name, Value: value}
 }
 
 func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {

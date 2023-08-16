@@ -144,6 +144,19 @@ var _ Directive = &Price{}
 func (p *Price) date() *Date       { return p.Date }
 func (p *Price) Directive() string { return "price" }
 
+type Event struct {
+	Date  *Date  `parser:"@Date 'event'"`
+	Name  string `parser:"@String"`
+	Value string `parser:"@String"`
+
+	withMetadata
+}
+
+var _ Directive = &Event{}
+
+func (e *Event) date() *Date       { return e.Date }
+func (e *Event) Directive() string { return "event" }
+
 type Transaction struct {
 	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!' | 'P') )"`
@@ -226,6 +239,7 @@ var (
 			&Note{},
 			&Document{},
 			&Price{},
+			&Event{},
 			&Transaction{},
 		),
 		participle.UseLookahead(2),
