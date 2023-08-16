@@ -118,6 +118,19 @@ var _ Directive = &Note{}
 func (n *Note) date() *Date       { return n.Date }
 func (n *Note) Directive() string { return "note" }
 
+type Document struct {
+	Date           *Date  `parser:"@Date 'document'"`
+	Account        string `parser:"@Account"`
+	PathToDocument string `parser:"@String"`
+
+	withMetadata
+}
+
+var _ Directive = &Document{}
+
+func (d *Document) date() *Date       { return d.Date }
+func (d *Document) Directive() string { return "document" }
+
 type Transaction struct {
 	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!' | 'P') )"`
@@ -196,7 +209,16 @@ var (
 		participle.Lexer(lex),
 		participle.Unquote("String"),
 		participle.Elide("Comment", "Whitespace"),
-		participle.Union[Directive](&Commodity{}, &Open{}, &Close{}, &Balance{}, &Pad{}, &Note{}, &Transaction{}),
+		participle.Union[Directive](
+			&Commodity{},
+			&Open{},
+			&Close{},
+			&Balance{},
+			&Pad{},
+			&Note{},
+			&Document{},
+			&Transaction{},
+		),
 		participle.UseLookahead(2),
 	)
 )
