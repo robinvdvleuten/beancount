@@ -158,6 +158,7 @@ var (
 	)
 )
 
+// Parse AST from an io.Reader.
 func Parse(r io.Reader) (*AST, error) {
 	ast, err := parser.Parse("", r)
 	if err != nil {
@@ -167,7 +168,7 @@ func Parse(r io.Reader) (*AST, error) {
 	return ast, nil
 }
 
-// ParseString parses telegram from a string.
+// ParseString parses AST from a string.
 func ParseString(str string) (*AST, error) {
 	ast, err := parser.ParseString("", str)
 	if err != nil {
@@ -177,7 +178,7 @@ func ParseString(str string) (*AST, error) {
 	return ast, nil
 }
 
-// ParseBytes parses telegram from bytes.
+// ParseBytes parses AST from bytes.
 func ParseBytes(data []byte) (*AST, error) {
 	ast, err := parser.ParseBytes("", data)
 	if err != nil {
