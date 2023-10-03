@@ -6,7 +6,7 @@ require (
 	github.com/alecthomas/assert/v2 v2.3.0
 	github.com/alecthomas/kong v0.8.0
 	github.com/alecthomas/participle/v2 v2.1.0
-	github.com/alecthomas/repr v0.2.0
+	github.com/alecthomas/repr v0.3.0
 	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb
 )
 
