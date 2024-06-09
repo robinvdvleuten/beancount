@@ -270,6 +270,16 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Include",
+			beancount: `
+				include "2024.beancount"
+			`,
+			expected: withIncludes(
+				beancount(),
+				include("2024.beancount"),
+			),
+		},
+		{
 			name: "Comment",
 			beancount: `
 				; 1792-01-01 commodity USD
@@ -479,6 +489,15 @@ func option(name string, value string) *Option {
 
 func withOptions(ast *AST, options ...*Option) *AST {
 	ast.Options = options
+	return ast
+}
+
+func include(filename string) *Include {
+	return &Include{Filename: filename}
+}
+
+func withIncludes(ast *AST, includes ...*Include) *AST {
+	ast.Includes = includes
 	return ast
 }
 

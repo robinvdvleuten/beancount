@@ -20,7 +20,8 @@ func (d Directives) Less(i, j int) bool { return d[i].date().Before(time.Time(d[
 
 type AST struct {
 	Directives Directives `parser:"(@@"`
-	Options    []*Option  `parser:"| @@ | ~ignore)*"`
+	Options    []*Option  `parser:"| @@"`
+	Includes   []*Include `parser:"| @@ | ~ignore)*"`
 }
 
 type WithMetadata interface {
@@ -226,6 +227,10 @@ type Metadata struct {
 type Option struct {
 	Name  string `parser:"'option' @String"`
 	Value string `parser:"@String"`
+}
+
+type Include struct {
+	Filename  string `parser:"'include' @String"`
 }
 
 var (
