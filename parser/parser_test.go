@@ -365,6 +365,34 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "TransactionWithCostAndLabel",
+			beancount: `
+				2021-09-22 * "Buy shares with reference"
+					Assets:Stocks                          10 AAPL {150.00 USD, "ref-001"}
+					Assets:Cash
+			`,
+			expected: beancount(
+				transaction("2021-09-22", "*", "", "Buy shares with reference",
+					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, costWithLabel(amount("150.00", "USD"), nil, "ref-001")),
+					posting("Assets:Cash", "", nil, nil, false, nil),
+				),
+			),
+		},
+		{
+			name: "TransactionWithCostDateAndLabel",
+			beancount: `
+				2021-09-22 * "Buy shares with date and label"
+					Assets:Stocks                          10 AAPL {150.00 USD, 2021-09-22, "Batch A"}
+					Assets:Cash
+			`,
+			expected: beancount(
+				transaction("2021-09-22", "*", "", "Buy shares with date and label",
+					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, costWithLabel(amount("150.00", "USD"), date("2021-09-22"), "Batch A")),
+					posting("Assets:Cash", "", nil, nil, false, nil),
+				),
+			),
+		},
+		{
 			name: "TransactionWithPadding",
 			beancount: `
 				2002-01-17 P "(Padding inserted for balance of 987.34 USD)"
@@ -593,7 +621,11 @@ func amount(value string, currency string) *Amount {
 }
 
 func cost(amount *Amount, d *Date) *Cost {
-	return &Cost{Amount: amount, Date: d}
+	return &Cost{Amount: amount, Date: d, Label: ""}
+}
+
+func costWithLabel(amount *Amount, d *Date, label string) *Cost {
+	return &Cost{Amount: amount, Date: d, Label: label}
 }
 
 func date(value string) *Date {

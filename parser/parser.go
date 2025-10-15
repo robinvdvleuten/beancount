@@ -195,7 +195,8 @@ type Amount struct {
 
 type Cost struct {
 	Amount *Amount `parser:"'{' @@"`
-	Date   *Date   `parser:"(',' @Date)? '}'"`
+	Date   *Date   `parser:"(',' @Date)?"`
+	Label  string  `parser:"(',' @String)? '}'"`
 }
 
 type Account string
