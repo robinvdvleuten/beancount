@@ -165,6 +165,7 @@ type Transaction struct {
 	Payee     string   `parser:"@(String (?= String))?"`
 	Narration string   `parser:"@String?"`
 	Links     []string `parser:"@Link*"`
+	Tags      []string `parser:"@Tag*"`
 
 	withMetadata
 
@@ -246,6 +247,7 @@ var (
 		{"String", `"[^"]*"`},
 		{"Number", `[-+]?(\d*\.)?\d+`},
 		{"Link", `\^[A-Za-z0-9_-]+`},
+		{"Tag", `#[A-Za-z0-9_-]+`},
 		{"Ident", `[A-Za-z][0-9A-Za-z_-]*`},
 		{"Punct", `[!*:,@{}]+`},
 		{"Comment", `;[^\n]*\n`},

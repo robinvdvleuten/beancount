@@ -231,6 +231,62 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "TransactionWithTag",
+			beancount: `
+				2021-06-15 * "Waterbar" "" #trip-san-francisco-2021
+					Liabilities:US:Chase:Slate                       -46.68 USD
+					Expenses:Food:Restaurant                          46.68 USD
+			`,
+			expected: beancount(
+				withTags(
+					transaction("2021-06-15", "*", "Waterbar", "",
+						posting("Liabilities:US:Chase:Slate", "", amount("-46.68", "USD"), nil, false, nil),
+						posting("Expenses:Food:Restaurant", "", amount("46.68", "USD"), nil, false, nil),
+					),
+					"#trip-san-francisco-2021",
+				),
+			),
+		},
+		{
+			name: "TransactionWithMultipleTags",
+			beancount: `
+				2014-04-23 * "Flight to Berlin" #trip-berlin #vacation
+					Assets:MyBank:Checking            -1230.27 USD
+					Expenses:Flights
+			`,
+			expected: beancount(
+				withTags(
+					transaction("2014-04-23", "*", "", "Flight to Berlin",
+						posting("Assets:MyBank:Checking", "", amount("-1230.27", "USD"), nil, false, nil),
+						posting("Expenses:Flights", "", nil, nil, false, nil),
+					),
+					"#trip-berlin",
+					"#vacation",
+				),
+			),
+		},
+		{
+			name: "TransactionWithLinksAndTags",
+			beancount: `
+				2014-04-23 * "Flight to Berlin" ^invoice-123 #trip-berlin #vacation
+					Assets:MyBank:Checking            -1230.27 USD
+					Expenses:Flights
+			`,
+			expected: beancount(
+				withTags(
+					withLinks(
+						transaction("2014-04-23", "*", "", "Flight to Berlin",
+							posting("Assets:MyBank:Checking", "", amount("-1230.27", "USD"), nil, false, nil),
+							posting("Expenses:Flights", "", nil, nil, false, nil),
+						),
+						"^invoice-123",
+					),
+					"#trip-berlin",
+					"#vacation",
+				),
+			),
+		},
+		{
 			name: "TransactionWithMetadata",
 			beancount: `
 			2013-08-26 * "Buying some shares of Hooli"
@@ -579,5 +635,10 @@ func withMeta[W WithMetadata](w W, metadata ...*Metadata) W {
 
 func withLinks(t *Transaction, links ...string) *Transaction {
 	t.Links = links
+	return t
+}
+
+func withTags(t *Transaction, tags ...string) *Transaction {
+	t.Tags = tags
 	return t
 }
