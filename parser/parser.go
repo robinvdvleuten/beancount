@@ -164,8 +164,8 @@ type Transaction struct {
 	Flag      string   `parser:"@('*' | '!' | 'P') )"`
 	Payee     string   `parser:"@(String (?= String))?"`
 	Narration string   `parser:"@String?"`
-	Links     []string `parser:"@Link*"`
-	Tags      []string `parser:"@Tag*"`
+	Links     []Link   `parser:"@Link*"`
+	Tags      []Tag    `parser:"@Tag*"`
 
 	withMetadata
 
@@ -223,6 +223,20 @@ func (d *Date) Capture(values []string) error {
 	}
 
 	d.Time = t
+	return nil
+}
+
+type Link string
+
+func (l *Link) Capture(values []string) error {
+	*l = Link(strings.TrimPrefix(values[0], "^"))
+	return nil
+}
+
+type Tag string
+
+func (t *Tag) Capture(values []string) error {
+	*t = Tag(strings.TrimPrefix(values[0], "#"))
 	return nil
 }
 

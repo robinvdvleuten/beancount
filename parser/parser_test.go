@@ -208,7 +208,7 @@ func TestParse(t *testing.T) {
 						posting("Assets:AccountsReceivable", "", amount("-8450.00", "USD"), nil, false, nil),
 						posting("Income:Clients:PepeStudios", "", nil, nil, false, nil),
 					),
-					"^invoice-pepe-studios-jan14",
+					"invoice-pepe-studios-jan14",
 				),
 			),
 		},
@@ -225,8 +225,8 @@ func TestParse(t *testing.T) {
 						posting("Assets:BofA:Checking", "", amount("8450.00", "USD"), nil, false, nil),
 						posting("Assets:AccountsReceivable", "", nil, nil, false, nil),
 					),
-					"^invoice-pepe-studios-jan14",
-					"^payment-check",
+					"invoice-pepe-studios-jan14",
+					"payment-check",
 				),
 			),
 		},
@@ -243,7 +243,7 @@ func TestParse(t *testing.T) {
 						posting("Liabilities:US:Chase:Slate", "", amount("-46.68", "USD"), nil, false, nil),
 						posting("Expenses:Food:Restaurant", "", amount("46.68", "USD"), nil, false, nil),
 					),
-					"#trip-san-francisco-2021",
+					"trip-san-francisco-2021",
 				),
 			),
 		},
@@ -260,8 +260,8 @@ func TestParse(t *testing.T) {
 						posting("Assets:MyBank:Checking", "", amount("-1230.27", "USD"), nil, false, nil),
 						posting("Expenses:Flights", "", nil, nil, false, nil),
 					),
-					"#trip-berlin",
-					"#vacation",
+					"trip-berlin",
+					"vacation",
 				),
 			),
 		},
@@ -279,10 +279,10 @@ func TestParse(t *testing.T) {
 							posting("Assets:MyBank:Checking", "", amount("-1230.27", "USD"), nil, false, nil),
 							posting("Expenses:Flights", "", nil, nil, false, nil),
 						),
-						"^invoice-123",
+						"invoice-123",
 					),
-					"#trip-berlin",
-					"#vacation",
+					"trip-berlin",
+					"vacation",
 				),
 			),
 		},
@@ -634,11 +634,17 @@ func withMeta[W WithMetadata](w W, metadata ...*Metadata) W {
 }
 
 func withLinks(t *Transaction, links ...string) *Transaction {
-	t.Links = links
+	t.Links = make([]Link, len(links))
+	for i, link := range links {
+		t.Links[i] = Link(link)
+	}
 	return t
 }
 
 func withTags(t *Transaction, tags ...string) *Transaction {
-	t.Tags = tags
+	t.Tags = make([]Tag, len(tags))
+	for i, tag := range tags {
+		t.Tags[i] = Tag(tag)
+	}
 	return t
 }
