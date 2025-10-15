@@ -188,12 +188,13 @@ func (t *Transaction) date() *Date       { return t.Date }
 func (t *Transaction) Directive() string { return "transaction" }
 
 type Posting struct {
-	Flag       string  `parser:"@('*' | '!')?"`
-	Account    Account `parser:"@Account"`
-	Amount     *Amount `parser:"(@@"`
-	Cost       *Cost   `parser:"@@?"`
-	PriceTotal bool    `parser:"(('@' | @'@@')"`
-	Price      *Amount `parser:"@@)?)?"`
+	Flag        string  `parser:"@('*' | '!')?"`
+	Account     Account `parser:"@Account"`
+	Amount      *Amount `parser:"(@@"`
+	Cost        *Cost   `parser:"@@?"`
+	PriceMarker string  `parser:"( '@'"` // Matches @ price marker (grammar only, always empty)
+	PriceTotal  bool    `parser:"@'@'?"` // Captures presence of second @ for total price
+	Price       *Amount `parser:"@@)?)?"`
 
 	withMetadata
 }
@@ -204,9 +205,15 @@ type Amount struct {
 }
 
 type Cost struct {
-	Amount *Amount `parser:"'{' @@"`
+	Amount *Amount `parser:"'{' @@?"`
 	Date   *Date   `parser:"(',' @Date)?"`
 	Label  string  `parser:"(',' @String)? '}'"`
+}
+
+// IsEmpty returns true if this is an empty cost specification {}.
+// Distinguishes between nil (no cost) and empty cost (any lot selection).
+func (c *Cost) IsEmpty() bool {
+	return c != nil && c.Amount == nil && c.Date == nil && c.Label == ""
 }
 
 type Account string
@@ -328,7 +335,7 @@ var (
 		{"Link", `\^[A-Za-z0-9_-]+`},
 		{"Tag", `#[A-Za-z0-9_-]+`},
 		{"Ident", `[A-Za-z][0-9A-Za-z_-]*`},
-		{"Punct", `[!*:,@{}]+`},
+		{"Punct", `[!*:,@{}]`},
 		{"Comment", `;[^\n]*\n`},
 		{"Whitespace", `[[:space:]]`},
 		{"ignore", `[\s\S]*`},

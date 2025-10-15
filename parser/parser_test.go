@@ -393,6 +393,34 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "TransactionWithEmptyCost",
+			beancount: `
+				2021-11-15 * "Sell stock - any lot"
+					Assets:Stocks                         -10 AAPL {}
+					Assets:Cash
+			`,
+			expected: beancount(
+				transaction("2021-11-15", "*", "", "Sell stock - any lot",
+					posting("Assets:Stocks", "", amount("-10", "AAPL"), nil, false, emptyCost()),
+					posting("Assets:Cash", "", nil, nil, false, nil),
+				),
+			),
+		},
+		{
+			name: "TransactionWithEmptyCostAndPrice",
+			beancount: `
+				2021-11-15 * "Sell stock - any lot with current price"
+					Assets:Stocks                         -10 AAPL {} @ 175.00 USD
+					Assets:Cash
+			`,
+			expected: beancount(
+				transaction("2021-11-15", "*", "", "Sell stock - any lot with current price",
+					posting("Assets:Stocks", "", amount("-10", "AAPL"), amount("175.00", "USD"), false, emptyCost()),
+					posting("Assets:Cash", "", nil, nil, false, nil),
+				),
+			),
+		},
+		{
 			name: "TransactionWithPadding",
 			beancount: `
 				2002-01-17 P "(Padding inserted for balance of 987.34 USD)"
@@ -859,6 +887,10 @@ func cost(amount *Amount, d *Date) *Cost {
 
 func costWithLabel(amount *Amount, d *Date, label string) *Cost {
 	return &Cost{Amount: amount, Date: d, Label: label}
+}
+
+func emptyCost() *Cost {
+	return &Cost{Amount: nil, Date: nil, Label: ""}
 }
 
 func date(value string) *Date {
