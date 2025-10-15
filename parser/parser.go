@@ -221,7 +221,7 @@ func (d *Date) Capture(values []string) error {
 
 	// Parse year (positions 0-3)
 	year := int(s[0]-'0')*1000 + int(s[1]-'0')*100 +
-	        int(s[2]-'0')*10 + int(s[3]-'0')
+		int(s[2]-'0')*10 + int(s[3]-'0')
 
 	// Parse month (positions 5-6)
 	month := int(s[5]-'0')*10 + int(s[6]-'0')
@@ -241,14 +241,16 @@ func (d *Date) Capture(values []string) error {
 type Link string
 
 func (l *Link) Capture(values []string) error {
-	*l = Link(strings.TrimPrefix(values[0], "^"))
+	// Lexer guarantees format \^[A-Za-z0-9_-]+, so we can skip first character
+	*l = Link(values[0][1:])
 	return nil
 }
 
 type Tag string
 
 func (t *Tag) Capture(values []string) error {
-	*t = Tag(strings.TrimPrefix(values[0], "#"))
+	// Lexer guarantees format #[A-Za-z0-9_-]+, so we can skip first character
+	*t = Tag(values[0][1:])
 	return nil
 }
 
