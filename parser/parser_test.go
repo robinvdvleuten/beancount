@@ -650,6 +650,76 @@ func TestParseKitchenSink(t *testing.T) {
 	assert.Equal(t, Tag("tax-loss-harvesting"), kitchenSinkTxn.Tags[3])
 }
 
+func TestDateCapture(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "ValidDate",
+			input:   "2024-03-15",
+			wantErr: false,
+		},
+		{
+			name:    "ValidLeapYear",
+			input:   "2024-02-29",
+			wantErr: false,
+		},
+		{
+			name:    "ValidDateMinMonth",
+			input:   "2024-01-15",
+			wantErr: false,
+		},
+		{
+			name:    "ValidDateMaxMonth",
+			input:   "2024-12-31",
+			wantErr: false,
+		},
+		{
+			name:    "InvalidMonthZero",
+			input:   "2024-00-15",
+			wantErr: true,
+			errMsg:  "invalid date: 2024-00-15",
+		},
+		{
+			name:    "InvalidMonthThirteen",
+			input:   "2024-13-15",
+			wantErr: true,
+			errMsg:  "invalid date: 2024-13-15",
+		},
+		{
+			name:    "InvalidDayZero",
+			input:   "2024-03-00",
+			wantErr: true,
+			errMsg:  "invalid date: 2024-03-00",
+		},
+		{
+			name:    "InvalidDayThirtyTwo",
+			input:   "2024-03-32",
+			wantErr: true,
+			errMsg:  "invalid date: 2024-03-32",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &Date{}
+			err := d.Capture([]string{tt.input})
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.EqualError(t, err, tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
 func beancount(directives ...Directive) *AST {
 	return &AST{Directives: directives}
 }

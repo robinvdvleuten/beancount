@@ -218,12 +218,25 @@ type Date struct {
 }
 
 func (d *Date) Capture(values []string) error {
-	t, err := time.Parse("2006-01-02", values[0])
-	if err != nil {
-		return err
+	s := values[0]
+	// Lexer guarantees format \d{4}-\d{2}-\d{2}, so we can parse directly
+
+	// Parse year (positions 0-3)
+	year := int(s[0]-'0')*1000 + int(s[1]-'0')*100 +
+	        int(s[2]-'0')*10 + int(s[3]-'0')
+
+	// Parse month (positions 5-6)
+	month := int(s[5]-'0')*10 + int(s[6]-'0')
+
+	// Parse day (positions 8-9)
+	day := int(s[8]-'0')*10 + int(s[9]-'0')
+
+	// Basic validation (time.Date will normalize edge cases)
+	if month < 1 || month > 12 || day < 1 || day > 31 {
+		return fmt.Errorf("invalid date: %s", s)
 	}
 
-	d.Time = t
+	d.Time = time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 	return nil
 }
 
