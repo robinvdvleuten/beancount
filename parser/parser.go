@@ -9,7 +9,6 @@ import (
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
-	"golang.org/x/exp/slices"
 )
 
 type Directives []Directive
@@ -201,16 +200,15 @@ type Cost struct {
 
 type Account string
 
-var allowedAccountTypes = []string{"Assets", "Liabilities", "Equity", "Income", "Expenses"}
-
 func (a *Account) Capture(values []string) error {
 	t, _, _ := strings.Cut(values[0], ":")
-	if !slices.Contains(allowedAccountTypes, t) {
+	switch t {
+	case "Assets", "Liabilities", "Equity", "Income", "Expenses":
+		*a = Account(values[0])
+		return nil
+	default:
 		return fmt.Errorf(`unexpected account type "%s"`, t)
 	}
-
-	*a = Account(values[0])
-	return nil
 }
 
 type Date struct {
