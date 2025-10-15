@@ -3,19 +3,30 @@ package parser
 import (
 	"fmt"
 	"io"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
+	"golang.org/x/exp/slices"
 )
 
 type Directives []Directive
 
 func (d Directives) Len() int           { return len(d) }
 func (d Directives) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d Directives) Less(i, j int) bool { return d[i].date().Before(d[j].date().Time) }
+func (d Directives) Less(i, j int) bool { return compareDirectives(d[i], d[j]) < 0 }
+
+// compareDirectives compares two directives by their date.
+// Returns -1 if a < b, 0 if a == b, 1 if a > b.
+func compareDirectives(a, b Directive) int {
+	if a.date().Before(b.date().Time) {
+		return -1
+	} else if a.date().After(b.date().Time) {
+		return 1
+	}
+	return 0
+}
 
 type AST struct {
 	Directives Directives `parser:"(@@"`
@@ -333,10 +344,26 @@ func ParseBytes(data []byte) (*AST, error) {
 	return ast, SortDirectives(ast)
 }
 
+// isSorted checks if directives are already sorted by date.
+func isSorted(d Directives) bool {
+	for i := 1; i < len(d); i++ {
+		if d.Less(i, i-1) {
+			return false
+		}
+	}
+	return true
+}
+
 // SortDirectives sort all directives by their parsed date.
 //
 // This is called automatically during Parse*(), but can be called on a manually constructed AST.
 func SortDirectives(ast *AST) error {
-	sort.Sort(ast.Directives)
+	// Skip sorting if already sorted (common case for well-maintained files)
+	if isSorted(ast.Directives) {
+		return nil
+	}
+
+	// Use pdqsort for better performance when sorting is needed
+	slices.SortFunc(ast.Directives, compareDirectives)
 	return nil
 }
