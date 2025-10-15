@@ -1,0 +1,135 @@
+; Kitchen Sink Example
+; Demonstrates all supported beancount features
+
+option "title" "Kitchen Sink - All Features Demo"
+option "operating_currency" "USD"
+
+; Commodities
+1792-01-01 commodity USD
+  name: "US Dollar"
+  asset-class: "cash"
+
+2009-01-03 commodity BTC
+  name: "Bitcoin"
+
+; Opening accounts
+2020-01-01 open Assets:Bank:Checking USD
+2020-01-01 open Assets:Brokerage:Cash USD
+2020-01-01 open Assets:Brokerage:AAPL
+2020-01-01 open Assets:Brokerage:MSFT
+2020-01-01 open Assets:Brokerage:VTI
+2020-01-01 open Assets:Crypto:BTC BTC
+2020-01-01 open Liabilities:CreditCard:Visa USD
+2020-01-01 open Equity:Opening-Balances
+2020-01-01 open Income:Salary
+2020-01-01 open Income:Investments:Dividends
+2020-01-01 open Expenses:Food:Restaurant
+2020-01-01 open Expenses:Food:Groceries
+2020-01-01 open Expenses:Transport:Flights
+2020-01-01 open Expenses:Housing:Rent
+2020-01-01 open Expenses:Commissions
+
+; Opening balances
+2020-01-01 * "Opening Balances"
+  Assets:Bank:Checking           5000.00 USD
+  Equity:Opening-Balances       -5000.00 USD
+
+; Balance assertion
+2020-01-02 balance Assets:Bank:Checking  5000.00 USD
+
+; Price directive
+2021-01-15 price BTC 35000.00 USD
+
+; Event
+2021-06-01 event "location" "San Francisco, CA"
+
+; Note
+2021-06-01 note Assets:Bank:Checking "Switched to online statements"
+
+; Simple transaction
+2021-06-15 * "Salary Deposit"
+  Assets:Bank:Checking           3500.00 USD
+  Income:Salary                 -3500.00 USD
+
+; Transaction with link
+2021-07-01 * "Rent Payment" ^july-rent
+  Assets:Bank:Checking          -1500.00 USD
+  Expenses:Housing:Rent          1500.00 USD
+
+; Transaction with tags
+2021-07-04 * "Flight to NYC" #travel #vacation
+  Liabilities:CreditCard:Visa    -450.00 USD
+  Expenses:Transport:Flights      450.00 USD
+
+; Transaction with links and tags
+2021-07-05 * "Restaurant in NYC" ^vacation-2021 #travel #vacation #food
+  Liabilities:CreditCard:Visa     -85.50 USD
+  Expenses:Food:Restaurant         85.50 USD
+
+; Transaction with metadata
+2021-08-01 * "Grocery Shopping"
+  store: "Whole Foods"
+  receipt: "RCP-2021-08-001"
+  Assets:Bank:Checking           -125.50 USD
+  Expenses:Food:Groceries         125.50 USD
+
+; Transaction with posting metadata
+2021-08-15 * "Investment Purchase"
+  trade-confirmation: "CONF-123456"
+  Assets:Brokerage:Cash          -500.00 USD
+  Assets:Brokerage:VTI              5 VTI {100.00 USD}
+    note: "Index fund allocation"
+
+; Transaction with cost and date
+2021-09-01 * "Buy Apple stock"
+  Assets:Brokerage:Cash          -1520.00 USD
+  Assets:Brokerage:AAPL              10 AAPL {150.00 USD, 2021-09-01}
+  Expenses:Commissions             20.00 USD
+
+; Transaction with cost, date, and label
+2021-09-15 * "Buy Microsoft stock"
+  Assets:Brokerage:Cash          -3020.00 USD
+  Assets:Brokerage:MSFT              10 MSFT {300.00 USD, 2021-09-15, "Batch-Q3"}
+  Expenses:Commissions             20.00 USD
+
+; Transaction with cost and price (selling)
+2021-10-01 * "Sell Apple stock"
+  Assets:Brokerage:AAPL             -10 AAPL {150.00 USD, 2021-09-01} @ 160.00 USD
+  Assets:Brokerage:Cash            1580.00 USD
+  Expenses:Commissions              20.00 USD
+
+; Transaction with total price
+2021-10-15 * "Currency exchange"
+  Assets:Bank:Checking             -500.00 USD @@ 545.00 CAD
+  Assets:Bank:CAD                   545.00 CAD
+
+; Transaction with flagged posting
+2021-11-01 * "Partial payment"
+  ! Assets:Bank:Checking           -250.00 USD
+  Liabilities:CreditCard:Visa       250.00 USD
+
+; Kitchen sink transaction with ALL features
+2021-12-15 * "Diversified Portfolio Rebalancing" ^rebalance-q4 ^invoice-2021-1215 #investment #stocks #retirement #tax-loss-harvesting
+  portfolio: "Retirement Account"
+  strategy: "Tax-loss harvesting + rebalancing"
+  advisor: "John Smith, CFP"
+  Assets:Brokerage:Cash           -10000.00 USD
+  Assets:Brokerage:AAPL                20 AAPL {155.00 USD, 2021-12-15, "Q4-Batch-A"} @ 157.00 USD
+    allocation: "Tech - 40%"
+    decision: "Overweight tech"
+  Assets:Brokerage:MSFT                10 MSFT {310.00 USD, 2021-12-15, "Q4-Batch-A"}
+    allocation: "Tech - 40%"
+  * Assets:Brokerage:VTI               30 VTI {105.00 USD, 2021-12-15}
+    allocation: "Broad Market - 20%"
+    rebalance: "true"
+  Expenses:Commissions                15.00 USD
+    broker: "E*TRADE"
+
+; Pad directive
+2021-12-30 pad Assets:Bank:Checking Equity:Opening-Balances
+
+; Balance check at year end
+2021-12-31 balance Assets:Bank:Checking  2500.00 USD
+
+; Close an account
+2021-12-31 close Liabilities:CreditCard:Visa

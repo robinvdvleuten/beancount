@@ -407,6 +407,49 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "TransactionKitchenSink",
+			beancount: `
+				2021-09-22 * "Diversified stock purchase" ^invoice-2021-q3 ^portfolio-rebalance #investment #stocks #retirement
+					trade-confirmation: "CONF-987654321"
+					broker: "E*TRADE"
+					Assets:Brokerage:Cash                -5000.00 USD
+					Assets:Brokerage:AAPL                      10 AAPL {150.00 USD, 2021-09-22, "Batch-Q3"} @ 152.00 USD
+						note: "Tech allocation"
+					Assets:Brokerage:MSFT                       5 MSFT {300.00 USD, 2021-09-22, "Batch-Q3"}
+						note: "Tech allocation"
+					* Assets:Brokerage:VTI                     20 VTI {100.00 USD, 2021-09-22}
+					Expenses:Commissions                     9.95 USD
+			`,
+			expected: beancount(
+				withTags(
+					withLinks(
+						withMeta(
+							transaction("2021-09-22", "*", "", "Diversified stock purchase",
+								posting("Assets:Brokerage:Cash", "", amount("-5000.00", "USD"), nil, false, nil),
+								withMeta(
+									posting("Assets:Brokerage:AAPL", "", amount("10", "AAPL"), amount("152.00", "USD"), false, costWithLabel(amount("150.00", "USD"), date("2021-09-22"), "Batch-Q3")),
+									meta("note", "Tech allocation"),
+								),
+								withMeta(
+									posting("Assets:Brokerage:MSFT", "", amount("5", "MSFT"), nil, false, costWithLabel(amount("300.00", "USD"), date("2021-09-22"), "Batch-Q3")),
+									meta("note", "Tech allocation"),
+								),
+								posting("Assets:Brokerage:VTI", "*", amount("20", "VTI"), nil, false, cost(amount("100.00", "USD"), date("2021-09-22"))),
+								posting("Expenses:Commissions", "", amount("9.95", "USD"), nil, false, nil),
+							),
+							meta("trade-confirmation", "CONF-987654321"),
+							meta("broker", "E*TRADE"),
+						),
+						"invoice-2021-q3",
+						"portfolio-rebalance",
+					),
+					"investment",
+					"stocks",
+					"retirement",
+				),
+			),
+		},
+		{
 			name: "Option",
 			beancount: `
 				option "title" "Example Beancount file"
@@ -566,6 +609,45 @@ func TestParseExample(t *testing.T) {
 
 	_, err = ParseBytes(data)
 	assert.NoError(t, err)
+}
+
+func TestParseKitchenSink(t *testing.T) {
+	data, err := os.ReadFile("../testdata/kitchensink.beancount")
+	assert.NoError(t, err)
+
+	ast, err := ParseBytes(data)
+	assert.NoError(t, err)
+	
+	// Verify we parsed all the directives
+	assert.True(t, len(ast.Directives) > 0, "Should have parsed directives")
+	assert.True(t, len(ast.Options) > 0, "Should have parsed options")
+	
+	// Find and verify the kitchen sink transaction
+	var kitchenSinkTxn *Transaction
+	for _, dir := range ast.Directives {
+		if txn, ok := dir.(*Transaction); ok {
+			if txn.Narration == "Diversified Portfolio Rebalancing" {
+				kitchenSinkTxn = txn
+				break
+			}
+		}
+	}
+	
+	assert.True(t, kitchenSinkTxn != nil, "Should find kitchen sink transaction")
+	assert.Equal(t, 2, len(kitchenSinkTxn.Links), "Should have 2 links")
+	assert.Equal(t, 4, len(kitchenSinkTxn.Tags), "Should have 4 tags")
+	assert.Equal(t, 3, len(kitchenSinkTxn.Metadata), "Should have 3 metadata entries")
+	assert.Equal(t, 5, len(kitchenSinkTxn.Postings), "Should have 5 postings")
+	
+	// Verify links are stripped of ^
+	assert.Equal(t, Link("rebalance-q4"), kitchenSinkTxn.Links[0])
+	assert.Equal(t, Link("invoice-2021-1215"), kitchenSinkTxn.Links[1])
+	
+	// Verify tags are stripped of #
+	assert.Equal(t, Tag("investment"), kitchenSinkTxn.Tags[0])
+	assert.Equal(t, Tag("stocks"), kitchenSinkTxn.Tags[1])
+	assert.Equal(t, Tag("retirement"), kitchenSinkTxn.Tags[2])
+	assert.Equal(t, Tag("tax-loss-harvesting"), kitchenSinkTxn.Tags[3])
 }
 
 func beancount(directives ...Directive) *AST {
