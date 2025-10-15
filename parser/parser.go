@@ -212,14 +212,54 @@ type Cost struct {
 type Account string
 
 func (a *Account) Capture(values []string) error {
-	t, _, _ := strings.Cut(values[0], ":")
+	parts := strings.Split(values[0], ":")
+
+	// Validate first segment (account type)
+	if len(parts) < 2 {
+		return fmt.Errorf("account must have at least two segments: %s", values[0])
+	}
+
+	t := parts[0]
 	switch t {
 	case "Assets", "Liabilities", "Equity", "Income", "Expenses":
-		*a = Account(values[0])
-		return nil
 	default:
 		return fmt.Errorf(`unexpected account type "%s"`, t)
 	}
+
+	// Validate subsequent segments
+	for i := 1; i < len(parts); i++ {
+		if !isValidAccountSegment(parts[i]) {
+			return fmt.Errorf("invalid account segment at position %d: %s", i, parts[i])
+		}
+	}
+
+	*a = Account(values[0])
+	return nil
+}
+
+// isValidAccountSegment checks if an account segment (after first) is valid.
+// Must start with uppercase letter or digit, can contain alphanumerics and hyphens.
+func isValidAccountSegment(segment string) bool {
+	if len(segment) == 0 {
+		return false
+	}
+
+	// First character must be uppercase or digit
+	first := segment[0]
+	if (first < 'A' || first > 'Z') && (first < '0' || first > '9') {
+		return false
+	}
+
+	// Rest can be alphanumeric or hyphen
+	for i := 1; i < len(segment); i++ {
+		ch := segment[i]
+		if (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') &&
+			(ch < '0' || ch > '9') && ch != '-' {
+			return false
+		}
+	}
+
+	return true
 }
 
 type Date struct {
@@ -282,7 +322,7 @@ type Include struct {
 var (
 	lex = lexer.MustSimple([]lexer.SimpleRule{
 		{"Date", `\d{4}-\d{2}-\d{2}`},
-		{"Account", `[A-Z][[:alpha:]]*(:[0-9A-Z][[:alnum:]]+(-[[:alnum:]]+)?)+`},
+		{"Account", `[A-Z][A-Za-z]*:[A-Za-z0-9][A-Za-z0-9:-]*`},
 		{"String", `"[^"]*"`},
 		{"Number", `[-+]?(\d*\.)?\d+`},
 		{"Link", `\^[A-Za-z0-9_-]+`},

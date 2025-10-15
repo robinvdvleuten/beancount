@@ -720,6 +720,87 @@ func TestDateCapture(t *testing.T) {
 	}
 }
 
+func TestAccountCapture(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "ValidSimpleAccount",
+			input:   "Assets:Cash",
+			wantErr: false,
+		},
+		{
+			name:    "ValidNestedAccount",
+			input:   "Assets:US:BofA:Checking",
+			wantErr: false,
+		},
+		{
+			name:    "ValidAccountWithHyphen",
+			input:   "Equity:Opening-Balances",
+			wantErr: false,
+		},
+		{
+			name:    "ValidAccountWithNumbers",
+			input:   "Expenses:Taxes:Y2021:US:Federal",
+			wantErr: false,
+		},
+		{
+			name:    "ValidAccountStartingWithNumber",
+			input:   "Assets:US:Federal:401k",
+			wantErr: false,
+		},
+		{
+			name:    "ValidAccountWithMixedCase",
+			input:   "Assets:US:Federal:PreTax401k",
+			wantErr: false,
+		},
+		{
+			name:    "InvalidAccountType",
+			input:   "Foo:Bar",
+			wantErr: true,
+			errMsg:  `unexpected account type "Foo"`,
+		},
+		{
+			name:    "InvalidSegmentStartsWithLowercase",
+			input:   "Assets:us:BofA",
+			wantErr: true,
+			errMsg:  "invalid account segment at position 1: us",
+		},
+		{
+			name:    "InvalidSegmentStartsWithHyphen",
+			input:   "Assets:-Invalid",
+			wantErr: true,
+			errMsg:  "invalid account segment at position 1: -Invalid",
+		},
+		{
+			name:    "InvalidEmptySegment",
+			input:   "Assets::Checking",
+			wantErr: true,
+			errMsg:  "invalid account segment at position 1: ",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			a := Account("")
+			err := a.Capture([]string{tt.input})
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.errMsg != "" {
+					assert.EqualError(t, err, tt.errMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, Account(tt.input), a)
+			}
+		})
+	}
+}
+
 func beancount(directives ...Directive) *AST {
 	return &AST{Directives: directives}
 }
