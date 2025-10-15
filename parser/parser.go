@@ -160,10 +160,11 @@ func (e *Event) date() *Date       { return e.Date }
 func (e *Event) Directive() string { return "event" }
 
 type Transaction struct {
-	Date      *Date  `parser:"@Date ('txn' | "`
-	Flag      string `parser:"@('*' | '!' | 'P') )"`
-	Payee     string `parser:"@(String (?= String))?"`
-	Narration string `parser:"@String?"`
+	Date      *Date    `parser:"@Date ('txn' | "`
+	Flag      string   `parser:"@('*' | '!' | 'P') )"`
+	Payee     string   `parser:"@(String (?= String))?"`
+	Narration string   `parser:"@String?"`
+	Links     []string `parser:"@Link*"`
 
 	withMetadata
 
@@ -239,6 +240,7 @@ var (
 		{"Account", `[A-Z][[:alpha:]]*(:[0-9A-Z][[:alnum:]]+(-[[:alnum:]]+)?)+`},
 		{"String", `"[^"]*"`},
 		{"Number", `[-+]?(\d*\.)?\d+`},
+		{"Link", `\^[A-Za-z0-9_-]+`},
 		{"Ident", `[A-Za-z][0-9A-Za-z_-]*`},
 		{"Punct", `[!*:,@{}]+`},
 		{"Comment", `;[^\n]*\n`},

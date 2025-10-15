@@ -196,6 +196,41 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "TransactionWithLink",
+			beancount: `
+				2014-02-05 * "Invoice for January" ^invoice-pepe-studios-jan14
+					Assets:AccountsReceivable         -8450.00 USD
+					Income:Clients:PepeStudios
+			`,
+			expected: beancount(
+				withLinks(
+					transaction("2014-02-05", "*", "", "Invoice for January",
+						posting("Assets:AccountsReceivable", "", amount("-8450.00", "USD"), nil, false, nil),
+						posting("Income:Clients:PepeStudios", "", nil, nil, false, nil),
+					),
+					"^invoice-pepe-studios-jan14",
+				),
+			),
+		},
+		{
+			name: "TransactionWithMultipleLinks",
+			beancount: `
+				2014-02-20 * "Check deposit - paying invoice" ^invoice-pepe-studios-jan14 ^payment-check
+					Assets:BofA:Checking               8450.00 USD
+					Assets:AccountsReceivable
+			`,
+			expected: beancount(
+				withLinks(
+					transaction("2014-02-20", "*", "", "Check deposit - paying invoice",
+						posting("Assets:BofA:Checking", "", amount("8450.00", "USD"), nil, false, nil),
+						posting("Assets:AccountsReceivable", "", nil, nil, false, nil),
+					),
+					"^invoice-pepe-studios-jan14",
+					"^payment-check",
+				),
+			),
+		},
+		{
 			name: "TransactionWithMetadata",
 			beancount: `
 			2013-08-26 * "Buying some shares of Hooli"
@@ -508,4 +543,9 @@ func meta(key string, value string) *Metadata {
 func withMeta[W WithMetadata](w W, metadata ...*Metadata) W {
 	w.AddMetadata(metadata...)
 	return w
+}
+
+func withLinks(t *Transaction, links ...string) *Transaction {
+	t.Links = links
+	return t
 }
