@@ -275,8 +275,36 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				transaction("2014-02-11", "*", "", "Bought shares of S&P 500",
-					posting("Assets:ETrade:IVV", "", amount("10", "IVV"), nil, false, amount("183.07", "USD")),
+					posting("Assets:ETrade:IVV", "", amount("10", "IVV"), nil, false, cost(amount("183.07", "USD"), nil)),
 					posting("Assets:ETrade:Cash", "", amount("-1830.70", "USD"), nil, false, nil),
+				),
+			),
+		},
+		{
+			name: "TransactionWithCostAndDate",
+			beancount: `
+				2021-09-22 * "Buy shares of ITOT"
+					Assets:US:ETrade:ITOT                16 ITOT {85.66 USD, 2021-09-22}
+					Assets:US:ETrade:Cash           -1379.51 USD
+			`,
+			expected: beancount(
+				transaction("2021-09-22", "*", "", "Buy shares of ITOT",
+					posting("Assets:US:ETrade:ITOT", "", amount("16", "ITOT"), nil, false, cost(amount("85.66", "USD"), date("2021-09-22"))),
+					posting("Assets:US:ETrade:Cash", "", amount("-1379.51", "USD"), nil, false, nil),
+				),
+			),
+		},
+		{
+			name: "TransactionWithCostDateAndPrice",
+			beancount: `
+				2021-12-15 * "Sell specific lot"
+					Assets:US:ETrade:ITOT               -16 ITOT {85.66 USD, 2021-09-22} @ 90.10 USD
+					Assets:US:ETrade:Cash
+			`,
+			expected: beancount(
+				transaction("2021-12-15", "*", "", "Sell specific lot",
+					posting("Assets:US:ETrade:ITOT", "", amount("-16", "ITOT"), amount("90.10", "USD"), false, cost(amount("85.66", "USD"), date("2021-09-22"))),
+					posting("Assets:US:ETrade:Cash", "", nil, nil, false, nil),
 				),
 			),
 		},
@@ -500,12 +528,16 @@ func transaction(d string, flag string, payee string, narration string, postings
 	return &Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
 }
 
-func posting(account Account, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Amount) *Posting {
+func posting(account Account, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Cost) *Posting {
 	return &Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
 }
 
 func amount(value string, currency string) *Amount {
 	return &Amount{Value: value, Currency: currency}
+}
+
+func cost(amount *Amount, d *Date) *Cost {
+	return &Cost{Amount: amount, Date: d}
 }
 
 func date(value string) *Date {

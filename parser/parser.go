@@ -180,9 +180,9 @@ type Posting struct {
 	Flag       string  `parser:"@('*' | '!')?"`
 	Account    Account `parser:"@Account"`
 	Amount     *Amount `parser:"(@@"`
+	Cost       *Cost   `parser:"@@?"`
 	PriceTotal bool    `parser:"(('@' | @'@@')"`
-	Price      *Amount `parser:"@@)?"`
-	Cost       *Amount `parser:"('{' @@ '}')?)?"`
+	Price      *Amount `parser:"@@)?)?"`
 
 	withMetadata
 }
@@ -190,6 +190,11 @@ type Posting struct {
 type Amount struct {
 	Value    string `parser:"@Number"`
 	Currency string `parser:"@Ident"`
+}
+
+type Cost struct {
+	Amount *Amount `parser:"'{' @@"`
+	Date   *Date   `parser:"(',' @Date)? '}'"`
 }
 
 type Account string
