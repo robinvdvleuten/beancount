@@ -160,12 +160,12 @@ func (e *Event) date() *Date       { return e.Date }
 func (e *Event) Directive() string { return "event" }
 
 type Transaction struct {
-	Date      *Date    `parser:"@Date ('txn' | "`
-	Flag      string   `parser:"@('*' | '!' | 'P') )"`
-	Payee     string   `parser:"@(String (?= String))?"`
-	Narration string   `parser:"@String?"`
-	Links     []Link   `parser:"@Link*"`
-	Tags      []Tag    `parser:"@Tag*"`
+	Date      *Date  `parser:"@Date ('txn' | "`
+	Flag      string `parser:"@('*' | '!' | 'P') )"`
+	Payee     string `parser:"@(String (?= String))?"`
+	Narration string `parser:"@String?"`
+	Links     []Link `parser:"@Link*"`
+	Tags      []Tag  `parser:"@Tag*"`
 
 	withMetadata
 
@@ -252,7 +252,7 @@ type Option struct {
 }
 
 type Include struct {
-	Filename  string `parser:"'include' @String"`
+	Filename string `parser:"'include' @String"`
 }
 
 var (

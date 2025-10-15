@@ -617,11 +617,11 @@ func TestParseKitchenSink(t *testing.T) {
 
 	ast, err := ParseBytes(data)
 	assert.NoError(t, err)
-	
+
 	// Verify we parsed all the directives
 	assert.True(t, len(ast.Directives) > 0, "Should have parsed directives")
 	assert.True(t, len(ast.Options) > 0, "Should have parsed options")
-	
+
 	// Find and verify the kitchen sink transaction
 	var kitchenSinkTxn *Transaction
 	for _, dir := range ast.Directives {
@@ -632,17 +632,17 @@ func TestParseKitchenSink(t *testing.T) {
 			}
 		}
 	}
-	
+
 	assert.True(t, kitchenSinkTxn != nil, "Should find kitchen sink transaction")
 	assert.Equal(t, 2, len(kitchenSinkTxn.Links), "Should have 2 links")
 	assert.Equal(t, 4, len(kitchenSinkTxn.Tags), "Should have 4 tags")
 	assert.Equal(t, 3, len(kitchenSinkTxn.Metadata), "Should have 3 metadata entries")
 	assert.Equal(t, 5, len(kitchenSinkTxn.Postings), "Should have 5 postings")
-	
+
 	// Verify links are stripped of ^
 	assert.Equal(t, Link("rebalance-q4"), kitchenSinkTxn.Links[0])
 	assert.Equal(t, Link("invoice-2021-1215"), kitchenSinkTxn.Links[1])
-	
+
 	// Verify tags are stripped of #
 	assert.Equal(t, Tag("investment"), kitchenSinkTxn.Tags[0])
 	assert.Equal(t, Tag("stocks"), kitchenSinkTxn.Tags[1])
