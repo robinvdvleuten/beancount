@@ -2,9 +2,11 @@ package parser
 
 import (
 	"os"
+	"reflect"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/alecthomas/repr"
 )
 
@@ -650,6 +652,8 @@ func TestParse(t *testing.T) {
 			if test.fail != "" {
 				assert.EqualError(t, err, test.fail)
 			} else {
+				normalizeAST(ast)
+
 				assert.NoError(t, err)
 				assert.Equal(t,
 					repr.String(test.expected, repr.Indent("  ")),
@@ -854,6 +858,54 @@ func TestAccountCapture(t *testing.T) {
 				assert.Equal(t, Account(tt.input), a)
 			}
 		})
+	}
+}
+
+func normalizeAST(ast *AST) {
+	if ast == nil {
+		return
+	}
+
+	for _, dir := range ast.Directives {
+		normalizeDirective(dir)
+	}
+
+	for _, opt := range ast.Options {
+		if opt != nil {
+			opt.Pos = lexer.Position{}
+		}
+	}
+
+	for _, inc := range ast.Includes {
+		if inc != nil {
+			inc.Pos = lexer.Position{}
+		}
+	}
+}
+
+func normalizeDirective(d Directive) {
+	if d == nil {
+		return
+	}
+
+	rv := reflect.ValueOf(d)
+	if rv.IsNil() {
+		return
+	}
+
+	rv = reflect.Indirect(rv)
+	posField := rv.FieldByName("Pos")
+	if posField.IsValid() && posField.CanSet() {
+		posField.Set(reflect.ValueOf(lexer.Position{}))
+	}
+
+	switch dir := d.(type) {
+	case *Transaction:
+		for _, posting := range dir.Postings {
+			if posting != nil {
+				posting.Pos = lexer.Position{}
+			}
+		}
 	}
 }
 

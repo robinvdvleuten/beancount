@@ -54,6 +54,7 @@ type Directive interface {
 }
 
 type Commodity struct {
+	Pos      lexer.Position
 	Date     *Date  `parser:"@Date 'commodity'"`
 	Currency string `parser:"@Ident"`
 
@@ -66,6 +67,7 @@ func (c *Commodity) date() *Date       { return c.Date }
 func (c *Commodity) Directive() string { return "commodity" }
 
 type Open struct {
+	Pos                  lexer.Position
 	Date                 *Date    `parser:"@Date 'open'"`
 	Account              Account  `parser:"@Account"`
 	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
@@ -80,6 +82,7 @@ func (o *Open) date() *Date       { return o.Date }
 func (o *Open) Directive() string { return "open" }
 
 type Close struct {
+	Pos     lexer.Position
 	Date    *Date   `parser:"@Date 'close'"`
 	Account Account `parser:"@Account"`
 
@@ -92,6 +95,7 @@ func (c *Close) date() *Date       { return c.Date }
 func (c *Close) Directive() string { return "close" }
 
 type Balance struct {
+	Pos     lexer.Position
 	Date    *Date   `parser:"@Date 'balance'"`
 	Account Account `parser:"@Account"`
 	Amount  *Amount `parser:"@@"`
@@ -105,6 +109,7 @@ func (b *Balance) date() *Date       { return b.Date }
 func (b *Balance) Directive() string { return "balance" }
 
 type Pad struct {
+	Pos        lexer.Position
 	Date       *Date   `parser:"@Date 'pad'"`
 	Account    Account `parser:"@Account"`
 	AccountPad Account `parser:"@Account"`
@@ -118,6 +123,7 @@ func (p *Pad) date() *Date       { return p.Date }
 func (p *Pad) Directive() string { return "pad" }
 
 type Note struct {
+	Pos         lexer.Position
 	Date        *Date   `parser:"@Date 'note'"`
 	Account     Account `parser:"@Account"`
 	Description string  `parser:"@String"`
@@ -131,6 +137,7 @@ func (n *Note) date() *Date       { return n.Date }
 func (n *Note) Directive() string { return "note" }
 
 type Document struct {
+	Pos            lexer.Position
 	Date           *Date   `parser:"@Date 'document'"`
 	Account        Account `parser:"@Account"`
 	PathToDocument string  `parser:"@String"`
@@ -144,6 +151,7 @@ func (d *Document) date() *Date       { return d.Date }
 func (d *Document) Directive() string { return "document" }
 
 type Price struct {
+	Pos       lexer.Position
 	Date      *Date   `parser:"@Date 'price'"`
 	Commodity string  `parser:"@Ident"`
 	Amount    *Amount `parser:"@@"`
@@ -157,6 +165,7 @@ func (p *Price) date() *Date       { return p.Date }
 func (p *Price) Directive() string { return "price" }
 
 type Event struct {
+	Pos   lexer.Position
 	Date  *Date  `parser:"@Date 'event'"`
 	Name  string `parser:"@String"`
 	Value string `parser:"@String"`
@@ -170,6 +179,7 @@ func (e *Event) date() *Date       { return e.Date }
 func (e *Event) Directive() string { return "event" }
 
 type Transaction struct {
+	Pos       lexer.Position
 	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!' | 'P') )"`
 	Payee     string `parser:"@(String (?= String))?"`
@@ -188,6 +198,7 @@ func (t *Transaction) date() *Date       { return t.Date }
 func (t *Transaction) Directive() string { return "transaction" }
 
 type Posting struct {
+	Pos         lexer.Position
 	Flag        string  `parser:"@('*' | '!')?"`
 	Account     Account `parser:"@Account"`
 	Amount      *Amount `parser:"(@@"`
@@ -335,11 +346,13 @@ type Metadata struct {
 }
 
 type Option struct {
+	Pos   lexer.Position
 	Name  string `parser:"'option' @String"`
 	Value string `parser:"@String"`
 }
 
 type Include struct {
+	Pos      lexer.Position
 	Filename string `parser:"'include' @String"`
 }
 
@@ -355,7 +368,7 @@ var (
 		{"Punct", `[!*:,@{}]`},
 		{"Comment", `;[^\n]*\n`},
 		{"Whitespace", `[[:space:]]`},
-		{"ignore", `[\s\S]*`},
+		{"ignore", `.`},
 	})
 
 	parser = participle.MustBuild[AST](
