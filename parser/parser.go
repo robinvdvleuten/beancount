@@ -15,7 +15,7 @@ type Directives []Directive
 
 func (d Directives) Len() int           { return len(d) }
 func (d Directives) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
-func (d Directives) Less(i, j int) bool { return d[i].date().Before(time.Time(d[j].date().Time)) }
+func (d Directives) Less(i, j int) bool { return d[i].date().Before(d[j].date().Time) }
 
 type AST struct {
 	Directives Directives `parser:"(@@"`
