@@ -421,6 +421,34 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "TransactionWithMergeCost",
+			beancount: `
+				2021-09-22 * "Average cost basis"
+					Assets:Stocks                          10 AAPL {*}
+					Assets:Cash
+			`,
+			expected: beancount(
+				transaction("2021-09-22", "*", "", "Average cost basis",
+					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, mergeCost()),
+					posting("Assets:Cash", "", nil, nil, false, nil),
+				),
+			),
+		},
+		{
+			name: "TransactionWithMergeCostAndLabel",
+			beancount: `
+				2021-09-22 * "Average cost basis with label"
+					Assets:Stocks                          10 AAPL {*, "Consolidated"}
+					Assets:Cash
+			`,
+			expected: beancount(
+				transaction("2021-09-22", "*", "", "Average cost basis with label",
+					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, mergeCostWithLabel("Consolidated")),
+					posting("Assets:Cash", "", nil, nil, false, nil),
+				),
+			),
+		},
+		{
 			name: "TransactionWithPadding",
 			beancount: `
 				2002-01-17 P "(Padding inserted for balance of 987.34 USD)"
@@ -882,15 +910,23 @@ func amount(value string, currency string) *Amount {
 }
 
 func cost(amount *Amount, d *Date) *Cost {
-	return &Cost{Amount: amount, Date: d, Label: ""}
+	return &Cost{IsMerge: false, Amount: amount, Date: d, Label: ""}
 }
 
 func costWithLabel(amount *Amount, d *Date, label string) *Cost {
-	return &Cost{Amount: amount, Date: d, Label: label}
+	return &Cost{IsMerge: false, Amount: amount, Date: d, Label: label}
 }
 
 func emptyCost() *Cost {
-	return &Cost{Amount: nil, Date: nil, Label: ""}
+	return &Cost{IsMerge: false, Amount: nil, Date: nil, Label: ""}
+}
+
+func mergeCost() *Cost {
+	return &Cost{IsMerge: true, Amount: nil, Date: nil, Label: ""}
+}
+
+func mergeCostWithLabel(label string) *Cost {
+	return &Cost{IsMerge: true, Amount: nil, Date: nil, Label: label}
 }
 
 func date(value string) *Date {

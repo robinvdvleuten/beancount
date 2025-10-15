@@ -205,15 +205,22 @@ type Amount struct {
 }
 
 type Cost struct {
-	Amount *Amount `parser:"'{' @@?"`
-	Date   *Date   `parser:"(',' @Date)?"`
-	Label  string  `parser:"(',' @String)? '}'"`
+	IsMerge bool    `parser:"'{' (@'*'"`
+	Amount  *Amount `parser:"| @@)?"`
+	Date    *Date   `parser:"(',' @Date)?"`
+	Label   string  `parser:"(',' @String)? '}'"`
 }
 
 // IsEmpty returns true if this is an empty cost specification {}.
 // Distinguishes between nil (no cost) and empty cost (any lot selection).
 func (c *Cost) IsEmpty() bool {
-	return c != nil && c.Amount == nil && c.Date == nil && c.Label == ""
+	return c != nil && !c.IsMerge && c.Amount == nil && c.Date == nil && c.Label == ""
+}
+
+// IsMergeCost returns true if this is a merge cost specification {*}.
+// Used to average all lots together.
+func (c *Cost) IsMergeCost() bool {
+	return c != nil && c.IsMerge
 }
 
 type Account string
