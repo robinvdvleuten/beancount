@@ -8,6 +8,7 @@ require (
 	github.com/alecthomas/participle/v2 v2.1.4
 	github.com/alecthomas/repr v0.5.2
 	github.com/mattn/go-runewidth v0.0.19
+	github.com/shopspring/decimal v1.4.0
 	golang.org/x/exp v0.0.0-20230811145659-89c5cff77bcb
 )
 

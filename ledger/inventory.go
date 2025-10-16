@@ -1,0 +1,236 @@
+package ledger
+
+import (
+	"fmt"
+	"sort"
+
+	"github.com/shopspring/decimal"
+)
+
+// Inventory tracks lots of commodities with cost basis
+type Inventory struct {
+	// Map: commodity -> list of lots
+	lots map[string][]*Lot
+}
+
+// NewInventory creates a new inventory
+func NewInventory() *Inventory {
+	return &Inventory{
+		lots: make(map[string][]*Lot),
+	}
+}
+
+// Add adds an amount without cost basis
+func (inv *Inventory) Add(commodity string, amount decimal.Decimal) {
+	// Add as a lot without cost spec
+	inv.AddLot(commodity, amount, nil)
+}
+
+// AddLot adds an amount with a specific cost basis
+func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *LotSpec) {
+	// Find existing lot with matching spec
+	lots := inv.lots[commodity]
+	for _, lot := range lots {
+		if lotSpecsMatch(lot.Spec, spec) {
+			// Add to existing lot
+			lot.Amount = lot.Amount.Add(amount)
+			return
+		}
+	}
+
+	// Create new lot
+	newLot := NewLot(commodity, amount, spec)
+	inv.lots[commodity] = append(inv.lots[commodity], newLot)
+}
+
+// Get returns the total amount of a commodity (summing all lots)
+func (inv *Inventory) Get(commodity string) decimal.Decimal {
+	total := decimal.Zero
+	for _, lot := range inv.lots[commodity] {
+		total = total.Add(lot.Amount)
+	}
+	return total
+}
+
+// GetLots returns all lots for a commodity
+func (inv *Inventory) GetLots(commodity string) []*Lot {
+	return inv.lots[commodity]
+}
+
+// ReduceLot reduces from a specific lot or uses booking method
+func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *LotSpec, bookingMethod string) error {
+	// Reducing means amount should be negative
+	if amount.GreaterThanOrEqual(decimal.Zero) {
+		return fmt.Errorf("reduce amount must be negative, got %s", amount.String())
+	}
+
+	// Get absolute value for comparison
+	reduceAmount := amount.Abs()
+
+	// Empty spec {} means use booking method
+	if spec != nil && spec.IsEmpty() {
+		return inv.reduceWithBooking(commodity, reduceAmount, bookingMethod)
+	}
+
+	// Specific lot spec - find matching lot
+	if spec != nil && spec.Cost != nil {
+		return inv.reduceSpecificLot(commodity, reduceAmount, spec)
+	}
+
+	// No spec at all - treat as simple amount
+	// Just add the negative amount to first available lot or create new lot
+	inv.AddLot(commodity, amount, nil)
+	return nil
+}
+
+// reduceSpecificLot reduces from a specific lot matching the spec
+func (inv *Inventory) reduceSpecificLot(commodity string, amount decimal.Decimal, spec *LotSpec) error {
+	lots := inv.lots[commodity]
+
+	// Find matching lot
+	for _, lot := range lots {
+		if lotSpecsMatch(lot.Spec, spec) {
+			// Check if sufficient amount
+			if lot.Amount.LessThan(amount) {
+				return fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
+					spec.String(), lot.Amount.String(), amount.String())
+			}
+
+			// Reduce from lot
+			lot.Amount = lot.Amount.Sub(amount)
+
+			// Remove lot if empty
+			if lot.Amount.IsZero() {
+				inv.removeLot(commodity, lot)
+			}
+
+			return nil
+		}
+	}
+
+	return fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+}
+
+// reduceWithBooking reduces using booking method (FIFO, LIFO, etc.)
+func (inv *Inventory) reduceWithBooking(commodity string, amount decimal.Decimal, bookingMethod string) error {
+	lots := inv.lots[commodity]
+
+	if len(lots) == 0 {
+		return fmt.Errorf("no lots available for %s", commodity)
+	}
+
+	// For now, implement FIFO (oldest first)
+	// Sort lots by date (lots without date come first)
+	sortedLots := make([]*Lot, len(lots))
+	copy(sortedLots, lots)
+	sort.Slice(sortedLots, func(i, j int) bool {
+		// Lots without date come first
+		if sortedLots[i].Spec == nil || sortedLots[i].Spec.Date == nil {
+			return true
+		}
+		if sortedLots[j].Spec == nil || sortedLots[j].Spec.Date == nil {
+			return false
+		}
+		// Sort by date
+		return sortedLots[i].Spec.Date.Before(sortedLots[j].Spec.Date.Time)
+	})
+
+	// Reduce from lots in FIFO order
+	remaining := amount
+	for _, lot := range sortedLots {
+		if remaining.IsZero() {
+			break
+		}
+
+		if lot.Amount.GreaterThanOrEqual(remaining) {
+			// This lot has enough
+			lot.Amount = lot.Amount.Sub(remaining)
+			if lot.Amount.IsZero() {
+				inv.removeLot(commodity, lot)
+			}
+			remaining = decimal.Zero
+		} else {
+			// Take all from this lot
+			remaining = remaining.Sub(lot.Amount)
+			lot.Amount = decimal.Zero
+			inv.removeLot(commodity, lot)
+		}
+	}
+
+	if !remaining.IsZero() {
+		return fmt.Errorf("insufficient total amount for %s: need %s more",
+			commodity, remaining.String())
+	}
+
+	return nil
+}
+
+// removeLot removes a lot from the inventory
+func (inv *Inventory) removeLot(commodity string, lotToRemove *Lot) {
+	lots := inv.lots[commodity]
+	newLots := make([]*Lot, 0, len(lots)-1)
+	for _, lot := range lots {
+		if lot != lotToRemove {
+			newLots = append(newLots, lot)
+		}
+	}
+	if len(newLots) == 0 {
+		delete(inv.lots, commodity)
+	} else {
+		inv.lots[commodity] = newLots
+	}
+}
+
+// IsEmpty returns true if the inventory has no lots
+func (inv *Inventory) IsEmpty() bool {
+	return len(inv.lots) == 0
+}
+
+// Currencies returns all commodities in the inventory
+func (inv *Inventory) Currencies() []string {
+	currencies := make([]string, 0, len(inv.lots))
+	for currency := range inv.lots {
+		currencies = append(currencies, currency)
+	}
+	return currencies
+}
+
+// String returns a string representation of the inventory
+func (inv *Inventory) String() string {
+	if inv.IsEmpty() {
+		return "{}"
+	}
+
+	result := "{"
+	first := true
+	for commodity, lots := range inv.lots {
+		for _, lot := range lots {
+			if !first {
+				result += ", "
+			}
+			if lot.Spec == nil || lot.Spec.IsEmpty() {
+				result += fmt.Sprintf("%s %s", lot.Amount.String(), commodity)
+			} else {
+				result += lot.String()
+			}
+			first = false
+		}
+	}
+	result += "}"
+	return result
+}
+
+// lotSpecsMatch checks if two lot specs match
+func lotSpecsMatch(a, b *LotSpec) bool {
+	// Both nil
+	if a == nil && b == nil {
+		return true
+	}
+
+	// One nil, one not
+	if a == nil || b == nil {
+		return false
+	}
+
+	return a.Equal(b)
+}
