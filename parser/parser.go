@@ -303,6 +303,16 @@ func (d *Date) Capture(values []string) error {
 	return nil
 }
 
+// IsZero returns true if the Date is nil or represents the zero time.
+// This method is nil-safe to prevent panics when repr or other libraries
+// check if fields are zero-valued.
+func (d *Date) IsZero() bool {
+	if d == nil {
+		return true
+	}
+	return d.Time.IsZero()
+}
+
 type Link string
 
 func (l *Link) Capture(values []string) error {
