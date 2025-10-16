@@ -1,6 +1,6 @@
 module github.com/robinvdvleuten/beancount
 
-go 1.19
+go 1.24
 
 require (
 	github.com/alecthomas/assert/v2 v2.11.0
