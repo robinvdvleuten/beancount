@@ -560,7 +560,7 @@ func TestParse(t *testing.T) {
 			beancount: `
 				1980-05-12 open Foo:Bar
 			`,
-			fail: `Open.Account: unexpected account type "Foo"`,
+			fail: `2:20: failed to capture: unexpected account type "Foo"`,
 		},
 		{
 			name: "Kitchensink",
