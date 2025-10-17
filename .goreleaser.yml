@@ -29,3 +29,21 @@ archives:
     files:
       - COPYING
       - README*
+
+homebrew_casks:
+  - repository:
+      owner: robinvdvleuten
+      name: homebrew-tap
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr",
+              args: ["-dr", "com.apple.quarantine", "#{staged_path}/beancount"]
+          end
+    commit_author:
+      name: "Robin van der Vleuten"
+      email: "robin@webstronauts.com"
+    homepage: "https://github.com/robinvdvleuten/beancount"
+    description: "A fast, lightweight Beancount parser and formatter written in Go"
+    skip_upload: auto
