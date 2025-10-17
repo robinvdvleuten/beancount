@@ -52,3 +52,38 @@ homebrew_casks:
     homepage: "https://github.com/robinvdvleuten/beancount"
     description: "A fast, lightweight Beancount parser and formatter written in Go"
     skip_upload: auto
+
+changelog:
+  use: github
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "^style:"
+      - "^build:"
+      - "Merge"
+  groups:
+    - title: "⚠️ Breaking Changes"
+      regexp: "^.*!(\\([[:word:]]+\\))?:.+$"
+      order: 0
+    - title: "Added"
+      # Maps feat: commits to "Added"
+      regexp: "^.*?feat(\\([[:word:]]+\\))?:.+$"
+      order: 1
+    - title: "Fixed"
+      # Maps fix: commits to "Fixed"
+      regexp: "^.*?fix(\\([[:word:]]+\\))?:.+$"
+      order: 2
+    - title: "Changed"
+      # Maps refactor: and perf: to "Changed"
+      regexp: "^.*?(refactor|perf)(\\([[:word:]]+\\))?:.+$"
+      order: 3
+    - title: "Security"
+      # Security-related commits (use in scope or description)
+      regexp: ".*security.*"
+      order: 4
+    - title: "Other Changes"
+      order: 999
