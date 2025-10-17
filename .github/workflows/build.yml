@@ -1,8 +1,8 @@
-name: test
+name: build
 on: [push, pull_request]
 
 jobs:
-  test:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -13,4 +13,5 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
+      - run: go build -v ./...
       - run: go test ./...
