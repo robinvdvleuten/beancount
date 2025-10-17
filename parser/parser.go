@@ -59,6 +59,16 @@ type Directive interface {
 	Directive() string
 }
 
+// Commodity declares a commodity or currency that can be used in the ledger.
+// This directive is optional but helps document which currencies and commodities
+// are expected in your accounts. It establishes the existence of a tradable
+// instrument and can be used with metadata to specify display precision and formatting.
+//
+// Example:
+//
+//	2014-01-01 commodity USD
+//	  name: "US Dollar"
+//	  asset-class: "cash"
 type Commodity struct {
 	Pos      lexer.Position
 	Date     *Date  `parser:"@Date 'commodity'"`
@@ -72,6 +82,15 @@ var _ Directive = &Commodity{}
 func (c *Commodity) date() *Date       { return c.Date }
 func (c *Commodity) Directive() string { return "commodity" }
 
+// Open declares the opening of an account at a specific date, marking the beginning
+// of its lifetime in the ledger. You can optionally constrain which currencies the
+// account may hold and specify a booking method (STRICT, NONE, AVERAGE, FIFO, LIFO)
+// for lot tracking. All accounts must be opened before they can be used in transactions.
+//
+// Example:
+//
+//	2014-05-01 open Assets:US:BofA:Checking USD
+//	2014-05-01 open Assets:Investments:Brokerage USD,EUR "FIFO"
 type Open struct {
 	Pos                  lexer.Position
 	Date                 *Date    `parser:"@Date 'open'"`
@@ -87,6 +106,14 @@ var _ Directive = &Open{}
 func (o *Open) date() *Date       { return o.Date }
 func (o *Open) Directive() string { return "open" }
 
+// Close declares the closing of an account at a specific date, marking the end of
+// its lifetime in the ledger. After this date, the account should have a zero balance
+// and no new transactions should be posted to it. This helps catch errors if you
+// accidentally post transactions to closed accounts.
+//
+// Example:
+//
+//	2015-09-23 close Assets:US:BofA:Checking
 type Close struct {
 	Pos     lexer.Position
 	Date    *Date   `parser:"@Date 'close'"`
@@ -100,6 +127,15 @@ var _ Directive = &Close{}
 func (c *Close) date() *Date       { return c.Date }
 func (c *Close) Directive() string { return "close" }
 
+// Balance asserts that an account should have a specific balance at the beginning
+// of a given date. This directive is used to verify the integrity of your ledger
+// against external statements like bank statements or brokerage reports. If the
+// calculated balance doesn't match the assertion, an error will be raised.
+//
+// Example:
+//
+//	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
+//	2014-08-09 balance Assets:Investments:Brokerage 10.00 HOOL {518.73 USD}
 type Balance struct {
 	Pos     lexer.Position
 	Date    *Date   `parser:"@Date 'balance'"`
@@ -114,6 +150,15 @@ var _ Directive = &Balance{}
 func (b *Balance) date() *Date       { return b.Date }
 func (b *Balance) Directive() string { return "balance" }
 
+// Pad automatically inserts a transaction to bring an account to a specific balance
+// determined by the next balance assertion. The padding amount is calculated from the
+// difference needed and posted against AccountPad (typically an equity account).
+// This is useful for initializing opening balances without manual calculation.
+//
+// Example:
+//
+//	2014-01-01 pad Assets:US:BofA:Checking Equity:Opening-Balances
+//	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
 type Pad struct {
 	Pos        lexer.Position
 	Date       *Date   `parser:"@Date 'pad'"`
@@ -128,6 +173,14 @@ var _ Directive = &Pad{}
 func (p *Pad) date() *Date       { return p.Date }
 func (p *Pad) Directive() string { return "pad" }
 
+// Note attaches a dated comment or note to an account, allowing you to record
+// important information about an account at a specific point in time. These notes
+// can be used to track customer service calls, account changes, or any other
+// significant events related to the account.
+//
+// Example:
+//
+//	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
 type Note struct {
 	Pos         lexer.Position
 	Date        *Date   `parser:"@Date 'note'"`
@@ -142,6 +195,15 @@ var _ Directive = &Note{}
 func (n *Note) date() *Date       { return n.Date }
 func (n *Note) Directive() string { return "note" }
 
+// Document associates an external file (such as a receipt, invoice, statement, or
+// contract) with an account at a specific date. The path can be absolute or relative
+// to the ledger file. This creates an audit trail linking your ledger entries to
+// supporting documentation.
+//
+// Example:
+//
+//	2014-07-09 document Assets:US:BofA:Checking "/documents/bank-statements/2014-07.pdf"
+//	2014-11-02 document Liabilities:CreditCard "receipts/amazon-invoice-2014-11-02.pdf"
 type Document struct {
 	Pos            lexer.Position
 	Date           *Date   `parser:"@Date 'document'"`
@@ -156,6 +218,15 @@ var _ Directive = &Document{}
 func (d *Document) date() *Date       { return d.Date }
 func (d *Document) Directive() string { return "document" }
 
+// Price declares the price of a commodity in terms of another currency at a specific
+// date. These entries are used to track exchange rates, stock prices, and other market
+// values over time. Beancount uses price directives for reporting account values at
+// market prices and for currency conversions.
+//
+// Example:
+//
+//	2014-07-09 price USD 1.08 CAD
+//	2015-04-30 price HOOL 582.26 USD
 type Price struct {
 	Pos       lexer.Position
 	Date      *Date   `parser:"@Date 'price'"`
@@ -170,6 +241,15 @@ var _ Directive = &Price{}
 func (p *Price) date() *Date       { return p.Date }
 func (p *Price) Directive() string { return "price" }
 
+// Event records a named event with a value at a specific date, allowing you to track
+// important life events, location changes, employment history, or other time-based
+// state. Events can be queried and used in reports to provide context for your
+// financial history.
+//
+// Example:
+//
+//	2014-07-09 event "location" "New York, USA"
+//	2014-09-01 event "employer" "Hooli Inc."
 type Event struct {
 	Pos   lexer.Position
 	Date  *Date  `parser:"@Date 'event'"`
@@ -184,6 +264,22 @@ var _ Directive = &Event{}
 func (e *Event) date() *Date       { return e.Date }
 func (e *Event) Directive() string { return "event" }
 
+// Transaction records a financial transaction with a date, flag, optional payee,
+// narration, and a list of postings. The flag indicates transaction status: '*' for
+// cleared/complete transactions, '!' for pending/uncleared transactions, or 'P' for
+// automatically generated padding transactions. Each transaction must have at least
+// two postings, and the sum of all posting amounts must balance to zero (double-entry
+// bookkeeping). Tags and links can be used to categorize and connect related transactions.
+//
+// Example:
+//
+//	2014-05-05 * "Cafe Mogador" "Lamb tagine with wine"
+//	  Liabilities:CreditCard:CapitalOne         -37.45 USD
+//	  Expenses:Food:Restaurant
+//
+//	2014-06-08 ! "Transfer to Savings" #savings-goal
+//	  Assets:US:BofA:Checking                  -100.00 USD
+//	  Assets:US:BofA:Savings                    100.00 USD
 type Transaction struct {
 	Pos       lexer.Position
 	Date      *Date  `parser:"@Date ('txn' | "`
@@ -203,6 +299,18 @@ var _ Directive = &Transaction{}
 func (t *Transaction) date() *Date       { return t.Date }
 func (t *Transaction) Directive() string { return "transaction" }
 
+// Posting represents a single leg of a transaction, specifying an account and optional
+// amount, cost, and price. Each transaction must have at least two postings that balance
+// to zero. One posting may omit its amount, which will be automatically inferred. Cost
+// specifications track the acquisition cost of commodities for capital gains. Price
+// specifications record the conversion rate without affecting the cost basis.
+//
+// Example postings within transactions:
+//
+//	Assets:Investments:Brokerage    10 HOOL {518.73 USD}  ; Purchase with cost
+//	Assets:Investments:Cash        200 EUR @ 1.35 USD     ; Currency conversion with price
+//	Expenses:Groceries              45.60 USD              ; Simple posting
+//	Assets:Checking                                        ; Inferred amount
 type Posting struct {
 	Pos         lexer.Position
 	Flag        string  `parser:"@('*' | '!')?"`
@@ -216,11 +324,27 @@ type Posting struct {
 	withMetadata
 }
 
+// Amount represents a numerical value with its associated currency or commodity symbol.
+// The value is stored as a string to preserve the exact decimal representation from
+// the input, avoiding floating-point precision issues.
 type Amount struct {
 	Value    string `parser:"@Number"`
 	Currency string `parser:"@Ident"`
 }
 
+// Cost represents the cost basis specification for a posting, used primarily for tracking
+// the acquisition cost of investments and other commodities. An empty cost {} selects any
+// lot automatically. A merge cost {*} averages all lots together. Otherwise, you can specify
+// the per-unit cost amount, acquisition date, and/or a label to identify specific lots for
+// capital gains calculations.
+//
+// Example cost specifications:
+//
+//	10 HOOL {518.73 USD}              ; Per-unit cost
+//	10 HOOL {518.73 USD, 2014-05-01}  ; Cost with acquisition date
+//	-5 HOOL {502.12 USD, "first-lot"} ; Cost with label for lot selection
+//	10 HOOL {}                        ; Any lot (automatic selection)
+//	10 HOOL {*}                       ; Merge/average all lots
 type Cost struct {
 	IsMerge bool    `parser:"'{' (@'*'"`
 	Amount  *Amount `parser:"| @@)?"`
@@ -240,6 +364,17 @@ func (c *Cost) IsMergeCost() bool {
 	return c != nil && c.IsMerge
 }
 
+// Account represents a Beancount account name consisting of at least two colon-separated
+// segments. The first segment (account type) must be one of the five account categories:
+// Assets, Liabilities, Equity, Income, or Expenses. Subsequent segments must start with
+// an uppercase letter or digit and can contain letters, numbers, and hyphens.
+//
+// Example accounts:
+//
+//	Assets:US:BofA:Checking
+//	Liabilities:CreditCard:CapitalOne
+//	Income:US:Acme:Salary
+//	Expenses:Home:Rent
 type Account string
 
 func (a *Account) Capture(values []string) error {
@@ -277,6 +412,9 @@ func isValidAccountSegment(segment string) bool {
 	return len(segment) > 0 && accountSegmentRegex.MatchString(segment)
 }
 
+// Date represents a calendar date in ISO 8601 format (YYYY-MM-DD). All Beancount
+// directives and transactions must have a date. Dates are used for sorting directives
+// chronologically and for balance assertions.
 type Date struct {
 	time.Time
 }
@@ -300,6 +438,11 @@ func (d *Date) IsZero() bool {
 	return d.Time.IsZero()
 }
 
+// Link represents a reference link starting with ^, used to connect related transactions
+// together. Links can be used to group transactions that are part of the same event,
+// such as a purchase and its associated payment, or multiple legs of a complex transaction.
+//
+// Example: 2014-05-05 * "Payment" ^trip-to-europe
 type Link string
 
 func (l *Link) Capture(values []string) error {
@@ -308,6 +451,11 @@ func (l *Link) Capture(values []string) error {
 	return nil
 }
 
+// Tag represents a hashtag starting with #, used to categorize and filter transactions.
+// Tags are commonly used for budgeting categories, projects, or any other classification
+// scheme. Multiple tags can be attached to a single transaction.
+//
+// Example: 2014-05-05 * "Dinner" #dining #entertainment
 type Tag string
 
 func (t *Tag) Capture(values []string) error {
@@ -316,44 +464,123 @@ func (t *Tag) Capture(values []string) error {
 	return nil
 }
 
+// Metadata represents a key-value pair that can be attached to any directive or posting.
+// Metadata entries are indented on lines immediately following the directive or posting
+// they annotate. They provide a flexible way to attach arbitrary structured information
+// such as invoice numbers, confirmation codes, or custom categorization.
+//
+// Example:
+//
+//	2014-05-05 * "Payment"
+//	  invoice: "INV-2014-05-001"
+//	  Assets:Checking  -100.00 USD
+//	    confirmation: "CONF123456"
+//	  Expenses:Services
 type Metadata struct {
 	Key   string `parser:"@Ident ':'"`
 	Value string `parser:"@(~'\\n'+)"`
 }
 
+// Option sets a configuration parameter that affects how the ledger is processed or
+// displayed. Options can control the ledger title, operating currency, plugin behavior,
+// and other processing settings. Options apply globally to the entire ledger.
+//
+// Example:
+//
+//	option "title" "Personal Ledger of John Doe"
+//	option "operating_currency" "USD"
+//	option "booking_method" "STRICT"
 type Option struct {
 	Pos   lexer.Position
 	Name  string `parser:"'option' @String"`
 	Value string `parser:"@String"`
 }
 
+// Include imports and processes directives from another Beancount file, allowing you
+// to split your ledger across multiple files for better organization. The path can be
+// absolute or relative to the file containing the include directive. Common practice is
+// to separate account definitions, price histories, and yearly transactions into different files.
+//
+// Example:
+//
+//	include "accounts.beancount"
+//	include "prices/2014.beancount"
+//	include "transactions/2014-expenses.beancount"
 type Include struct {
 	Pos      lexer.Position
 	Filename string `parser:"'include' @String"`
 }
 
+// Plugin loads a processing plugin that can transform or validate the ledger data.
+// Plugins are Python modules that run after parsing and can add new directives, check
+// for errors, or modify existing entries. An optional configuration string can be passed
+// to customize plugin behavior.
+//
+// Example:
+//
+//	plugin "beancount.plugins.auto_accounts"
+//	plugin "beancount.plugins.check_commodity" "USD,EUR,GBP"
 type Plugin struct {
 	Pos    lexer.Position
 	Name   string `parser:"'plugin' @String"`
 	Config string `parser:"@String?"`
 }
 
+// Pushtag pushes a tag onto the tag stack, causing all subsequent transactions in the
+// file to automatically receive this tag until a corresponding poptag is encountered.
+// This is useful for tagging groups of transactions that share a common category or
+// project without manually adding the tag to each transaction.
+//
+// Example:
+//
+//	pushtag #trip-europe
+//	2014-07-01 * "Flight to Paris"  ; Automatically tagged #trip-europe
+//	  Expenses:Travel  450.00 USD
+//	  Liabilities:CreditCard
+//	poptag #trip-europe
 type Pushtag struct {
 	Pos lexer.Position
 	Tag Tag `parser:"'pushtag' @Tag"`
 }
 
+// Poptag removes a tag from the tag stack, ending the automatic application of that tag
+// to subsequent transactions. It must match a previously pushed tag. Transactions appearing
+// after the poptag will no longer automatically receive the specified tag.
+//
+// Example:
+//
+//	poptag #trip-europe
 type Poptag struct {
 	Pos lexer.Position
 	Tag Tag `parser:"'poptag' @Tag"`
 }
 
+// Pushmeta pushes a metadata key-value pair onto the metadata stack, causing all
+// subsequent directives in the file to automatically receive this metadata entry until
+// a corresponding popmeta is encountered. This is useful for applying common metadata
+// such as location or trip information to groups of transactions.
+//
+// Example:
+//
+//	pushmeta location: "New York, NY"
+//	2014-07-01 * "Hotel"  ; Automatically receives location metadata
+//	  Expenses:Accommodation  150.00 USD
+//	  Liabilities:CreditCard
+//	popmeta location:
 type Pushmeta struct {
 	Pos   lexer.Position
 	Key   string `parser:"'pushmeta' @Ident ':'"`
 	Value string `parser:"@(~'\\n'+)"`
 }
 
+// Popmeta removes a metadata key from the metadata stack, ending the automatic application
+// of that metadata to subsequent directives. It must match a previously pushed metadata key.
+// Directives appearing after the popmeta will no longer automatically receive the specified
+// metadata entry.
+//
+// Example:
+//
+//	popmeta location:
 type Popmeta struct {
 	Pos lexer.Position
 	Key string `parser:"'popmeta' @Ident ':'"`
