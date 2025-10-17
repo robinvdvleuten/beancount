@@ -266,8 +266,10 @@ func TestLoadAbsolutePath(t *testing.T) {
 
 	// Create main file with absolute include path
 	mainFile := filepath.Join(tmpDir, "main.beancount")
+	// Convert to forward slashes for beancount syntax (works on all platforms)
+	includePath := filepath.ToSlash(includedFile)
 	err = os.WriteFile(mainFile, []byte(`
-include "`+includedFile+`"
+include "`+includePath+`"
 
 2024-01-02 open Assets:Checking USD
 `), 0644)
