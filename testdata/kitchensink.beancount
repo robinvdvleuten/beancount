@@ -4,6 +4,10 @@
 option "title" "Kitchen Sink - All Features Demo"
 option "operating_currency" "USD"
 
+; Plugin directives
+plugin "beancount.plugins.auto_accounts"
+plugin "beancount.plugins.check_commodity" "USD,CAD,BTC"
+
 ; Commodities
 1792-01-01 commodity USD
   name: "US Dollar"
@@ -44,8 +48,16 @@ option "operating_currency" "USD"
 ; Event
 2021-06-01 event "location" "San Francisco, CA"
 
+; Custom directive (for plugin development)
+2021-06-01 custom "budget" "quarterly" TRUE 10000.00 USD
+  category: "savings-goal"
+  notes: "Q2 budget planning"
+
 ; Note
 2021-06-01 note Assets:Bank:Checking "Switched to online statements"
+
+; Document
+2021-06-05 document Assets:Bank:Checking "statements/2021-06-checking.pdf"
 
 ; Simple transaction
 2021-06-15 * "Salary Deposit"
@@ -62,10 +74,26 @@ option "operating_currency" "USD"
   Liabilities:CreditCard:Visa    -450.00 USD
   Expenses:Transport:Flights      450.00 USD
 
-; Transaction with links and tags
-2021-07-05 * "Restaurant in NYC" ^vacation-2021 #travel #vacation #food
+; Pushtag - automatically tag following transactions
+pushtag #vacation
+
+; Transaction with links and tags (includes pushed tag)
+2021-07-05 * "Restaurant in NYC" ^vacation-2021 #travel #food
   Liabilities:CreditCard:Visa     -85.50 USD
   Expenses:Food:Restaurant         85.50 USD
+
+; Pushmeta - automatically add metadata to following directives
+pushmeta trip: "NYC Summer 2021"
+
+2021-07-06 * "Hotel in NYC"
+  Liabilities:CreditCard:Visa    -280.00 USD
+  Expenses:Housing:Rent           280.00 USD
+
+; Popmeta - stop adding metadata
+popmeta trip:
+
+; Poptag - stop adding tag
+poptag #vacation
 
 ; Transaction with metadata
 2021-08-01 * "Grocery Shopping"
