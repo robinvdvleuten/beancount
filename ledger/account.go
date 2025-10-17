@@ -59,8 +59,9 @@ func (a *Account) IsOpen(date *parser.Date) bool {
 		return false
 	}
 
-	// If there's a close date, check that the date is before closing
-	if a.CloseDate != nil && !a.CloseDate.After(date.Time) {
+	// If there's a close date, check that the date is not after closing
+	// Transactions are allowed ON the close date, but not AFTER
+	if a.CloseDate != nil && date.After(a.CloseDate.Time) {
 		return false
 	}
 
