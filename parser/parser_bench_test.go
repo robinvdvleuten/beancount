@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"os"
 	"testing"
 )
@@ -13,7 +14,7 @@ func BenchmarkParseKitchensink(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := ParseBytes(data)
+		_, err := ParseBytes(context.Background(), data)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -28,7 +29,7 @@ func BenchmarkParseExample(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := ParseBytes(data)
+		_, err := ParseBytes(context.Background(), data)
 		if err != nil {
 			b.Fatal(err)
 		}

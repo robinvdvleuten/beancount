@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"os"
 	"reflect"
 	"testing"
@@ -883,7 +884,7 @@ func TestParse(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// fmt.Println(parser.String())
 
-			ast, err := ParseString(test.beancount)
+			ast, err := ParseString(context.Background(), test.beancount)
 			if test.fail != "" {
 				assert.EqualError(t, err, test.fail)
 			} else {
@@ -902,7 +903,7 @@ func TestParseExample(t *testing.T) {
 	data, err := os.ReadFile("../testdata/example.beancount")
 	assert.NoError(t, err)
 
-	_, err = ParseBytes(data)
+	_, err = ParseBytes(context.Background(), data)
 	assert.NoError(t, err)
 }
 
@@ -910,7 +911,7 @@ func TestParseKitchenSink(t *testing.T) {
 	data, err := os.ReadFile("../testdata/kitchensink.beancount")
 	assert.NoError(t, err)
 
-	ast, err := ParseBytes(data)
+	ast, err := ParseBytes(context.Background(), data)
 	assert.NoError(t, err)
 
 	// Verify we parsed all the directives

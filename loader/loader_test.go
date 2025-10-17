@@ -1,6 +1,7 @@
 package loader
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,13 +24,13 @@ func TestLoadSingleFile(t *testing.T) {
 
 	// Test without FollowIncludes
 	ldr := New()
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ast.Directives))
 
 	// Test with FollowIncludes (should behave the same for single file)
 	ldr = New(WithFollowIncludes())
-	ast, err = ldr.Load(mainFile)
+	ast, err = ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(ast.Directives))
 }
@@ -55,7 +56,7 @@ include "included.beancount"
 
 	// Load without following includes
 	ldr := New()
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 1 directive (only from main file)
@@ -88,7 +89,7 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 3 directives (merged from both files)
@@ -137,7 +138,7 @@ include "b.beancount"
 
 	// Load A with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(fileA)
+	ast, err := ldr.Load(context.Background(), fileA)
 	assert.NoError(t, err)
 
 	// Should have 3 directives (from A, B, and C)
@@ -182,7 +183,7 @@ include "c.beancount"
 
 	// Load A with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(fileA)
+	ast, err := ldr.Load(context.Background(), fileA)
 	assert.NoError(t, err)
 
 	// Should have 3 directives
@@ -213,7 +214,7 @@ include "a.beancount"
 	// Load A - circular includes are handled via deduplication (not an error)
 	// A is loaded first, then B is loaded, then A is requested again but already visited
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(fileA)
+	ast, err := ldr.Load(context.Background(), fileA)
 	assert.NoError(t, err)
 
 	// Should have 2 directives (one from A, one from B)
@@ -247,7 +248,7 @@ include "accounts/savings.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 2 directives
@@ -277,7 +278,7 @@ include "`+includePath+`"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 2 directives
@@ -306,7 +307,7 @@ include "common.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 2 directives (not 3 - deduplication should work)
@@ -330,7 +331,7 @@ include "does-not-exist.beancount"
 
 	// Load should fail
 	ldr := New(WithFollowIncludes())
-	_, err = ldr.Load(mainFile)
+	_, err = ldr.Load(context.Background(), mainFile)
 	assert.Error(t, err)
 }
 
@@ -361,7 +362,7 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Main file options should take precedence
@@ -402,7 +403,7 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(mainFile)
+	ast, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Both plugins should be present

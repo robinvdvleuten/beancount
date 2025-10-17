@@ -22,6 +22,7 @@
 package loader
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -77,14 +78,14 @@ func New(opts ...Option) *Loader {
 }
 
 // Load parses a beancount file with optional recursive include resolution.
-func (l *Loader) Load(filename string) (*parser.AST, error) {
+func (l *Loader) Load(ctx context.Context, filename string) (*parser.AST, error) {
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
 		data, err := os.ReadFile(filename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 		}
-		ast, err := parser.ParseBytesWithFilename(filename, data)
+		ast, err := parser.ParseBytesWithFilename(ctx, filename, data)
 		if err != nil {
 			// Wrap parser errors for consistent formatting
 			return nil, parser.NewParseError(filename, err)
@@ -97,7 +98,7 @@ func (l *Loader) Load(filename string) (*parser.AST, error) {
 		visited: make(map[string]bool),
 	}
 
-	return state.loadRecursive(filename)
+	return state.loadRecursive(ctx, filename)
 }
 
 // loaderState tracks state during recursive loading.
@@ -106,7 +107,7 @@ type loaderState struct {
 }
 
 // loadRecursive recursively loads a file and all its includes.
-func (l *loaderState) loadRecursive(filename string) (*parser.AST, error) {
+func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*parser.AST, error) {
 	// Get absolute path for deduplication
 	absPath, err := filepath.Abs(filename)
 	if err != nil {
@@ -126,7 +127,7 @@ func (l *loaderState) loadRecursive(filename string) (*parser.AST, error) {
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
 
-	ast, err := parser.ParseBytesWithFilename(filename, data)
+	ast, err := parser.ParseBytesWithFilename(ctx, filename, data)
 	if err != nil {
 		// Wrap parser errors for consistent formatting
 		return nil, parser.NewParseError(filename, err)
@@ -143,6 +144,13 @@ func (l *loaderState) loadRecursive(filename string) (*parser.AST, error) {
 	var includedASTs []*parser.AST
 
 	for _, inc := range ast.Includes {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
 		// Resolve path relative to the including file's directory
 		includePath := inc.Filename
 		if !filepath.IsAbs(includePath) {
@@ -150,7 +158,7 @@ func (l *loaderState) loadRecursive(filename string) (*parser.AST, error) {
 		}
 
 		// Recursively load the included file
-		includedAST, err := l.loadRecursive(includePath)
+		includedAST, err := l.loadRecursive(ctx, includePath)
 		if err != nil {
 			return nil, fmt.Errorf("in file %s: %w", filename, err)
 		}

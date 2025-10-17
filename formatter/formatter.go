@@ -25,6 +25,7 @@ package formatter
 
 import (
 	"cmp"
+	"context"
 	"io"
 	"slices"
 	"strings"
@@ -349,7 +350,14 @@ func (f *Formatter) getOriginalLine(lineNum int) string {
 }
 
 // Comments and blank lines from sourceContent are preserved based on Formatter configuration.
-func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) error {
+func (f *Formatter) Format(ctx context.Context, ast *parser.AST, sourceContent []byte, w io.Writer) error {
+	// Check for cancellation before starting
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	// Determine the currency column based on the configuration
 	if f.CurrencyColumn == 0 {
 		f.CurrencyColumn = f.determineCurrencyColumn(ast)

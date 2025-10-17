@@ -1,6 +1,7 @@
 package beancount
 
 import (
+	"context"
 	stdErrors "errors"
 	"fmt"
 	"os"
@@ -17,9 +18,12 @@ type CheckCmd struct {
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
+	// Create context for cancellation support
+	runCtx := context.Background()
+
 	// Load the input file and recursively resolve all includes
 	ldr := loader.New(loader.WithFollowIncludes())
-	ast, err := ldr.Load(cmd.File.Filename)
+	ast, err := ldr.Load(runCtx, cmd.File.Filename)
 	if err != nil {
 		// Format parser errors consistently with ledger errors
 		errFormatter := errors.NewTextFormatter(nil)
@@ -31,7 +35,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 
 	// Create a new ledger and process the AST
 	l := ledger.New()
-	if err := l.Process(ast); err != nil {
+	if err := l.Process(runCtx, ast); err != nil {
 		// Print all validation errors
 		var validationErrors *ledger.ValidationErrors
 		if stdErrors.As(err, &validationErrors) {
@@ -62,9 +66,12 @@ type FormatCmd struct {
 }
 
 func (cmd *FormatCmd) Run(ctx *kong.Context) error {
+	// Create context for cancellation support
+	runCtx := context.Background()
+
 	// Load only the single file (don't follow includes)
 	ldr := loader.New()
-	ast, err := ldr.Load(cmd.File.Filename)
+	ast, err := ldr.Load(runCtx, cmd.File.Filename)
 	if err != nil {
 		// Format parser errors consistently
 		errFormatter := errors.NewTextFormatter(nil)
@@ -94,7 +101,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context) error {
 	f := formatter.New(opts...)
 
 	// Format and output to stdout
-	if err := f.Format(ast, contents, os.Stdout); err != nil {
+	if err := f.Format(runCtx, ast, contents, os.Stdout); err != nil {
 		return err
 	}
 

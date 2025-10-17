@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"regexp"
@@ -690,7 +691,7 @@ var (
 )
 
 // Parse AST from an io.Reader.
-func Parse(r io.Reader) (*AST, error) {
+func Parse(ctx context.Context, r io.Reader) (*AST, error) {
 	ast, err := parser.Parse("", r)
 	if err != nil {
 		return nil, err
@@ -704,7 +705,7 @@ func Parse(r io.Reader) (*AST, error) {
 }
 
 // ParseString parses AST from a string.
-func ParseString(str string) (*AST, error) {
+func ParseString(ctx context.Context, str string) (*AST, error) {
 	ast, err := parser.ParseString("", str)
 	if err != nil {
 		return nil, err
@@ -718,13 +719,20 @@ func ParseString(str string) (*AST, error) {
 }
 
 // ParseBytes parses AST from bytes.
-func ParseBytes(data []byte) (*AST, error) {
-	return ParseBytesWithFilename("", data)
+func ParseBytes(ctx context.Context, data []byte) (*AST, error) {
+	return ParseBytesWithFilename(ctx, "", data)
 }
 
 // ParseBytesWithFilename parses AST from bytes with a filename for position tracking.
 // The filename will be included in position information in the AST for better error reporting.
-func ParseBytesWithFilename(filename string, data []byte) (*AST, error) {
+func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (*AST, error) {
+	// Check for cancellation before starting
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
+	}
+
 	ast, err := parser.ParseBytes(filename, data)
 	if err != nil {
 		return nil, err

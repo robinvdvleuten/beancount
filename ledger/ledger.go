@@ -34,6 +34,7 @@
 package ledger
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/robinvdvleuten/beancount/parser"
@@ -82,7 +83,7 @@ func New() *Ledger {
 }
 
 // Process processes an AST and builds the ledger state
-func (l *Ledger) Process(ast *parser.AST) error {
+func (l *Ledger) Process(ctx context.Context, ast *parser.AST) error {
 	// Process options first
 	for _, opt := range ast.Options {
 		l.options[opt.Name] = opt.Value
@@ -90,6 +91,13 @@ func (l *Ledger) Process(ast *parser.AST) error {
 
 	// Process directives in order (they're already sorted by date)
 	for _, directive := range ast.Directives {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		l.processDirective(directive)
 	}
 

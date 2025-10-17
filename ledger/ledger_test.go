@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"context"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -70,11 +71,11 @@ func TestLedger_ProcessOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(tt.input)
+			ast, err := parser.ParseString(context.Background(), tt.input)
 			assert.NoError(t, err, "parsing should succeed")
 
 			l := New()
-			err = l.Process(ast)
+			err = l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -142,11 +143,11 @@ func TestLedger_ProcessClose(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(tt.input)
+			ast, err := parser.ParseString(context.Background(), tt.input)
 			assert.NoError(t, err, "parsing should succeed")
 
 			l := New()
-			err = l.Process(ast)
+			err = l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -305,11 +306,11 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(tt.input)
+			ast, err := parser.ParseString(context.Background(), tt.input)
 			assert.NoError(t, err, "parsing should succeed")
 
 			l := New()
-			err = l.Process(ast)
+			err = l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -464,11 +465,11 @@ func TestLedger_ProcessBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(tt.input)
+			ast, err := parser.ParseString(context.Background(), tt.input)
 			assert.NoError(t, err, "parsing should succeed")
 
 			l := New()
-			err = l.Process(ast)
+			err = l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)

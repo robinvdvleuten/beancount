@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"context"
 	"bytes"
 	"testing"
 
@@ -20,7 +21,7 @@ option "title" "Test Ledger"
   Assets:Checking  -75.50 USD
   Expenses:Food  75.50 USD
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -31,7 +32,7 @@ option "title" "Test Ledger"
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -59,7 +60,7 @@ option "operating_currency" "USD"
 `
 		}
 
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -70,7 +71,7 @@ option "operating_currency" "USD"
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -94,7 +95,7 @@ option "operating_currency" "USD"
 `
 		}
 
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -105,7 +106,7 @@ option "operating_currency" "USD"
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -127,7 +128,7 @@ option "title" "Test Ledger"
   Assets:Checking  -75.50 USD
   Expenses:Food  75.50 USD
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -138,7 +139,7 @@ option "title" "Test Ledger"
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -153,7 +154,7 @@ option "title" "Test Ledger"
   Assets:Checking  -75.50 USD
   Expenses:Food  75.50 USD
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		if err != nil {
 			b.Fatal(err)
 		}
@@ -164,7 +165,7 @@ option "title" "Test Ledger"
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -182,7 +183,7 @@ func BenchmarkCurrencyColumnCalculation(b *testing.B) {
 `
 	}
 
-	ast, err := parser.ParseString(source)
+	ast, err := parser.ParseString(context.Background(), source)
 	if err != nil {
 		b.Fatal(err)
 	}

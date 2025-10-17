@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"context"
 	"testing"
 
 	"github.com/robinvdvleuten/beancount/parser"
@@ -17,7 +18,7 @@ func BenchmarkProcessTransaction(b *testing.B) {
   Expenses:Food     50.00 USD
 `
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -25,7 +26,7 @@ func BenchmarkProcessTransaction(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(ast)
+		_ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -42,7 +43,7 @@ func BenchmarkProcessTransactionWithCost(b *testing.B) {
   Expenses:Commission       5.00 USD
 `
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -50,7 +51,7 @@ func BenchmarkProcessTransactionWithCost(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(ast)
+		_ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -65,7 +66,7 @@ func BenchmarkProcessTransactionWithInference(b *testing.B) {
   Expenses:Food
 `
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -73,7 +74,7 @@ func BenchmarkProcessTransactionWithInference(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(ast)
+		_ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -96,7 +97,7 @@ func BenchmarkProcessTransactionComplex(b *testing.B) {
   Income:Salary      -3405.00 USD
 `
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -104,7 +105,7 @@ func BenchmarkProcessTransactionComplex(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(ast)
+		_ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -121,7 +122,7 @@ func BenchmarkProcessBalance(b *testing.B) {
 2021-01-03 balance Assets:Cash  -50.00 USD
 `
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -129,7 +130,7 @@ func BenchmarkProcessBalance(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(ast)
+		_ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -147,7 +148,7 @@ func BenchmarkProcessPad(b *testing.B) {
 2021-01-06 balance Assets:Checking  500.00 USD
 `
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	if err != nil {
 		b.Fatal(err)
 	}
@@ -155,6 +156,6 @@ func BenchmarkProcessPad(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(ast)
+		_ = l.Process(context.Background(), ast)
 	}
 }

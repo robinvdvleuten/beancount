@@ -1,6 +1,7 @@
 package formatter
 
 import (
+	"context"
 	"bytes"
 	"testing"
 
@@ -16,12 +17,12 @@ option "title" "Test"
 ; Comment before directive
 2021-01-01 open Assets:Checking
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		// Verify comments are preserved
@@ -38,12 +39,12 @@ option "title" "Test"
 
 2021-01-02 open Assets:Savings
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -70,12 +71,12 @@ option "title" "Test"
   Assets:Checking  100.00 USD
   Equity:Opening-Balances  -100.00 USD
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		assert.True(t, bytes.Contains(buf.Bytes(), []byte("; Opening accounts")),
@@ -88,12 +89,12 @@ option "title" "Test"
 		source := `; This comment should not appear
 option "title" "Test"
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New(WithPreserveComments(false))
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		// Comment should not be in output
@@ -106,12 +107,12 @@ option "title" "Test"
 
 2021-01-01 open Assets:Checking
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New(WithPreserveBlanks(false))
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		// Should have minimal blank lines
@@ -135,12 +136,12 @@ option "title" "Test"
 ; Comment 3
 option "title" "Test"
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		// All comments should be preserved
@@ -229,12 +230,12 @@ option "operating_currency" "EUR"
 
 2023-01-01 open Assets:Checking EUR
 `
-		ast, err := parser.ParseString(source)
+		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		// Verify hash headers are preserved

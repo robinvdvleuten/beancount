@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"context"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -16,7 +17,7 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 		  Assets:Stock         5 AAPL {100.00 USD}
 	`
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(ast.Directives))
 
@@ -79,11 +80,11 @@ func TestFullTransactionWithCost(t *testing.T) {
 		  Assets:Stock     5 AAPL {100.00 USD}
 	`
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	assert.NoError(t, err)
 
 	l := New()
-	err = l.Process(ast)
+	err = l.Process(context.Background(), ast)
 
 	// Should have NO errors - transaction should balance!
 	if err != nil {
@@ -105,7 +106,7 @@ func TestCalculateWeights_Price(t *testing.T) {
 		  Assets:Cash     1600.00 USD
 	`
 
-	ast, err := parser.ParseString(input)
+	ast, err := parser.ParseString(context.Background(), input)
 	assert.NoError(t, err)
 
 	txn, ok := ast.Directives[0].(*parser.Transaction)

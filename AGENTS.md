@@ -612,6 +612,128 @@ var _ Directive = &Transaction{}
 var _ io.Writer = &bytes.Buffer{}
 ```
 
+### Context Pattern
+All public functions that perform I/O, processing, or potentially long-running operations should accept `context.Context` as their first parameter:
+
+```go
+// ✅ CORRECT: Context as first parameter
+func Load(ctx context.Context, filename string) (*AST, error) {
+    collector := telemetry.FromContext(ctx)
+    timer := collector.Start("Load " + filename)
+    defer timer.End()
+
+    // Check for cancellation in loops
+    for _, inc := range includes {
+        select {
+        case <-ctx.Done():
+            return nil, ctx.Err()
+        default:
+        }
+
+        // Do work...
+    }
+
+    return ast, nil
+}
+
+// ❌ INCORRECT: No context parameter
+func Load(filename string) (*AST, error) {
+    // Cannot be cancelled, no telemetry support
+}
+```
+
+**When to use context:**
+- Functions that do I/O (file operations, network)
+- Functions that process many items (loops over directives, includes)
+- Functions that may take > 100ms
+- Public APIs that others might want to cancel/timeout
+
+**When NOT to use context:**
+- Pure computation functions (no I/O)
+- Internal helper functions that are always fast
+- Functions that only manipulate data structures
+
+**Cancellation checks:**
+- Add `select { case <-ctx.Done(): return ctx.Err() }` in loops that process many items
+- Check every 100-1000 iterations for very tight loops
+- Don't check in every function call (overhead not worth it)
+
+**Context propagation:**
+- Always pass context to functions you call
+- Use `context.Background()` only at program entry points
+- Never store context in structs (pass as parameter)
+- Context goes first: `func Foo(ctx context.Context, arg1, arg2)`
+
+### Telemetry Pattern
+Use the telemetry package to instrument operations for timing analysis:
+
+```go
+// ✅ CORRECT: Extract collector and time operation
+func Process(ctx context.Context, ast *AST) error {
+    collector := telemetry.FromContext(ctx)
+    timer := collector.Start("Process ledger")
+    defer timer.End()
+
+    // Nested operations
+    optsTimer := timer.Child("Process options")
+    for _, opt := range ast.Options {
+        // Process options...
+    }
+    optsTimer.End()
+
+    dirsTimer := timer.Child("Process directives")
+    for _, dir := range ast.Directives {
+        // Process directives...
+    }
+    dirsTimer.End()
+
+    return nil
+}
+
+// ❌ INCORRECT: Manual timing without telemetry
+func Process(ctx context.Context, ast *AST) error {
+    start := time.Now()
+    defer func() {
+        fmt.Printf("Process took %v\n", time.Since(start))
+    }()
+    // No hierarchical tracking, inconsistent output
+}
+```
+
+**When to add telemetry:**
+- Operations that users care about performance (loading, parsing, validation)
+- Operations that may be slow (> 10ms)
+- Top-level phases (Load, Parse, Process, Format)
+- Sub-operations that provide useful breakdown (per-file parsing, directive types)
+
+**When NOT to add telemetry:**
+- Trivial operations (< 1ms)
+- Operations called thousands of times (too noisy)
+- Internal helper functions
+
+**Telemetry best practices:**
+- Always use `defer timer.End()` to ensure timers complete
+- Use descriptive names: "Parse main.beancount" not just "Parse"
+- Create child timers for nested operations
+- Extract collector once per function (not per operation)
+- Telemetry has zero overhead when disabled (NoOp collector)
+
+**Hierarchical timers:**
+```go
+// Parent timer
+parentTimer := collector.Start("Parent operation")
+defer parentTimer.End()
+
+// Child timers - will be nested under parent in output
+child1 := parentTimer.Child("Child 1")
+// ... work ...
+child1.End()
+
+child2 := parentTimer.Child("Child 2")
+// ... work ...
+child2.End()
+```
+
 ## Project-Specific Conventions
 
 ### Parser Package
@@ -653,6 +775,7 @@ var _ io.Writer = &bytes.Buffer{}
 
 When this guide is updated, add an entry here:
 
+- 2025-01-17: Added Context Pattern and Telemetry Pattern sections for Phase 1 and Phase 2 implementation
 - 2025-01-17: Added Constructor Pattern section with anti-pattern warning about redundant field extraction
 - 2025-01-17: Added error formatting section describing the errors package and formatter pattern
 - 2025-01-17: Initial version created based on codebase analysis
