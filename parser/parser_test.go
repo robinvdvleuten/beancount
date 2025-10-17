@@ -537,6 +537,26 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Plugin with name only",
+			beancount: `
+				plugin "beancount.plugins.auto_accounts"
+			`,
+			expected: withPlugins(
+				beancount(),
+				plugin("beancount.plugins.auto_accounts", ""),
+			),
+		},
+		{
+			name: "Plugin with name and config",
+			beancount: `
+				plugin "beancount.plugins.module_name" "configuration data"
+			`,
+			expected: withPlugins(
+				beancount(),
+				plugin("beancount.plugins.module_name", "configuration data"),
+			),
+		},
+		{
 			name: "Comment",
 			beancount: `
 				; 1792-01-01 commodity USD
@@ -890,6 +910,12 @@ func normalizeAST(ast *AST) {
 			inc.Pos = lexer.Position{}
 		}
 	}
+
+	for _, plugin := range ast.Plugins {
+		if plugin != nil {
+			plugin.Pos = lexer.Position{}
+		}
+	}
 }
 
 func normalizeDirective(d Directive) {
@@ -1015,6 +1041,15 @@ func include(filename string) *Include {
 
 func withIncludes(ast *AST, includes ...*Include) *AST {
 	ast.Includes = includes
+	return ast
+}
+
+func plugin(name string, config string) *Plugin {
+	return &Plugin{Name: name, Config: config}
+}
+
+func withPlugins(ast *AST, plugins ...*Plugin) *AST {
+	ast.Plugins = plugins
 	return ast
 }
 

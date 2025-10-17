@@ -32,7 +32,8 @@ func compareDirectives(a, b Directive) int {
 type AST struct {
 	Directives Directives `parser:"(@@"`
 	Options    []*Option  `parser:"| @@"`
-	Includes   []*Include `parser:"| @@ | ~ignore)*"`
+	Includes   []*Include `parser:"| @@"`
+	Plugins    []*Plugin  `parser:"| @@ | ~ignore)*"`
 }
 
 type WithMetadata interface {
@@ -325,6 +326,12 @@ type Option struct {
 type Include struct {
 	Pos      lexer.Position
 	Filename string `parser:"'include' @String"`
+}
+
+type Plugin struct {
+	Pos    lexer.Position
+	Name   string `parser:"'plugin' @String"`
+	Config string `parser:"@String?"`
 }
 
 var (
