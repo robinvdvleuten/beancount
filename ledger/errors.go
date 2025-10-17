@@ -1,12 +1,10 @@
 package ledger
 
 import (
-	"bytes"
 	"fmt"
 	"sort"
 
 	"github.com/alecthomas/participle/v2/lexer"
-	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -30,58 +28,20 @@ func (e *AccountNotOpenError) Error() string {
 	return fmt.Sprintf("%s: Invalid reference to unknown account '%s'", location, e.Account)
 }
 
-// FormatWithContext formats the full error message including the directive context.
-// This produces output similar to bean-check, showing the complete directive.
-func (e *AccountNotOpenError) FormatWithContext(f *formatter.Formatter) string {
-	var buf bytes.Buffer
+func (e *AccountNotOpenError) GetPosition() lexer.Position {
+	return e.Pos
+}
 
-	// Write the error message
-	buf.WriteString(e.Error())
-	buf.WriteString("\n\n")
+func (e *AccountNotOpenError) GetDirective() parser.Directive {
+	return e.Directive
+}
 
-	// Write the formatted directive with proper indentation
-	if e.Directive != nil {
-		// For transactions, use the exported FormatTransaction method
-		if txn, ok := e.Directive.(*parser.Transaction); ok {
-			var txnBuf bytes.Buffer
-			directiveFormatter := formatter.New()
-			if f != nil && f.CurrencyColumn > 0 {
-				directiveFormatter = formatter.New(formatter.WithCurrencyColumn(f.CurrencyColumn))
-			}
+func (e *AccountNotOpenError) GetAccount() parser.Account {
+	return e.Account
+}
 
-			if err := directiveFormatter.FormatTransaction(txn, &txnBuf); err == nil {
-				// Indent each line with 3 spaces
-				lines := bytes.Split(txnBuf.Bytes(), []byte("\n"))
-				for _, line := range lines {
-					if len(line) > 0 {
-						buf.WriteString("   ")
-						buf.Write(line)
-						buf.WriteByte('\n')
-					}
-				}
-			}
-		} else {
-			// For other directives, manually format them
-			buf.WriteString("   ")
-
-			switch d := e.Directive.(type) {
-			case *parser.Balance:
-				fmt.Fprintf(&buf, "%s balance %s", d.Date.Format("2006-01-02"), d.Account)
-				if d.Amount != nil {
-					fmt.Fprintf(&buf, "  %s %s", d.Amount.Value, d.Amount.Currency)
-				}
-			case *parser.Pad:
-				fmt.Fprintf(&buf, "%s pad %s %s", d.Date.Format("2006-01-02"), d.Account, d.AccountPad)
-			case *parser.Note:
-				fmt.Fprintf(&buf, "%s note %s %q", d.Date.Format("2006-01-02"), d.Account, d.Description)
-			case *parser.Document:
-				fmt.Fprintf(&buf, "%s document %s %q", d.Date.Format("2006-01-02"), d.Account, d.PathToDocument)
-			}
-			buf.WriteByte('\n')
-		}
-	}
-
-	return buf.String()
+func (e *AccountNotOpenError) GetDate() *parser.Date {
+	return e.Date
 }
 
 // AccountAlreadyOpenError is returned when trying to open an account that's already open
@@ -89,11 +49,34 @@ type AccountAlreadyOpenError struct {
 	Account    parser.Account
 	Date       *parser.Date
 	OpenedDate *parser.Date
+	Pos        lexer.Position
+	Directive  parser.Directive
 }
 
 func (e *AccountAlreadyOpenError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
 	return fmt.Sprintf("%s: Account %s is already open (opened on %s)",
-		e.Date.Format("2006-01-02"), e.Account, e.OpenedDate.Format("2006-01-02"))
+		location, e.Account, e.OpenedDate.Format("2006-01-02"))
+}
+
+func (e *AccountAlreadyOpenError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *AccountAlreadyOpenError) GetDirective() parser.Directive {
+	return e.Directive
+}
+
+func (e *AccountAlreadyOpenError) GetAccount() parser.Account {
+	return e.Account
+}
+
+func (e *AccountAlreadyOpenError) GetDate() *parser.Date {
+	return e.Date
 }
 
 // AccountAlreadyClosedError is returned when trying to use or close an account that's already closed
@@ -101,22 +84,68 @@ type AccountAlreadyClosedError struct {
 	Account    parser.Account
 	Date       *parser.Date
 	ClosedDate *parser.Date
+	Pos        lexer.Position
+	Directive  parser.Directive
 }
 
 func (e *AccountAlreadyClosedError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
 	return fmt.Sprintf("%s: Account %s is already closed (closed on %s)",
-		e.Date.Format("2006-01-02"), e.Account, e.ClosedDate.Format("2006-01-02"))
+		location, e.Account, e.ClosedDate.Format("2006-01-02"))
+}
+
+func (e *AccountAlreadyClosedError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *AccountAlreadyClosedError) GetDirective() parser.Directive {
+	return e.Directive
+}
+
+func (e *AccountAlreadyClosedError) GetAccount() parser.Account {
+	return e.Account
+}
+
+func (e *AccountAlreadyClosedError) GetDate() *parser.Date {
+	return e.Date
 }
 
 // AccountNotClosedError is returned when trying to close an account that was never opened
 type AccountNotClosedError struct {
-	Account parser.Account
-	Date    *parser.Date
+	Account   parser.Account
+	Date      *parser.Date
+	Pos       lexer.Position
+	Directive parser.Directive
 }
 
 func (e *AccountNotClosedError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
 	return fmt.Sprintf("%s: Cannot close account %s that was never opened",
-		e.Date.Format("2006-01-02"), e.Account)
+		location, e.Account)
+}
+
+func (e *AccountNotClosedError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *AccountNotClosedError) GetDirective() parser.Directive {
+	return e.Directive
+}
+
+func (e *AccountNotClosedError) GetAccount() parser.Account {
+	return e.Account
+}
+
+func (e *AccountNotClosedError) GetDate() *parser.Date {
+	return e.Date
 }
 
 // TransactionNotBalancedError is returned when a transaction doesn't balance
@@ -168,39 +197,16 @@ func (e *TransactionNotBalancedError) formatResiduals() string {
 	return result
 }
 
-// FormatWithContext formats the full error message including the transaction context.
-// This produces output similar to bean-check, showing the complete transaction.
-func (e *TransactionNotBalancedError) FormatWithContext(f *formatter.Formatter) string {
-	var buf bytes.Buffer
+func (e *TransactionNotBalancedError) GetPosition() lexer.Position {
+	return e.Pos
+}
 
-	// Write the error message
-	buf.WriteString(e.Error())
-	buf.WriteString("\n\n")
+func (e *TransactionNotBalancedError) GetDirective() parser.Directive {
+	return e.Transaction
+}
 
-	// Write the formatted transaction with proper indentation
-	if e.Transaction != nil {
-		// Create a new formatter to avoid modifying the passed one
-		txnFormatter := formatter.New()
-		if f != nil && f.CurrencyColumn > 0 {
-			txnFormatter = formatter.New(formatter.WithCurrencyColumn(f.CurrencyColumn))
-		}
-
-		// Write indented transaction (3 spaces to match bean-check style)
-		var txnBuf bytes.Buffer
-		if err := txnFormatter.FormatTransaction(e.Transaction, &txnBuf); err == nil {
-			// Indent each line with 3 spaces
-			lines := bytes.Split(txnBuf.Bytes(), []byte("\n"))
-			for _, line := range lines {
-				if len(line) > 0 {
-					buf.WriteString("   ")
-					buf.Write(line)
-					buf.WriteByte('\n')
-				}
-			}
-		}
-	}
-
-	return buf.String()
+func (e *TransactionNotBalancedError) GetDate() *parser.Date {
+	return e.Date
 }
 
 // InvalidAmountError is returned when an amount cannot be parsed
@@ -209,25 +215,205 @@ type InvalidAmountError struct {
 	Account    parser.Account
 	Value      string
 	Underlying error
+	Pos        lexer.Position
+	Directive  parser.Directive
 }
 
 func (e *InvalidAmountError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
 	return fmt.Sprintf("%s: Invalid amount %q for account %s: %v",
-		e.Date.Format("2006-01-02"), e.Value, e.Account, e.Underlying)
+		location, e.Value, e.Account, e.Underlying)
+}
+
+func (e *InvalidAmountError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *InvalidAmountError) GetDirective() parser.Directive {
+	return e.Directive
+}
+
+func (e *InvalidAmountError) GetAccount() parser.Account {
+	return e.Account
+}
+
+func (e *InvalidAmountError) GetDate() *parser.Date {
+	return e.Date
 }
 
 // BalanceMismatchError is returned when a balance assertion fails
 type BalanceMismatchError struct {
-	Date     *parser.Date
-	Account  parser.Account
-	Expected string // Expected amount
-	Actual   string // Actual amount in inventory
-	Currency string
+	Date      *parser.Date
+	Account   parser.Account
+	Expected  string // Expected amount
+	Actual    string // Actual amount in inventory
+	Currency  string
+	Pos       lexer.Position
+	Directive parser.Directive
 }
 
 func (e *BalanceMismatchError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
 	return fmt.Sprintf("%s: Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
-		e.Date.Format("2006-01-02"), e.Account,
+		location, e.Account,
 		e.Expected, e.Currency,
 		e.Actual, e.Currency)
+}
+
+func (e *BalanceMismatchError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *BalanceMismatchError) GetDirective() parser.Directive {
+	return e.Directive
+}
+
+func (e *BalanceMismatchError) GetAccount() parser.Account {
+	return e.Account
+}
+
+func (e *BalanceMismatchError) GetDate() *parser.Date {
+	return e.Date
+}
+
+// Constructor functions for ledger errors.
+// These provide a cleaner API and ensure consistent field initialization.
+
+// NewAccountNotOpenError creates an error for when a directive references an unopened account.
+// Use this for transactions where the account comes from a posting.
+func NewAccountNotOpenError(txn *parser.Transaction, account parser.Account) *AccountNotOpenError {
+	return &AccountNotOpenError{
+		Account:   account,
+		Date:      txn.Date,
+		Pos:       txn.Pos,
+		Directive: txn,
+	}
+}
+
+// NewAccountNotOpenErrorFromBalance creates an error for a balance directive referencing an unopened account.
+func NewAccountNotOpenErrorFromBalance(balance *parser.Balance) *AccountNotOpenError {
+	return &AccountNotOpenError{
+		Account:   balance.Account,
+		Date:      balance.Date,
+		Pos:       balance.Pos,
+		Directive: balance,
+	}
+}
+
+// NewAccountNotOpenErrorFromPad creates an error for a pad directive referencing an unopened account.
+func NewAccountNotOpenErrorFromPad(pad *parser.Pad, account parser.Account) *AccountNotOpenError {
+	return &AccountNotOpenError{
+		Account:   account,
+		Date:      pad.Date,
+		Pos:       pad.Pos,
+		Directive: pad,
+	}
+}
+
+// NewAccountNotOpenErrorFromNote creates an error for a note directive referencing an unopened account.
+func NewAccountNotOpenErrorFromNote(note *parser.Note) *AccountNotOpenError {
+	return &AccountNotOpenError{
+		Account:   note.Account,
+		Date:      note.Date,
+		Pos:       note.Pos,
+		Directive: note,
+	}
+}
+
+// NewAccountNotOpenErrorFromDocument creates an error for a document directive referencing an unopened account.
+func NewAccountNotOpenErrorFromDocument(doc *parser.Document) *AccountNotOpenError {
+	return &AccountNotOpenError{
+		Account:   doc.Account,
+		Date:      doc.Date,
+		Pos:       doc.Pos,
+		Directive: doc,
+	}
+}
+
+// NewAccountAlreadyOpenError creates an error for when trying to open an already-open account.
+func NewAccountAlreadyOpenError(open *parser.Open, openedDate *parser.Date) *AccountAlreadyOpenError {
+	return &AccountAlreadyOpenError{
+		Account:    open.Account,
+		Date:       open.Date,
+		OpenedDate: openedDate,
+		Pos:        open.Pos,
+		Directive:  open,
+	}
+}
+
+// NewAccountAlreadyClosedError creates an error for when trying to use or close an already-closed account.
+func NewAccountAlreadyClosedError(close *parser.Close, closedDate *parser.Date) *AccountAlreadyClosedError {
+	return &AccountAlreadyClosedError{
+		Account:    close.Account,
+		Date:       close.Date,
+		ClosedDate: closedDate,
+		Pos:        close.Pos,
+		Directive:  close,
+	}
+}
+
+// NewAccountNotClosedError creates an error for when trying to close an account that was never opened.
+func NewAccountNotClosedError(close *parser.Close) *AccountNotClosedError {
+	return &AccountNotClosedError{
+		Account:   close.Account,
+		Date:      close.Date,
+		Pos:       close.Pos,
+		Directive: close,
+	}
+}
+
+// NewTransactionNotBalancedError creates an error for when a transaction doesn't balance.
+func NewTransactionNotBalancedError(txn *parser.Transaction, residuals map[string]string) *TransactionNotBalancedError {
+	return &TransactionNotBalancedError{
+		Pos:         txn.Pos,
+		Date:        txn.Date,
+		Narration:   txn.Narration,
+		Residuals:   residuals,
+		Transaction: txn,
+	}
+}
+
+// NewInvalidAmountError creates an error for when an amount in a transaction cannot be parsed or is invalid.
+func NewInvalidAmountError(txn *parser.Transaction, account parser.Account, value string, err error) *InvalidAmountError {
+	return &InvalidAmountError{
+		Date:       txn.Date,
+		Account:    account,
+		Value:      value,
+		Underlying: err,
+		Pos:        txn.Pos,
+		Directive:  txn,
+	}
+}
+
+// NewInvalidAmountErrorFromBalance creates an error for when a balance amount cannot be parsed.
+func NewInvalidAmountErrorFromBalance(balance *parser.Balance, err error) *InvalidAmountError {
+	return &InvalidAmountError{
+		Date:       balance.Date,
+		Account:    balance.Account,
+		Value:      balance.Amount.Value,
+		Underlying: err,
+		Pos:        balance.Pos,
+		Directive:  balance,
+	}
+}
+
+// NewBalanceMismatchError creates an error for when a balance assertion fails.
+func NewBalanceMismatchError(balance *parser.Balance, expected, actual, currency string) *BalanceMismatchError {
+	return &BalanceMismatchError{
+		Date:      balance.Date,
+		Account:   balance.Account,
+		Expected:  expected,
+		Actual:    actual,
+		Currency:  currency,
+		Pos:       balance.Pos,
+		Directive: balance,
+	}
 }

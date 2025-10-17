@@ -84,7 +84,12 @@ func (l *Loader) Load(filename string) (*parser.AST, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 		}
-		return parser.ParseBytesWithFilename(filename, data)
+		ast, err := parser.ParseBytesWithFilename(filename, data)
+		if err != nil {
+			// Wrap parser errors for consistent formatting
+			return nil, parser.NewParseError(filename, err)
+		}
+		return ast, nil
 	}
 
 	// Recursive loading with include resolution
@@ -123,7 +128,8 @@ func (l *loaderState) loadRecursive(filename string) (*parser.AST, error) {
 
 	ast, err := parser.ParseBytesWithFilename(filename, data)
 	if err != nil {
-		return nil, err
+		// Wrap parser errors for consistent formatting
+		return nil, parser.NewParseError(filename, err)
 	}
 
 	// If no includes, return as-is

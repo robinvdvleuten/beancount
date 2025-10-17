@@ -1,11 +1,12 @@
 package beancount
 
 import (
-	"errors"
+	stdErrors "errors"
 	"fmt"
 	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/robinvdvleuten/beancount/errors"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
@@ -20,7 +21,12 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 	ldr := loader.New(loader.WithFollowIncludes())
 	ast, err := ldr.Load(cmd.File.Filename)
 	if err != nil {
-		return fmt.Errorf("load error: %w", err)
+		// Format parser errors consistently with ledger errors
+		errFormatter := errors.NewTextFormatter(nil)
+		formatted := errFormatter.Format(err)
+		_, _ = fmt.Fprint(ctx.Stderr, formatted)
+		_, _ = fmt.Fprintln(ctx.Stderr)
+		return fmt.Errorf("parse error")
 	}
 
 	// Create a new ledger and process the AST
@@ -28,28 +34,16 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 	if err := l.Process(ast); err != nil {
 		// Print all validation errors
 		var validationErrors *ledger.ValidationErrors
-		if errors.As(err, &validationErrors) {
-			// Create a formatter for rendering transaction context
+		if stdErrors.As(err, &validationErrors) {
+			// Create a formatter for rendering errors
 			f := formatter.New()
+			errFormatter := errors.NewTextFormatter(f)
 
-			for i, e := range validationErrors.Errors {
-				// Check if this is an error with context formatting support
-				if balErr, ok := e.(*ledger.TransactionNotBalancedError); ok && balErr.Transaction != nil {
-					// Use the enhanced formatting with transaction context
-					_, _ = fmt.Fprint(ctx.Stderr, balErr.FormatWithContext(f))
-				} else if accErr, ok := e.(*ledger.AccountNotOpenError); ok && accErr.Directive != nil {
-					// Use the enhanced formatting with directive context
-					_, _ = fmt.Fprint(ctx.Stderr, accErr.FormatWithContext(f))
-				} else {
-					// For other errors, use standard formatting
-					_, _ = fmt.Fprintf(ctx.Stderr, "%s\n", e)
-				}
+			// Format all errors
+			formatted := errFormatter.FormatAll(validationErrors.Errors)
+			_, _ = fmt.Fprint(ctx.Stderr, formatted)
+			_, _ = fmt.Fprintln(ctx.Stderr) // Add final newline
 
-				// Add blank line between errors (but not after the last one)
-				if i < len(validationErrors.Errors)-1 {
-					_, _ = fmt.Fprintln(ctx.Stderr)
-				}
-			}
 			return fmt.Errorf("%d validation error(s) found", len(validationErrors.Errors))
 		}
 		return err
@@ -72,7 +66,12 @@ func (cmd *FormatCmd) Run(ctx *kong.Context) error {
 	ldr := loader.New()
 	ast, err := ldr.Load(cmd.File.Filename)
 	if err != nil {
-		return err
+		// Format parser errors consistently
+		errFormatter := errors.NewTextFormatter(nil)
+		formatted := errFormatter.Format(err)
+		_, _ = fmt.Fprint(ctx.Stderr, formatted)
+		_, _ = fmt.Fprintln(ctx.Stderr)
+		return fmt.Errorf("parse error")
 	}
 
 	// Read file contents for formatter (needs original source for comment preservation)

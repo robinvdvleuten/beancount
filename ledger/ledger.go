@@ -149,11 +149,7 @@ func (l *Ledger) processOpen(open *parser.Open) {
 	if existing, ok := l.accounts[accountName]; ok {
 		// Check if it's already open
 		if !existing.IsClosed() {
-			l.addError(&AccountAlreadyOpenError{
-				Account:    open.Account,
-				Date:       open.Date,
-				OpenedDate: existing.OpenDate,
-			})
+			l.addError(NewAccountAlreadyOpenError(open, existing.OpenDate))
 			return
 		}
 		// Account was closed before, allow reopening
@@ -180,20 +176,13 @@ func (l *Ledger) processClose(close *parser.Close) {
 	// Check if account exists
 	account, ok := l.accounts[accountName]
 	if !ok {
-		l.addError(&AccountNotClosedError{
-			Account: close.Account,
-			Date:    close.Date,
-		})
+		l.addError(NewAccountNotClosedError(close))
 		return
 	}
 
 	// Check if already closed
 	if account.IsClosed() {
-		l.addError(&AccountAlreadyClosedError{
-			Account:    close.Account,
-			Date:       close.Date,
-			ClosedDate: account.CloseDate,
-		})
+		l.addError(NewAccountAlreadyClosedError(close, account.CloseDate))
 		return
 	}
 
@@ -212,12 +201,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 	for _, posting := range txn.Postings {
 		// Validate account is open
 		if !l.isAccountOpen(posting.Account, txn.Date) {
-			l.addError(&AccountNotOpenError{
-				Account:   posting.Account,
-				Date:      txn.Date,
-				Pos:       txn.Pos,
-				Directive: txn,
-			})
+			l.addError(NewAccountNotOpenError(txn, posting.Account))
 			hasErrors = true
 			continue
 		}
@@ -229,12 +213,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 			// Calculate weights immediately
 			weights, err := CalculateWeights(posting)
 			if err != nil {
-				l.addError(&InvalidAmountError{
-					Date:       txn.Date,
-					Account:    posting.Account,
-					Value:      posting.Amount.Value,
-					Underlying: err,
-				})
+				l.addError(NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
 				hasErrors = true
 				continue
 			}
@@ -278,13 +257,8 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 				}
 			} else if len(postingsWithoutAmounts) > 1 {
 				// Ambiguous - can't infer
-				l.addError(&TransactionNotBalancedError{
-					Pos:         txn.Pos,
-					Date:        txn.Date,
-					Narration:   fmt.Sprintf("%s (multiple postings with missing amounts - ambiguous)", txn.Narration),
-					Residuals:   map[string]string{currency: residual.String()},
-					Transaction: txn,
-				})
+				residuals := map[string]string{currency: residual.String()}
+				l.addError(NewTransactionNotBalancedError(txn, residuals))
 				return
 			}
 		}
@@ -335,13 +309,8 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 			} else if len(balance) > 1 {
 				// Multiple currencies - ambiguous
 				// For now, report error (could be improved to match currencies intelligently)
-				l.addError(&TransactionNotBalancedError{
-					Pos:         txn.Pos,
-					Date:        txn.Date,
-					Narration:   fmt.Sprintf("%s (empty cost spec with multiple unbalanced currencies - ambiguous)", txn.Narration),
-					Residuals:   map[string]string{},
-					Transaction: txn,
-				})
+				residuals := map[string]string{}
+				l.addError(NewTransactionNotBalancedError(txn, residuals))
 				return
 			}
 		}
@@ -361,13 +330,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 	}
 
 	if len(residuals) > 0 {
-		l.addError(&TransactionNotBalancedError{
-			Pos:         txn.Pos,
-			Date:        txn.Date,
-			Narration:   txn.Narration,
-			Residuals:   residuals,
-			Transaction: txn,
-		})
+		l.addError(NewTransactionNotBalancedError(txn, residuals))
 		return // Don't update inventory if not balanced
 	}
 
@@ -420,12 +383,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 			// Has cost basis - add/reduce with lot tracking
 			lotSpec, err := ParseLotSpec(costToUse)
 			if err != nil {
-				l.addError(&InvalidAmountError{
-					Date:       txn.Date,
-					Account:    posting.Account,
-					Value:      "cost",
-					Underlying: err,
-				})
+				l.addError(NewInvalidAmountError(txn, posting.Account, "cost", err))
 				continue
 			}
 
@@ -440,12 +398,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 				}
 				err := account.Inventory.ReduceLot(currency, amount, lotSpec, bookingMethod)
 				if err != nil {
-					l.addError(&InvalidAmountError{
-						Date:       txn.Date,
-						Account:    posting.Account,
-						Value:      "lot reduction",
-						Underlying: err,
-					})
+					l.addError(NewInvalidAmountError(txn, posting.Account, "lot reduction", err))
 				}
 			}
 		} else {
@@ -459,24 +412,14 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 func (l *Ledger) processBalance(balance *parser.Balance) {
 	// Validate account is open
 	if !l.isAccountOpen(balance.Account, balance.Date) {
-		l.addError(&AccountNotOpenError{
-			Account:   balance.Account,
-			Date:      balance.Date,
-			Pos:       balance.Pos,
-			Directive: balance,
-		})
+		l.addError(NewAccountNotOpenErrorFromBalance(balance))
 		return
 	}
 
 	// Parse expected amount
 	expectedAmount, err := ParseAmount(balance.Amount)
 	if err != nil {
-		l.addError(&InvalidAmountError{
-			Date:       balance.Date,
-			Account:    balance.Account,
-			Value:      balance.Amount.Value,
-			Underlying: err,
-		})
+		l.addError(NewInvalidAmountErrorFromBalance(balance, err))
 		return
 	}
 
@@ -521,13 +464,7 @@ func (l *Ledger) processBalance(balance *parser.Balance) {
 	// Check if amounts match within tolerance
 	tolerance := GetTolerance(currency)
 	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
-		l.addError(&BalanceMismatchError{
-			Date:     balance.Date,
-			Account:  balance.Account,
-			Expected: expectedAmount.String(),
-			Actual:   actualAmount.String(),
-			Currency: currency,
-		})
+		l.addError(NewBalanceMismatchError(balance, expectedAmount.String(), actualAmount.String(), currency))
 	}
 }
 
@@ -535,22 +472,12 @@ func (l *Ledger) processBalance(balance *parser.Balance) {
 func (l *Ledger) processPad(pad *parser.Pad) {
 	// Validate accounts are open
 	if !l.isAccountOpen(pad.Account, pad.Date) {
-		l.addError(&AccountNotOpenError{
-			Account:   pad.Account,
-			Date:      pad.Date,
-			Pos:       pad.Pos,
-			Directive: pad,
-		})
+		l.addError(NewAccountNotOpenErrorFromPad(pad, pad.Account))
 		return
 	}
 
 	if !l.isAccountOpen(pad.AccountPad, pad.Date) {
-		l.addError(&AccountNotOpenError{
-			Account:   pad.AccountPad,
-			Date:      pad.Date,
-			Pos:       pad.Pos,
-			Directive: pad,
-		})
+		l.addError(NewAccountNotOpenErrorFromPad(pad, pad.AccountPad))
 		return
 	}
 
@@ -563,12 +490,7 @@ func (l *Ledger) processPad(pad *parser.Pad) {
 func (l *Ledger) processNote(note *parser.Note) {
 	// Validate account is open
 	if !l.isAccountOpen(note.Account, note.Date) {
-		l.addError(&AccountNotOpenError{
-			Account:   note.Account,
-			Date:      note.Date,
-			Pos:       note.Pos,
-			Directive: note,
-		})
+		l.addError(NewAccountNotOpenErrorFromNote(note))
 	}
 
 }
@@ -577,12 +499,7 @@ func (l *Ledger) processNote(note *parser.Note) {
 func (l *Ledger) processDocument(doc *parser.Document) {
 	// Validate account is open
 	if !l.isAccountOpen(doc.Account, doc.Date) {
-		l.addError(&AccountNotOpenError{
-			Account:   doc.Account,
-			Date:      doc.Date,
-			Pos:       doc.Pos,
-			Directive: doc,
-		})
+		l.addError(NewAccountNotOpenErrorFromDocument(doc))
 	}
 }
 
