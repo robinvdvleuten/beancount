@@ -155,6 +155,57 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "CustomWithStrings",
+			beancount: `
+				2014-07-09 custom "budget" "..."
+			`,
+			expected: beancount(
+				custom("2014-07-09", "budget", customString("...")),
+			),
+		},
+		{
+			name: "CustomWithMixedTypes",
+			beancount: `
+				2014-07-09 custom "budget" "..." TRUE 45.30 USD
+			`,
+			expected: beancount(
+				custom("2014-07-09", "budget",
+					customString("..."),
+					customBoolean("TRUE"),
+					customAmount(amount("45.30", "USD")),
+				),
+			),
+		},
+		{
+			name: "CustomWithAllTypes",
+			beancount: `
+				2015-01-01 custom "forecast" 100.00 USD FALSE "monthly" 42
+			`,
+			expected: beancount(
+				custom("2015-01-01", "forecast",
+					customAmount(amount("100.00", "USD")),
+					customBoolean("FALSE"),
+					customString("monthly"),
+					customNumber("42"),
+				),
+			),
+		},
+		{
+			name: "CustomWithMetadata",
+			beancount: `
+				2014-07-09 custom "budget" "quarterly"
+					note: "Annual budget planning"
+					category: "financial"
+			`,
+			expected: beancount(
+				withMeta(
+					custom("2014-07-09", "budget", customString("quarterly")),
+					meta("note", "Annual budget planning"),
+					meta("category", "financial"),
+				),
+			),
+		},
+		{
 			name: "Transaction",
 			beancount: `
 				2014-05-05 txn "Cafe Mogador" "Lamb tagine with wine"
@@ -1155,6 +1206,26 @@ func price(d string, commodity string, amount *Amount) *Price {
 
 func event(d string, name string, value string) *Event {
 	return &Event{Date: date(d), Name: name, Value: value}
+}
+
+func custom(d string, t string, values ...*CustomValue) *Custom {
+	return &Custom{Date: date(d), Type: t, Values: values}
+}
+
+func customString(value string) *CustomValue {
+	return &CustomValue{String: &value}
+}
+
+func customBoolean(value string) *CustomValue {
+	return &CustomValue{BooleanValue: &value}
+}
+
+func customAmount(a *Amount) *CustomValue {
+	return &CustomValue{Amount: a}
+}
+
+func customNumber(value string) *CustomValue {
+	return &CustomValue{Number: &value}
 }
 
 func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {

@@ -264,6 +264,67 @@ var _ Directive = &Event{}
 func (e *Event) date() *Date       { return e.Date }
 func (e *Event) Directive() string { return "event" }
 
+// Custom is a prototype directive for plugin development, allowing arbitrary typed values
+// after the directive name. This provides a flexible extension mechanism for plugins to
+// define their own directives with custom data. Values can be strings, numbers, booleans,
+// or amounts in any combination.
+//
+// Example:
+//
+//	2014-07-09 custom "budget" "..." TRUE 45.30 USD
+//	2015-01-01 custom "forecast" 100.00 USD FALSE "monthly"
+type Custom struct {
+	Pos    lexer.Position
+	Date   *Date          `parser:"@Date 'custom'"`
+	Type   string         `parser:"@String"`
+	Values []*CustomValue `parser:"@@*"`
+
+	withMetadata
+}
+
+var _ Directive = &Custom{}
+
+func (c *Custom) date() *Date       { return c.Date }
+func (c *Custom) Directive() string { return "custom" }
+
+// CustomValue represents a single value in a custom directive, which can be a string,
+// number, boolean, or amount. Only one field will be non-nil/non-zero for each value.
+type CustomValue struct {
+	String       *string `parser:"@String"`
+	BooleanValue *string `parser:"| @('TRUE' | 'FALSE')"`
+	Amount       *Amount `parser:"| @@"`
+	Number       *string `parser:"| @Number"`
+}
+
+// GetValue returns the actual value stored in this CustomValue as an interface{}.
+func (cv *CustomValue) GetValue() interface{} {
+	switch {
+	case cv.String != nil:
+		return *cv.String
+	case cv.BooleanValue != nil:
+		return *cv.BooleanValue == "TRUE"
+	case cv.Amount != nil:
+		return cv.Amount
+	case cv.Number != nil:
+		return *cv.Number
+	default:
+		return nil
+	}
+}
+
+// IsBoolean returns true if this value is a boolean.
+func (cv *CustomValue) IsBoolean() bool {
+	return cv.BooleanValue != nil
+}
+
+// Boolean returns the boolean value if this is a boolean value.
+func (cv *CustomValue) Boolean() bool {
+	if cv.BooleanValue != nil {
+		return *cv.BooleanValue == "TRUE"
+	}
+	return false
+}
+
 // Transaction records a financial transaction with a date, flag, optional payee,
 // narration, and a list of postings. The flag indicates transaction status: '*' for
 // cleared/complete transactions, '!' for pending/uncleared transactions, or 'P' for
@@ -621,6 +682,7 @@ var (
 			&Document{},
 			&Price{},
 			&Event{},
+			&Custom{},
 			&Transaction{},
 		),
 		participle.UseLookahead(2),
@@ -705,6 +767,8 @@ func getDirectivePos(d Directive) lexer.Position {
 	case *Price:
 		return v.Pos
 	case *Event:
+		return v.Pos
+	case *Custom:
 		return v.Pos
 	case *Transaction:
 		return v.Pos
