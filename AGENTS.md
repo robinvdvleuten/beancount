@@ -5,6 +5,7 @@ This document outlines the coding standards, conventions, and best practices for
 ## Essential Commands
 
 ### Code Quality Checks
+
 ```bash
 # Format all Go files (MUST be run before committing)
 gofmt -w .
@@ -23,6 +24,7 @@ go test -bench=. ./...
 ```
 
 ### Pre-Commit Checklist
+
 - [ ] Run `gofmt -w .` on all modified files
 - [ ] Run `golangci-lint run` and fix all issues
 - [ ] Run `go test ./...` and ensure all tests pass
@@ -32,11 +34,13 @@ go test -bench=. ./...
 ## Code Formatting
 
 ### Standard Formatting
+
 - **Always use `gofmt`** for code formatting
 - No exceptions - all code must be gofmt-compliant
 - Line length: Aim for 100-120 characters, but readability takes precedence
 
 ### Import Organization
+
 Organize imports in **three groups** separated by blank lines:
 
 ```go
@@ -63,6 +67,7 @@ import (
 ## Documentation Standards
 
 ### Package-Level Documentation
+
 Every package should have a package comment:
 
 ```go
@@ -73,6 +78,7 @@ package formatter
 ```
 
 ### Type Documentation
+
 Follow the pattern established in `parser/parser.go`:
 
 ```go
@@ -101,6 +107,7 @@ type Transaction struct {
 - Add blank line before examples
 
 ### Function/Method Documentation
+
 ```go
 // FormatTransaction formats a single transaction and writes the output to the writer.
 // This method is useful for rendering individual transactions, such as in error messages.
@@ -116,6 +123,7 @@ func (f *Formatter) FormatTransaction(txn *parser.Transaction, w io.Writer) erro
 - Mention error conditions
 
 ### Unexported Functions
+
 Document complex private functions too:
 
 ```go
@@ -126,6 +134,7 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 ## String Building
 
 ### Use strings.Builder for Performance
+
 **ALWAYS use `strings.Builder`** for building strings, never use string concatenation with `+=`:
 
 ```go
@@ -148,6 +157,7 @@ return result
 **Why:** String concatenation creates a new string allocation for each `+=` operation. `strings.Builder` is optimized for this use case and significantly more efficient.
 
 ### When to Use bytes.Buffer
+
 Use `bytes.Buffer` only when:
 - Working with binary data
 - Need the `io.Writer` interface AND doing byte operations
@@ -156,6 +166,7 @@ Use `bytes.Buffer` only when:
 ## Error Handling
 
 ### Custom Error Types
+
 Use custom error types for well-defined error conditions:
 
 ```go
@@ -179,6 +190,7 @@ func (e *AccountNotOpenError) Error() string {
 - Error needs type-checking with `errors.As()`
 
 ### Wrapped Errors
+
 Use `fmt.Errorf` with `%w` for adding context:
 
 ```go
@@ -194,6 +206,7 @@ if err != nil {
 - Simple error propagation
 
 ### Error Messages
+
 - Start with lowercase (unless proper noun or error type name)
 - Be specific about what failed
 - Include relevant context (filenames, accounts, etc.)
@@ -210,6 +223,7 @@ fmt.Errorf("Error parsing.") // Too vague, capitalized, has period
 ## Variable Declarations
 
 ### Use := for Local Variables
+
 Prefer short declaration for local variables:
 
 ```go
@@ -223,6 +237,7 @@ accounts = make(map[string]*Account)
 ```
 
 ### Use var When Zero Value is Desired
+
 ```go
 var (
     count int          // Explicitly want 0
@@ -231,6 +246,7 @@ var (
 ```
 
 ### Grouped var for Package-Level
+
 ```go
 var (
     // Version contains the application version number
@@ -244,6 +260,7 @@ var (
 ## Map and Slice Initialization
 
 ### Provide Capacity Hints When Possible
+
 Always provide capacity hints when the size is known or predictable:
 
 ```go
@@ -257,6 +274,7 @@ items := make([]astItem, 0)
 ```
 
 ### Use Literal Syntax for Small Fixed Collections
+
 ```go
 // ✅ CORRECT
 weights := WeightSet{
@@ -269,6 +287,7 @@ tags := []string{"vacation", "travel"}
 ## Control Flow
 
 ### Prefer Early Returns
+
 Avoid deep nesting by returning early for error cases:
 
 ```go
@@ -321,6 +340,7 @@ func (l *Ledger) processClose(close *parser.Close) {
 ```
 
 ### Use Type Switches for Multiple Type Checks
+
 When handling multiple types, use type switches instead of repeated type assertions:
 
 ```go
@@ -349,6 +369,7 @@ if txn, ok := directive.(*parser.Transaction); ok {
 ## Struct Organization
 
 ### Field Ordering
+
 1. Exported fields (alphabetically or logically grouped)
 2. Unexported fields (alphabetically or logically grouped)
 
@@ -376,6 +397,7 @@ type Formatter struct {
 ```
 
 ### Struct Tags
+
 Keep struct tags on the same line when reasonable:
 
 ```go
@@ -389,6 +411,7 @@ type Transaction struct {
 ## Function Organization
 
 ### Order Within a File
+
 1. Package constants and variables
 2. Type definitions
 3. Constructor functions (New, NewXxx)
@@ -396,6 +419,7 @@ type Transaction struct {
 5. Private helper functions (alphabetically or logically grouped)
 
 ### Group Related Functions
+
 Keep related functions together:
 
 ```go
@@ -419,11 +443,13 @@ func (l *Ledger) isAccountOpen(account Account, date Date) bool { }
 ## Testing Standards
 
 ### All Tests Must Pass
+
 - **Never commit code with failing tests**
 - Run `go test ./...` before every commit
 - Fix or skip (with clear reason) any flaky tests
 
 ### Test Organization
+
 Use table-driven tests with subtests for multiple cases:
 
 ```go
@@ -443,6 +469,7 @@ func TestFormatCmd(t *testing.T) {
 ```
 
 ### Assertion Library
+
 Use `github.com/alecthomas/assert/v2` for assertions:
 
 ```go
@@ -452,6 +479,7 @@ assert.True(t, condition, "optional message")
 ```
 
 ### Test Coverage
+
 - Aim for >80% coverage on new code
 - Focus on critical paths and error cases
 - Don't test trivial getters/setters
@@ -459,6 +487,7 @@ assert.True(t, condition, "optional message")
 ## Performance Considerations
 
 ### Memory Pooling
+
 Use `sync.Pool` for frequently allocated objects:
 
 ```go
@@ -478,6 +507,7 @@ func putBalanceMap(m map[string]decimal.Decimal) {
 ```
 
 ### Defer Cleanup
+
 Always defer pool returns and resource cleanup:
 
 ```go
@@ -486,6 +516,7 @@ defer putBalanceMap(balance) // Ensure cleanup even if function panics
 ```
 
 ### Pre-allocate When Possible
+
 ```go
 // Estimate initial capacity
 estimatedSize := (len(ast.Options) + len(ast.Directives)) * 100
@@ -495,6 +526,7 @@ buf.Grow(estimatedSize)
 ## Comment Style
 
 ### Inline Comments
+
 - Use sparingly, prefer self-documenting code
 - Explain WHY, not WHAT
 - Full sentences with proper punctuation when needed
@@ -508,6 +540,7 @@ needed := residual.Neg()
 ```
 
 ### TODO Comments
+
 Include context and optionally your name/date:
 
 ```go
@@ -516,6 +549,7 @@ Include context and optionally your name/date:
 ```
 
 ### Block Comments
+
 Use for complex algorithms or important context:
 
 ```go
@@ -527,25 +561,30 @@ Use for complex algorithms or important context:
 ## Naming Conventions
 
 ### Variables
+
 - Short names for short scopes: `i`, `err`, `ok`
 - Descriptive names for package-level or longer scopes
 - Avoid stuttering: `user.UserName` → `user.Name`
 
 ### Functions
+
 - Start with verb: `Get`, `Set`, `Process`, `Calculate`, `Format`
 - Boolean functions: `Is`, `Has`, `Can`, `Should`
 
 ### Constants
+
 - Use PascalCase for exported: `DefaultCurrencyColumn`
 - Use camelCase for unexported: `defaultTolerance`
 
 ### Interfaces
+
 - Single-method interfaces end in `-er`: `Reader`, `Writer`, `Formatter`
 - Multi-method interfaces use descriptive names: `Directive`, `WithMetadata`
 
 ## Common Patterns
 
 ### Constructor Pattern
+
 Use constructors to encapsulate object initialization and avoid repetition:
 
 ```go
@@ -581,6 +620,7 @@ func NewAccountNotOpenErrorFromBalance(balance *parser.Balance) *AccountNotOpenE
 - Only pass external data that the constructor can't extract itself
 
 ### Options Pattern
+
 Use functional options for configurable constructors:
 
 ```go
@@ -613,6 +653,7 @@ var _ io.Writer = &bytes.Buffer{}
 ```
 
 ### Context Pattern
+
 All public functions that perform I/O, processing, or potentially long-running operations should accept `context.Context` as their first parameter:
 
 ```go
@@ -665,6 +706,7 @@ func Load(filename string) (*AST, error) {
 - Context goes first: `func Foo(ctx context.Context, arg1, arg2)`
 
 ### Telemetry Pattern
+
 Use the telemetry package to instrument operations for timing analysis:
 
 ```go
@@ -760,24 +802,102 @@ loader.load main.beancount: 25ms
 ## Project-Specific Conventions
 
 ### AST Package
+
 - Contains all Abstract Syntax Tree node types (Transaction, Balance, Open, etc.)
 - All directives implement `Directive` interface
 - Basic types: Amount, Cost, Account, Date, Link, Tag, Metadata
 - Import separately from parser: `import "github.com/robinvdvleuten/beancount/ast"`
 - Participle parser tags remain on struct fields in ast package
 
+#### AST Builder Functions
+
+The `ast` package provides constructor functions for programmatically building AST nodes, making it easy to generate beancount files from code (e.g., CSV importers, data migration tools).
+
+**Simple Constructors** (no validation or fixed parameters):
+```go
+// Basic types
+amount := ast.NewAmount("100.50", "USD")
+link := ast.NewLink("invoice-001")  // ^ prefix optional
+tag := ast.NewTag("groceries")      // # prefix optional
+meta := ast.NewMetadata("key", "value")
+```
+
+**Validated Constructors** (return errors for invalid input):
+```go
+// Date validation
+date, err := ast.NewDate("2024-01-15")  // YYYY-MM-DD format
+date := ast.NewDateFromTime(time.Now()) // From time.Time
+
+// Account validation
+account, err := ast.NewAccount("Assets:Checking")  // Validates format
+```
+
+**Functional Options Pattern** (for complex types):
+```go
+// Transaction with options
+txn := ast.NewTransaction(date, "Buy groceries",
+    ast.WithFlag("*"),
+    ast.WithPayee("Whole Foods"),
+    ast.WithTags("food", "shopping"),
+    ast.WithLinks("receipt-001"),
+    ast.WithPostings(
+        ast.NewPosting(expensesAccount, ast.WithAmount("45.60", "USD")),
+        ast.NewPosting(checkingAccount),
+    ),
+)
+
+// Posting with options
+posting := ast.NewPosting(account,
+    ast.WithAmount("100.00", "USD"),
+    ast.WithCost(ast.NewCost(ast.NewAmount("1.35", "EUR"))),
+    ast.WithPrice(ast.NewAmount("1.40", "EUR")),
+)
+```
+
+**Convenience Helpers**:
+```go
+// Pre-configured transactions
+txn := ast.NewClearedTransaction(date, "Description", postings...)  // flag="*"
+txn := ast.NewPendingTransaction(date, "Description", postings...)  // flag="!"
+```
+
+**CSV Importer Example**:
+```go
+// Parse CSV row: "2024-01-15,Whole Foods,-45.60"
+date, _ := ast.NewDate(csvDate)
+expensesAccount, _ := ast.NewAccount("Expenses:Groceries")
+checkingAccount, _ := ast.NewAccount("Assets:Checking")
+
+txn := ast.NewClearedTransaction(date, csvPayee,
+    ast.NewPosting(expensesAccount, ast.WithAmount("45.60", "USD")),
+    ast.NewPosting(checkingAccount, ast.WithAmount(csvAmount, "USD")),
+)
+
+formatter.FormatTransaction(txn, os.Stdout)
+```
+
+**Rules:**
+- Use simple constructors for types with no optional fields (Amount, Link, Tag)
+- Use functional options for types with many optional fields (Transaction, Posting)
+- Validators return errors for invalid input (Date, Account)
+- Builders don't set `lexer.Position` fields (parser-only)
+- Follow options pattern for extensibility without breaking changes
+
 ### Parser Package
+
 - Contains only parsing logic (no type definitions)
 - Returns `*ast.AST` from Parse functions
 - Uses `participle` library for grammar parsing
 - Include comprehensive examples in godoc
 
 ### Formatter Package
+
 - Always preserve original spacing when possible
 - Use `runewidth.StringWidth()` for display width calculations (not `len()`)
 - Comments and blank lines preserved by default
 
 ### Ledger Package
+
 - Use `decimal.Decimal` for all monetary amounts (never float)
 - Pool frequently allocated maps
 - Return `ValidationErrors` wrapper for multiple errors
@@ -785,6 +905,7 @@ loader.load main.beancount: 25ms
 - Implement getter methods: `GetPosition()`, `GetDirective()`, `GetAccount()`, `GetDate()`
 
 ### Errors Package
+
 - Provides formatting infrastructure, not domain errors
 - Domain-specific errors remain in their packages (e.g., `ledger`, `parser`)
 - Use `TextFormatter` for CLI output (bean-check style: `filename:line: message` + directive)
@@ -792,6 +913,7 @@ loader.load main.beancount: 25ms
 - All errors with `GetPosition()` and `GetDirective()` methods are formatted with context
 
 ### Loader Package
+
 - Follow includes recursively when `WithFollowIncludes()` option set
 - Deduplicate included files by absolute path
 - Preserve directive order after merging
@@ -801,13 +923,3 @@ loader.load main.beancount: 25ms
 - [Effective Go](https://go.dev/doc/effective_go)
 - [Go Code Review Comments](https://github.com/golang/go/wiki/CodeReviewComments)
 - [Uber Go Style Guide](https://github.com/uber-go/guide/blob/master/style.md)
-
-## Changelog
-
-When this guide is updated, add an entry here:
-
-- 2025-01-17: Moved AST types from parser/ to new ast/ package following go/ast pattern (Phase 1)
-- 2025-01-17: Added Context Pattern and Telemetry Pattern sections for Phase 1 and Phase 2 implementation
-- 2025-01-17: Added Constructor Pattern section with anti-pattern warning about redundant field extraction
-- 2025-01-17: Added error formatting section describing the errors package and formatter pattern
-- 2025-01-17: Initial version created based on codebase analysis

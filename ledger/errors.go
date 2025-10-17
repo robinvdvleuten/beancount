@@ -14,8 +14,8 @@ import (
 type AccountNotOpenError struct {
 	Account   ast.Account
 	Date      *ast.Date
-	Pos       lexer.Position   // Position in source file (includes filename)
-	Directive ast.Directive // The directive that referenced the closed account
+	Pos       lexer.Position // Position in source file (includes filename)
+	Directive ast.Directive  // The directive that referenced the closed account
 }
 
 func (e *AccountNotOpenError) Error() string {
@@ -150,11 +150,11 @@ func (e *AccountNotClosedError) GetDate() *ast.Date {
 
 // TransactionNotBalancedError is returned when a transaction doesn't balance
 type TransactionNotBalancedError struct {
-	Pos         lexer.Position      // Position in source file (includes filename)
-	Date        *ast.Date        // Transaction date
-	Narration   string              // Transaction narration
-	Residuals   map[string]string   // currency -> amount string (unbalanced amounts)
-	Transaction *ast.Transaction // Full transaction for context rendering
+	Pos         lexer.Position    // Position in source file (includes filename)
+	Date        *ast.Date         // Transaction date
+	Narration   string            // Transaction narration
+	Residuals   map[string]string // currency -> amount string (unbalanced amounts)
+	Transaction *ast.Transaction  // Full transaction for context rendering
 }
 
 // Error returns a bean-check style error message with filename:line prefix.

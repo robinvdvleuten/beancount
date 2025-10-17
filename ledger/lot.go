@@ -11,7 +11,7 @@ import (
 type LotSpec struct {
 	Cost         *decimal.Decimal // Cost per unit (nil if no cost basis)
 	CostCurrency string           // Currency of the cost
-	Date         *ast.Date     // Optional acquisition date
+	Date         *ast.Date        // Optional acquisition date
 	Label        string           // Optional label
 }
 

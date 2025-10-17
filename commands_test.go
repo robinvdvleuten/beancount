@@ -1,8 +1,8 @@
 package beancount
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"

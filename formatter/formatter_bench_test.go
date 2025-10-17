@@ -1,8 +1,8 @@
 package formatter
 
 import (
-	"context"
 	"bytes"
+	"context"
 	"testing"
 
 	"github.com/robinvdvleuten/beancount/parser"
