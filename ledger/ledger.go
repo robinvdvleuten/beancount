@@ -38,6 +38,7 @@ import (
 	"fmt"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
 
@@ -83,23 +84,29 @@ func New() *Ledger {
 }
 
 // Process processes an AST and builds the ledger state
-func (l *Ledger) Process(ctx context.Context, ast *ast.AST) error {
+func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
+	// Extract telemetry collector from context
+	collector := telemetry.FromContext(ctx)
+
 	// Process options first
-	for _, opt := range ast.Options {
+	for _, opt := range tree.Options {
 		l.options[opt.Name] = opt.Value
 	}
 
 	// Process directives in order (they're already sorted by date)
-	for _, directive := range ast.Directives {
+	processTimer := collector.Start(fmt.Sprintf("ledger.processing (%d directives)", len(tree.Directives)))
+	for _, directive := range tree.Directives {
 		// Check for cancellation
 		select {
 		case <-ctx.Done():
+			processTimer.End()
 			return ctx.Err()
 		default:
 		}
 
 		l.processDirective(directive)
 	}
+	processTimer.End()
 
 	// Return collected errors
 	if len(l.errors) > 0 {

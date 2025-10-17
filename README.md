@@ -64,6 +64,31 @@ example.beancount:15: Transaction does not balance: (-500.00 USD)
 1 validation error(s) found
 ```
 
+**Performance profiling:**
+
+Use the `--telemetry` flag to see detailed timing breakdowns:
+
+```bash
+beancount check --telemetry example.beancount
+```
+
+Example output:
+```
+✓ Check passed
+
+loader.load example.beancount: 125ms
+├─ loader.parse example.beancount: 85ms
+│  ├─ parser.lexing: 75ms
+│  ├─ parser.push_pop: 5ms
+│  └─ parser.sorting: 5ms
+├─ loader.parse accounts.beancount: 35ms
+│  ├─ parser.lexing: 30ms
+│  ├─ parser.push_pop: 3ms
+│  └─ parser.sorting: 2ms
+├─ ast.merging: 2ms
+└─ ledger.processing (1523 directives): 3ms
+```
+
 ### Format a Beancount file
 
 Format a Beancount file with automatic alignment:

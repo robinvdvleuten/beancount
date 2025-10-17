@@ -7,6 +7,7 @@ import (
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
 var (
@@ -88,14 +89,29 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	default:
 	}
 
+	// Extract telemetry collector from context
+	collector := telemetry.FromContext(ctx)
+
+	// Lex & Parse
+	parseTimer := collector.Start("parser.lexing")
 	tree, err := parser.ParseBytes(filename, data)
+	parseTimer.End()
 	if err != nil {
 		return nil, err
 	}
 
+	// Apply push/pop directives
+	pushPopTimer := collector.Start("parser.push_pop")
 	if err := ast.ApplyPushPopDirectives(tree); err != nil {
+		pushPopTimer.End()
 		return nil, err
 	}
+	pushPopTimer.End()
 
-	return tree, ast.SortDirectives(tree)
+	// Sort directives
+	sortTimer := collector.Start("parser.sorting")
+	err = ast.SortDirectives(tree)
+	sortTimer.End()
+
+	return tree, err
 }

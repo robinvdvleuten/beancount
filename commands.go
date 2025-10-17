@@ -11,15 +11,24 @@ import (
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
 type CheckCmd struct {
-	File kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
+	File      kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
+	Telemetry bool                      `help:"Show timing telemetry for operations." default:"false"`
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 	// Create context for cancellation support
 	runCtx := context.Background()
+
+	// Create telemetry collector if flag is set
+	var collector telemetry.Collector
+	if cmd.Telemetry {
+		collector = telemetry.NewTimingCollector()
+		runCtx = telemetry.WithCollector(runCtx, collector)
+	}
 
 	// Load the input file and recursively resolve all includes
 	ldr := loader.New(loader.WithFollowIncludes())
@@ -55,6 +64,13 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 
 	// Success
 	_, _ = fmt.Fprintln(ctx.Stdout, "✓ Check passed")
+
+	// Output telemetry report if enabled
+	if cmd.Telemetry {
+		_, _ = fmt.Fprintln(ctx.Stderr)
+		collector.Report(ctx.Stderr)
+	}
+
 	return nil
 }
 

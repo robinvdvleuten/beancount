@@ -29,6 +29,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
 // Loader handles loading and parsing of Beancount files with optional include resolution.
@@ -80,13 +81,19 @@ func New(opts ...Option) *Loader {
 
 // Load parses a beancount file with optional recursive include resolution.
 func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
+	// Extract telemetry collector from context
+	collector := telemetry.FromContext(ctx)
+
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
+		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 		data, err := os.ReadFile(filename)
 		if err != nil {
+			parseTimer.End()
 			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 		}
 		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+		parseTimer.End()
 		if err != nil {
 			// Wrap parser errors for consistent formatting
 			return nil, parser.NewParseError(filename, err)
@@ -95,16 +102,21 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	}
 
 	// Recursive loading with include resolution
+	loadTimer := collector.Start(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
 	state := &loaderState{
-		visited: make(map[string]bool),
+		visited:   make(map[string]bool),
+		collector: collector,
 	}
 
-	return state.loadRecursive(ctx, filename)
+	ast, err := state.loadRecursive(ctx, filename)
+	loadTimer.End()
+	return ast, err
 }
 
 // loaderState tracks state during recursive loading.
 type loaderState struct {
-	visited map[string]bool // Absolute paths of files already loaded
+	visited   map[string]bool    // Absolute paths of files already loaded
+	collector telemetry.Collector // Telemetry collector for tracking load operations
 }
 
 // loadRecursive recursively loads a file and all its includes.
@@ -123,12 +135,15 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 	l.visited[absPath] = true
 
 	// Read and parse the file
+	parseTimer := l.collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 	data, err := os.ReadFile(filename)
 	if err != nil {
+		parseTimer.End()
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
 
 	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+	parseTimer.End()
 	if err != nil {
 		// Wrap parser errors for consistent formatting
 		return nil, parser.NewParseError(filename, err)
@@ -168,7 +183,9 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 	}
 
 	// Merge all ASTs
+	mergeTimer := l.collector.Start("ast.merging")
 	merged := mergeASTs(result, includedASTs...)
+	mergeTimer.End()
 	return merged, nil
 }
 

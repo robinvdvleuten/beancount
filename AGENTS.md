@@ -713,7 +713,9 @@ func Process(ctx context.Context, ast *AST) error {
 
 **Telemetry best practices:**
 - Always use `defer timer.End()` to ensure timers complete
-- Use descriptive names: "Parse main.beancount" not just "Parse"
+- Use system-like naming: `"parser.lexing"`, `"loader.parse"`, `"ast.merging"`, `"ledger.processing"`
+- Include context in names: `"loader.parse accounts.beancount"` not just `"parse"`
+- Format: `"package.operation"` or `"package.operation <context>"`
 - Create child timers for nested operations
 - Extract collector once per function (not per operation)
 - Telemetry has zero overhead when disabled (NoOp collector)
@@ -733,6 +735,27 @@ child2 := parentTimer.Child("Child 2")
 // ... work ...
 child2.End()
 ```
+
+**Real-world naming examples from our codebase:**
+```
+loader.load main.beancount: 25ms
+├─ loader.parse main.beancount: 15ms
+│  ├─ parser.lexing: 12ms
+│  ├─ parser.push_pop: 2ms
+│  └─ parser.sorting: 1ms
+├─ loader.parse accounts.beancount: 8ms
+│  ├─ parser.lexing: 7ms
+│  ├─ parser.push_pop: 0ms
+│  └─ parser.sorting: 1ms
+├─ ast.merging: 1ms
+└─ ledger.processing (150 directives): 1ms
+```
+
+**Naming standards:**
+- Parser operations: `parser.lexing`, `parser.push_pop`, `parser.sorting`
+- Loader operations: `loader.load <file>`, `loader.parse <file>`
+- AST operations: `ast.merging`
+- Ledger operations: `ledger.processing (N directives)`
 
 ## Project-Specific Conventions
 
