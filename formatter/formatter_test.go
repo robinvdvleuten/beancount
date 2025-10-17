@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -115,7 +116,7 @@ func TestFormat(t *testing.T) {
 
 func TestCalculateCurrencyColumn(t *testing.T) {
 	t.Run("EmptyAST", func(t *testing.T) {
-		ast := &parser.AST{}
+		ast := &ast.AST{}
 		f := New()
 		column := f.calculateCurrencyColumn(ast)
 		assert.Equal(t, 52, column, "Should return default column for empty AST")

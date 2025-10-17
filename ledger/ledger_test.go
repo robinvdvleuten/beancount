@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -555,7 +556,7 @@ func TestAccount_IsOpen(t *testing.T) {
 
 func TestParseAccountType(t *testing.T) {
 	tests := []struct {
-		account parser.Account
+		account ast.Account
 		want    AccountType
 	}{
 		{"Assets:Checking", AccountTypeAssets},
@@ -575,8 +576,8 @@ func TestParseAccountType(t *testing.T) {
 }
 
 // Helper function to parse dates in tests
-func mustParseDate(s string) *parser.Date {
-	date := &parser.Date{}
+func mustParseDate(s string) *ast.Date {
+	date := &ast.Date{}
 	err := date.Capture([]string{s})
 	if err != nil {
 		panic(err)

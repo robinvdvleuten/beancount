@@ -1,0 +1,269 @@
+package ast
+
+import "github.com/alecthomas/participle/v2/lexer"
+
+// Commodity declares a commodity or currency that can be used in the ledger.
+// This directive is optional but helps document which currencies and commodities
+// are expected in your accounts. It establishes the existence of a tradable
+// instrument and can be used with metadata to specify display precision and formatting.
+//
+// Example:
+//
+//	2014-01-01 commodity USD
+//	  name: "US Dollar"
+//	  asset-class: "cash"
+type Commodity struct {
+	Pos      lexer.Position
+	Date     *Date  `parser:"@Date 'commodity'"`
+	Currency string `parser:"@Ident"`
+
+	withMetadata
+}
+
+var _ Directive = &Commodity{}
+
+func (c *Commodity) date() *Date       { return c.Date }
+func (c *Commodity) Directive() string { return "commodity" }
+
+// Open declares the opening of an account at a specific date, marking the beginning
+// of its lifetime in the ledger. You can optionally constrain which currencies the
+// account may hold and specify a booking method (STRICT, NONE, AVERAGE, FIFO, LIFO)
+// for lot tracking. All accounts must be opened before they can be used in transactions.
+//
+// Example:
+//
+//	2014-05-01 open Assets:US:BofA:Checking USD
+//	2014-05-01 open Assets:Investments:Brokerage USD,EUR "FIFO"
+type Open struct {
+	Pos                  lexer.Position
+	Date                 *Date    `parser:"@Date 'open'"`
+	Account              Account  `parser:"@Account"`
+	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
+	BookingMethod        string   `parser:"@String?"`
+
+	withMetadata `parser:""`
+}
+
+var _ Directive = &Open{}
+
+func (o *Open) date() *Date       { return o.Date }
+func (o *Open) Directive() string { return "open" }
+
+// Close declares the closing of an account at a specific date, marking the end of
+// its lifetime in the ledger. After this date, the account should have a zero balance
+// and no new transactions should be posted to it. This helps catch errors if you
+// accidentally post transactions to closed accounts.
+//
+// Example:
+//
+//	2015-09-23 close Assets:US:BofA:Checking
+type Close struct {
+	Pos     lexer.Position
+	Date    *Date   `parser:"@Date 'close'"`
+	Account Account `parser:"@Account"`
+
+	withMetadata
+}
+
+var _ Directive = &Close{}
+
+func (c *Close) date() *Date       { return c.Date }
+func (c *Close) Directive() string { return "close" }
+
+// Balance asserts that an account should have a specific balance at the beginning
+// of a given date. This directive is used to verify the integrity of your ledger
+// against external statements like bank statements or brokerage reports. If the
+// calculated balance doesn't match the assertion, an error will be raised.
+//
+// Example:
+//
+//	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
+//	2014-08-09 balance Assets:Investments:Brokerage 10.00 HOOL {518.73 USD}
+type Balance struct {
+	Pos     lexer.Position
+	Date    *Date   `parser:"@Date 'balance'"`
+	Account Account `parser:"@Account"`
+	Amount  *Amount `parser:"@@"`
+
+	withMetadata
+}
+
+var _ Directive = &Balance{}
+
+func (b *Balance) date() *Date       { return b.Date }
+func (b *Balance) Directive() string { return "balance" }
+
+// Pad automatically inserts a transaction to bring an account to a specific balance
+// determined by the next balance assertion. The padding amount is calculated from the
+// difference needed and posted against AccountPad (typically an equity account).
+// This is useful for initializing opening balances without manual calculation.
+//
+// Example:
+//
+//	2014-01-01 pad Assets:US:BofA:Checking Equity:Opening-Balances
+//	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
+type Pad struct {
+	Pos        lexer.Position
+	Date       *Date   `parser:"@Date 'pad'"`
+	Account    Account `parser:"@Account"`
+	AccountPad Account `parser:"@Account"`
+
+	withMetadata
+}
+
+var _ Directive = &Pad{}
+
+func (p *Pad) date() *Date       { return p.Date }
+func (p *Pad) Directive() string { return "pad" }
+
+// Note attaches a dated comment or note to an account, allowing you to record
+// important information about an account at a specific point in time. These notes
+// can be used to track customer service calls, account changes, or any other
+// significant events related to the account.
+//
+// Example:
+//
+//	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
+type Note struct {
+	Pos         lexer.Position
+	Date        *Date   `parser:"@Date 'note'"`
+	Account     Account `parser:"@Account"`
+	Description string  `parser:"@String"`
+
+	withMetadata
+}
+
+var _ Directive = &Note{}
+
+func (n *Note) date() *Date       { return n.Date }
+func (n *Note) Directive() string { return "note" }
+
+// Document associates an external file (such as a receipt, invoice, statement, or
+// contract) with an account at a specific date. The path can be absolute or relative
+// to the ledger file. This creates an audit trail linking your ledger entries to
+// supporting documentation.
+//
+// Example:
+//
+//	2014-07-09 document Assets:US:BofA:Checking "/documents/bank-statements/2014-07.pdf"
+//	2014-11-02 document Liabilities:CreditCard "receipts/amazon-invoice-2014-11-02.pdf"
+type Document struct {
+	Pos            lexer.Position
+	Date           *Date   `parser:"@Date 'document'"`
+	Account        Account `parser:"@Account"`
+	PathToDocument string  `parser:"@String"`
+
+	withMetadata
+}
+
+var _ Directive = &Document{}
+
+func (d *Document) date() *Date       { return d.Date }
+func (d *Document) Directive() string { return "document" }
+
+// Price declares the price of a commodity in terms of another currency at a specific
+// date. These entries are used to track exchange rates, stock prices, and other market
+// values over time. Beancount uses price directives for reporting account values at
+// market prices and for currency conversions.
+//
+// Example:
+//
+//	2014-07-09 price USD 1.08 CAD
+//	2015-04-30 price HOOL 582.26 USD
+type Price struct {
+	Pos       lexer.Position
+	Date      *Date   `parser:"@Date 'price'"`
+	Commodity string  `parser:"@Ident"`
+	Amount    *Amount `parser:"@@"`
+
+	withMetadata
+}
+
+var _ Directive = &Price{}
+
+func (p *Price) date() *Date       { return p.Date }
+func (p *Price) Directive() string { return "price" }
+
+// Event records a named event with a value at a specific date, allowing you to track
+// important life events, location changes, employment history, or other time-based
+// state. Events can be queried and used in reports to provide context for your
+// financial history.
+//
+// Example:
+//
+//	2014-07-09 event "location" "New York, USA"
+//	2014-09-01 event "employer" "Hooli Inc."
+type Event struct {
+	Pos   lexer.Position
+	Date  *Date  `parser:"@Date 'event'"`
+	Name  string `parser:"@String"`
+	Value string `parser:"@String"`
+
+	withMetadata
+}
+
+var _ Directive = &Event{}
+
+func (e *Event) date() *Date       { return e.Date }
+func (e *Event) Directive() string { return "event" }
+
+// Custom is a prototype directive for plugin development, allowing arbitrary typed values
+// after the directive name. This provides a flexible extension mechanism for plugins to
+// define their own directives with custom data. Values can be strings, numbers, booleans,
+// or amounts in any combination.
+//
+// Example:
+//
+//	2014-07-09 custom "budget" "..." TRUE 45.30 USD
+//	2015-01-01 custom "forecast" 100.00 USD FALSE "monthly"
+type Custom struct {
+	Pos    lexer.Position
+	Date   *Date          `parser:"@Date 'custom'"`
+	Type   string         `parser:"@String"`
+	Values []*CustomValue `parser:"@@*"`
+
+	withMetadata
+}
+
+var _ Directive = &Custom{}
+
+func (c *Custom) date() *Date       { return c.Date }
+func (c *Custom) Directive() string { return "custom" }
+
+// CustomValue represents a single value in a custom directive, which can be a string,
+// number, boolean, or amount. Only one field will be non-nil/non-zero for each value.
+type CustomValue struct {
+	String       *string `parser:"@String"`
+	BooleanValue *string `parser:"| @('TRUE' | 'FALSE')"`
+	Amount       *Amount `parser:"| @@"`
+	Number       *string `parser:"| @Number"`
+}
+
+// GetValue returns the actual value stored in this CustomValue as an interface{}.
+func (cv *CustomValue) GetValue() interface{} {
+	switch {
+	case cv.String != nil:
+		return *cv.String
+	case cv.BooleanValue != nil:
+		return *cv.BooleanValue == "TRUE"
+	case cv.Amount != nil:
+		return cv.Amount
+	case cv.Number != nil:
+		return *cv.Number
+	default:
+		return nil
+	}
+}
+
+// IsBoolean returns true if this value is a boolean.
+func (cv *CustomValue) IsBoolean() bool {
+	return cv.BooleanValue != nil
+}
+
+// Boolean returns the boolean value if this is a boolean value.
+func (cv *CustomValue) Boolean() bool {
+	if cv.BooleanValue != nil {
+		return *cv.BooleanValue == "TRUE"
+	}
+	return false
+}

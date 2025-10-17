@@ -3,12 +3,12 @@ package ledger
 import (
 	"fmt"
 
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
 
-// ParseAmount converts a parser.Amount to a decimal.Decimal
-func ParseAmount(amount *parser.Amount) (decimal.Decimal, error) {
+// ParseAmount converts a ast.Amount to a decimal.Decimal
+func ParseAmount(amount *ast.Amount) (decimal.Decimal, error) {
 	if amount == nil {
 		return decimal.Zero, fmt.Errorf("amount is nil")
 	}
@@ -21,9 +21,9 @@ func ParseAmount(amount *parser.Amount) (decimal.Decimal, error) {
 	return d, nil
 }
 
-// MustParseAmount converts a parser.Amount to a decimal.Decimal and panics on error
+// MustParseAmount converts a ast.Amount to a decimal.Decimal and panics on error
 // Use only in tests or when you're certain the amount is valid
-func MustParseAmount(amount *parser.Amount) decimal.Decimal {
+func MustParseAmount(amount *ast.Amount) decimal.Decimal {
 	d, err := ParseAmount(amount)
 	if err != nil {
 		panic(err)

@@ -1,7 +1,7 @@
 package ledger
 
 import (
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
 
@@ -17,7 +17,7 @@ type WeightSet []Weight
 
 // CalculateWeights calculates all weights contributed by a posting
 // This handles cost basis and price annotations
-func CalculateWeights(posting *parser.Posting) (WeightSet, error) {
+func CalculateWeights(posting *ast.Posting) (WeightSet, error) {
 	if posting.Amount == nil {
 		// No amount specified - this will be inferred (not implemented yet)
 		return WeightSet{}, nil

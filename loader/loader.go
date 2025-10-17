@@ -27,6 +27,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -78,19 +79,19 @@ func New(opts ...Option) *Loader {
 }
 
 // Load parses a beancount file with optional recursive include resolution.
-func (l *Loader) Load(ctx context.Context, filename string) (*parser.AST, error) {
+func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
 		data, err := os.ReadFile(filename)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 		}
-		ast, err := parser.ParseBytesWithFilename(ctx, filename, data)
+		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 		if err != nil {
 			// Wrap parser errors for consistent formatting
 			return nil, parser.NewParseError(filename, err)
 		}
-		return ast, nil
+		return result, nil
 	}
 
 	// Recursive loading with include resolution
@@ -107,7 +108,7 @@ type loaderState struct {
 }
 
 // loadRecursive recursively loads a file and all its includes.
-func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*parser.AST, error) {
+func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.AST, error) {
 	// Get absolute path for deduplication
 	absPath, err := filepath.Abs(filename)
 	if err != nil {
@@ -117,7 +118,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*pars
 	// Check if already visited (deduplication - same file included multiple times)
 	if l.visited[absPath] {
 		// Return empty AST - this file was already processed
-		return &parser.AST{}, nil
+		return &ast.AST{}, nil
 	}
 	l.visited[absPath] = true
 
@@ -127,23 +128,23 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*pars
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
 
-	ast, err := parser.ParseBytesWithFilename(ctx, filename, data)
+	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 	if err != nil {
 		// Wrap parser errors for consistent formatting
 		return nil, parser.NewParseError(filename, err)
 	}
 
 	// If no includes, return as-is
-	if len(ast.Includes) == 0 {
-		ast.Includes = nil // Clear includes since we're in follow mode
-		return ast, nil
+	if len(result.Includes) == 0 {
+		result.Includes = nil // Clear includes since we're in follow mode
+		return result, nil
 	}
 
 	// Recursively load all includes and merge
 	baseDir := filepath.Dir(absPath)
-	var includedASTs []*parser.AST
+	var includedASTs []*ast.AST
 
-	for _, inc := range ast.Includes {
+	for _, inc := range result.Includes {
 		// Check for cancellation
 		select {
 		case <-ctx.Done():
@@ -167,16 +168,16 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*pars
 	}
 
 	// Merge all ASTs
-	merged := mergeASTs(ast, includedASTs...)
+	merged := mergeASTs(result, includedASTs...)
 	return merged, nil
 }
 
 // mergeASTs combines a main AST with multiple included ASTs.
 // The main AST's options take precedence over included files' options.
 // All directives are combined and will be sorted by date by the parser.
-func mergeASTs(main *parser.AST, included ...*parser.AST) *parser.AST {
-	result := &parser.AST{
-		Directives: make(parser.Directives, 0, len(main.Directives)),
+func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
+	result := &ast.AST{
+		Directives: make(ast.Directives, 0, len(main.Directives)),
 		Options:    main.Options,   // Main file options take precedence
 		Includes:   nil,            // All includes resolved, so clear this
 		Plugins:    main.Plugins,   // Start with main file plugins
@@ -202,7 +203,7 @@ func mergeASTs(main *parser.AST, included ...*parser.AST) *parser.AST {
 	}
 
 	// Re-sort all directives by date
-	_ = parser.SortDirectives(result)
+	_ = ast.SortDirectives(result)
 
 	return result
 }

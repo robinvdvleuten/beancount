@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/participle/v2"
 	"github.com/alecthomas/participle/v2/lexer"
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 // ParseError represents a syntax error during parsing.
@@ -27,7 +28,7 @@ func (e *ParseError) GetPosition() lexer.Position {
 	return e.Pos
 }
 
-func (e *ParseError) GetDirective() Directive {
+func (e *ParseError) GetDirective() ast.Directive {
 	return nil // Parse errors don't have directive context
 }
 

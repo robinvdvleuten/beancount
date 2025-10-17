@@ -4,15 +4,15 @@ import (
 	"fmt"
 
 	"github.com/alecthomas/participle/v2/lexer"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/errors"
 	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/parser"
 )
 
 // Example showing how to use TextFormatter for CLI output
 func ExampleTextFormatter() {
 	// Create a sample error
-	date := &parser.Date{}
+	date := &ast.Date{}
 	err := &ledger.AccountNotOpenError{
 		Account: "Assets:Checking",
 		Date:    date,
@@ -33,7 +33,7 @@ func ExampleTextFormatter() {
 // Example showing how to use JSONFormatter for API/web output
 func ExampleJSONFormatter() {
 	// Create sample errors
-	date := &parser.Date{}
+	date := &ast.Date{}
 	errs := []error{
 		&ledger.AccountNotOpenError{
 			Account: "Assets:Checking",

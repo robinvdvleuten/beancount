@@ -3,7 +3,7 @@ package ledger
 import (
 	"sync"
 
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
 
@@ -20,7 +20,7 @@ var (
 	// inferredAmountsMapPool provides pooled maps for amount inference
 	inferredAmountsMapPool = sync.Pool{
 		New: func() interface{} {
-			return make(map[*parser.Posting]*parser.Amount, 2)
+			return make(map[*ast.Posting]*ast.Amount, 2)
 		},
 	}
 )
@@ -40,12 +40,12 @@ func putBalanceMap(m map[string]decimal.Decimal) {
 }
 
 // getInferredAmountsMap retrieves a pooled inferred amounts map
-func getInferredAmountsMap() map[*parser.Posting]*parser.Amount {
-	return inferredAmountsMapPool.Get().(map[*parser.Posting]*parser.Amount)
+func getInferredAmountsMap() map[*ast.Posting]*ast.Amount {
+	return inferredAmountsMapPool.Get().(map[*ast.Posting]*ast.Amount)
 }
 
 // putInferredAmountsMap clears and returns an inferred amounts map to the pool
-func putInferredAmountsMap(m map[*parser.Posting]*parser.Amount) {
+func putInferredAmountsMap(m map[*ast.Posting]*ast.Amount) {
 	for k := range m {
 		delete(m, k)
 	}

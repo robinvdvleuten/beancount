@@ -31,7 +31,7 @@ import (
 	"strings"
 
 	"github.com/mattn/go-runewidth"
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 const (
@@ -235,12 +235,12 @@ type widthMetrics struct {
 }
 
 // calculateWidthMetrics performs a single pass through the AST to calculate all width metrics.
-func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
+func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 	metrics := widthMetrics{}
 
-	for _, directive := range ast.Directives {
+	for _, directive := range tree.Directives {
 		switch d := directive.(type) {
-		case *parser.Transaction:
+		case *ast.Transaction:
 			for _, posting := range d.Postings {
 				if posting.Amount != nil {
 					// Calculate prefix width: indentation + flag + account + spacing
@@ -261,7 +261,7 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 				}
 			}
 
-		case *parser.Balance:
+		case *ast.Balance:
 			if d.Amount != nil {
 				// Calculate width: date + "balance" + account + spacing + number
 				width := DateWidth + 1 + BalanceKeywordWidth + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
@@ -271,7 +271,7 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
 			}
 
-		case *parser.Price:
+		case *ast.Price:
 			if d.Amount != nil {
 				// Calculate width: date + "price" + commodity + spacing + number
 				width := DateWidth + 1 + PriceKeywordWidth + runewidth.StringWidth(d.Commodity) + MinimumSpacing
@@ -288,7 +288,7 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 
 // calculateCurrencyColumn auto-calculates the currency column from AST content.
 // Returns the default column if no amounts are found.
-func (f *Formatter) calculateCurrencyColumn(ast *parser.AST) int {
+func (f *Formatter) calculateCurrencyColumn(ast *ast.AST) int {
 	metrics := f.calculateWidthMetrics(ast)
 	if metrics.currencyColumn > 0 {
 		return metrics.currencyColumn + MinimumSpacing
@@ -298,7 +298,7 @@ func (f *Formatter) calculateCurrencyColumn(ast *parser.AST) int {
 
 // determineCurrencyColumn calculates the currency column based on configuration.
 // Priority: explicit widths (PrefixWidth/NumWidth) > auto-calculated from content > default.
-func (f *Formatter) determineCurrencyColumn(ast *parser.AST) int {
+func (f *Formatter) determineCurrencyColumn(ast *ast.AST) int {
 	// If explicit widths are provided, use those
 	if f.PrefixWidth > 0 || f.NumWidth > 0 {
 		metrics := f.calculateWidthMetrics(ast)
@@ -330,14 +330,14 @@ func (f *Formatter) determineCurrencyColumn(ast *parser.AST) int {
 // astItem represents any item in the AST with its position
 type astItem struct {
 	pos       int
-	option    *parser.Option
-	include   *parser.Include
-	plugin    *parser.Plugin
-	pushtag   *parser.Pushtag
-	poptag    *parser.Poptag
-	pushmeta  *parser.Pushmeta
-	popmeta   *parser.Popmeta
-	directive parser.Directive
+	option    *ast.Option
+	include   *ast.Include
+	plugin    *ast.Plugin
+	pushtag   *ast.Pushtag
+	poptag    *ast.Poptag
+	pushmeta  *ast.Pushmeta
+	popmeta   *ast.Popmeta
+	directive ast.Directive
 }
 
 // getOriginalLine returns the original line from source by line number (1-indexed).
@@ -350,7 +350,7 @@ func (f *Formatter) getOriginalLine(lineNum int) string {
 }
 
 // Comments and blank lines from sourceContent are preserved based on Formatter configuration.
-func (f *Formatter) Format(ctx context.Context, ast *parser.AST, sourceContent []byte, w io.Writer) error {
+func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []byte, w io.Writer) error {
 	// Check for cancellation before starting
 	select {
 	case <-ctx.Done():
@@ -488,12 +488,12 @@ func (f *Formatter) Format(ctx context.Context, ast *parser.AST, sourceContent [
 // FormatTransaction formats a single transaction and writes the output to the writer.
 // This method is useful for rendering individual transactions, such as in error messages.
 // The currency column is calculated from the transaction itself if not explicitly set.
-func (f *Formatter) FormatTransaction(txn *parser.Transaction, w io.Writer) error {
+func (f *Formatter) FormatTransaction(txn *ast.Transaction, w io.Writer) error {
 	// Determine the currency column if not set
 	if f.CurrencyColumn == 0 {
 		// Create a minimal AST with just this transaction to calculate metrics
-		ast := &parser.AST{
-			Directives: []parser.Directive{txn},
+		ast := &ast.AST{
+			Directives: []ast.Directive{txn},
 		}
 		f.CurrencyColumn = f.determineCurrencyColumn(ast)
 	}
@@ -587,29 +587,29 @@ func buildLineContentMap(comments []CommentBlock, blanks []BlankLine) map[int][]
 }
 
 // getDirectivePos extracts the line position from any directive type.
-func getDirectivePos(d parser.Directive) int {
+func getDirectivePos(d ast.Directive) int {
 	switch directive := d.(type) {
-	case *parser.Commodity:
+	case *ast.Commodity:
 		return directive.Pos.Line
-	case *parser.Open:
+	case *ast.Open:
 		return directive.Pos.Line
-	case *parser.Close:
+	case *ast.Close:
 		return directive.Pos.Line
-	case *parser.Balance:
+	case *ast.Balance:
 		return directive.Pos.Line
-	case *parser.Pad:
+	case *ast.Pad:
 		return directive.Pos.Line
-	case *parser.Note:
+	case *ast.Note:
 		return directive.Pos.Line
-	case *parser.Document:
+	case *ast.Document:
 		return directive.Pos.Line
-	case *parser.Price:
+	case *ast.Price:
 		return directive.Pos.Line
-	case *parser.Event:
+	case *ast.Event:
 		return directive.Pos.Line
-	case *parser.Custom:
+	case *ast.Custom:
 		return directive.Pos.Line
-	case *parser.Transaction:
+	case *ast.Transaction:
 		return directive.Pos.Line
 	default:
 		return 0
@@ -636,36 +636,36 @@ func (f *Formatter) outputPrecedingContent(currentLine, lastLine int, lineConten
 }
 
 // formatDirective formats a directive based on its type.
-func (f *Formatter) formatDirective(d parser.Directive, buf *strings.Builder) {
+func (f *Formatter) formatDirective(d ast.Directive, buf *strings.Builder) {
 	switch directive := d.(type) {
-	case *parser.Commodity:
+	case *ast.Commodity:
 		f.formatCommodity(directive, buf)
-	case *parser.Open:
+	case *ast.Open:
 		f.formatOpen(directive, buf)
-	case *parser.Close:
+	case *ast.Close:
 		f.formatClose(directive, buf)
-	case *parser.Balance:
+	case *ast.Balance:
 		f.formatBalance(directive, buf)
-	case *parser.Pad:
+	case *ast.Pad:
 		f.formatPad(directive, buf)
-	case *parser.Note:
+	case *ast.Note:
 		f.formatNote(directive, buf)
-	case *parser.Document:
+	case *ast.Document:
 		f.formatDocument(directive, buf)
-	case *parser.Price:
+	case *ast.Price:
 		f.formatPrice(directive, buf)
-	case *parser.Event:
+	case *ast.Event:
 		f.formatEvent(directive, buf)
-	case *parser.Custom:
+	case *ast.Custom:
 		f.formatCustom(directive, buf)
-	case *parser.Transaction:
+	case *ast.Transaction:
 		f.formatTransaction(directive, buf)
 	}
 }
 
 // formatOption formats an option directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatOption(opt *parser.Option, buf *strings.Builder) {
+func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(opt.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -682,7 +682,7 @@ func (f *Formatter) formatOption(opt *parser.Option, buf *strings.Builder) {
 
 // formatInclude formats an include directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatInclude(inc *parser.Include, buf *strings.Builder) {
+func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(inc.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -697,7 +697,7 @@ func (f *Formatter) formatInclude(inc *parser.Include, buf *strings.Builder) {
 
 // formatCommodity formats a commodity directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatCommodity(c *parser.Commodity, buf *strings.Builder) {
+func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -715,7 +715,7 @@ func (f *Formatter) formatCommodity(c *parser.Commodity, buf *strings.Builder) {
 
 // formatOpen formats an open directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatOpen(o *parser.Open, buf *strings.Builder) {
+func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(o.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -752,7 +752,7 @@ func (f *Formatter) formatOpen(o *parser.Open, buf *strings.Builder) {
 
 // formatClose formats a close directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatClose(c *parser.Close, buf *strings.Builder) {
+func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -769,7 +769,7 @@ func (f *Formatter) formatClose(c *parser.Close, buf *strings.Builder) {
 }
 
 // formatBalance formats a balance directive.
-func (f *Formatter) formatBalance(b *parser.Balance, buf *strings.Builder) {
+func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 	buf.WriteString(b.Date.Format("2006-01-02"))
 	buf.WriteString(" balance ")
 	buf.WriteString(string(b.Account))
@@ -786,7 +786,7 @@ func (f *Formatter) formatBalance(b *parser.Balance, buf *strings.Builder) {
 
 // formatPad formats a pad directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatPad(p *parser.Pad, buf *strings.Builder) {
+func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -806,7 +806,7 @@ func (f *Formatter) formatPad(p *parser.Pad, buf *strings.Builder) {
 
 // formatNote formats a note directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatNote(n *parser.Note, buf *strings.Builder) {
+func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(n.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -826,7 +826,7 @@ func (f *Formatter) formatNote(n *parser.Note, buf *strings.Builder) {
 
 // formatDocument formats a document directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatDocument(d *parser.Document, buf *strings.Builder) {
+func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(d.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -845,7 +845,7 @@ func (f *Formatter) formatDocument(d *parser.Document, buf *strings.Builder) {
 }
 
 // formatPrice formats a price directive.
-func (f *Formatter) formatPrice(p *parser.Price, buf *strings.Builder) {
+func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 	buf.WriteString(p.Date.Format("2006-01-02"))
 	buf.WriteString(" price ")
 	buf.WriteString(p.Commodity)
@@ -862,7 +862,7 @@ func (f *Formatter) formatPrice(p *parser.Price, buf *strings.Builder) {
 
 // formatEvent formats an event directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatEvent(e *parser.Event, buf *strings.Builder) {
+func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(e.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -882,7 +882,7 @@ func (f *Formatter) formatEvent(e *parser.Event, buf *strings.Builder) {
 
 // formatCustom formats a custom directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatCustom(c *parser.Custom, buf *strings.Builder) {
+func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -919,7 +919,7 @@ func (f *Formatter) formatCustom(c *parser.Custom, buf *strings.Builder) {
 
 // formatPlugin formats a plugin directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatPlugin(p *parser.Plugin, buf *strings.Builder) {
+func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -940,7 +940,7 @@ func (f *Formatter) formatPlugin(p *parser.Plugin, buf *strings.Builder) {
 
 // formatPushtag formats a pushtag directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatPushtag(p *parser.Pushtag, buf *strings.Builder) {
+func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -955,7 +955,7 @@ func (f *Formatter) formatPushtag(p *parser.Pushtag, buf *strings.Builder) {
 
 // formatPoptag formats a poptag directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatPoptag(p *parser.Poptag, buf *strings.Builder) {
+func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -970,7 +970,7 @@ func (f *Formatter) formatPoptag(p *parser.Poptag, buf *strings.Builder) {
 
 // formatPushmeta formats a pushmeta directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatPushmeta(p *parser.Pushmeta, buf *strings.Builder) {
+func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -987,7 +987,7 @@ func (f *Formatter) formatPushmeta(p *parser.Pushmeta, buf *strings.Builder) {
 
 // formatPopmeta formats a popmeta directive.
 // Preserves original spacing by using the source line.
-func (f *Formatter) formatPopmeta(p *parser.Popmeta, buf *strings.Builder) {
+func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
 	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -1004,7 +1004,7 @@ func (f *Formatter) formatPopmeta(p *parser.Popmeta, buf *strings.Builder) {
 // Format: date flag [payee] [narration] [links] [tags]
 // Note: Strings are re-quoted as the parser unquotes them during parsing.
 // The parser's lexer doesn't support escaped quotes within strings.
-func (f *Formatter) formatTransaction(t *parser.Transaction, buf *strings.Builder) {
+func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) {
 	// First line: date, flag, payee (optional), narration, tags, links
 	buf.WriteString(t.Date.Format("2006-01-02"))
 	buf.WriteByte(' ')
@@ -1049,7 +1049,7 @@ func (f *Formatter) formatTransaction(t *parser.Transaction, buf *strings.Builde
 
 // formatPosting formats a single posting with proper alignment.
 // Handles both postings with explicit amounts and implied amounts (nil).
-func (f *Formatter) formatPosting(p *parser.Posting, buf *strings.Builder) {
+func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	buf.WriteString("  ")
 
 	// Calculate display width: indentation + flag (if present) + account
@@ -1097,7 +1097,7 @@ func (f *Formatter) formatPosting(p *parser.Posting, buf *strings.Builder) {
 }
 
 // formatAmountAligned formats an amount with proper alignment to the currency column.
-func (f *Formatter) formatAmountAligned(amount *parser.Amount, currentWidth int, buf *strings.Builder) {
+func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, buf *strings.Builder) {
 	if amount == nil {
 		return
 	}
@@ -1116,7 +1116,7 @@ func (f *Formatter) formatAmountAligned(amount *parser.Amount, currentWidth int,
 }
 
 // formatCost formats a cost specification.
-func (f *Formatter) formatCost(cost *parser.Cost, buf *strings.Builder) {
+func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 	if cost == nil {
 		return
 	}
@@ -1144,7 +1144,7 @@ func (f *Formatter) formatCost(cost *parser.Cost, buf *strings.Builder) {
 }
 
 // formatMetadata formats metadata entries with proper indentation.
-func (f *Formatter) formatMetadata(metadata []*parser.Metadata, buf *strings.Builder) {
+func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 	if len(metadata) == 0 {
 		return
 	}

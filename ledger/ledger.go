@@ -37,7 +37,7 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
 
@@ -52,7 +52,7 @@ type Ledger struct {
 	accounts   map[string]*Account
 	errors     []error
 	options    map[string]string
-	padEntries map[string]*parser.Pad // account -> pad directive
+	padEntries map[string]*ast.Pad // account -> pad directive
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -78,12 +78,12 @@ func New() *Ledger {
 		accounts:   make(map[string]*Account),
 		errors:     make([]error, 0),
 		options:    make(map[string]string),
-		padEntries: make(map[string]*parser.Pad),
+		padEntries: make(map[string]*ast.Pad),
 	}
 }
 
 // Process processes an AST and builds the ledger state
-func (l *Ledger) Process(ctx context.Context, ast *parser.AST) error {
+func (l *Ledger) Process(ctx context.Context, ast *ast.AST) error {
 	// Process options first
 	for _, opt := range ast.Options {
 		l.options[opt.Name] = opt.Value
@@ -126,21 +126,21 @@ func (l *Ledger) Accounts() map[string]*Account {
 }
 
 // processDirective processes a single directive
-func (l *Ledger) processDirective(directive parser.Directive) {
+func (l *Ledger) processDirective(directive ast.Directive) {
 	switch d := directive.(type) {
-	case *parser.Open:
+	case *ast.Open:
 		l.processOpen(d)
-	case *parser.Close:
+	case *ast.Close:
 		l.processClose(d)
-	case *parser.Transaction:
+	case *ast.Transaction:
 		l.processTransaction(d)
-	case *parser.Balance:
+	case *ast.Balance:
 		l.processBalance(d)
-	case *parser.Pad:
+	case *ast.Pad:
 		l.processPad(d)
-	case *parser.Note:
+	case *ast.Note:
 		l.processNote(d)
-	case *parser.Document:
+	case *ast.Document:
 		l.processDocument(d)
 	default:
 		// Unknown directive type - ignore for now
@@ -150,7 +150,7 @@ func (l *Ledger) processDirective(directive parser.Directive) {
 }
 
 // processOpen processes an Open directive
-func (l *Ledger) processOpen(open *parser.Open) {
+func (l *Ledger) processOpen(open *ast.Open) {
 	accountName := string(open.Account)
 
 	// Check if account already exists
@@ -178,7 +178,7 @@ func (l *Ledger) processOpen(open *parser.Open) {
 }
 
 // processClose processes a Close directive
-func (l *Ledger) processClose(close *parser.Close) {
+func (l *Ledger) processClose(close *ast.Close) {
 	accountName := string(close.Account)
 
 	// Check if account exists
@@ -199,11 +199,11 @@ func (l *Ledger) processClose(close *parser.Close) {
 }
 
 // processTransaction processes a Transaction directive
-func (l *Ledger) processTransaction(txn *parser.Transaction) {
+func (l *Ledger) processTransaction(txn *ast.Transaction) {
 	// Single-pass validation, classification, and weight calculation
 	hasErrors := false
-	var postingsWithoutAmounts []*parser.Posting
-	var postingsWithEmptyCosts []*parser.Posting // Postings with {} empty cost specs
+	var postingsWithoutAmounts []*ast.Posting
+	var postingsWithEmptyCosts []*ast.Posting // Postings with {} empty cost specs
 	var allWeights []WeightSet
 
 	for _, posting := range txn.Postings {
@@ -259,7 +259,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 			// For simplicity, if there's ONE missing posting and ONE unbalanced currency, assign it
 			if len(postingsWithoutAmounts) == 1 {
 				// Create the inferred amount
-				inferredAmounts[postingsWithoutAmounts[0]] = &parser.Amount{
+				inferredAmounts[postingsWithoutAmounts[0]] = &ast.Amount{
 					Value:    needed.String(),
 					Currency: currency,
 				}
@@ -275,7 +275,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 	// Infer costs for empty cost specs {}
 	// Note: Only infer costs for AUGMENTATIONS (positive amounts)
 	// For REDUCTIONS (negative amounts), empty cost spec means "use booking method"
-	inferredCosts := make(map[*parser.Posting]*parser.Amount)
+	inferredCosts := make(map[*ast.Posting]*ast.Amount)
 
 	if len(postingsWithEmptyCosts) > 0 {
 		// For each posting with empty cost spec, infer the cost from the residual
@@ -305,7 +305,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 					costPerUnit := residual.Neg().Div(amount)
 
 					// Store the inferred cost
-					inferredCosts[posting] = &parser.Amount{
+					inferredCosts[posting] = &ast.Amount{
 						Value:    costPerUnit.String(),
 						Currency: currency,
 					}
@@ -345,7 +345,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 	// Update inventories
 	for _, posting := range txn.Postings {
 		// Get the amount (either explicit or inferred)
-		var amountToUse *parser.Amount
+		var amountToUse *ast.Amount
 		if posting.Amount != nil {
 			amountToUse = posting.Amount
 		} else if inferredAmount, ok := inferredAmounts[posting]; ok {
@@ -369,7 +369,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
 		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
 		hasInferredCost := false
-		var costToUse *parser.Cost
+		var costToUse *ast.Cost
 
 		if hasExplicitCost {
 			costToUse = posting.Cost
@@ -381,7 +381,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 		} else if inferredCost, ok := inferredCosts[posting]; ok {
 			// Use inferred cost - create a temporary Cost structure
 			hasInferredCost = true
-			costToUse = &parser.Cost{
+			costToUse = &ast.Cost{
 				Amount: inferredCost,
 			}
 		}
@@ -417,7 +417,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 }
 
 // processBalance processes a Balance directive
-func (l *Ledger) processBalance(balance *parser.Balance) {
+func (l *Ledger) processBalance(balance *ast.Balance) {
 	// Validate account is open
 	if !l.isAccountOpen(balance.Account, balance.Date) {
 		l.addError(NewAccountNotOpenErrorFromBalance(balance))
@@ -477,7 +477,7 @@ func (l *Ledger) processBalance(balance *parser.Balance) {
 }
 
 // processPad processes a Pad directive
-func (l *Ledger) processPad(pad *parser.Pad) {
+func (l *Ledger) processPad(pad *ast.Pad) {
 	// Validate accounts are open
 	if !l.isAccountOpen(pad.Account, pad.Date) {
 		l.addError(NewAccountNotOpenErrorFromPad(pad, pad.Account))
@@ -495,7 +495,7 @@ func (l *Ledger) processPad(pad *parser.Pad) {
 }
 
 // processNote processes a Note directive
-func (l *Ledger) processNote(note *parser.Note) {
+func (l *Ledger) processNote(note *ast.Note) {
 	// Validate account is open
 	if !l.isAccountOpen(note.Account, note.Date) {
 		l.addError(NewAccountNotOpenErrorFromNote(note))
@@ -504,7 +504,7 @@ func (l *Ledger) processNote(note *parser.Note) {
 }
 
 // processDocument processes a Document directive
-func (l *Ledger) processDocument(doc *parser.Document) {
+func (l *Ledger) processDocument(doc *ast.Document) {
 	// Validate account is open
 	if !l.isAccountOpen(doc.Account, doc.Date) {
 		l.addError(NewAccountNotOpenErrorFromDocument(doc))
@@ -512,7 +512,7 @@ func (l *Ledger) processDocument(doc *parser.Document) {
 }
 
 // isAccountOpen checks if an account is open at the given date
-func (l *Ledger) isAccountOpen(account parser.Account, date *parser.Date) bool {
+func (l *Ledger) isAccountOpen(account ast.Account, date *ast.Date) bool {
 	accountName := string(account)
 	acc, ok := l.accounts[accountName]
 	if !ok {

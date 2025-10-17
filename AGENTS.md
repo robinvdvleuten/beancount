@@ -736,9 +736,17 @@ child2.End()
 
 ## Project-Specific Conventions
 
-### Parser Package
+### AST Package
+- Contains all Abstract Syntax Tree node types (Transaction, Balance, Open, etc.)
 - All directives implement `Directive` interface
-- Use `participle` struct tags for grammar
+- Basic types: Amount, Cost, Account, Date, Link, Tag, Metadata
+- Import separately from parser: `import "github.com/robinvdvleuten/beancount/ast"`
+- Participle parser tags remain on struct fields in ast package
+
+### Parser Package
+- Contains only parsing logic (no type definitions)
+- Returns `*ast.AST` from Parse functions
+- Uses `participle` library for grammar parsing
 - Include comprehensive examples in godoc
 
 ### Formatter Package
@@ -775,6 +783,7 @@ child2.End()
 
 When this guide is updated, add an entry here:
 
+- 2025-01-17: Moved AST types from parser/ to new ast/ package following go/ast pattern (Phase 1)
 - 2025-01-17: Added Context Pattern and Telemetry Pattern sections for Phase 1 and Phase 2 implementation
 - 2025-01-17: Added Constructor Pattern section with anti-pattern warning about redundant field extraction
 - 2025-01-17: Added error formatting section describing the errors package and formatter pattern

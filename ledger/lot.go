@@ -3,7 +3,7 @@ package ledger
 import (
 	"fmt"
 
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
 
@@ -11,7 +11,7 @@ import (
 type LotSpec struct {
 	Cost         *decimal.Decimal // Cost per unit (nil if no cost basis)
 	CostCurrency string           // Currency of the cost
-	Date         *parser.Date     // Optional acquisition date
+	Date         *ast.Date     // Optional acquisition date
 	Label        string           // Optional label
 }
 
@@ -21,7 +21,7 @@ func (ls *LotSpec) IsEmpty() bool {
 }
 
 // IsMerge returns true if this represents a merge cost {*}
-// Note: This is handled separately in parser.Cost.IsMergeCost()
+// Note: This is handled separately in ast.Cost.IsMergeCost()
 func (ls *LotSpec) IsMerge() bool {
 	return false // Merge is handled at parser level
 }
@@ -120,8 +120,8 @@ func (l *Lot) String() string {
 	return fmt.Sprintf("%s %s %s", l.Amount.String(), l.Commodity, l.Spec.String())
 }
 
-// ParseLotSpec creates a LotSpec from parser.Cost
-func ParseLotSpec(cost *parser.Cost) (*LotSpec, error) {
+// ParseLotSpec creates a LotSpec from ast.Cost
+func ParseLotSpec(cost *ast.Cost) (*LotSpec, error) {
 	if cost == nil {
 		return nil, nil
 	}

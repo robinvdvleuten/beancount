@@ -9,6 +9,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/alecthomas/repr"
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 func TestParse(t *testing.T) {
@@ -16,7 +17,7 @@ func TestParse(t *testing.T) {
 		name      string
 		beancount string
 		fail      string
-		expected  *AST
+		expected  *ast.AST
 	}{
 		{
 			name: "Open",
@@ -911,17 +912,17 @@ func TestParseKitchenSink(t *testing.T) {
 	data, err := os.ReadFile("../testdata/kitchensink.beancount")
 	assert.NoError(t, err)
 
-	ast, err := ParseBytes(context.Background(), data)
+	tree, err := ParseBytes(context.Background(), data)
 	assert.NoError(t, err)
 
 	// Verify we parsed all the directives
-	assert.True(t, len(ast.Directives) > 0, "Should have parsed directives")
-	assert.True(t, len(ast.Options) > 0, "Should have parsed options")
+	assert.True(t, len(tree.Directives) > 0, "Should have parsed directives")
+	assert.True(t, len(tree.Options) > 0, "Should have parsed options")
 
 	// Find and verify the kitchen sink transaction
-	var kitchenSinkTxn *Transaction
-	for _, dir := range ast.Directives {
-		if txn, ok := dir.(*Transaction); ok {
+	var kitchenSinkTxn *ast.Transaction
+	for _, dir := range tree.Directives {
+		if txn, ok := dir.(*ast.Transaction); ok {
 			if txn.Narration == "Diversified Portfolio Rebalancing" {
 				kitchenSinkTxn = txn
 				break
@@ -936,14 +937,14 @@ func TestParseKitchenSink(t *testing.T) {
 	assert.Equal(t, 5, len(kitchenSinkTxn.Postings), "Should have 5 postings")
 
 	// Verify links are stripped of ^
-	assert.Equal(t, Link("rebalance-q4"), kitchenSinkTxn.Links[0])
-	assert.Equal(t, Link("invoice-2021-1215"), kitchenSinkTxn.Links[1])
+	assert.Equal(t, ast.Link("rebalance-q4"), kitchenSinkTxn.Links[0])
+	assert.Equal(t, ast.Link("invoice-2021-1215"), kitchenSinkTxn.Links[1])
 
 	// Verify tags are stripped of #
-	assert.Equal(t, Tag("investment"), kitchenSinkTxn.Tags[0])
-	assert.Equal(t, Tag("stocks"), kitchenSinkTxn.Tags[1])
-	assert.Equal(t, Tag("retirement"), kitchenSinkTxn.Tags[2])
-	assert.Equal(t, Tag("tax-loss-harvesting"), kitchenSinkTxn.Tags[3])
+	assert.Equal(t, ast.Tag("investment"), kitchenSinkTxn.Tags[0])
+	assert.Equal(t, ast.Tag("stocks"), kitchenSinkTxn.Tags[1])
+	assert.Equal(t, ast.Tag("retirement"), kitchenSinkTxn.Tags[2])
+	assert.Equal(t, ast.Tag("tax-loss-harvesting"), kitchenSinkTxn.Tags[3])
 }
 
 func TestDateCapture(t *testing.T) {
@@ -1001,7 +1002,7 @@ func TestDateCapture(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d := &Date{}
+			d := &ast.Date{}
 			err := d.Capture([]string{tt.input})
 
 			if tt.wantErr {
@@ -1081,7 +1082,7 @@ func TestAccountCapture(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a := Account("")
+			a := ast.Account("")
 			err := a.Capture([]string{tt.input})
 
 			if tt.wantErr {
@@ -1091,57 +1092,57 @@ func TestAccountCapture(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, Account(tt.input), a)
+				assert.Equal(t, ast.Account(tt.input), a)
 			}
 		})
 	}
 }
 
-func normalizeAST(ast *AST) {
-	if ast == nil {
+func normalizeAST(tree *ast.AST) {
+	if tree == nil {
 		return
 	}
 
-	for _, dir := range ast.Directives {
+	for _, dir := range tree.Directives {
 		normalizeDirective(dir)
 	}
 
 	// Normalize positions for all non-directive AST elements
-	normalizePositions(ast.Options)
-	normalizePositions(ast.Includes)
-	normalizePositions(ast.Plugins)
-	normalizePositions(ast.Pushtags)
-	normalizePositions(ast.Poptags)
-	normalizePositions(ast.Pushmetas)
-	normalizePositions(ast.Popmetas)
+	normalizePositions(tree.Options)
+	normalizePositions(tree.Includes)
+	normalizePositions(tree.Plugins)
+	normalizePositions(tree.Pushtags)
+	normalizePositions(tree.Poptags)
+	normalizePositions(tree.Pushmetas)
+	normalizePositions(tree.Popmetas)
 }
 
 // normalizePositions resets Pos to zero for all items in a slice of Node types.
-func normalizePositions[T Node](items []T) {
+func normalizePositions[T ast.Node](items []T) {
 	for _, item := range items {
 		if item != nil {
 			// Use type assertion to access Pos field
 			switch v := any(item).(type) {
-			case *Option:
+			case *ast.Option:
 				v.Pos = lexer.Position{}
-			case *Include:
+			case *ast.Include:
 				v.Pos = lexer.Position{}
-			case *Plugin:
+			case *ast.Plugin:
 				v.Pos = lexer.Position{}
-			case *Pushtag:
+			case *ast.Pushtag:
 				v.Pos = lexer.Position{}
-			case *Poptag:
+			case *ast.Poptag:
 				v.Pos = lexer.Position{}
-			case *Pushmeta:
+			case *ast.Pushmeta:
 				v.Pos = lexer.Position{}
-			case *Popmeta:
+			case *ast.Popmeta:
 				v.Pos = lexer.Position{}
 			}
 		}
 	}
 }
 
-func normalizeDirective(d Directive) {
+func normalizeDirective(d ast.Directive) {
 	if d == nil {
 		return
 	}
@@ -1158,7 +1159,7 @@ func normalizeDirective(d Directive) {
 	}
 
 	switch dir := d.(type) {
-	case *Transaction:
+	case *ast.Transaction:
 		for _, posting := range dir.Postings {
 			if posting != nil {
 				posting.Pos = lexer.Position{}
@@ -1168,102 +1169,102 @@ func normalizeDirective(d Directive) {
 }
 
 // AST constructor
-func beancount(directives ...Directive) *AST {
-	return &AST{Directives: directives}
+func beancount(directives ...ast.Directive) *ast.AST {
+	return &ast.AST{Directives: directives}
 }
 
 // Directive constructors
-func open(d string, account Account, constraintCurrencies []string, bookingMethod string) *Open {
-	return &Open{Date: date(d), Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
+func open(d string, account ast.Account, constraintCurrencies []string, bookingMethod string) *ast.Open {
+	return &ast.Open{Date: date(d), Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
 }
 
-func close(d string, account Account) *Close {
-	return &Close{Date: date(d), Account: account}
+func close(d string, account ast.Account) *ast.Close {
+	return &ast.Close{Date: date(d), Account: account}
 }
 
-func commodity(d string, currency string) *Commodity {
-	return &Commodity{Date: date(d), Currency: currency}
+func commodity(d string, currency string) *ast.Commodity {
+	return &ast.Commodity{Date: date(d), Currency: currency}
 }
 
-func balance(d string, account Account, amount *Amount) *Balance {
-	return &Balance{Date: date(d), Account: account, Amount: amount}
+func balance(d string, account ast.Account, amount *ast.Amount) *ast.Balance {
+	return &ast.Balance{Date: date(d), Account: account, Amount: amount}
 }
 
-func pad(d string, account Account, accountPad Account) *Pad {
-	return &Pad{Date: date(d), Account: account, AccountPad: accountPad}
+func pad(d string, account ast.Account, accountPad ast.Account) *ast.Pad {
+	return &ast.Pad{Date: date(d), Account: account, AccountPad: accountPad}
 }
 
-func note(d string, account Account, description string) *Note {
-	return &Note{Date: date(d), Account: account, Description: description}
+func note(d string, account ast.Account, description string) *ast.Note {
+	return &ast.Note{Date: date(d), Account: account, Description: description}
 }
 
-func doc(d string, account Account, pathToDocument string) *Document {
-	return &Document{Date: date(d), Account: account, PathToDocument: pathToDocument}
+func doc(d string, account ast.Account, pathToDocument string) *ast.Document {
+	return &ast.Document{Date: date(d), Account: account, PathToDocument: pathToDocument}
 }
 
-func price(d string, commodity string, amount *Amount) *Price {
-	return &Price{Date: date(d), Commodity: commodity, Amount: amount}
+func price(d string, commodity string, amount *ast.Amount) *ast.Price {
+	return &ast.Price{Date: date(d), Commodity: commodity, Amount: amount}
 }
 
-func event(d string, name string, value string) *Event {
-	return &Event{Date: date(d), Name: name, Value: value}
+func event(d string, name string, value string) *ast.Event {
+	return &ast.Event{Date: date(d), Name: name, Value: value}
 }
 
-func custom(d string, t string, values ...*CustomValue) *Custom {
-	return &Custom{Date: date(d), Type: t, Values: values}
+func custom(d string, t string, values ...*ast.CustomValue) *ast.Custom {
+	return &ast.Custom{Date: date(d), Type: t, Values: values}
 }
 
-func customString(value string) *CustomValue {
-	return &CustomValue{String: &value}
+func customString(value string) *ast.CustomValue {
+	return &ast.CustomValue{String: &value}
 }
 
-func customBoolean(value string) *CustomValue {
-	return &CustomValue{BooleanValue: &value}
+func customBoolean(value string) *ast.CustomValue {
+	return &ast.CustomValue{BooleanValue: &value}
 }
 
-func customAmount(a *Amount) *CustomValue {
-	return &CustomValue{Amount: a}
+func customAmount(a *ast.Amount) *ast.CustomValue {
+	return &ast.CustomValue{Amount: a}
 }
 
-func customNumber(value string) *CustomValue {
-	return &CustomValue{Number: &value}
+func customNumber(value string) *ast.CustomValue {
+	return &ast.CustomValue{Number: &value}
 }
 
-func transaction(d string, flag string, payee string, narration string, postings ...*Posting) *Transaction {
-	return &Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
+func transaction(d string, flag string, payee string, narration string, postings ...*ast.Posting) *ast.Transaction {
+	return &ast.Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
 }
 
 // Sub-element constructors
-func posting(account Account, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Cost) *Posting {
-	return &Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
+func posting(account ast.Account, flag string, amount *ast.Amount, price *ast.Amount, priceTotal bool, cost *ast.Cost) *ast.Posting {
+	return &ast.Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
 }
 
-func amount(value string, currency string) *Amount {
-	return &Amount{Value: value, Currency: currency}
+func amount(value string, currency string) *ast.Amount {
+	return &ast.Amount{Value: value, Currency: currency}
 }
 
-func cost(amount *Amount, d *Date) *Cost {
-	return &Cost{IsMerge: false, Amount: amount, Date: d, Label: ""}
+func cost(amount *ast.Amount, d *ast.Date) *ast.Cost {
+	return &ast.Cost{IsMerge: false, Amount: amount, Date: d, Label: ""}
 }
 
-func costWithLabel(amount *Amount, d *Date, label string) *Cost {
-	return &Cost{IsMerge: false, Amount: amount, Date: d, Label: label}
+func costWithLabel(amount *ast.Amount, d *ast.Date, label string) *ast.Cost {
+	return &ast.Cost{IsMerge: false, Amount: amount, Date: d, Label: label}
 }
 
-func emptyCost() *Cost {
-	return &Cost{IsMerge: false, Amount: nil, Date: nil, Label: ""}
+func emptyCost() *ast.Cost {
+	return &ast.Cost{IsMerge: false, Amount: nil, Date: nil, Label: ""}
 }
 
-func mergeCost() *Cost {
-	return &Cost{IsMerge: true, Amount: nil, Date: nil, Label: ""}
+func mergeCost() *ast.Cost {
+	return &ast.Cost{IsMerge: true, Amount: nil, Date: nil, Label: ""}
 }
 
-func mergeCostWithLabel(label string) *Cost {
-	return &Cost{IsMerge: true, Amount: nil, Date: nil, Label: label}
+func mergeCostWithLabel(label string) *ast.Cost {
+	return &ast.Cost{IsMerge: true, Amount: nil, Date: nil, Label: label}
 }
 
-func date(value string) *Date {
-	d := &Date{}
+func date(value string) *ast.Date {
+	d := &ast.Date{}
 
 	if err := d.Capture([]string{value}); err != nil {
 		panic(err)
@@ -1272,93 +1273,93 @@ func date(value string) *Date {
 	return d
 }
 
-func meta(key string, value string) *Metadata {
-	return &Metadata{Key: key, Value: value}
+func meta(key string, value string) *ast.Metadata {
+	return &ast.Metadata{Key: key, Value: value}
 }
 
 // Node constructors
-func option(name string, value string) *Option {
-	return &Option{Name: name, Value: value}
+func option(name string, value string) *ast.Option {
+	return &ast.Option{Name: name, Value: value}
 }
 
-func include(filename string) *Include {
-	return &Include{Filename: filename}
+func include(filename string) *ast.Include {
+	return &ast.Include{Filename: filename}
 }
 
-func plugin(name string, config string) *Plugin {
-	return &Plugin{Name: name, Config: config}
+func plugin(name string, config string) *ast.Plugin {
+	return &ast.Plugin{Name: name, Config: config}
 }
 
-func pushtag(tag string) *Pushtag {
-	return &Pushtag{Tag: Tag(tag)}
+func pushtag(tag string) *ast.Pushtag {
+	return &ast.Pushtag{Tag: ast.Tag(tag)}
 }
 
-func poptag(tag string) *Poptag {
-	return &Poptag{Tag: Tag(tag)}
+func poptag(tag string) *ast.Poptag {
+	return &ast.Poptag{Tag: ast.Tag(tag)}
 }
 
-func pushmeta(key string, value string) *Pushmeta {
-	return &Pushmeta{Key: key, Value: value}
+func pushmeta(key string, value string) *ast.Pushmeta {
+	return &ast.Pushmeta{Key: key, Value: value}
 }
 
-func popmeta(key string) *Popmeta {
-	return &Popmeta{Key: key}
+func popmeta(key string) *ast.Popmeta {
+	return &ast.Popmeta{Key: key}
 }
 
 // AST modifiers
-func withOptions(ast *AST, options ...*Option) *AST {
-	ast.Options = options
-	return ast
+func withOptions(a *ast.AST, options ...*ast.Option) *ast.AST {
+	a.Options = options
+	return a
 }
 
-func withIncludes(ast *AST, includes ...*Include) *AST {
-	ast.Includes = includes
-	return ast
+func withIncludes(a *ast.AST, includes ...*ast.Include) *ast.AST {
+	a.Includes = includes
+	return a
 }
 
-func withPlugins(ast *AST, plugins ...*Plugin) *AST {
-	ast.Plugins = plugins
-	return ast
+func withPlugins(a *ast.AST, plugins ...*ast.Plugin) *ast.AST {
+	a.Plugins = plugins
+	return a
 }
 
-func withPushtags(ast *AST, pushtags ...*Pushtag) *AST {
-	ast.Pushtags = pushtags
-	return ast
+func withPushtags(a *ast.AST, pushtags ...*ast.Pushtag) *ast.AST {
+	a.Pushtags = pushtags
+	return a
 }
 
-func withPoptags(ast *AST, poptags ...*Poptag) *AST {
-	ast.Poptags = poptags
-	return ast
+func withPoptags(a *ast.AST, poptags ...*ast.Poptag) *ast.AST {
+	a.Poptags = poptags
+	return a
 }
 
-func withPushmetas(ast *AST, pushmetas ...*Pushmeta) *AST {
-	ast.Pushmetas = pushmetas
-	return ast
+func withPushmetas(a *ast.AST, pushmetas ...*ast.Pushmeta) *ast.AST {
+	a.Pushmetas = pushmetas
+	return a
 }
 
-func withPopmetas(ast *AST, popmetas ...*Popmeta) *AST {
-	ast.Popmetas = popmetas
-	return ast
+func withPopmetas(a *ast.AST, popmetas ...*ast.Popmeta) *ast.AST {
+	a.Popmetas = popmetas
+	return a
 }
 
 // Directive modifiers
-func withMeta[W WithMetadata](w W, metadata ...*Metadata) W {
+func withMeta[W ast.WithMetadata](w W, metadata ...*ast.Metadata) W {
 	w.AddMetadata(metadata...)
 	return w
 }
 
-func withLinks(t *Transaction, links ...string) *Transaction {
-	t.Links = make([]Link, len(links))
+func withLinks(t *ast.Transaction, links ...string) *ast.Transaction {
+	t.Links = make([]ast.Link, len(links))
 	for i, link := range links {
-		t.Links[i] = Link(link)
+		t.Links[i] = ast.Link(link)
 	}
 	return t
 }
 
-func withTags(t *Transaction, tags ...string) *Transaction {
-	t.Tags = make([]Tag, len(tags))
+func withTags(t *ast.Transaction, tags ...string) *ast.Transaction {
+	t.Tags = make([]ast.Tag, len(tags))
 	for i, tag := range tags {
-		t.Tags[i] = Tag(tag)
+		t.Tags[i] = ast.Tag(tag)
 	}
 	return t
 }

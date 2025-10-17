@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 func TestLoadSingleFile(t *testing.T) {
@@ -24,15 +24,15 @@ func TestLoadSingleFile(t *testing.T) {
 
 	// Test without FollowIncludes
 	ldr := New()
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(ast.Directives))
+	assert.Equal(t, 2, len(tree.Directives))
 
 	// Test with FollowIncludes (should behave the same for single file)
 	ldr = New(WithFollowIncludes())
-	ast, err = ldr.Load(context.Background(), mainFile)
+	tree, err = ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
-	assert.Equal(t, 2, len(ast.Directives))
+	assert.Equal(t, 2, len(tree.Directives))
 }
 
 func TestLoadWithInclude_NoFollow(t *testing.T) {
@@ -56,15 +56,15 @@ include "included.beancount"
 
 	// Load without following includes
 	ldr := New()
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 1 directive (only from main file)
-	assert.Equal(t, 1, len(ast.Directives))
+	assert.Equal(t, 1, len(tree.Directives))
 
 	// Should preserve the include directive
-	assert.Equal(t, 1, len(ast.Includes))
-	assert.Equal(t, "included.beancount", ast.Includes[0].Filename)
+	assert.Equal(t, 1, len(tree.Includes))
+	assert.Equal(t, "included.beancount", tree.Includes[0].Filename)
 }
 
 func TestLoadWithInclude_WithFollow(t *testing.T) {
@@ -89,19 +89,19 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 3 directives (merged from both files)
-	assert.Equal(t, 3, len(ast.Directives))
+	assert.Equal(t, 3, len(tree.Directives))
 
 	// Includes should be nil (all resolved)
-	assert.True(t, ast.Includes == nil)
+	assert.True(t, tree.Includes == nil)
 
 	// Verify directives are sorted by date
-	open1 := ast.Directives[0].(*parser.Open)
-	open2 := ast.Directives[1].(*parser.Open)
-	open3 := ast.Directives[2].(*parser.Open)
+	open1 := tree.Directives[0].(*ast.Open)
+	open2 := tree.Directives[1].(*ast.Open)
+	open3 := tree.Directives[2].(*ast.Open)
 
 	assert.Equal(t, "Assets:Savings", string(open1.Account))
 	assert.Equal(t, "Assets:Checking", string(open2.Account))
@@ -138,16 +138,16 @@ include "b.beancount"
 
 	// Load A with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), fileA)
+	tree, err := ldr.Load(context.Background(), fileA)
 	assert.NoError(t, err)
 
 	// Should have 3 directives (from A, B, and C)
-	assert.Equal(t, 3, len(ast.Directives))
+	assert.Equal(t, 3, len(tree.Directives))
 
 	// Verify all accounts are present and sorted
 	accounts := make([]string, 3)
-	for i, dir := range ast.Directives {
-		open := dir.(*parser.Open)
+	for i, dir := range tree.Directives {
+		open := dir.(*ast.Open)
 		accounts[i] = string(open.Account)
 	}
 
@@ -183,11 +183,11 @@ include "c.beancount"
 
 	// Load A with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), fileA)
+	tree, err := ldr.Load(context.Background(), fileA)
 	assert.NoError(t, err)
 
 	// Should have 3 directives
-	assert.Equal(t, 3, len(ast.Directives))
+	assert.Equal(t, 3, len(tree.Directives))
 }
 
 func TestLoadCircularInclude(t *testing.T) {
@@ -214,12 +214,12 @@ include "a.beancount"
 	// Load A - circular includes are handled via deduplication (not an error)
 	// A is loaded first, then B is loaded, then A is requested again but already visited
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), fileA)
+	tree, err := ldr.Load(context.Background(), fileA)
 	assert.NoError(t, err)
 
 	// Should have 2 directives (one from A, one from B)
 	// The second include of A is skipped due to deduplication
-	assert.Equal(t, 2, len(ast.Directives))
+	assert.Equal(t, 2, len(tree.Directives))
 }
 
 func TestLoadRelativePaths(t *testing.T) {
@@ -248,11 +248,11 @@ include "accounts/savings.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 2 directives
-	assert.Equal(t, 2, len(ast.Directives))
+	assert.Equal(t, 2, len(tree.Directives))
 }
 
 func TestLoadAbsolutePath(t *testing.T) {
@@ -278,11 +278,11 @@ include "`+includePath+`"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 2 directives
-	assert.Equal(t, 2, len(ast.Directives))
+	assert.Equal(t, 2, len(tree.Directives))
 }
 
 func TestLoadSameFileTwice(t *testing.T) {
@@ -307,14 +307,14 @@ include "common.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Should have 2 directives (not 3 - deduplication should work)
 	// Actually, looking at the implementation, we visit each include directive,
 	// so it would try to include twice. But the second time it should be skipped
 	// because it's already in visited map.
-	assert.Equal(t, 2, len(ast.Directives))
+	assert.Equal(t, 2, len(tree.Directives))
 }
 
 func TestLoadNonExistentFile(t *testing.T) {
@@ -362,15 +362,15 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Main file options should take precedence
-	assert.Equal(t, 2, len(ast.Options))
+	assert.Equal(t, 2, len(tree.Options))
 
 	// Find and verify options
 	optionsMap := make(map[string]string)
-	for _, opt := range ast.Options {
+	for _, opt := range tree.Options {
 		optionsMap[opt.Name] = opt.Value
 	}
 
@@ -403,15 +403,15 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	ast, err := ldr.Load(context.Background(), mainFile)
+	tree, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
 	// Both plugins should be present
-	assert.Equal(t, 2, len(ast.Plugins))
+	assert.Equal(t, 2, len(tree.Plugins))
 
 	// Verify plugin names
 	pluginNames := make([]string, 2)
-	for i, plugin := range ast.Plugins {
+	for i, plugin := range tree.Plugins {
 		pluginNames[i] = plugin.Name
 	}
 

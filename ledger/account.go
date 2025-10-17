@@ -3,7 +3,7 @@ package ledger
 import (
 	"strings"
 
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 // AccountType represents the type of account
@@ -38,18 +38,18 @@ func (t AccountType) String() string {
 
 // Account represents an account in the ledger
 type Account struct {
-	Name                 parser.Account
+	Name                 ast.Account
 	Type                 AccountType
-	OpenDate             *parser.Date
-	CloseDate            *parser.Date
+	OpenDate             *ast.Date
+	CloseDate            *ast.Date
 	ConstraintCurrencies []string
 	BookingMethod        string
-	Metadata             []*parser.Metadata
+	Metadata             []*ast.Metadata
 	Inventory            *Inventory // Inventory with lot tracking
 }
 
 // IsOpen returns true if the account is open at the given date
-func (a *Account) IsOpen(date *parser.Date) bool {
+func (a *Account) IsOpen(date *ast.Date) bool {
 	if a.OpenDate == nil {
 		return false
 	}
@@ -74,7 +74,7 @@ func (a *Account) IsClosed() bool {
 }
 
 // ParseAccountType parses the account type from the account name
-func ParseAccountType(account parser.Account) AccountType {
+func ParseAccountType(account ast.Account) AccountType {
 	parts := strings.Split(string(account), ":")
 	if len(parts) == 0 {
 		return AccountTypeUnknown

@@ -17,8 +17,8 @@ import (
 	"strings"
 
 	"github.com/alecthomas/participle/v2/lexer"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
-	"github.com/robinvdvleuten/beancount/parser"
 )
 
 // Formatter formats errors for output in different formats.
@@ -48,7 +48,7 @@ func (tf *TextFormatter) Format(err error) string {
 	// Check if this is an error with position and directive context
 	if e, ok := err.(interface {
 		GetPosition() lexer.Position
-		GetDirective() parser.Directive
+		GetDirective() ast.Directive
 		Error() string
 	}); ok {
 		return tf.formatWithContext(e.GetPosition(), e.Error(), e.GetDirective())
@@ -91,7 +91,7 @@ func (tf *TextFormatter) formatWithPosition(pos lexer.Position, message string) 
 }
 
 // formatWithContext formats an error with directive context (bean-check style).
-func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, directive parser.Directive) string {
+func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, directive ast.Directive) string {
 	if directive == nil {
 		return message
 	}
@@ -104,7 +104,7 @@ func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, d
 
 	// Write the formatted directive with proper indentation
 	switch d := directive.(type) {
-	case *parser.Transaction:
+	case *ast.Transaction:
 		// Use the formatter to format transactions
 		var txnBuf bytes.Buffer
 		txnFormatter := formatter.New()
@@ -124,7 +124,7 @@ func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, d
 			}
 		}
 
-	case *parser.Balance:
+	case *ast.Balance:
 		buf.WriteString("   ")
 		fmt.Fprintf(&buf, "%s balance %s", d.Date.Format("2006-01-02"), d.Account)
 		if d.Amount != nil {
@@ -132,19 +132,19 @@ func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, d
 		}
 		buf.WriteByte('\n')
 
-	case *parser.Pad:
+	case *ast.Pad:
 		buf.WriteString("   ")
 		fmt.Fprintf(&buf, "%s pad %s %s\n", d.Date.Format("2006-01-02"), d.Account, d.AccountPad)
 
-	case *parser.Note:
+	case *ast.Note:
 		buf.WriteString("   ")
 		fmt.Fprintf(&buf, "%s note %s %q\n", d.Date.Format("2006-01-02"), d.Account, d.Description)
 
-	case *parser.Document:
+	case *ast.Document:
 		buf.WriteString("   ")
 		fmt.Fprintf(&buf, "%s document %s %q\n", d.Date.Format("2006-01-02"), d.Account, d.PathToDocument)
 
-	case *parser.Open:
+	case *ast.Open:
 		buf.WriteString("   ")
 		fmt.Fprintf(&buf, "%s open %s", d.Date.Format("2006-01-02"), d.Account)
 		if len(d.ConstraintCurrencies) > 0 {
@@ -155,7 +155,7 @@ func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, d
 		}
 		buf.WriteByte('\n')
 
-	case *parser.Close:
+	case *ast.Close:
 		buf.WriteString("   ")
 		fmt.Fprintf(&buf, "%s close %s\n", d.Date.Format("2006-01-02"), d.Account)
 	}
@@ -224,9 +224,9 @@ func (jf *JSONFormatter) toJSON(err error) ErrorJSON {
 	// Extract additional details based on error type
 	// This will be extended as we add more error types
 	switch e := err.(type) {
-	case interface{ GetAccount() parser.Account }:
+	case interface{ GetAccount() ast.Account }:
 		errJSON.Details["account"] = string(e.GetAccount())
-	case interface{ GetDate() *parser.Date }:
+	case interface{ GetDate() *ast.Date }:
 		if date := e.GetDate(); date != nil {
 			errJSON.Details["date"] = date.Format("2006-01-02")
 		}

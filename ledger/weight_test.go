@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
@@ -17,11 +18,11 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 		  Assets:Stock         5 AAPL {100.00 USD}
 	`
 
-	ast, err := parser.ParseString(context.Background(), input)
+	tree, err := parser.ParseString(context.Background(), input)
 	assert.NoError(t, err)
-	assert.Equal(t, 1, len(ast.Directives))
+	assert.Equal(t, 1, len(tree.Directives))
 
-	txn, ok := ast.Directives[0].(*parser.Transaction)
+	txn, ok := tree.Directives[0].(*ast.Transaction)
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(txn.Postings))
 
@@ -106,10 +107,10 @@ func TestCalculateWeights_Price(t *testing.T) {
 		  Assets:Cash     1600.00 USD
 	`
 
-	ast, err := parser.ParseString(context.Background(), input)
+	tree, err := parser.ParseString(context.Background(), input)
 	assert.NoError(t, err)
 
-	txn, ok := ast.Directives[0].(*parser.Transaction)
+	txn, ok := tree.Directives[0].(*ast.Transaction)
 	assert.True(t, ok)
 
 	// Test stock posting (with cost and price)
