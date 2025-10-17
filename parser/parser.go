@@ -30,10 +30,14 @@ func compareDirectives(a, b Directive) int {
 }
 
 type AST struct {
-	Directives Directives `parser:"(@@"`
-	Options    []*Option  `parser:"| @@"`
-	Includes   []*Include `parser:"| @@"`
-	Plugins    []*Plugin  `parser:"| @@ | ~ignore)*"`
+	Directives Directives  `parser:"(@@"`
+	Options    []*Option   `parser:"| @@"`
+	Includes   []*Include  `parser:"| @@"`
+	Plugins    []*Plugin   `parser:"| @@"`
+	Pushtags   []*Pushtag  `parser:"| @@"`
+	Poptags    []*Poptag   `parser:"| @@"`
+	Pushmetas  []*Pushmeta `parser:"| @@"`
+	Popmetas   []*Popmeta  `parser:"| @@ | ~ignore)*"`
 }
 
 type WithMetadata interface {
@@ -334,6 +338,33 @@ type Plugin struct {
 	Config string `parser:"@String?"`
 }
 
+type Pushtag struct {
+	Pos lexer.Position
+	Tag Tag `parser:"'pushtag' @Tag"`
+}
+
+type Poptag struct {
+	Pos lexer.Position
+	Tag Tag `parser:"'poptag' @Tag"`
+}
+
+type Pushmeta struct {
+	Pos   lexer.Position
+	Key   string `parser:"'pushmeta' @Ident ':'"`
+	Value string `parser:"@(~'\\n'+)"`
+}
+
+type Popmeta struct {
+	Pos lexer.Position
+	Key string `parser:"'popmeta' @Ident ':'"`
+}
+
+// Node is a constraint for AST nodes that have a Pos field.
+// This includes all non-directive top-level elements (options, includes, plugins, push/pop directives).
+type Node interface {
+	*Option | *Include | *Plugin | *Pushtag | *Poptag | *Pushmeta | *Popmeta
+}
+
 var (
 	lex = lexer.MustSimple([]lexer.SimpleRule{
 		{"Date", `\d{4}-\d{2}-\d{2}`},
@@ -376,6 +407,10 @@ func Parse(r io.Reader) (*AST, error) {
 		return nil, err
 	}
 
+	if err := ApplyPushPopDirectives(ast); err != nil {
+		return nil, err
+	}
+
 	return ast, SortDirectives(ast)
 }
 
@@ -383,6 +418,10 @@ func Parse(r io.Reader) (*AST, error) {
 func ParseString(str string) (*AST, error) {
 	ast, err := parser.ParseString("", str)
 	if err != nil {
+		return nil, err
+	}
+
+	if err := ApplyPushPopDirectives(ast); err != nil {
 		return nil, err
 	}
 
@@ -396,7 +435,144 @@ func ParseBytes(data []byte) (*AST, error) {
 		return nil, err
 	}
 
+	if err := ApplyPushPopDirectives(ast); err != nil {
+		return nil, err
+	}
+
 	return ast, SortDirectives(ast)
+}
+
+// positionedItem represents any AST item that has a position in the source file.
+type positionedItem struct {
+	pos       lexer.Position
+	directive Directive
+	pushtag   *Pushtag
+	poptag    *Poptag
+	pushmeta  *Pushmeta
+	popmeta   *Popmeta
+}
+
+// getDirectivePos extracts the position from any directive type.
+func getDirectivePos(d Directive) lexer.Position {
+	switch v := d.(type) {
+	case *Commodity:
+		return v.Pos
+	case *Open:
+		return v.Pos
+	case *Close:
+		return v.Pos
+	case *Balance:
+		return v.Pos
+	case *Pad:
+		return v.Pos
+	case *Note:
+		return v.Pos
+	case *Document:
+		return v.Pos
+	case *Price:
+		return v.Pos
+	case *Event:
+		return v.Pos
+	case *Transaction:
+		return v.Pos
+	default:
+		return lexer.Position{}
+	}
+}
+
+// ApplyPushPopDirectives applies pushtag/poptag and pushmeta/popmeta directives
+// to transactions and other directives in file order (before date sorting).
+func ApplyPushPopDirectives(ast *AST) error {
+	// Collect all positioned items
+	var items []positionedItem
+
+	for i := range ast.Directives {
+		items = append(items, positionedItem{
+			pos:       getDirectivePos(ast.Directives[i]),
+			directive: ast.Directives[i],
+		})
+	}
+
+	for _, pt := range ast.Pushtags {
+		items = append(items, positionedItem{pos: pt.Pos, pushtag: pt})
+	}
+
+	for _, pt := range ast.Poptags {
+		items = append(items, positionedItem{pos: pt.Pos, poptag: pt})
+	}
+
+	for _, pm := range ast.Pushmetas {
+		items = append(items, positionedItem{pos: pm.Pos, pushmeta: pm})
+	}
+
+	for _, pm := range ast.Popmetas {
+		items = append(items, positionedItem{pos: pm.Pos, popmeta: pm})
+	}
+
+	// Sort by file position
+	slices.SortFunc(items, func(a, b positionedItem) int {
+		if a.pos.Line != b.pos.Line {
+			if a.pos.Line < b.pos.Line {
+				return -1
+			}
+			return 1
+		}
+		if a.pos.Column != b.pos.Column {
+			if a.pos.Column < b.pos.Column {
+				return -1
+			}
+			return 1
+		}
+		if a.pos.Offset < b.pos.Offset {
+			return -1
+		}
+		if a.pos.Offset > b.pos.Offset {
+			return 1
+		}
+		return 0
+	})
+
+	// Track active state - use slices to preserve order
+	var activeTags []Tag
+	activeMetadata := make(map[string]string)
+
+	// Process items in file order
+	for _, item := range items {
+		switch {
+		case item.pushtag != nil:
+			activeTags = append(activeTags, item.pushtag.Tag)
+
+		case item.poptag != nil:
+			// Remove tag from slice
+			for i, tag := range activeTags {
+				if tag == item.poptag.Tag {
+					activeTags = append(activeTags[:i], activeTags[i+1:]...)
+					break
+				}
+			}
+
+		case item.pushmeta != nil:
+			activeMetadata[item.pushmeta.Key] = item.pushmeta.Value
+
+		case item.popmeta != nil:
+			delete(activeMetadata, item.popmeta.Key)
+
+		case item.directive != nil:
+			// Apply active tags to transactions (preserving order)
+			if txn, ok := item.directive.(*Transaction); ok {
+				txn.Tags = append(txn.Tags, activeTags...)
+			}
+
+			// Apply active metadata to all directives with metadata
+			if withMeta, ok := item.directive.(WithMetadata); ok {
+				for key, value := range activeMetadata {
+					withMeta.AddMetadata(&Metadata{Key: key, Value: value})
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 // isSorted checks if directives are already sorted by date.

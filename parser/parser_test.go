@@ -557,6 +557,161 @@ func TestParse(t *testing.T) {
 			),
 		},
 		{
+			name: "Pushtag applies to transaction",
+			beancount: `
+				pushtag #trip-berlin
+
+				2014-04-23 * "Flight to Berlin"
+					Expenses:Flights -1230.27 USD
+					Liabilities:CreditCard
+			`,
+			expected: withPushtags(
+				beancount(
+					withTags(
+						transaction("2014-04-23", "*", "", "Flight to Berlin",
+							posting("Expenses:Flights", "", amount("-1230.27", "USD"), nil, false, nil),
+							posting("Liabilities:CreditCard", "", nil, nil, false, nil),
+						),
+						"trip-berlin",
+					),
+				),
+				pushtag("trip-berlin"),
+			),
+		},
+		{
+			name: "Poptag removes tag",
+			beancount: `
+				pushtag #trip-berlin
+
+				2014-04-23 * "Flight to Berlin"
+					Expenses:Flights -1230.27 USD
+					Liabilities:CreditCard
+
+				poptag #trip-berlin
+
+				2014-04-24 * "Dinner"
+					Expenses:Restaurant -45.00 EUR
+					Assets:Cash
+			`,
+			expected: withPoptags(
+				withPushtags(
+					beancount(
+						withTags(
+							transaction("2014-04-23", "*", "", "Flight to Berlin",
+								posting("Expenses:Flights", "", amount("-1230.27", "USD"), nil, false, nil),
+								posting("Liabilities:CreditCard", "", nil, nil, false, nil),
+							),
+							"trip-berlin",
+						),
+						transaction("2014-04-24", "*", "", "Dinner",
+							posting("Expenses:Restaurant", "", amount("-45.00", "EUR"), nil, false, nil),
+							posting("Assets:Cash", "", nil, nil, false, nil),
+						),
+					),
+					pushtag("trip-berlin"),
+				),
+				poptag("trip-berlin"),
+			),
+		},
+		{
+			name: "Multiple pushtags stack",
+			beancount: `
+				pushtag #trip-berlin
+				pushtag #vacation
+
+				2014-04-23 * "Flight"
+					Expenses:Flights -1230.27 USD
+					Liabilities:CreditCard
+			`,
+			expected: withPushtags(
+				beancount(
+					withTags(
+						transaction("2014-04-23", "*", "", "Flight",
+							posting("Expenses:Flights", "", amount("-1230.27", "USD"), nil, false, nil),
+							posting("Liabilities:CreditCard", "", nil, nil, false, nil),
+						),
+						"trip-berlin", "vacation",
+					),
+				),
+				pushtag("trip-berlin"),
+				pushtag("vacation"),
+			),
+		},
+		{
+			name: "Pushmeta applies metadata to transaction",
+			beancount: `
+				pushmeta location: "Berlin, Germany"
+
+				2014-04-23 * "Dinner"
+					Expenses:Restaurant -45.00 EUR
+					Assets:Cash
+			`,
+			expected: withPushmetas(
+				beancount(
+					withMeta(
+						transaction("2014-04-23", "*", "", "Dinner",
+							posting("Expenses:Restaurant", "", amount("-45.00", "EUR"), nil, false, nil),
+							posting("Assets:Cash", "", nil, nil, false, nil),
+						),
+						meta("location", "Berlin, Germany"),
+					),
+				),
+				pushmeta("location", "Berlin, Germany"),
+			),
+		},
+		{
+			name: "Popmeta removes metadata",
+			beancount: `
+				pushmeta location: "Berlin, Germany"
+
+				2014-04-23 * "Dinner in Berlin"
+					Expenses:Restaurant -45.00 EUR
+					Assets:Cash
+
+				popmeta location:
+
+				2014-04-24 * "Dinner elsewhere"
+					Expenses:Restaurant -30.00 EUR
+					Assets:Cash
+			`,
+			expected: withPopmetas(
+				withPushmetas(
+					beancount(
+						withMeta(
+							transaction("2014-04-23", "*", "", "Dinner in Berlin",
+								posting("Expenses:Restaurant", "", amount("-45.00", "EUR"), nil, false, nil),
+								posting("Assets:Cash", "", nil, nil, false, nil),
+							),
+							meta("location", "Berlin, Germany"),
+						),
+						transaction("2014-04-24", "*", "", "Dinner elsewhere",
+							posting("Expenses:Restaurant", "", amount("-30.00", "EUR"), nil, false, nil),
+							posting("Assets:Cash", "", nil, nil, false, nil),
+						),
+					),
+					pushmeta("location", "Berlin, Germany"),
+				),
+				popmeta("location"),
+			),
+		},
+		{
+			name: "Pushmeta applies to non-transaction directives",
+			beancount: `
+				pushmeta source: "import-script"
+
+				2014-04-01 open Assets:Checking USD
+			`,
+			expected: withPushmetas(
+				beancount(
+					withMeta(
+						open("2014-04-01", "Assets:Checking", []string{"USD"}, ""),
+						meta("source", "import-script"),
+					),
+				),
+				pushmeta("source", "import-script"),
+			),
+		},
+		{
 			name: "Comment",
 			beancount: `
 				; 1792-01-01 commodity USD
@@ -899,21 +1054,37 @@ func normalizeAST(ast *AST) {
 		normalizeDirective(dir)
 	}
 
-	for _, opt := range ast.Options {
-		if opt != nil {
-			opt.Pos = lexer.Position{}
-		}
-	}
+	// Normalize positions for all non-directive AST elements
+	normalizePositions(ast.Options)
+	normalizePositions(ast.Includes)
+	normalizePositions(ast.Plugins)
+	normalizePositions(ast.Pushtags)
+	normalizePositions(ast.Poptags)
+	normalizePositions(ast.Pushmetas)
+	normalizePositions(ast.Popmetas)
+}
 
-	for _, inc := range ast.Includes {
-		if inc != nil {
-			inc.Pos = lexer.Position{}
-		}
-	}
-
-	for _, plugin := range ast.Plugins {
-		if plugin != nil {
-			plugin.Pos = lexer.Position{}
+// normalizePositions resets Pos to zero for all items in a slice of Node types.
+func normalizePositions[T Node](items []T) {
+	for _, item := range items {
+		if item != nil {
+			// Use type assertion to access Pos field
+			switch v := any(item).(type) {
+			case *Option:
+				v.Pos = lexer.Position{}
+			case *Include:
+				v.Pos = lexer.Position{}
+			case *Plugin:
+				v.Pos = lexer.Position{}
+			case *Pushtag:
+				v.Pos = lexer.Position{}
+			case *Poptag:
+				v.Pos = lexer.Position{}
+			case *Pushmeta:
+				v.Pos = lexer.Position{}
+			case *Popmeta:
+				v.Pos = lexer.Position{}
+			}
 		}
 	}
 }
@@ -944,10 +1115,12 @@ func normalizeDirective(d Directive) {
 	}
 }
 
+// AST constructor
 func beancount(directives ...Directive) *AST {
 	return &AST{Directives: directives}
 }
 
+// Directive constructors
 func open(d string, account Account, constraintCurrencies []string, bookingMethod string) *Open {
 	return &Open{Date: date(d), Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
 }
@@ -988,6 +1161,7 @@ func transaction(d string, flag string, payee string, narration string, postings
 	return &Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
 }
 
+// Sub-element constructors
 func posting(account Account, flag string, amount *Amount, price *Amount, priceTotal bool, cost *Cost) *Posting {
 	return &Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
 }
@@ -1026,17 +1200,43 @@ func date(value string) *Date {
 	return d
 }
 
+func meta(key string, value string) *Metadata {
+	return &Metadata{Key: key, Value: value}
+}
+
+// Node constructors
 func option(name string, value string) *Option {
 	return &Option{Name: name, Value: value}
 }
 
+func include(filename string) *Include {
+	return &Include{Filename: filename}
+}
+
+func plugin(name string, config string) *Plugin {
+	return &Plugin{Name: name, Config: config}
+}
+
+func pushtag(tag string) *Pushtag {
+	return &Pushtag{Tag: Tag(tag)}
+}
+
+func poptag(tag string) *Poptag {
+	return &Poptag{Tag: Tag(tag)}
+}
+
+func pushmeta(key string, value string) *Pushmeta {
+	return &Pushmeta{Key: key, Value: value}
+}
+
+func popmeta(key string) *Popmeta {
+	return &Popmeta{Key: key}
+}
+
+// AST modifiers
 func withOptions(ast *AST, options ...*Option) *AST {
 	ast.Options = options
 	return ast
-}
-
-func include(filename string) *Include {
-	return &Include{Filename: filename}
 }
 
 func withIncludes(ast *AST, includes ...*Include) *AST {
@@ -1044,19 +1244,32 @@ func withIncludes(ast *AST, includes ...*Include) *AST {
 	return ast
 }
 
-func plugin(name string, config string) *Plugin {
-	return &Plugin{Name: name, Config: config}
-}
-
 func withPlugins(ast *AST, plugins ...*Plugin) *AST {
 	ast.Plugins = plugins
 	return ast
 }
 
-func meta(key string, value string) *Metadata {
-	return &Metadata{Key: key, Value: value}
+func withPushtags(ast *AST, pushtags ...*Pushtag) *AST {
+	ast.Pushtags = pushtags
+	return ast
 }
 
+func withPoptags(ast *AST, poptags ...*Poptag) *AST {
+	ast.Poptags = poptags
+	return ast
+}
+
+func withPushmetas(ast *AST, pushmetas ...*Pushmeta) *AST {
+	ast.Pushmetas = pushmetas
+	return ast
+}
+
+func withPopmetas(ast *AST, popmetas ...*Popmeta) *AST {
+	ast.Popmetas = popmetas
+	return ast
+}
+
+// Directive modifiers
 func withMeta[W WithMetadata](w W, metadata ...*Metadata) W {
 	w.AddMetadata(metadata...)
 	return w
