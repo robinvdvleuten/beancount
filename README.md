@@ -12,7 +12,7 @@ A fast, lightweight [Beancount](https://beancount.github.io/) parser and formatt
 
 [Beancount](https://beancount.github.io/) is a double-entry bookkeeping system that uses plain text files to track personal or business finances. It allows you to maintain your accounting ledger as readable text files, making it easy to version control, search, and programmatically manipulate your financial data. The Beancount file format uses a simple, human-readable syntax to record transactions, accounts, and other financial directives.
 
-This project is a Go implementation of a Beancount file parser and formatter. While the official Beancount implementation is written in Python and includes a full accounting engine with balance calculations, reports, and queries, this Go version focuses specifically on parsing and formatting. It's designed to be fast and lightweight, making it ideal for tooling, text editors, build pipelines, or any situation where you need to work with Beancount file syntax without the overhead of the full accounting system.
+This project is a Go implementation of a Beancount file parser, formatter, and validator. While the official Beancount implementation is written in Python and includes a full accounting engine with balance calculations, reports, queries, and a web interface, this Go version focuses on parsing, formatting, and ledger validation. It's designed to be fast and lightweight, making it ideal for tooling, text editors, build pipelines, or any situation where you need to validate Beancount files without the overhead of the full accounting system.
 
 ## Features
 
@@ -20,10 +20,12 @@ This implementation currently supports:
 
 - **Parsing**: Full parsing of Beancount file syntax
 - **Formatting**: Auto-align currencies, numbers, and accounts
-- **Validation**: Syntax checking and error reporting
+- **Validation**: Balance checks, account lifecycle, assertions
+- **Inventory**: Lot-based tracking with cost basis (FIFO/LIFO)
+- **Includes**: Recursive loading of modular Beancount files
 - **CLI Interface**: Simple command-line tools for common operations
 
-**Note**: This is a parser and formatter implementation. It does not currently include the full accounting engine features of the official Python implementation (balance calculations, reporting, queries, etc.).
+**Note**: This implementation includes ledger validation with transaction balancing, account management, and inventory tracking. It does not include reporting, queries, or a web interface like the official Python implementation.
 
 ## Installation
 
@@ -39,10 +41,27 @@ go install github.com/robinvdvleuten/beancount@latest
 
 ### Check a Beancount file
 
-Parse and validate a Beancount file:
+Validate a Beancount file with full ledger checks:
 
 ```bash
 beancount check example.beancount
+```
+
+This command validates:
+- Transaction balance across all currencies
+- Account open/close dates are respected
+- Balance assertions match actual balances
+- All referenced accounts exist
+
+Example error output:
+```
+example.beancount:15: Transaction does not balance: (-500.00 USD)
+
+   2020-01-15 * "Grocery shopping"
+     Assets:Checking   1000.00 USD
+     Expenses:Food      500.00 USD
+
+1 validation error(s) found
 ```
 
 ### Format a Beancount file
