@@ -30,6 +30,9 @@ archives:
       - COPYING
       - README*
 
+signs:
+  - artifacts: checksum
+
 homebrew_casks:
   - repository:
       owner: robinvdvleuten
