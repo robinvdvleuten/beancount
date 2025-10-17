@@ -293,6 +293,11 @@ type astItem struct {
 	pos       int
 	option    *parser.Option
 	include   *parser.Include
+	plugin    *parser.Plugin
+	pushtag   *parser.Pushtag
+	poptag    *parser.Poptag
+	pushmeta  *parser.Pushmeta
+	popmeta   *parser.Popmeta
 	directive parser.Directive
 }
 
@@ -340,7 +345,7 @@ func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) e
 	estimatedSize := (len(ast.Options) + len(ast.Includes) + len(ast.Directives)) * 100
 	buf.Grow(estimatedSize)
 
-	// Collect all items (options, includes, directives) with their positions
+	// Collect all items (options, includes, plugins, push/pop directives, directives) with their positions
 	var items []astItem
 
 	for _, opt := range ast.Options {
@@ -352,6 +357,36 @@ func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) e
 	for _, inc := range ast.Includes {
 		if inc != nil {
 			items = append(items, astItem{pos: inc.Pos.Line, include: inc})
+		}
+	}
+
+	for _, plugin := range ast.Plugins {
+		if plugin != nil {
+			items = append(items, astItem{pos: plugin.Pos.Line, plugin: plugin})
+		}
+	}
+
+	for _, pushtag := range ast.Pushtags {
+		if pushtag != nil {
+			items = append(items, astItem{pos: pushtag.Pos.Line, pushtag: pushtag})
+		}
+	}
+
+	for _, poptag := range ast.Poptags {
+		if poptag != nil {
+			items = append(items, astItem{pos: poptag.Pos.Line, poptag: poptag})
+		}
+	}
+
+	for _, pushmeta := range ast.Pushmetas {
+		if pushmeta != nil {
+			items = append(items, astItem{pos: pushmeta.Pos.Line, pushmeta: pushmeta})
+		}
+	}
+
+	for _, popmeta := range ast.Popmetas {
+		if popmeta != nil {
+			items = append(items, astItem{pos: popmeta.Pos.Line, popmeta: popmeta})
 		}
 	}
 
@@ -381,6 +416,16 @@ func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) e
 			f.formatOption(item.option, &buf)
 		} else if item.include != nil {
 			f.formatInclude(item.include, &buf)
+		} else if item.plugin != nil {
+			f.formatPlugin(item.plugin, &buf)
+		} else if item.pushtag != nil {
+			f.formatPushtag(item.pushtag, &buf)
+		} else if item.poptag != nil {
+			f.formatPoptag(item.poptag, &buf)
+		} else if item.pushmeta != nil {
+			f.formatPushmeta(item.pushmeta, &buf)
+		} else if item.popmeta != nil {
+			f.formatPopmeta(item.popmeta, &buf)
 		} else if item.directive != nil {
 			f.formatDirective(item.directive, &buf)
 		}
@@ -513,6 +558,8 @@ func getDirectivePos(d parser.Directive) int {
 		return directive.Pos.Line
 	case *parser.Event:
 		return directive.Pos.Line
+	case *parser.Custom:
+		return directive.Pos.Line
 	case *parser.Transaction:
 		return directive.Pos.Line
 	default:
@@ -560,6 +607,8 @@ func (f *Formatter) formatDirective(d parser.Directive, buf *strings.Builder) {
 		f.formatPrice(directive, buf)
 	case *parser.Event:
 		f.formatEvent(directive, buf)
+	case *parser.Custom:
+		f.formatCustom(directive, buf)
 	case *parser.Transaction:
 		f.formatTransaction(directive, buf)
 	}
@@ -780,6 +829,126 @@ func (f *Formatter) formatEvent(e *parser.Event, buf *strings.Builder) {
 	buf.WriteString(escapeString(e.Value))
 	buf.WriteString("\"\n")
 	f.formatMetadata(e.Metadata, buf)
+}
+
+// formatCustom formats a custom directive.
+// Preserves original spacing by using the source line.
+func (f *Formatter) formatCustom(c *parser.Custom, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(c.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
+	buf.WriteString(c.Date.Format("2006-01-02"))
+	buf.WriteString(" custom \"")
+	buf.WriteString(escapeString(c.Type))
+	buf.WriteByte('"')
+
+	// Format custom values
+	for _, val := range c.Values {
+		buf.WriteByte(' ')
+		if val.String != nil {
+			buf.WriteByte('"')
+			buf.WriteString(escapeString(*val.String))
+			buf.WriteByte('"')
+		} else if val.BooleanValue != nil {
+			buf.WriteString(*val.BooleanValue)
+		} else if val.Amount != nil {
+			buf.WriteString(val.Amount.Value)
+			buf.WriteByte(' ')
+			buf.WriteString(val.Amount.Currency)
+		} else if val.Number != nil {
+			buf.WriteString(*val.Number)
+		}
+	}
+	buf.WriteByte('\n')
+	f.formatMetadata(c.Metadata, buf)
+}
+
+// formatPlugin formats a plugin directive.
+// Preserves original spacing by using the source line.
+func (f *Formatter) formatPlugin(p *parser.Plugin, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
+	buf.WriteString("plugin \"")
+	buf.WriteString(escapeString(p.Name))
+	buf.WriteByte('"')
+	if p.Config != "" {
+		buf.WriteString(" \"")
+		buf.WriteString(escapeString(p.Config))
+		buf.WriteByte('"')
+	}
+	buf.WriteByte('\n')
+}
+
+// formatPushtag formats a pushtag directive.
+// Preserves original spacing by using the source line.
+func (f *Formatter) formatPushtag(p *parser.Pushtag, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
+	buf.WriteString("pushtag #")
+	buf.WriteString(string(p.Tag))
+	buf.WriteByte('\n')
+}
+
+// formatPoptag formats a poptag directive.
+// Preserves original spacing by using the source line.
+func (f *Formatter) formatPoptag(p *parser.Poptag, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
+	buf.WriteString("poptag #")
+	buf.WriteString(string(p.Tag))
+	buf.WriteByte('\n')
+}
+
+// formatPushmeta formats a pushmeta directive.
+// Preserves original spacing by using the source line.
+func (f *Formatter) formatPushmeta(p *parser.Pushmeta, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
+	buf.WriteString("pushmeta ")
+	buf.WriteString(p.Key)
+	buf.WriteString(": ")
+	buf.WriteString(p.Value)
+	buf.WriteByte('\n')
+}
+
+// formatPopmeta formats a popmeta directive.
+// Preserves original spacing by using the source line.
+func (f *Formatter) formatPopmeta(p *parser.Popmeta, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
+	buf.WriteString("popmeta ")
+	buf.WriteString(p.Key)
+	buf.WriteString(":\n")
 }
 
 // formatTransaction formats a transaction directive with proper structure.

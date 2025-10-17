@@ -504,6 +504,120 @@ func TestFormatDirectives(t *testing.T) {
 		// Should contain price
 		assert.Contains(t, buf.String(), "@ 0.85 EUR")
 	})
+
+	t.Run("Plugin", func(t *testing.T) {
+		source := `plugin "beancount.plugins.auto_accounts"`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "plugin \"beancount.plugins.auto_accounts\"\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
+	t.Run("PluginWithConfig", func(t *testing.T) {
+		source := `plugin "beancount.plugins.check_commodity" "USD,EUR"`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "plugin \"beancount.plugins.check_commodity\" \"USD,EUR\"\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
+	t.Run("Custom", func(t *testing.T) {
+		source := `2021-06-01 custom "budget" "quarterly" TRUE 10000.00 USD`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "2021-06-01 custom \"budget\" \"quarterly\" TRUE 10000.00 USD\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
+	t.Run("CustomWithMetadata", func(t *testing.T) {
+		source := `2021-06-01 custom "budget" "quarterly"
+  category: "savings-goal"`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		assert.Contains(t, output, "2021-06-01 custom \"budget\" \"quarterly\"")
+		assert.Contains(t, output, "category: \"savings-goal\"")
+	})
+
+	t.Run("Pushtag", func(t *testing.T) {
+		source := `pushtag #vacation`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "pushtag #vacation\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
+	t.Run("Poptag", func(t *testing.T) {
+		source := `poptag #vacation`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "poptag #vacation\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
+	t.Run("Pushmeta", func(t *testing.T) {
+		source := `pushmeta trip: "NYC Summer 2021"`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "pushmeta trip: \"NYC Summer 2021\"\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
+	t.Run("Popmeta", func(t *testing.T) {
+		source := `popmeta trip:`
+		ast, err := parser.ParseString(source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		expected := "popmeta trip:\n"
+		assert.Equal(t, expected, buf.String())
+	})
 }
 
 // TestTransactionEdgeCases tests edge cases for transaction formatting
