@@ -103,6 +103,94 @@ beancount format --currency-column 60 example.beancount
 beancount format --prefix-width 50 --num-width 12 example.beancount
 ```
 
+## Programmatic Usage
+
+This library can be used programmatically in your Go applications to parse, manipulate, and generate Beancount files.
+
+### Parsing Beancount Files
+
+Load and parse a Beancount file:
+
+```go
+import (
+    "context"
+    "github.com/robinvdvleuten/beancount/loader"
+)
+
+// Load a single file
+ldr := loader.New()
+ast, err := ldr.Load(context.Background(), "example.beancount")
+if err != nil {
+    log.Fatal(err)
+}
+
+// Load with recursive include resolution
+ldr = loader.New(loader.WithFollowIncludes())
+ast, err = ldr.Load(context.Background(), "main.beancount")
+```
+
+### Building Transactions Programmatically
+
+Create Beancount transactions using the builder API:
+
+```go
+import "github.com/robinvdvleuten/beancount/ast"
+
+// Create a transaction with the functional options pattern
+date, _ := ast.NewDate("2024-01-15")
+checking, _ := ast.NewAccount("Assets:Checking")
+groceries, _ := ast.NewAccount("Expenses:Groceries")
+
+txn := ast.NewTransaction(date, "Grocery shopping",
+    ast.WithFlag("*"),
+    ast.WithPayee("Whole Foods"),
+    ast.WithTags("food", "weekly"),
+    ast.WithPostings(
+        ast.NewPosting(groceries, ast.WithAmount("125.43", "USD")),
+        ast.NewPosting(checking), // Balancing posting
+    ),
+)
+```
+
+### Formatting Output
+
+Format transactions back to Beancount syntax:
+
+```go
+import (
+    "context"
+    "os"
+    "github.com/robinvdvleuten/beancount/formatter"
+)
+
+// Create a formatter
+fmtr := formatter.New()
+
+// Format a single transaction
+fmtr.FormatTransaction(txn, os.Stdout)
+
+// Format an entire AST
+fmtr.Format(context.Background(), ast, sourceContent, os.Stdout)
+```
+
+### Complete Example
+
+See the [CSV Importer example](examples/csv_importer/) for a complete working example that demonstrates:
+- Reading CSV files with Go's `encoding/csv`
+- Building transactions programmatically with the builder API
+- Automatic expense categorization
+- Error handling and validation
+- Formatting output
+
+Run the example:
+
+```bash
+cd examples/csv_importer
+go run main.go transactions.csv
+```
+
+For more details on the builder API, see the [package documentation](https://pkg.go.dev/github.com/robinvdvleuten/beancount/ast).
+
 ## Contributing
 
 Everyone is encouraged to help improve this project. Here are a few ways you can help:
@@ -140,3 +228,5 @@ distributed under the License is distributed on an "AS IS" BASIS,
 WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
+
+functional programming patterns (haskell, clojure) for ledger?
