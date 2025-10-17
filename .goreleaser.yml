@@ -29,6 +29,8 @@ archives:
     files:
       - COPYING
       - README*
+gomod:
+  proxy: true
 
 signs:
   - artifacts: checksum
