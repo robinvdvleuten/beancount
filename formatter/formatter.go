@@ -127,6 +127,10 @@ type Formatter struct {
 	// PreserveBlanks controls whether blank lines are preserved during formatting.
 	// Default: true
 	PreserveBlanks bool
+
+	// sourceLines holds the original source lines for preserving spacing.
+	// This is set during Format() and cleared after.
+	sourceLines []string
 }
 
 // Option is a functional option for configuring a Formatter.
@@ -291,12 +295,25 @@ type astItem struct {
 	directive parser.Directive
 }
 
+// getOriginalLine returns the original line from source by line number (1-indexed).
+// Returns empty string if line number is out of bounds.
+func (f *Formatter) getOriginalLine(lineNum int) string {
+	if lineNum < 1 || lineNum > len(f.sourceLines) {
+		return ""
+	}
+	return f.sourceLines[lineNum-1]
+}
+
 // Comments and blank lines from sourceContent are preserved based on Formatter configuration.
 func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) error {
 	// Determine the currency column based on the configuration
 	if f.CurrencyColumn == 0 {
 		f.CurrencyColumn = f.determineCurrencyColumn(ast)
 	}
+
+	// Store source lines for preserving original spacing
+	f.sourceLines = strings.Split(string(sourceContent), "\n")
+	defer func() { f.sourceLines = nil }() // Clear after formatting
 
 	// Extract comments and blank lines if preservation is enabled
 	var lineContentMap map[int][]LineContent
@@ -523,7 +540,15 @@ func (f *Formatter) formatDirective(d parser.Directive, buf *strings.Builder) {
 }
 
 // formatOption formats an option directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatOption(opt *parser.Option, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(opt.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString("option \"")
 	buf.WriteString(escapeString(opt.Name))
 	buf.WriteString("\" \"")
@@ -532,14 +557,31 @@ func (f *Formatter) formatOption(opt *parser.Option, buf *strings.Builder) {
 }
 
 // formatInclude formats an include directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatInclude(inc *parser.Include, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(inc.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString("include \"")
 	buf.WriteString(escapeString(inc.Filename))
 	buf.WriteString("\"\n")
 }
 
 // formatCommodity formats a commodity directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatCommodity(c *parser.Commodity, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(c.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(c.Date.Format("2006-01-02"))
 	buf.WriteString(" commodity ")
 	buf.WriteString(c.Currency)
@@ -548,7 +590,16 @@ func (f *Formatter) formatCommodity(c *parser.Commodity, buf *strings.Builder) {
 }
 
 // formatOpen formats an open directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatOpen(o *parser.Open, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(o.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(o.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(o.Date.Format("2006-01-02"))
 	buf.WriteString(" open ")
 	buf.WriteString(string(o.Account))
@@ -576,7 +627,16 @@ func (f *Formatter) formatOpen(o *parser.Open, buf *strings.Builder) {
 }
 
 // formatClose formats a close directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatClose(c *parser.Close, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(c.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(c.Date.Format("2006-01-02"))
 	buf.WriteString(" close ")
 	buf.WriteString(string(c.Account))
@@ -599,7 +659,16 @@ func (f *Formatter) formatBalance(b *parser.Balance, buf *strings.Builder) {
 }
 
 // formatPad formats a pad directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatPad(p *parser.Pad, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(p.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(p.Date.Format("2006-01-02"))
 	buf.WriteString(" pad ")
 	buf.WriteString(string(p.Account))
@@ -610,7 +679,16 @@ func (f *Formatter) formatPad(p *parser.Pad, buf *strings.Builder) {
 }
 
 // formatNote formats a note directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatNote(n *parser.Note, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(n.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(n.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(n.Date.Format("2006-01-02"))
 	buf.WriteString(" note ")
 	buf.WriteString(string(n.Account))
@@ -621,7 +699,16 @@ func (f *Formatter) formatNote(n *parser.Note, buf *strings.Builder) {
 }
 
 // formatDocument formats a document directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatDocument(d *parser.Document, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(d.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(d.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(d.Date.Format("2006-01-02"))
 	buf.WriteString(" document ")
 	buf.WriteString(string(d.Account))
@@ -646,7 +733,16 @@ func (f *Formatter) formatPrice(p *parser.Price, buf *strings.Builder) {
 }
 
 // formatEvent formats an event directive.
+// Preserves original spacing by using the source line.
 func (f *Formatter) formatEvent(e *parser.Event, buf *strings.Builder) {
+	if originalLine := f.getOriginalLine(e.Pos.Line); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		f.formatMetadata(e.Metadata, buf)
+		return
+	}
+
+	// Fallback to reconstructing if original line not available
 	buf.WriteString(e.Date.Format("2006-01-02"))
 	buf.WriteString(" event \"")
 	buf.WriteString(escapeString(e.Name))
