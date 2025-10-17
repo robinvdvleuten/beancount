@@ -38,10 +38,19 @@ func TestParse(t *testing.T) {
 		{
 			name: "OpenWithMultipleConstraintCurrencies",
 			beancount: `
-				2014-05-01 open Equity:Opening-Balances USD, EUR NONE
+				2014-05-01 open Equity:Opening-Balances USD, EUR "NONE"
 			`,
 			expected: beancount(
 				open("2014-05-01", "Equity:Opening-Balances", []string{"USD", "EUR"}, "NONE"),
+			),
+		},
+		{
+			name: "OpenWithBookingMethodFIFO",
+			beancount: `
+				2023-01-01 open Assets:Investments:BTC BTC "FIFO"
+			`,
+			expected: beancount(
+				open("2023-01-01", "Assets:Investments:BTC", []string{"BTC"}, "FIFO"),
 			),
 		},
 		{

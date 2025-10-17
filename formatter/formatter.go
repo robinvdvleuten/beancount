@@ -60,7 +60,7 @@ type LineContent interface {
 	lineNumber() int
 }
 
-func (c CommentBlock) isLineContent() {}
+func (c CommentBlock) isLineContent()  {}
 func (c CommentBlock) lineNumber() int { return c.Line }
 func (b BlankLine) isLineContent()     {}
 func (b BlankLine) lineNumber() int    { return b.Line }
@@ -68,7 +68,7 @@ func (b BlankLine) lineNumber() int    { return b.Line }
 // DirectiveWithComments wraps a directive with its associated comments and blank lines.
 type DirectiveWithComments struct {
 	PrecedingLines []LineContent // Comments/blanks that appear before this directive
-	InlineComment  string         // Comment at the end of the directive line (empty if none)
+	InlineComment  string        // Comment at the end of the directive line (empty if none)
 }
 
 // escapeString escapes special characters in strings for Beancount format.

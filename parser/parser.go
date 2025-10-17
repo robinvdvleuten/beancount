@@ -71,7 +71,7 @@ type Open struct {
 	Date                 *Date    `parser:"@Date 'open'"`
 	Account              Account  `parser:"@Account"`
 	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
-	BookingMethod        string   `parser:"@('STRICT' | 'NONE')?"`
+	BookingMethod        string   `parser:"@String?"`
 
 	withMetadata `parser:""`
 }
