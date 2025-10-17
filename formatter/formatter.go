@@ -346,7 +346,10 @@ func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) e
 	buf.Grow(estimatedSize)
 
 	// Collect all items (options, includes, plugins, push/pop directives, directives) with their positions
-	var items []astItem
+	totalItems := len(ast.Options) + len(ast.Includes) + len(ast.Plugins) +
+		len(ast.Pushtags) + len(ast.Poptags) + len(ast.Pushmetas) + len(ast.Popmetas) +
+		len(ast.Directives)
+	items := make([]astItem, 0, totalItems)
 
 	for _, opt := range ast.Options {
 		if opt != nil {
