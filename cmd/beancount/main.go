@@ -1,19 +1,44 @@
 package main
 
 import (
+	"fmt"
+
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount"
 )
 
 var (
+	// Version contains the application version number. It's set via ldflags
+	// when building.
+	Version = ""
+
+	// CommitSHA contains the SHA of the commit that this application was built
+	// against. It's set via ldflags when building.
+	CommitSHA = ""
+
 	cli struct {
+		Version kong.VersionFlag `help:"Show version information"`
 		beancount.Commands
 	}
 )
 
 func main() {
-	ctx := kong.Parse(&cli)
+	ctx := kong.Parse(&cli,
+		kong.Vars{
+			"version": buildVersion(),
+		},
+	)
 
 	err := ctx.Run()
 	ctx.FatalIfErrorf(err)
+}
+
+func buildVersion() string {
+	if Version == "" {
+		Version = "dev"
+	}
+	if CommitSHA == "" {
+		return Version
+	}
+	return fmt.Sprintf("%s (%s)", Version, CommitSHA)
 }
