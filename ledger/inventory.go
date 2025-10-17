@@ -3,6 +3,7 @@ package ledger
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/shopspring/decimal"
 )
@@ -201,23 +202,27 @@ func (inv *Inventory) String() string {
 		return "{}"
 	}
 
-	result := "{"
+	var buf strings.Builder
+	buf.WriteByte('{')
+
 	first := true
 	for commodity, lots := range inv.lots {
 		for _, lot := range lots {
 			if !first {
-				result += ", "
+				buf.WriteString(", ")
 			}
 			if lot.Spec == nil || lot.Spec.IsEmpty() {
-				result += fmt.Sprintf("%s %s", lot.Amount.String(), commodity)
+				buf.WriteString(lot.Amount.String())
+				buf.WriteByte(' ')
+				buf.WriteString(commodity)
 			} else {
-				result += lot.String()
+				buf.WriteString(lot.String())
 			}
 			first = false
 		}
 	}
-	result += "}"
-	return result
+	buf.WriteByte('}')
+	return buf.String()
 }
 
 // lotSpecsMatch checks if two lot specs match
