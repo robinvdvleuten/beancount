@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -208,11 +209,11 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 					if posting.Flag != "" {
 						prefixWidth += 2 // flag + space
 					}
-					prefixWidth += len(string(posting.Account)) + MinimumSpacing
+					prefixWidth += runewidth.StringWidth(string(posting.Account)) + MinimumSpacing
 					metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
 
 					// Calculate number width
-					numWidth := len(posting.Amount.Value)
+					numWidth := runewidth.StringWidth(posting.Amount.Value)
 					metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 
 					// Calculate total width for currency column
@@ -224,8 +225,8 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 		case *parser.Balance:
 			if d.Amount != nil {
 				// Calculate width: date + "balance" + account + spacing + number
-				width := DateWidth + 1 + BalanceKeywordWidth + len(string(d.Account)) + MinimumSpacing
-				numWidth := len(d.Amount.Value)
+				width := DateWidth + 1 + BalanceKeywordWidth + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
+				numWidth := runewidth.StringWidth(d.Amount.Value)
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
@@ -234,8 +235,8 @@ func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 		case *parser.Price:
 			if d.Amount != nil {
 				// Calculate width: date + "price" + commodity + spacing + number
-				width := DateWidth + 1 + PriceKeywordWidth + len(d.Commodity) + MinimumSpacing
-				numWidth := len(d.Amount.Value)
+				width := DateWidth + 1 + PriceKeywordWidth + runewidth.StringWidth(d.Commodity) + MinimumSpacing
+				numWidth := runewidth.StringWidth(d.Amount.Value)
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
@@ -651,7 +652,9 @@ func (f *Formatter) formatBalance(b *parser.Balance, buf *strings.Builder) {
 	buf.WriteString(string(b.Account))
 
 	if b.Amount != nil {
-		f.formatAmountAligned(b.Amount, buf.Len(), buf)
+		// Calculate display width: date (10) + " balance " (9) + account display width
+		currentWidth := DateWidth + 1 + BalanceKeywordWidth + runewidth.StringWidth(string(b.Account))
+		f.formatAmountAligned(b.Amount, currentWidth, buf)
 	}
 
 	buf.WriteByte('\n')
@@ -725,7 +728,9 @@ func (f *Formatter) formatPrice(p *parser.Price, buf *strings.Builder) {
 	buf.WriteString(p.Commodity)
 
 	if p.Amount != nil {
-		f.formatAmountAligned(p.Amount, buf.Len(), buf)
+		// Calculate display width: date (10) + " price " (7) + commodity display width
+		currentWidth := DateWidth + 1 + PriceKeywordWidth + runewidth.StringWidth(p.Commodity)
+		f.formatAmountAligned(p.Amount, currentWidth, buf)
 	}
 
 	buf.WriteByte('\n')
@@ -804,18 +809,23 @@ func (f *Formatter) formatTransaction(t *parser.Transaction, buf *strings.Builde
 func (f *Formatter) formatPosting(p *parser.Posting, buf *strings.Builder) {
 	buf.WriteString("  ")
 
+	// Calculate display width: indentation + flag (if present) + account
+	currentWidth := DefaultIndentation
+
 	// Add flag if present
 	if p.Flag != "" {
 		buf.WriteString(p.Flag)
 		buf.WriteByte(' ')
+		currentWidth += 2 // flag + space
 	}
 
 	buf.WriteString(string(p.Account))
+	currentWidth += runewidth.StringWidth(string(p.Account))
 
 	// Add amount if present (explicit amount)
 	// If amount is nil, this is an implied/calculated amount posting
 	if p.Amount != nil {
-		f.formatAmountAligned(p.Amount, buf.Len(), buf)
+		f.formatAmountAligned(p.Amount, currentWidth, buf)
 
 		// Add cost specification if present (e.g., {150.00 USD})
 		if p.Cost != nil {
@@ -849,8 +859,8 @@ func (f *Formatter) formatAmountAligned(amount *parser.Amount, currentWidth int,
 		return
 	}
 
-	// Calculate padding needed
-	padding := f.CurrencyColumn - currentWidth - len(amount.Value)
+	// Calculate padding needed using display width
+	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amount.Value)
 	if padding < MinimumSpacing {
 		padding = MinimumSpacing
 	}
