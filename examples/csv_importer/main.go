@@ -71,7 +71,7 @@ func readCSV(filename string) ([]CSVRecord, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	reader := csv.NewReader(file)
 	reader.TrimLeadingSpace = true

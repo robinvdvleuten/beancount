@@ -115,7 +115,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 
 // loaderState tracks state during recursive loading.
 type loaderState struct {
-	visited   map[string]bool    // Absolute paths of files already loaded
+	visited   map[string]bool     // Absolute paths of files already loaded
 	collector telemetry.Collector // Telemetry collector for tracking load operations
 }
 
