@@ -32,12 +32,18 @@ func CalculateWeights(posting *parser.Posting) (WeightSet, error) {
 	currency := posting.Amount.Currency
 
 	// Check for cost specification
-	hasCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
+	hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
+	hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
 	hasPrice := posting.Price != nil
 
 	var weights WeightSet
 
-	if hasCost {
+	if hasEmptyCost {
+		// Empty cost spec {} - cost will be inferred to balance the transaction
+		// Return empty weights; cost inference happens in processTransaction()
+		return WeightSet{}, nil
+
+	} else if hasExplicitCost {
 		// Cost: {X CURR} or {X CURR} @ Y CURR2
 		// When there's a cost, ONLY the cost contributes to balance!
 		// The price (if present) is just informational (market value)
