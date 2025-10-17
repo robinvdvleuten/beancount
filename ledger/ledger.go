@@ -140,8 +140,10 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 		// Validate account is open
 		if !l.isAccountOpen(posting.Account, txn.Date) {
 			l.addError(&AccountNotOpenError{
-				Account: posting.Account,
-				Date:    txn.Date,
+				Account:   posting.Account,
+				Date:      txn.Date,
+				Pos:       txn.Pos,
+				Directive: txn,
 			})
 			hasErrors = true
 			continue
@@ -301,8 +303,10 @@ func (l *Ledger) processBalance(balance *parser.Balance) {
 	// Validate account is open
 	if !l.isAccountOpen(balance.Account, balance.Date) {
 		l.addError(&AccountNotOpenError{
-			Account: balance.Account,
-			Date:    balance.Date,
+			Account:   balance.Account,
+			Date:      balance.Date,
+			Pos:       balance.Pos,
+			Directive: balance,
 		})
 		return
 	}
@@ -375,16 +379,20 @@ func (l *Ledger) processPad(pad *parser.Pad) {
 	// Validate accounts are open
 	if !l.isAccountOpen(pad.Account, pad.Date) {
 		l.addError(&AccountNotOpenError{
-			Account: pad.Account,
-			Date:    pad.Date,
+			Account:   pad.Account,
+			Date:      pad.Date,
+			Pos:       pad.Pos,
+			Directive: pad,
 		})
 		return
 	}
 
 	if !l.isAccountOpen(pad.AccountPad, pad.Date) {
 		l.addError(&AccountNotOpenError{
-			Account: pad.AccountPad,
-			Date:    pad.Date,
+			Account:   pad.AccountPad,
+			Date:      pad.Date,
+			Pos:       pad.Pos,
+			Directive: pad,
 		})
 		return
 	}
@@ -399,8 +407,10 @@ func (l *Ledger) processNote(note *parser.Note) {
 	// Validate account is open
 	if !l.isAccountOpen(note.Account, note.Date) {
 		l.addError(&AccountNotOpenError{
-			Account: note.Account,
-			Date:    note.Date,
+			Account:   note.Account,
+			Date:      note.Date,
+			Pos:       note.Pos,
+			Directive: note,
 		})
 	}
 
@@ -411,8 +421,10 @@ func (l *Ledger) processDocument(doc *parser.Document) {
 	// Validate account is open
 	if !l.isAccountOpen(doc.Account, doc.Date) {
 		l.addError(&AccountNotOpenError{
-			Account: doc.Account,
-			Date:    doc.Date,
+			Account:   doc.Account,
+			Date:      doc.Date,
+			Pos:       doc.Pos,
+			Directive: doc,
 		})
 	}
 }

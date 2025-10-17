@@ -32,10 +32,13 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 			f := formatter.New()
 
 			for i, e := range validationErrors.Errors {
-				// Check if this is a TransactionNotBalancedError with context
+				// Check if this is an error with context formatting support
 				if balErr, ok := e.(*ledger.TransactionNotBalancedError); ok && balErr.Transaction != nil {
 					// Use the enhanced formatting with transaction context
 					_, _ = fmt.Fprint(ctx.Stderr, balErr.FormatWithContext(f))
+				} else if accErr, ok := e.(*ledger.AccountNotOpenError); ok && accErr.Directive != nil {
+					// Use the enhanced formatting with directive context
+					_, _ = fmt.Fprint(ctx.Stderr, accErr.FormatWithContext(f))
 				} else {
 					// For other errors, use standard formatting
 					_, _ = fmt.Fprintf(ctx.Stderr, "%s\n", e)
