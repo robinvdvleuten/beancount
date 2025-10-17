@@ -15,6 +15,23 @@ type Ledger struct {
 	padEntries map[string]*parser.Pad // account -> pad directive
 }
 
+// ValidationErrors wraps multiple validation errors
+type ValidationErrors struct {
+	Errors []error
+}
+
+func (e *ValidationErrors) Error() string {
+	if len(e.Errors) == 1 {
+		return e.Errors[0].Error()
+	}
+	return fmt.Sprintf("%d validation errors occurred", len(e.Errors))
+}
+
+// Unwrap returns the underlying errors for error unwrapping
+func (e *ValidationErrors) Unwrap() []error {
+	return e.Errors
+}
+
 // New creates a new empty ledger
 func New() *Ledger {
 	return &Ledger{
@@ -43,6 +60,22 @@ func (l *Ledger) Process(ast *parser.AST) error {
 	}
 
 	return nil
+}
+
+// Errors returns all collected errors
+func (l *Ledger) Errors() []error {
+	return l.errors
+}
+
+// GetAccount returns an account by name
+func (l *Ledger) GetAccount(name string) (*Account, bool) {
+	acc, ok := l.accounts[name]
+	return acc, ok
+}
+
+// Accounts returns all accounts
+func (l *Ledger) Accounts() map[string]*Account {
+	return l.accounts
 }
 
 // processDirective processes a single directive
@@ -527,37 +560,4 @@ func (l *Ledger) isAccountOpen(account parser.Account, date *parser.Date) bool {
 // addError adds an error to the error collection
 func (l *Ledger) addError(err error) {
 	l.errors = append(l.errors, err)
-}
-
-// Errors returns all collected errors
-func (l *Ledger) Errors() []error {
-	return l.errors
-}
-
-// GetAccount returns an account by name
-func (l *Ledger) GetAccount(name string) (*Account, bool) {
-	acc, ok := l.accounts[name]
-	return acc, ok
-}
-
-// Accounts returns all accounts
-func (l *Ledger) Accounts() map[string]*Account {
-	return l.accounts
-}
-
-// ValidationErrors wraps multiple validation errors
-type ValidationErrors struct {
-	Errors []error
-}
-
-func (e *ValidationErrors) Error() string {
-	if len(e.Errors) == 1 {
-		return e.Errors[0].Error()
-	}
-	return fmt.Sprintf("%d validation errors occurred", len(e.Errors))
-}
-
-// Unwrap returns the underlying errors for error unwrapping
-func (e *ValidationErrors) Unwrap() []error {
-	return e.Errors
 }
