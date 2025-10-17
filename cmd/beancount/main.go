@@ -27,6 +27,9 @@ func main() {
 		kong.Vars{
 			"version": buildVersion(),
 		},
+		kong.Name("beancount"),
+		kong.Description("A beancount file parser and formatter."),
+		kong.UsageOnError(),
 	)
 
 	err := ctx.Run()
