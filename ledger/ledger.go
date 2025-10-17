@@ -134,6 +134,7 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 	// Single-pass validation, classification, and weight calculation
 	hasErrors := false
 	var postingsWithoutAmounts []*parser.Posting
+	var postingsWithEmptyCosts []*parser.Posting // Postings with {} empty cost specs
 	var allWeights []WeightSet
 
 	for _, posting := range txn.Postings {
@@ -165,7 +166,13 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 				hasErrors = true
 				continue
 			}
-			allWeights = append(allWeights, weights)
+
+			// Check if this is an empty cost spec (returns empty weights)
+			if len(weights) == 0 && posting.Cost != nil && posting.Cost.IsEmpty() {
+				postingsWithEmptyCosts = append(postingsWithEmptyCosts, posting)
+			} else {
+				allWeights = append(allWeights, weights)
+			}
 		}
 	}
 
@@ -204,6 +211,63 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 					Date:        txn.Date,
 					Narration:   fmt.Sprintf("%s (multiple postings with missing amounts - ambiguous)", txn.Narration),
 					Residuals:   map[string]string{currency: residual.String()},
+					Transaction: txn,
+				})
+				return
+			}
+		}
+	}
+
+	// Infer costs for empty cost specs {}
+	// Note: Only infer costs for AUGMENTATIONS (positive amounts)
+	// For REDUCTIONS (negative amounts), empty cost spec means "use booking method"
+	inferredCosts := make(map[*parser.Posting]*parser.Amount)
+
+	if len(postingsWithEmptyCosts) > 0 {
+		// For each posting with empty cost spec, infer the cost from the residual
+		for _, posting := range postingsWithEmptyCosts {
+			// Parse the commodity amount
+			amount, err := ParseAmount(posting.Amount)
+			if err != nil {
+				continue // Already validated earlier
+			}
+
+			// Only infer cost for augmentations (positive amounts)
+			// For reductions (negative amounts), empty cost spec means "use booking method"
+			if amount.IsNegative() {
+				// This is a reduction - don't infer cost, let booking method handle it
+				// The weight is already 0, which is correct - we'll calculate actual
+				// weight when we reduce lots using FIFO/LIFO
+				continue
+			}
+
+			// Look for a residual currency that can be used for the cost
+			// Simple case: if there's one residual currency, use it
+			if len(balance) == 1 {
+				for currency, residual := range balance {
+					// Calculate the cost per unit needed to balance
+					// If residual is -5000 USD and amount is 10 HOOL
+					// We need +5000 USD, so cost per unit = 5000 / 10 = 500 USD
+					costPerUnit := residual.Neg().Div(amount)
+
+					// Store the inferred cost
+					inferredCosts[posting] = &parser.Amount{
+						Value:    costPerUnit.String(),
+						Currency: currency,
+					}
+
+					// Add this weight to the balance
+					totalCost := amount.Mul(costPerUnit)
+					balance[currency] = balance[currency].Add(totalCost)
+				}
+			} else if len(balance) > 1 {
+				// Multiple currencies - ambiguous
+				// For now, report error (could be improved to match currencies intelligently)
+				l.addError(&TransactionNotBalancedError{
+					Pos:         txn.Pos,
+					Date:        txn.Date,
+					Narration:   fmt.Sprintf("%s (empty cost spec with multiple unbalanced currencies - ambiguous)", txn.Narration),
+					Residuals:   map[string]string{},
 					Transaction: txn,
 				})
 				return
@@ -258,10 +322,31 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 		amount, _ := ParseAmount(amountToUse)
 		currency := amountToUse.Currency
 
+		// Check if we have a cost (explicit, inferred, or empty)
+		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
+		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
+		hasInferredCost := false
+		var costToUse *parser.Cost
+
+		if hasExplicitCost {
+			costToUse = posting.Cost
+		} else if hasEmptyCost {
+			// Empty cost spec - use it directly for lot tracking
+			// For reductions, this triggers FIFO/LIFO booking
+			// For augmentations, the cost was inferred earlier
+			costToUse = posting.Cost
+		} else if inferredCost, ok := inferredCosts[posting]; ok {
+			// Use inferred cost - create a temporary Cost structure
+			hasInferredCost = true
+			costToUse = &parser.Cost{
+				Amount: inferredCost,
+			}
+		}
+
 		// Update lot inventory
-		if posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost() {
+		if hasExplicitCost || hasEmptyCost || hasInferredCost {
 			// Has cost basis - add/reduce with lot tracking
-			lotSpec, err := ParseLotSpec(posting.Cost)
+			lotSpec, err := ParseLotSpec(costToUse)
 			if err != nil {
 				l.addError(&InvalidAmountError{
 					Date:       txn.Date,
