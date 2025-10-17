@@ -80,3 +80,19 @@ Before submitting a pull request, please make sure to run
 `go fmt` on any Go source files you touched so the code stays consistent.
 
 Feel free to open an issue to get feedback on your idea before spending too much time on it.
+
+## License
+
+Copyright (c) 2025 Robin van der Vleuten
+
+Licensed under the GNU General Public License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
