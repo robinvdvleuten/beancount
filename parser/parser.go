@@ -3,6 +3,7 @@ package parser
 import (
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"time"
 
@@ -262,29 +263,13 @@ func (a *Account) Capture(values []string) error {
 	return nil
 }
 
-// isValidAccountSegment checks if an account segment (after first) is valid.
+// accountSegmentRegex validates account segments (after first).
 // Must start with uppercase letter or digit, can contain alphanumerics and hyphens.
+var accountSegmentRegex = regexp.MustCompile(`^[A-Z0-9][A-Za-z0-9-]*$`)
+
+// isValidAccountSegment checks if an account segment (after first) is valid.
 func isValidAccountSegment(segment string) bool {
-	if len(segment) == 0 {
-		return false
-	}
-
-	// First character must be uppercase or digit
-	first := segment[0]
-	if (first < 'A' || first > 'Z') && (first < '0' || first > '9') {
-		return false
-	}
-
-	// Rest can be alphanumeric or hyphen
-	for i := 1; i < len(segment); i++ {
-		ch := segment[i]
-		if (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') &&
-			(ch < '0' || ch > '9') && ch != '-' {
-			return false
-		}
-	}
-
-	return true
+	return len(segment) > 0 && accountSegmentRegex.MatchString(segment)
 }
 
 type Date struct {
@@ -292,25 +277,11 @@ type Date struct {
 }
 
 func (d *Date) Capture(values []string) error {
-	s := values[0]
-	// Lexer guarantees format \d{4}-\d{2}-\d{2}, so we can parse directly
-
-	// Parse year (positions 0-3)
-	year := int(s[0]-'0')*1000 + int(s[1]-'0')*100 +
-		int(s[2]-'0')*10 + int(s[3]-'0')
-
-	// Parse month (positions 5-6)
-	month := int(s[5]-'0')*10 + int(s[6]-'0')
-
-	// Parse day (positions 8-9)
-	day := int(s[8]-'0')*10 + int(s[9]-'0')
-
-	// Basic validation (time.Date will normalize edge cases)
-	if month < 1 || month > 12 || day < 1 || day > 31 {
-		return fmt.Errorf("invalid date: %s", s)
+	t, err := time.Parse("2006-01-02", values[0])
+	if err != nil {
+		return fmt.Errorf("invalid date: %s", values[0])
 	}
-
-	d.Time = time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	d.Time = t
 	return nil
 }
 

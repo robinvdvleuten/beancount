@@ -1,11 +1,13 @@
 package beancount
 
 import (
+	"errors"
+	"fmt"
 	"os"
 
 	"github.com/alecthomas/kong"
-	"github.com/alecthomas/repr"
 	"github.com/robinvdvleuten/beancount/formatter"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -14,13 +16,28 @@ type CheckCmd struct {
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
+	// Parse the input file
 	ast, err := parser.ParseBytes(cmd.File)
 	if err != nil {
+		return fmt.Errorf("parse error: %w", err)
+	}
+
+	// Create a new ledger and process the AST
+	l := ledger.New()
+	if err := l.Process(ast); err != nil {
+		// Print all validation errors
+		var validationErrors *ledger.ValidationErrors
+		if errors.As(err, &validationErrors) {
+			for _, e := range validationErrors.Errors {
+				_, _ = fmt.Fprintf(ctx.Stderr, "ERROR: %s\n", e)
+			}
+			return fmt.Errorf("%d validation error(s) found", len(validationErrors.Errors))
+		}
 		return err
 	}
 
-	repr.Println(ast)
-
+	// Success
+	_, _ = fmt.Fprintln(ctx.Stdout, "✓ Check passed")
 	return nil
 }
 

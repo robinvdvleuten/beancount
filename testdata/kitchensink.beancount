@@ -14,6 +14,7 @@ option "operating_currency" "USD"
 
 ; Opening accounts
 2020-01-01 open Assets:Bank:Checking USD
+2020-01-01 open Assets:Bank:CAD CAD
 2020-01-01 open Assets:Brokerage:Cash USD
 2020-01-01 open Assets:Brokerage:AAPL
 2020-01-01 open Assets:Brokerage:MSFT
