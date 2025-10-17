@@ -8,7 +8,7 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/loader"
 )
 
 type CheckCmd struct {
@@ -16,10 +16,11 @@ type CheckCmd struct {
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
-	// Parse the input file with filename for better error reporting
-	ast, err := parser.ParseBytesWithFilename(cmd.File.Filename, cmd.File.Contents)
+	// Load the input file and recursively resolve all includes
+	ldr := loader.New(loader.WithFollowIncludes())
+	ast, err := ldr.Load(cmd.File.Filename)
 	if err != nil {
-		return fmt.Errorf("parse error: %w", err)
+		return fmt.Errorf("load error: %w", err)
 	}
 
 	// Create a new ledger and process the AST
@@ -67,10 +68,17 @@ type FormatCmd struct {
 }
 
 func (cmd *FormatCmd) Run(ctx *kong.Context) error {
-	// Parse the input file with filename for better error reporting
-	ast, err := parser.ParseBytesWithFilename(cmd.File.Filename, cmd.File.Contents)
+	// Load only the single file (don't follow includes)
+	ldr := loader.New()
+	ast, err := ldr.Load(cmd.File.Filename)
 	if err != nil {
 		return err
+	}
+
+	// Read file contents for formatter (needs original source for comment preservation)
+	contents, err := os.ReadFile(cmd.File.Filename)
+	if err != nil {
+		return fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// Create formatter with options
@@ -87,7 +95,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context) error {
 	f := formatter.New(opts...)
 
 	// Format and output to stdout
-	if err := f.Format(ast, cmd.File.Contents, os.Stdout); err != nil {
+	if err := f.Format(ast, contents, os.Stdout); err != nil {
 		return err
 	}
 
