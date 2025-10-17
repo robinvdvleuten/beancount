@@ -391,6 +391,31 @@ func (f *Formatter) Format(ast *parser.AST, sourceContent []byte, w io.Writer) e
 	return err
 }
 
+// FormatTransaction formats a single transaction and writes the output to the writer.
+// This method is useful for rendering individual transactions, such as in error messages.
+// The currency column is calculated from the transaction itself if not explicitly set.
+func (f *Formatter) FormatTransaction(txn *parser.Transaction, w io.Writer) error {
+	// Determine the currency column if not set
+	if f.CurrencyColumn == 0 {
+		// Create a minimal AST with just this transaction to calculate metrics
+		ast := &parser.AST{
+			Directives: []parser.Directive{txn},
+		}
+		f.CurrencyColumn = f.determineCurrencyColumn(ast)
+	}
+
+	// Use a string builder to buffer output
+	var buf strings.Builder
+	buf.Grow(200) // Reasonable estimate for a transaction
+
+	// Format the transaction
+	f.formatTransaction(txn, &buf)
+
+	// Write output
+	_, err := w.Write([]byte(buf.String()))
+	return err
+}
+
 // determineCommentType checks if a comment is a section header by looking at the next line.
 func determineCommentType(currentIndex int, lines []string) CommentType {
 	if currentIndex+1 < len(lines) && strings.TrimSpace(lines[currentIndex+1]) == "" {

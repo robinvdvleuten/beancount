@@ -12,12 +12,12 @@ import (
 )
 
 type CheckCmd struct {
-	File []byte `help:"Beancount input filename." arg:"" type:"filecontent"`
+	File kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context) error {
-	// Parse the input file
-	ast, err := parser.ParseBytes(cmd.File)
+	// Parse the input file with filename for better error reporting
+	ast, err := parser.ParseBytesWithFilename(cmd.File.Filename, cmd.File.Contents)
 	if err != nil {
 		return fmt.Errorf("parse error: %w", err)
 	}
@@ -28,8 +28,23 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 		// Print all validation errors
 		var validationErrors *ledger.ValidationErrors
 		if errors.As(err, &validationErrors) {
-			for _, e := range validationErrors.Errors {
-				_, _ = fmt.Fprintf(ctx.Stderr, "ERROR: %s\n", e)
+			// Create a formatter for rendering transaction context
+			f := formatter.New()
+
+			for i, e := range validationErrors.Errors {
+				// Check if this is a TransactionNotBalancedError with context
+				if balErr, ok := e.(*ledger.TransactionNotBalancedError); ok && balErr.Transaction != nil {
+					// Use the enhanced formatting with transaction context
+					_, _ = fmt.Fprint(ctx.Stderr, balErr.FormatWithContext(f))
+				} else {
+					// For other errors, use standard formatting
+					_, _ = fmt.Fprintf(ctx.Stderr, "%s\n", e)
+				}
+
+				// Add blank line between errors (but not after the last one)
+				if i < len(validationErrors.Errors)-1 {
+					_, _ = fmt.Fprintln(ctx.Stderr)
+				}
 			}
 			return fmt.Errorf("%d validation error(s) found", len(validationErrors.Errors))
 		}
@@ -42,15 +57,15 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 }
 
 type FormatCmd struct {
-	File           []byte `help:"Beancount input filename." arg:"" type:"filecontent"`
-	CurrencyColumn int    `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
-	PrefixWidth    int    `help:"Width in characters for account names (auto if 0)." default:"0"`
-	NumWidth       int    `help:"Width for numbers (auto if 0)." default:"0"`
+	File           kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
+	CurrencyColumn int                       `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
+	PrefixWidth    int                       `help:"Width in characters for account names (auto if 0)." default:"0"`
+	NumWidth       int                       `help:"Width for numbers (auto if 0)." default:"0"`
 }
 
 func (cmd *FormatCmd) Run(ctx *kong.Context) error {
-	// Parse the input file
-	ast, err := parser.ParseBytes(cmd.File)
+	// Parse the input file with filename for better error reporting
+	ast, err := parser.ParseBytesWithFilename(cmd.File.Filename, cmd.File.Contents)
 	if err != nil {
 		return err
 	}
@@ -69,7 +84,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context) error {
 	f := formatter.New(opts...)
 
 	// Format and output to stdout
-	if err := f.Format(ast, cmd.File, os.Stdout); err != nil {
+	if err := f.Format(ast, cmd.File.Contents, os.Stdout); err != nil {
 		return err
 	}
 

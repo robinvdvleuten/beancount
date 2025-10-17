@@ -198,9 +198,11 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 			} else if len(postingsWithoutAmounts) > 1 {
 				// Ambiguous - can't infer
 				l.addError(&TransactionNotBalancedError{
-					Date:      txn.Date,
-					Narration: fmt.Sprintf("%s (multiple postings with missing amounts - ambiguous)", txn.Narration),
-					Residuals: map[string]string{currency: residual.String()},
+					Pos:         txn.Pos,
+					Date:        txn.Date,
+					Narration:   fmt.Sprintf("%s (multiple postings with missing amounts - ambiguous)", txn.Narration),
+					Residuals:   map[string]string{currency: residual.String()},
+					Transaction: txn,
 				})
 				return
 			}
@@ -222,9 +224,11 @@ func (l *Ledger) processTransaction(txn *parser.Transaction) {
 
 	if len(residuals) > 0 {
 		l.addError(&TransactionNotBalancedError{
-			Date:      txn.Date,
-			Narration: txn.Narration,
-			Residuals: residuals,
+			Pos:         txn.Pos,
+			Date:        txn.Date,
+			Narration:   txn.Narration,
+			Residuals:   residuals,
+			Transaction: txn,
 		})
 		return // Don't update inventory if not balanced
 	}

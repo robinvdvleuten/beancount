@@ -657,7 +657,13 @@ func ParseString(str string) (*AST, error) {
 
 // ParseBytes parses AST from bytes.
 func ParseBytes(data []byte) (*AST, error) {
-	ast, err := parser.ParseBytes("", data)
+	return ParseBytesWithFilename("", data)
+}
+
+// ParseBytesWithFilename parses AST from bytes with a filename for position tracking.
+// The filename will be included in position information in the AST for better error reporting.
+func ParseBytesWithFilename(filename string, data []byte) (*AST, error) {
+	ast, err := parser.ParseBytes(filename, data)
 	if err != nil {
 		return nil, err
 	}
