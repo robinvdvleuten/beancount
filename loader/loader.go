@@ -1,3 +1,24 @@
+// Package loader provides functionality for loading Beancount files with support for
+// include directives. It can recursively resolve and merge multiple files into a
+// single AST, handling relative paths and deduplication.
+//
+// The loader supports two modes of operation:
+//   - Simple mode: Parses a single file with include directives preserved in the AST
+//   - Follow mode: Recursively loads all included files and merges them into one AST
+//
+// When following includes, the loader resolves relative paths from the directory of
+// the file containing the include directive, and deduplicates files that are included
+// multiple times.
+//
+// Example usage:
+//
+//	// Load a single file without following includes
+//	loader := loader.New()
+//	ast, err := loader.Load("main.beancount")
+//
+//	// Load with recursive include resolution
+//	loader := loader.New(loader.WithFollowIncludes())
+//	ast, err := loader.Load("main.beancount")
 package loader
 
 import (
@@ -8,7 +29,13 @@ import (
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
-// Loader handles loading and parsing of beancount files with optional include resolution.
+// Loader handles loading and parsing of Beancount files with optional include resolution.
+// It provides configurable behavior for handling include directives, supporting both simple
+// single-file parsing and recursive loading with file merging.
+//
+// Configure the loader using functional options passed to New:
+//
+//	loader := New(WithFollowIncludes())
 type Loader struct {
 	// FollowIncludes determines whether to recursively load included files.
 	// When false, only the specified file is parsed and ast.Includes is preserved.

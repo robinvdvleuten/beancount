@@ -1,3 +1,26 @@
+// Package formatter provides formatting functionality for Beancount files with automatic
+// alignment and comment preservation. It handles the proper spacing and alignment of
+// currencies, numbers, and account names while preserving the original formatting intent.
+//
+// The formatter supports customizable column widths for account names, numbers, and
+// currency positions, and can preserve comments and blank lines from the source file.
+//
+// Example usage:
+//
+//	// Parse a Beancount file
+//	ast, err := parser.ParseBytes([]byte(sourceContent))
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Create a formatter with custom currency column
+//	f := formatter.New(
+//	    formatter.WithCurrencyColumn(60),
+//	    formatter.WithPreserveComments(true),
+//	)
+//
+//	// Format to stdout
+//	err = f.Format(ast, []byte(sourceContent), os.Stdout)
 package formatter
 
 import (
@@ -106,7 +129,22 @@ func escapeString(s string) string {
 	return buf.String()
 }
 
-// Formatter handles formatting of Beancount files with proper alignment.
+// Formatter handles formatting of Beancount files with proper alignment and spacing.
+// It aligns currencies, numbers, and account names according to configurable column widths,
+// and can preserve comments and blank lines from the original source.
+//
+// The formatter uses display width (via go-runewidth) rather than byte length for proper
+// alignment with Unicode characters. Comments and blank lines are tracked by position and
+// re-inserted during formatting to maintain the original structure.
+//
+// Example:
+//
+//	f := formatter.New(
+//	    formatter.WithCurrencyColumn(60),
+//	    formatter.WithPreserveComments(true),
+//	)
+//	var buf bytes.Buffer
+//	err := f.Format(ast, sourceContent, &buf)
 type Formatter struct {
 	// CurrencyColumn is the target column for currency alignment.
 	// If set (non-zero), this overrides PrefixWidth and NumWidth.

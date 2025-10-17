@@ -1,3 +1,36 @@
+// Package ledger provides accounting ledger validation and processing for Beancount files.
+// It validates transactions, maintains account states, tracks inventory with lot-based cost
+// basis, and performs balance assertions.
+//
+// The ledger validates that:
+//   - All transactions balance to zero across all currencies
+//   - Accounts are opened before use and closed accounts are not used
+//   - Balance assertions match actual inventory balances
+//   - Pad directives correctly balance accounts
+//
+// The ledger tracks inventory using lot-based accounting with support for different booking
+// methods (FIFO, LIFO). It uses decimal arithmetic for all monetary amounts to avoid floating
+// point precision issues.
+//
+// Example usage:
+//
+//	// Parse a Beancount file
+//	ast, err := parser.ParseBytes([]byte(source))
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Create and process ledger
+//	ledger := ledger.New()
+//	err = ledger.Process(ast)
+//	if err != nil {
+//	    // Handle validation errors
+//	    if verr, ok := err.(*ledger.ValidationErrors); ok {
+//	        for _, e := range verr.Errors {
+//	            fmt.Println(e)
+//	        }
+//	    }
+//	}
 package ledger
 
 import (
@@ -7,7 +40,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Ledger represents the state of the accounting ledger
+// Ledger represents the state of the accounting ledger with account balances,
+// transaction validation, and error tracking. It processes directives in date order
+// and maintains the complete state of all accounts including their inventory positions.
+//
+// The ledger validates all transactions for balance, ensures accounts are opened before
+// use, verifies balance assertions, and processes pad directives. All validation errors
+// are collected and returned together after processing.
 type Ledger struct {
 	accounts   map[string]*Account
 	errors     []error
