@@ -32,6 +32,7 @@ import (
 
 	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
 const (
@@ -358,16 +359,22 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	default:
 	}
 
+	// Extract telemetry collector from context
+	collector := telemetry.FromContext(ctx)
+
 	// Determine the currency column based on the configuration
+	widthTimer := collector.Start("formatter.width_calculation")
 	if f.CurrencyColumn == 0 {
 		f.CurrencyColumn = f.determineCurrencyColumn(ast)
 	}
+	widthTimer.End()
 
 	// Store source lines for preserving original spacing
 	f.sourceLines = strings.Split(string(sourceContent), "\n")
 	defer func() { f.sourceLines = nil }() // Clear after formatting
 
 	// Extract comments and blank lines if preservation is enabled
+	commentTimer := collector.Start("formatter.comment_extraction")
 	var lineContentMap map[int][]LineContent
 	if f.PreserveComments || f.PreserveBlanks {
 		comments, blanks := extractCommentsAndBlanks(sourceContent)
@@ -383,6 +390,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 		// Build a map of line numbers to content
 		lineContentMap = buildLineContentMap(comments, blanks)
 	}
+	commentTimer.End()
 
 	// Use a string builder to buffer all output, then write once
 	var buf strings.Builder
@@ -455,6 +463,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	lastLine := 0
 
 	// Format all items in order
+	formatTimer := collector.Start("formatter.directive_formatting")
 	for _, item := range items {
 		if lineContentMap != nil {
 			f.outputPrecedingContent(item.pos, lastLine, lineContentMap, &buf)
@@ -479,6 +488,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 			f.formatDirective(item.directive, &buf)
 		}
 	}
+	formatTimer.End()
 
 	// Write all output at once
 	_, err := w.Write([]byte(buf.String()))

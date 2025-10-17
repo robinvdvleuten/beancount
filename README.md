@@ -64,15 +64,31 @@ example.beancount:15: Transaction does not balance: (-500.00 USD)
 1 validation error(s) found
 ```
 
-**Performance profiling:**
+### Format a Beancount file
 
-Use the `--telemetry` flag to see detailed timing breakdowns:
+Format a Beancount file with automatic alignment:
 
 ```bash
-beancount check --telemetry example.beancount
+beancount format example.beancount
+
+# Specify currency column position
+beancount format --currency-column 60 example.beancount
+
+# Customize account name and number widths
+beancount format --prefix-width 50 --num-width 12 example.beancount
 ```
 
-Example output:
+### Telemetry
+
+Use the global `--telemetry` flag to see detailed timing breakdowns for any command:
+
+```bash
+beancount --telemetry check example.beancount
+beancount --telemetry format example.beancount
+```
+
+This displays a hierarchical breakdown of where time is spent during execution:
+
 ```
 ✓ Check passed
 
@@ -89,19 +105,7 @@ loader.load example.beancount: 125ms
 └─ ledger.processing (1523 directives): 3ms
 ```
 
-### Format a Beancount file
-
-Format a Beancount file with automatic alignment:
-
-```bash
-beancount format example.beancount
-
-# Specify currency column position
-beancount format --currency-column 60 example.beancount
-
-# Customize account name and number widths
-beancount format --prefix-width 50 --num-width 12 example.beancount
-```
+The telemetry output is written to stderr, making it easy to separate from command results.
 
 ## Programmatic Usage
 

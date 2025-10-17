@@ -14,18 +14,22 @@ import (
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
-type CheckCmd struct {
-	File      kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
-	Telemetry bool                      `help:"Show timing telemetry for operations." default:"false"`
+// Globals defines global flags available to all commands.
+type Globals struct {
+	Telemetry bool `help:"Show timing telemetry for operations."`
 }
 
-func (cmd *CheckCmd) Run(ctx *kong.Context) error {
+type CheckCmd struct {
+	File kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
+}
+
+func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Create context for cancellation support
 	runCtx := context.Background()
 
 	// Create telemetry collector if flag is set
 	var collector telemetry.Collector
-	if cmd.Telemetry {
+	if globals.Telemetry {
 		collector = telemetry.NewTimingCollector()
 		runCtx = telemetry.WithCollector(runCtx, collector)
 	}
@@ -66,7 +70,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context) error {
 	_, _ = fmt.Fprintln(ctx.Stdout, "✓ Check passed")
 
 	// Output telemetry report if enabled
-	if cmd.Telemetry {
+	if globals.Telemetry {
 		_, _ = fmt.Fprintln(ctx.Stderr)
 		collector.Report(ctx.Stderr)
 	}
@@ -81,9 +85,16 @@ type FormatCmd struct {
 	NumWidth       int                       `help:"Width for numbers (auto if 0)." default:"0"`
 }
 
-func (cmd *FormatCmd) Run(ctx *kong.Context) error {
+func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Create context for cancellation support
 	runCtx := context.Background()
+
+	// Create telemetry collector if flag is set
+	var collector telemetry.Collector
+	if globals.Telemetry {
+		collector = telemetry.NewTimingCollector()
+		runCtx = telemetry.WithCollector(runCtx, collector)
+	}
 
 	// Load only the single file (don't follow includes)
 	ldr := loader.New()
@@ -121,10 +132,18 @@ func (cmd *FormatCmd) Run(ctx *kong.Context) error {
 		return err
 	}
 
+	// Output telemetry report if enabled
+	if globals.Telemetry {
+		_, _ = fmt.Fprintln(ctx.Stderr)
+		collector.Report(ctx.Stderr)
+	}
+
 	return nil
 }
 
 type Commands struct {
+	Globals // Embed globals to make --telemetry available at root level
+
 	Check  CheckCmd  `cmd:"" help:"Parse, check and realize a beancount input file."`
 	Format FormatCmd `cmd:"" help:"Format a beancount file to align numbers and currencies."`
 }

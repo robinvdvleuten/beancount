@@ -798,6 +798,7 @@ loader.load main.beancount: 25ms
 - Loader operations: `loader.load <file>`, `loader.parse <file>`
 - AST operations: `ast.merging`
 - Ledger operations: `ledger.processing (N directives)`
+- Formatter operations: `formatter.width_calculation`, `formatter.comment_extraction`, `formatter.directive_formatting`
 
 ## Project-Specific Conventions
 

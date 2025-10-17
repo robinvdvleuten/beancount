@@ -30,6 +30,7 @@ func main() {
 		kong.Name("beancount"),
 		kong.Description("A beancount file parser and formatter."),
 		kong.UsageOnError(),
+		kong.Bind(&cli.Globals),
 	)
 
 	err := ctx.Run()
