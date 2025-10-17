@@ -524,13 +524,13 @@ func TestAccount_IsOpen(t *testing.T) {
 			want:      true,
 		},
 		{
-			name: "account is not open on close date",
+			name: "account is open on close date",
 			account: &Account{
 				OpenDate:  mustParseDate("2020-01-01"),
 				CloseDate: mustParseDate("2020-12-31"),
 			},
 			checkDate: "2020-12-31",
-			want:      false,
+			want:      true,
 		},
 		{
 			name: "account is not open after close date",

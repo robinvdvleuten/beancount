@@ -136,13 +136,13 @@ func (l *loaderState) loadRecursive(filename string) (*parser.AST, error) {
 func mergeASTs(main *parser.AST, included ...*parser.AST) *parser.AST {
 	result := &parser.AST{
 		Directives: make(parser.Directives, 0, len(main.Directives)),
-		Options:    main.Options,    // Main file options take precedence
-		Includes:   nil,              // All includes resolved, so clear this
-		Plugins:    main.Plugins,     // Start with main file plugins
-		Pushtags:   main.Pushtags,    // Start with main file pushtags
-		Poptags:    main.Poptags,     // Start with main file poptags
-		Pushmetas:  main.Pushmetas,   // Start with main file pushmetas
-		Popmetas:   main.Popmetas,    // Start with main file popmetas
+		Options:    main.Options,   // Main file options take precedence
+		Includes:   nil,            // All includes resolved, so clear this
+		Plugins:    main.Plugins,   // Start with main file plugins
+		Pushtags:   main.Pushtags,  // Start with main file pushtags
+		Poptags:    main.Poptags,   // Start with main file poptags
+		Pushmetas:  main.Pushmetas, // Start with main file pushmetas
+		Popmetas:   main.Popmetas,  // Start with main file popmetas
 	}
 
 	// Add main file directives
