@@ -230,8 +230,13 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string, timer 
 		return &ast.AST{}, nil
 	}
 	l.visited[absPath] = true
-	l.mu.Unlock()
+
+	// Read file while holding lock to prevent TOCTOU race condition
+	// This ensures atomic check-mark-read operation during concurrent loading
+	// File I/O is relatively fast compared to parsing, which happens outside the lock
 	data, err := os.ReadFile(filename)
+	l.mu.Unlock()
+
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
