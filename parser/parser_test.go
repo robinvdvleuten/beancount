@@ -25,7 +25,7 @@ func TestParse(t *testing.T) {
 				2014-05-01 open Equity:Opening-Balances
 			`,
 			expected: beancount(
-				open("2014-05-01", "Equity:Opening-Balances", nil, ""),
+				ast.NewOpen(date("2014-05-01"), account("Equity:Opening-Balances"), nil, ""),
 			),
 		},
 		{
@@ -34,7 +34,7 @@ func TestParse(t *testing.T) {
 				2014-05-01 open Liabilities:CreditCard:CapitalOne     USD
 			`,
 			expected: beancount(
-				open("2014-05-01", "Liabilities:CreditCard:CapitalOne", []string{"USD"}, ""),
+				ast.NewOpen(date("2014-05-01"), account("Liabilities:CreditCard:CapitalOne"), []string{"USD"}, ""),
 			),
 		},
 		{
@@ -43,7 +43,7 @@ func TestParse(t *testing.T) {
 				2014-05-01 open Equity:Opening-Balances USD, EUR "NONE"
 			`,
 			expected: beancount(
-				open("2014-05-01", "Equity:Opening-Balances", []string{"USD", "EUR"}, "NONE"),
+				ast.NewOpen(date("2014-05-01"), account("Equity:Opening-Balances"), []string{"USD", "EUR"}, "NONE"),
 			),
 		},
 		{
@@ -52,7 +52,7 @@ func TestParse(t *testing.T) {
 				2023-01-01 open Assets:Investments:BTC BTC "FIFO"
 			`,
 			expected: beancount(
-				open("2023-01-01", "Assets:Investments:BTC", []string{"BTC"}, "FIFO"),
+				ast.NewOpen(date("2023-01-01"), account("Assets:Investments:BTC"), []string{"BTC"}, "FIFO"),
 			),
 		},
 		{
@@ -61,7 +61,7 @@ func TestParse(t *testing.T) {
 				2016-11-28 close Liabilities:CreditCard:CapitalOne
 			`,
 			expected: beancount(
-				close("2016-11-28", "Liabilities:CreditCard:CapitalOne"),
+				ast.NewClose(date("2016-11-28"), account("Liabilities:CreditCard:CapitalOne")),
 			),
 		},
 		{
@@ -70,7 +70,7 @@ func TestParse(t *testing.T) {
 				1867-07-01 commodity CAD
 			`,
 			expected: beancount(
-				commodity("1867-07-01", "CAD"),
+				ast.NewCommodity(date("1867-07-01"), "CAD"),
 			),
 		},
 		{
@@ -82,19 +82,19 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				withMeta(
-					commodity("1867-07-01", "CAD"),
-					meta("name", "Hooli Corporation Class C Shares"),
-					meta("asset-class", "stock"),
+					ast.NewCommodity(date("1867-07-01"), "CAD"),
+					ast.NewMetadata("name", "Hooli Corporation Class C Shares"),
+					ast.NewMetadata("asset-class", "stock"),
 				),
 			),
 		},
 		{
 			name: "Balance",
 			beancount: `
-				2021-01-02 balance Assets:US:BofA:Checking        3793.56 USD 
+				2021-01-02 balance Assets:US:BofA:Checking        3793.56 USD
 			`,
 			expected: beancount(
-				balance("2021-01-02", "Assets:US:BofA:Checking", amount("3793.56", "USD")),
+				ast.NewBalance(date("2021-01-02"), account("Assets:US:BofA:Checking"), ast.NewAmount("3793.56", "USD")),
 			),
 		},
 		{
@@ -106,9 +106,9 @@ func TestParse(t *testing.T) {
 				2014-08-09 balance Assets:Cash      60.00 EUR
 			`,
 			expected: beancount(
-				balance("2014-08-09", "Assets:Cash", amount("562.00", "USD")),
-				balance("2014-08-09", "Assets:Cash", amount("210.00", "CAD")),
-				balance("2014-08-09", "Assets:Cash", amount("60.00", "EUR")),
+				ast.NewBalance(date("2014-08-09"), account("Assets:Cash"), ast.NewAmount("562.00", "USD")),
+				ast.NewBalance(date("2014-08-09"), account("Assets:Cash"), ast.NewAmount("210.00", "CAD")),
+				ast.NewBalance(date("2014-08-09"), account("Assets:Cash"), ast.NewAmount("60.00", "EUR")),
 			),
 		},
 		{
@@ -117,7 +117,7 @@ func TestParse(t *testing.T) {
 				2002-01-17 pad Assets:US:BofA:Checking Equity:Opening-Balances
 			`,
 			expected: beancount(
-				pad("2002-01-17", "Assets:US:BofA:Checking", "Equity:Opening-Balances"),
+				ast.NewPad(date("2002-01-17"), account("Assets:US:BofA:Checking"), account("Equity:Opening-Balances")),
 			),
 		},
 		{
@@ -126,7 +126,7 @@ func TestParse(t *testing.T) {
 				2013-11-03 note Liabilities:CreditCard "Called about fraudulent card."
 			`,
 			expected: beancount(
-				note("2013-11-03", "Liabilities:CreditCard", "Called about fraudulent card."),
+				ast.NewNote(date("2013-11-03"), account("Liabilities:CreditCard"), "Called about fraudulent card."),
 			),
 		},
 		{
@@ -135,7 +135,7 @@ func TestParse(t *testing.T) {
 				2013-11-03 document Liabilities:CreditCard "/home/joe/stmts/apr-2014.pdf"
 			`,
 			expected: beancount(
-				doc("2013-11-03", "Liabilities:CreditCard", "/home/joe/stmts/apr-2014.pdf"),
+				ast.NewDocument(date("2013-11-03"), account("Liabilities:CreditCard"), "/home/joe/stmts/apr-2014.pdf"),
 			),
 		},
 		{
@@ -144,7 +144,7 @@ func TestParse(t *testing.T) {
 				2014-07-09 price HOOL  579.18 USD
 			`,
 			expected: beancount(
-				price("2014-07-09", "HOOL", amount("579.18", "USD")),
+				ast.NewPrice(date("2014-07-09"), "HOOL", ast.NewAmount("579.18", "USD")),
 			),
 		},
 		{
@@ -153,7 +153,7 @@ func TestParse(t *testing.T) {
 				2014-07-09 event "location" "Paris, France"
 			`,
 			expected: beancount(
-				event("2014-07-09", "location", "Paris, France"),
+				ast.NewEvent(date("2014-07-09"), "location", "Paris, France"),
 			),
 		},
 		{
@@ -162,7 +162,7 @@ func TestParse(t *testing.T) {
 				2014-07-09 custom "budget" "..."
 			`,
 			expected: beancount(
-				custom("2014-07-09", "budget", customString("...")),
+				custom(date("2014-07-09"), "budget", customString("...")),
 			),
 		},
 		{
@@ -171,10 +171,10 @@ func TestParse(t *testing.T) {
 				2014-07-09 custom "budget" "..." TRUE 45.30 USD
 			`,
 			expected: beancount(
-				custom("2014-07-09", "budget",
+				custom(date("2014-07-09"), "budget",
 					customString("..."),
 					customBoolean("TRUE"),
-					customAmount(amount("45.30", "USD")),
+					customAmount(ast.NewAmount("45.30", "USD")),
 				),
 			),
 		},
@@ -184,8 +184,8 @@ func TestParse(t *testing.T) {
 				2015-01-01 custom "forecast" 100.00 USD FALSE "monthly" 42
 			`,
 			expected: beancount(
-				custom("2015-01-01", "forecast",
-					customAmount(amount("100.00", "USD")),
+				custom(date("2015-01-01"), "forecast",
+					customAmount(ast.NewAmount("100.00", "USD")),
 					customBoolean("FALSE"),
 					customString("monthly"),
 					customNumber("42"),
@@ -201,9 +201,9 @@ func TestParse(t *testing.T) {
 			`,
 			expected: beancount(
 				withMeta(
-					custom("2014-07-09", "budget", customString("quarterly")),
-					meta("note", "Annual budget planning"),
-					meta("category", "financial"),
+					custom(date("2014-07-09"), "budget", customString("quarterly")),
+					ast.NewMetadata("note", "Annual budget planning"),
+					ast.NewMetadata("category", "financial"),
 				),
 			),
 		},
@@ -215,9 +215,13 @@ func TestParse(t *testing.T) {
 					Expenses:Restaurant
 			`,
 			expected: beancount(
-				transaction("2014-05-05", "", "Cafe Mogador", "Lamb tagine with wine",
-					posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, false, nil),
-					posting("Expenses:Restaurant", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2014-05-05"), "Lamb tagine with wine",
+					ast.WithPayee("Cafe Mogador"),
+					ast.WithPostings(
+						ast.NewPosting(account("Liabilities:CreditCard:CapitalOne"),
+							ast.WithAmount("-37.45", "USD")),
+						ast.NewPosting(account("Expenses:Restaurant")),
+					),
 				),
 			),
 		},
@@ -228,8 +232,12 @@ func TestParse(t *testing.T) {
 					Liabilities:CreditCard:CapitalOne         -37.45 USD
 			`,
 			expected: beancount(
-				transaction("2014-05-05", "!", "", "Lamb tagine with wine",
-					posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2014-05-05"), "Lamb tagine with wine",
+					ast.WithFlag("!"),
+					ast.WithPostings(
+						ast.NewPosting(account("Liabilities:CreditCard:CapitalOne"),
+							ast.WithAmount("-37.45", "USD")),
+					),
 				),
 			),
 		},
@@ -240,8 +248,13 @@ func TestParse(t *testing.T) {
 					! Liabilities:CreditCard:CapitalOne         -37.45 USD
 			`,
 			expected: beancount(
-				transaction("2014-05-05", "*", "", "Lamb tagine with wine",
-					posting("Liabilities:CreditCard:CapitalOne", "!", amount("-37.45", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2014-05-05"), "Lamb tagine with wine",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Liabilities:CreditCard:CapitalOne"),
+							ast.WithAmount("-37.45", "USD"),
+							ast.WithPostingFlag("!")),
+					),
 				),
 			),
 		},
@@ -253,9 +266,15 @@ func TestParse(t *testing.T) {
 					Income:AcmeCorp:Salary            -4615.38 USD     ; Gross salary
 			`,
 			expected: beancount(
-				transaction("2014-03-19", "*", "Acme Corp", "Bi-monthly salary payment",
-					posting("Assets:MyBank:Checking", "", amount("3062.68", "USD"), nil, false, nil),
-					posting("Income:AcmeCorp:Salary", "", amount("-4615.38", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2014-03-19"), "Bi-monthly salary payment",
+					ast.WithFlag("*"),
+					ast.WithPayee("Acme Corp"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:MyBank:Checking"),
+							ast.WithAmount("3062.68", "USD")),
+						ast.NewPosting(account("Income:AcmeCorp:Salary"),
+							ast.WithAmount("-4615.38", "USD")),
+					),
 				),
 			),
 		},
@@ -267,12 +286,14 @@ func TestParse(t *testing.T) {
 					Income:Clients:PepeStudios
 			`,
 			expected: beancount(
-				withLinks(
-					transaction("2014-02-05", "*", "", "Invoice for January",
-						posting("Assets:AccountsReceivable", "", amount("-8450.00", "USD"), nil, false, nil),
-						posting("Income:Clients:PepeStudios", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2014-02-05"), "Invoice for January",
+					ast.WithFlag("*"),
+					ast.WithLinks("invoice-pepe-studios-jan14"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:AccountsReceivable"),
+							ast.WithAmount("-8450.00", "USD")),
+						ast.NewPosting(account("Income:Clients:PepeStudios")),
 					),
-					"invoice-pepe-studios-jan14",
 				),
 			),
 		},
@@ -284,13 +305,14 @@ func TestParse(t *testing.T) {
 					Assets:AccountsReceivable
 			`,
 			expected: beancount(
-				withLinks(
-					transaction("2014-02-20", "*", "", "Check deposit - paying invoice",
-						posting("Assets:BofA:Checking", "", amount("8450.00", "USD"), nil, false, nil),
-						posting("Assets:AccountsReceivable", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2014-02-20"), "Check deposit - paying invoice",
+					ast.WithFlag("*"),
+					ast.WithLinks("invoice-pepe-studios-jan14", "payment-check"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:BofA:Checking"),
+							ast.WithAmount("8450.00", "USD")),
+						ast.NewPosting(account("Assets:AccountsReceivable")),
 					),
-					"invoice-pepe-studios-jan14",
-					"payment-check",
 				),
 			),
 		},
@@ -302,12 +324,16 @@ func TestParse(t *testing.T) {
 					Expenses:Food:Restaurant                          46.68 USD
 			`,
 			expected: beancount(
-				withTags(
-					transaction("2021-06-15", "*", "Waterbar", "",
-						posting("Liabilities:US:Chase:Slate", "", amount("-46.68", "USD"), nil, false, nil),
-						posting("Expenses:Food:Restaurant", "", amount("46.68", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2021-06-15"), "",
+					ast.WithFlag("*"),
+					ast.WithPayee("Waterbar"),
+					ast.WithTags("trip-san-francisco-2021"),
+					ast.WithPostings(
+						ast.NewPosting(account("Liabilities:US:Chase:Slate"),
+							ast.WithAmount("-46.68", "USD")),
+						ast.NewPosting(account("Expenses:Food:Restaurant"),
+							ast.WithAmount("46.68", "USD")),
 					),
-					"trip-san-francisco-2021",
 				),
 			),
 		},
@@ -319,13 +345,14 @@ func TestParse(t *testing.T) {
 					Expenses:Flights
 			`,
 			expected: beancount(
-				withTags(
-					transaction("2014-04-23", "*", "", "Flight to Berlin",
-						posting("Assets:MyBank:Checking", "", amount("-1230.27", "USD"), nil, false, nil),
-						posting("Expenses:Flights", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2014-04-23"), "Flight to Berlin",
+					ast.WithFlag("*"),
+					ast.WithTags("trip-berlin", "vacation"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:MyBank:Checking"),
+							ast.WithAmount("-1230.27", "USD")),
+						ast.NewPosting(account("Expenses:Flights")),
 					),
-					"trip-berlin",
-					"vacation",
 				),
 			),
 		},
@@ -337,16 +364,15 @@ func TestParse(t *testing.T) {
 					Expenses:Flights
 			`,
 			expected: beancount(
-				withTags(
-					withLinks(
-						transaction("2014-04-23", "*", "", "Flight to Berlin",
-							posting("Assets:MyBank:Checking", "", amount("-1230.27", "USD"), nil, false, nil),
-							posting("Expenses:Flights", "", nil, nil, false, nil),
-						),
-						"invoice-123",
+				ast.NewTransaction(date("2014-04-23"), "Flight to Berlin",
+					ast.WithFlag("*"),
+					ast.WithLinks("invoice-123"),
+					ast.WithTags("trip-berlin", "vacation"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:MyBank:Checking"),
+							ast.WithAmount("-1230.27", "USD")),
+						ast.NewPosting(account("Expenses:Flights")),
 					),
-					"trip-berlin",
-					"vacation",
 				),
 			),
 		},
@@ -360,15 +386,20 @@ func TestParse(t *testing.T) {
 				Assets:BTrade:Cash
 			`,
 			expected: beancount(
-				withMeta(
-					transaction("2013-08-26", "*", "", "Buying some shares of Hooli",
-						withMeta(
-							posting("Assets:BTrade:HOOLI", "", amount("10", "HOOL"), amount("498.45", "USD"), false, nil),
-							meta("decision", "scheduled"),
-						),
-						posting("Assets:BTrade:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2013-08-26"), "Buying some shares of Hooli",
+					ast.WithFlag("*"),
+					ast.WithTransactionMetadata(
+						ast.NewMetadata("statement", "confirmation-826453.pdf"),
 					),
-					meta("statement", "confirmation-826453.pdf"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:BTrade:HOOLI"),
+							ast.WithAmount("10", "HOOL"),
+							ast.WithPrice(ast.NewAmount("498.45", "USD")),
+							ast.WithPostingMetadata(
+								ast.NewMetadata("decision", "scheduled"),
+							)),
+						ast.NewPosting(account("Assets:BTrade:Cash")),
+					),
 				),
 			),
 		},
@@ -380,9 +411,15 @@ func TestParse(t *testing.T) {
 					Assets:FR:SocGen:Checking          436.01 CAD
 			`,
 			expected: beancount(
-				transaction("2012-11-03", "*", "", "Transfer to account in Canada",
-					posting("Assets:MyBank:Checking", "", amount("-400.00", "USD"), amount("436.01", "CAD"), true, nil),
-					posting("Assets:FR:SocGen:Checking", "", amount("436.01", "CAD"), nil, false, nil),
+				ast.NewTransaction(date("2012-11-03"), "Transfer to account in Canada",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:MyBank:Checking"),
+							ast.WithAmount("-400.00", "USD"),
+							ast.WithTotalPrice(ast.NewAmount("436.01", "CAD"))),
+						ast.NewPosting(account("Assets:FR:SocGen:Checking"),
+							ast.WithAmount("436.01", "CAD")),
+					),
 				),
 			),
 		},
@@ -394,9 +431,15 @@ func TestParse(t *testing.T) {
 					Assets:ETrade:Cash         -1830.70 USD
 			`,
 			expected: beancount(
-				transaction("2014-02-11", "*", "", "Bought shares of S&P 500",
-					posting("Assets:ETrade:IVV", "", amount("10", "IVV"), nil, false, cost(amount("183.07", "USD"), nil)),
-					posting("Assets:ETrade:Cash", "", amount("-1830.70", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2014-02-11"), "Bought shares of S&P 500",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:ETrade:IVV"),
+							ast.WithAmount("10", "IVV"),
+							ast.WithCost(ast.NewCost(ast.NewAmount("183.07", "USD")))),
+						ast.NewPosting(account("Assets:ETrade:Cash"),
+							ast.WithAmount("-1830.70", "USD")),
+					),
 				),
 			),
 		},
@@ -408,9 +451,15 @@ func TestParse(t *testing.T) {
 					Assets:US:ETrade:Cash           -1379.51 USD
 			`,
 			expected: beancount(
-				transaction("2021-09-22", "*", "", "Buy shares of ITOT",
-					posting("Assets:US:ETrade:ITOT", "", amount("16", "ITOT"), nil, false, cost(amount("85.66", "USD"), date("2021-09-22"))),
-					posting("Assets:US:ETrade:Cash", "", amount("-1379.51", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2021-09-22"), "Buy shares of ITOT",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:US:ETrade:ITOT"),
+							ast.WithAmount("16", "ITOT"),
+							ast.WithCost(ast.NewCostWithDate(ast.NewAmount("85.66", "USD"), date("2021-09-22")))),
+						ast.NewPosting(account("Assets:US:ETrade:Cash"),
+							ast.WithAmount("-1379.51", "USD")),
+					),
 				),
 			),
 		},
@@ -422,9 +471,15 @@ func TestParse(t *testing.T) {
 					Assets:US:ETrade:Cash
 			`,
 			expected: beancount(
-				transaction("2021-12-15", "*", "", "Sell specific lot",
-					posting("Assets:US:ETrade:ITOT", "", amount("-16", "ITOT"), amount("90.10", "USD"), false, cost(amount("85.66", "USD"), date("2021-09-22"))),
-					posting("Assets:US:ETrade:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-12-15"), "Sell specific lot",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:US:ETrade:ITOT"),
+							ast.WithAmount("-16", "ITOT"),
+							ast.WithCost(ast.NewCostWithDate(ast.NewAmount("85.66", "USD"), date("2021-09-22"))),
+							ast.WithPrice(ast.NewAmount("90.10", "USD"))),
+						ast.NewPosting(account("Assets:US:ETrade:Cash")),
+					),
 				),
 			),
 		},
@@ -436,9 +491,14 @@ func TestParse(t *testing.T) {
 					Assets:Cash
 			`,
 			expected: beancount(
-				transaction("2021-09-22", "*", "", "Buy shares with reference",
-					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, costWithLabel(amount("150.00", "USD"), nil, "ref-001")),
-					posting("Assets:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-09-22"), "Buy shares with reference",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Stocks"),
+							ast.WithAmount("10", "AAPL"),
+							ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("150.00", "USD"), nil, "ref-001"))),
+						ast.NewPosting(account("Assets:Cash")),
+					),
 				),
 			),
 		},
@@ -450,9 +510,14 @@ func TestParse(t *testing.T) {
 					Assets:Cash
 			`,
 			expected: beancount(
-				transaction("2021-09-22", "*", "", "Buy shares with date and label",
-					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, costWithLabel(amount("150.00", "USD"), date("2021-09-22"), "Batch A")),
-					posting("Assets:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-09-22"), "Buy shares with date and label",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Stocks"),
+							ast.WithAmount("10", "AAPL"),
+							ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("150.00", "USD"), date("2021-09-22"), "Batch A"))),
+						ast.NewPosting(account("Assets:Cash")),
+					),
 				),
 			),
 		},
@@ -464,9 +529,14 @@ func TestParse(t *testing.T) {
 					Assets:Cash
 			`,
 			expected: beancount(
-				transaction("2021-11-15", "*", "", "Sell stock - any lot",
-					posting("Assets:Stocks", "", amount("-10", "AAPL"), nil, false, emptyCost()),
-					posting("Assets:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-11-15"), "Sell stock - any lot",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Stocks"),
+							ast.WithAmount("-10", "AAPL"),
+							ast.WithCost(ast.NewEmptyCost())),
+						ast.NewPosting(account("Assets:Cash")),
+					),
 				),
 			),
 		},
@@ -478,9 +548,15 @@ func TestParse(t *testing.T) {
 					Assets:Cash
 			`,
 			expected: beancount(
-				transaction("2021-11-15", "*", "", "Sell stock - any lot with current price",
-					posting("Assets:Stocks", "", amount("-10", "AAPL"), amount("175.00", "USD"), false, emptyCost()),
-					posting("Assets:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-11-15"), "Sell stock - any lot with current price",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Stocks"),
+							ast.WithAmount("-10", "AAPL"),
+							ast.WithCost(ast.NewEmptyCost()),
+							ast.WithPrice(ast.NewAmount("175.00", "USD"))),
+						ast.NewPosting(account("Assets:Cash")),
+					),
 				),
 			),
 		},
@@ -492,9 +568,14 @@ func TestParse(t *testing.T) {
 					Assets:Cash
 			`,
 			expected: beancount(
-				transaction("2021-09-22", "*", "", "Average cost basis",
-					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, mergeCost()),
-					posting("Assets:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-09-22"), "Average cost basis",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Stocks"),
+							ast.WithAmount("10", "AAPL"),
+							ast.WithCost(ast.NewMergeCost())),
+						ast.NewPosting(account("Assets:Cash")),
+					),
 				),
 			),
 		},
@@ -506,9 +587,14 @@ func TestParse(t *testing.T) {
 					Assets:Cash
 			`,
 			expected: beancount(
-				transaction("2021-09-22", "*", "", "Average cost basis with label",
-					posting("Assets:Stocks", "", amount("10", "AAPL"), nil, false, mergeCostWithLabel("Consolidated")),
-					posting("Assets:Cash", "", nil, nil, false, nil),
+				ast.NewTransaction(date("2021-09-22"), "Average cost basis with label",
+					ast.WithFlag("*"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Stocks"),
+							ast.WithAmount("10", "AAPL"),
+							ast.WithCost(mergeCostWithLabel("Consolidated"))),
+						ast.NewPosting(account("Assets:Cash")),
+					),
 				),
 			),
 		},
@@ -520,9 +606,14 @@ func TestParse(t *testing.T) {
 					Equity:Opening-Balances       -987.34 USD
 			`,
 			expected: beancount(
-				transaction("2002-01-17", "P", "", "(Padding inserted for balance of 987.34 USD)",
-					posting("Assets:US:BofA:Checking", "", amount("987.34", "USD"), nil, false, nil),
-					posting("Equity:Opening-Balances", "", amount("-987.34", "USD"), nil, false, nil),
+				ast.NewTransaction(date("2002-01-17"), "(Padding inserted for balance of 987.34 USD)",
+					ast.WithFlag("P"),
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:US:BofA:Checking"),
+							ast.WithAmount("987.34", "USD")),
+						ast.NewPosting(account("Equity:Opening-Balances"),
+							ast.WithAmount("-987.34", "USD")),
+					),
 				),
 			),
 		},
@@ -541,31 +632,37 @@ func TestParse(t *testing.T) {
 					Expenses:Commissions                     9.95 USD
 			`,
 			expected: beancount(
-				withTags(
-					withLinks(
-						withMeta(
-							transaction("2021-09-22", "*", "", "Diversified stock purchase",
-								posting("Assets:Brokerage:Cash", "", amount("-5000.00", "USD"), nil, false, nil),
-								withMeta(
-									posting("Assets:Brokerage:AAPL", "", amount("10", "AAPL"), amount("152.00", "USD"), false, costWithLabel(amount("150.00", "USD"), date("2021-09-22"), "Batch-Q3")),
-									meta("note", "Tech allocation"),
-								),
-								withMeta(
-									posting("Assets:Brokerage:MSFT", "", amount("5", "MSFT"), nil, false, costWithLabel(amount("300.00", "USD"), date("2021-09-22"), "Batch-Q3")),
-									meta("note", "Tech allocation"),
-								),
-								posting("Assets:Brokerage:VTI", "*", amount("20", "VTI"), nil, false, cost(amount("100.00", "USD"), date("2021-09-22"))),
-								posting("Expenses:Commissions", "", amount("9.95", "USD"), nil, false, nil),
-							),
-							meta("trade-confirmation", "CONF-987654321"),
-							meta("broker", "E*TRADE"),
-						),
-						"invoice-2021-q3",
-						"portfolio-rebalance",
+				ast.NewTransaction(date("2021-09-22"), "Diversified stock purchase",
+					ast.WithFlag("*"),
+					ast.WithLinks("invoice-2021-q3", "portfolio-rebalance"),
+					ast.WithTags("investment", "stocks", "retirement"),
+					ast.WithTransactionMetadata(
+						ast.NewMetadata("trade-confirmation", "CONF-987654321"),
+						ast.NewMetadata("broker", "E*TRADE"),
 					),
-					"investment",
-					"stocks",
-					"retirement",
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:Brokerage:Cash"),
+							ast.WithAmount("-5000.00", "USD")),
+						ast.NewPosting(account("Assets:Brokerage:AAPL"),
+							ast.WithAmount("10", "AAPL"),
+							ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("150.00", "USD"), date("2021-09-22"), "Batch-Q3")),
+							ast.WithPrice(ast.NewAmount("152.00", "USD")),
+							ast.WithPostingMetadata(
+								ast.NewMetadata("note", "Tech allocation"),
+							)),
+						ast.NewPosting(account("Assets:Brokerage:MSFT"),
+							ast.WithAmount("5", "MSFT"),
+							ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("300.00", "USD"), date("2021-09-22"), "Batch-Q3")),
+							ast.WithPostingMetadata(
+								ast.NewMetadata("note", "Tech allocation"),
+							)),
+						ast.NewPosting(account("Assets:Brokerage:VTI"),
+							ast.WithAmount("20", "VTI"),
+							ast.WithCost(ast.NewCostWithDate(ast.NewAmount("100.00", "USD"), date("2021-09-22"))),
+							ast.WithPostingFlag("*")),
+						ast.NewPosting(account("Expenses:Commissions"),
+							ast.WithAmount("9.95", "USD")),
+					),
 				),
 			),
 		},
@@ -620,12 +717,14 @@ func TestParse(t *testing.T) {
 			`,
 			expected: withPushtags(
 				beancount(
-					withTags(
-						transaction("2014-04-23", "*", "", "Flight to Berlin",
-							posting("Expenses:Flights", "", amount("-1230.27", "USD"), nil, false, nil),
-							posting("Liabilities:CreditCard", "", nil, nil, false, nil),
+					ast.NewTransaction(date("2014-04-23"), "Flight to Berlin",
+						ast.WithFlag("*"),
+						ast.WithTags("trip-berlin"),
+						ast.WithPostings(
+							ast.NewPosting(account("Expenses:Flights"),
+								ast.WithAmount("-1230.27", "USD")),
+							ast.NewPosting(account("Liabilities:CreditCard")),
 						),
-						"trip-berlin",
 					),
 				),
 				pushtag("trip-berlin"),
@@ -649,16 +748,22 @@ func TestParse(t *testing.T) {
 			expected: withPoptags(
 				withPushtags(
 					beancount(
-						withTags(
-							transaction("2014-04-23", "*", "", "Flight to Berlin",
-								posting("Expenses:Flights", "", amount("-1230.27", "USD"), nil, false, nil),
-								posting("Liabilities:CreditCard", "", nil, nil, false, nil),
+						ast.NewTransaction(date("2014-04-23"), "Flight to Berlin",
+							ast.WithFlag("*"),
+							ast.WithTags("trip-berlin"),
+							ast.WithPostings(
+								ast.NewPosting(account("Expenses:Flights"),
+									ast.WithAmount("-1230.27", "USD")),
+								ast.NewPosting(account("Liabilities:CreditCard")),
 							),
-							"trip-berlin",
 						),
-						transaction("2014-04-24", "*", "", "Dinner",
-							posting("Expenses:Restaurant", "", amount("-45.00", "EUR"), nil, false, nil),
-							posting("Assets:Cash", "", nil, nil, false, nil),
+						ast.NewTransaction(date("2014-04-24"), "Dinner",
+							ast.WithFlag("*"),
+							ast.WithPostings(
+								ast.NewPosting(account("Expenses:Restaurant"),
+									ast.WithAmount("-45.00", "EUR")),
+								ast.NewPosting(account("Assets:Cash")),
+							),
 						),
 					),
 					pushtag("trip-berlin"),
@@ -678,12 +783,14 @@ func TestParse(t *testing.T) {
 			`,
 			expected: withPushtags(
 				beancount(
-					withTags(
-						transaction("2014-04-23", "*", "", "Flight",
-							posting("Expenses:Flights", "", amount("-1230.27", "USD"), nil, false, nil),
-							posting("Liabilities:CreditCard", "", nil, nil, false, nil),
+					ast.NewTransaction(date("2014-04-23"), "Flight",
+						ast.WithFlag("*"),
+						ast.WithTags("trip-berlin", "vacation"),
+						ast.WithPostings(
+							ast.NewPosting(account("Expenses:Flights"),
+								ast.WithAmount("-1230.27", "USD")),
+							ast.NewPosting(account("Liabilities:CreditCard")),
 						),
-						"trip-berlin", "vacation",
 					),
 				),
 				pushtag("trip-berlin"),
@@ -701,12 +808,16 @@ func TestParse(t *testing.T) {
 			`,
 			expected: withPushmetas(
 				beancount(
-					withMeta(
-						transaction("2014-04-23", "*", "", "Dinner",
-							posting("Expenses:Restaurant", "", amount("-45.00", "EUR"), nil, false, nil),
-							posting("Assets:Cash", "", nil, nil, false, nil),
+					ast.NewTransaction(date("2014-04-23"), "Dinner",
+						ast.WithFlag("*"),
+						ast.WithTransactionMetadata(
+							ast.NewMetadata("location", "Berlin, Germany"),
 						),
-						meta("location", "Berlin, Germany"),
+						ast.WithPostings(
+							ast.NewPosting(account("Expenses:Restaurant"),
+								ast.WithAmount("-45.00", "EUR")),
+							ast.NewPosting(account("Assets:Cash")),
+						),
 					),
 				),
 				pushmeta("location", "Berlin, Germany"),
@@ -730,16 +841,24 @@ func TestParse(t *testing.T) {
 			expected: withPopmetas(
 				withPushmetas(
 					beancount(
-						withMeta(
-							transaction("2014-04-23", "*", "", "Dinner in Berlin",
-								posting("Expenses:Restaurant", "", amount("-45.00", "EUR"), nil, false, nil),
-								posting("Assets:Cash", "", nil, nil, false, nil),
+						ast.NewTransaction(date("2014-04-23"), "Dinner in Berlin",
+							ast.WithFlag("*"),
+							ast.WithTransactionMetadata(
+								ast.NewMetadata("location", "Berlin, Germany"),
 							),
-							meta("location", "Berlin, Germany"),
+							ast.WithPostings(
+								ast.NewPosting(account("Expenses:Restaurant"),
+									ast.WithAmount("-45.00", "EUR")),
+								ast.NewPosting(account("Assets:Cash")),
+							),
 						),
-						transaction("2014-04-24", "*", "", "Dinner elsewhere",
-							posting("Expenses:Restaurant", "", amount("-30.00", "EUR"), nil, false, nil),
-							posting("Assets:Cash", "", nil, nil, false, nil),
+						ast.NewTransaction(date("2014-04-24"), "Dinner elsewhere",
+							ast.WithFlag("*"),
+							ast.WithPostings(
+								ast.NewPosting(account("Expenses:Restaurant"),
+									ast.WithAmount("-30.00", "EUR")),
+								ast.NewPosting(account("Assets:Cash")),
+							),
 						),
 					),
 					pushmeta("location", "Berlin, Germany"),
@@ -757,8 +876,8 @@ func TestParse(t *testing.T) {
 			expected: withPushmetas(
 				beancount(
 					withMeta(
-						open("2014-04-01", "Assets:Checking", []string{"USD"}, ""),
-						meta("source", "import-script"),
+						ast.NewOpen(date("2014-04-01"), account("Assets:Checking"), []string{"USD"}, ""),
+						ast.NewMetadata("source", "import-script"),
 					),
 				),
 				pushmeta("source", "import-script"),
@@ -785,12 +904,15 @@ func TestParse(t *testing.T) {
 				2018-01-01 open Assets:US:BofA:Checking USD
 			`,
 			expected: beancount(
-				commodity("1792-01-01", "USD"),
-				open("1980-05-12", "Equity:Opening-Balances", nil, ""),
-				open("2018-01-01", "Assets:US:BofA:Checking", []string{"USD"}, ""),
-				transaction("2019-01-01", "", "", "",
-					posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, false, nil),
-					posting("Equity:Opening-Balances", "", nil, nil, false, nil),
+				ast.NewCommodity(date("1792-01-01"), "USD"),
+				ast.NewOpen(date("1980-05-12"), account("Equity:Opening-Balances"), nil, ""),
+				ast.NewOpen(date("2018-01-01"), account("Assets:US:BofA:Checking"), []string{"USD"}, ""),
+				ast.NewTransaction(date("2019-01-01"), "",
+					ast.WithPostings(
+						ast.NewPosting(account("Assets:US:BofA:Checking"),
+							ast.WithAmount("4135.73", "USD")),
+						ast.NewPosting(account("Equity:Opening-Balances")),
+					),
 				),
 			),
 		},
@@ -850,30 +972,57 @@ func TestParse(t *testing.T) {
 			expected: withOptions(
 				beancount(
 					withMeta(
-						commodity("1792-01-01", "USD"),
-						meta("export", "CASH"),
-						meta("name", "US Dollar"),
+						ast.NewCommodity(date("1792-01-01"), "USD"),
+						ast.NewMetadata("export", "CASH"),
+						ast.NewMetadata("name", "US Dollar"),
 					),
-					open("1980-05-12", "Equity:Opening-Balances", nil, ""),
-					open("2019-01-01", "Assets:US:BofA:Checking", []string{"USD"}, ""),
-					transaction("2019-01-01", "", "", "",
-						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), nil, false, nil),
-						posting("Equity:Opening-Balances", "", amount("-4135.73", "USD"), nil, false, nil),
+					ast.NewOpen(date("1980-05-12"), account("Equity:Opening-Balances"), nil, ""),
+					ast.NewOpen(date("2019-01-01"), account("Assets:US:BofA:Checking"), []string{"USD"}, ""),
+					ast.NewTransaction(date("2019-01-01"), "",
+						ast.WithPostings(
+							ast.NewPosting(account("Assets:US:BofA:Checking"),
+								ast.WithAmount("4135.73", "USD")),
+							ast.NewPosting(account("Equity:Opening-Balances"),
+								ast.WithAmount("-4135.73", "USD")),
+						),
 					),
-					transaction("2019-01-01", "*", "", "",
-						posting("Liabilities:CreditCard:CapitalOne", "", amount("-37.45", "USD"), nil, false, nil),
+					ast.NewTransaction(date("2019-01-01"), "",
+						ast.WithFlag("*"),
+						ast.WithPostings(
+							ast.NewPosting(account("Liabilities:CreditCard:CapitalOne"),
+								ast.WithAmount("-37.45", "USD")),
+						),
 					),
-					transaction("2019-01-01", "!", "", "",
-						posting("Assets:ETrade:IVV", "", amount("+10", "IVV"), nil, false, nil),
+					ast.NewTransaction(date("2019-01-01"), "",
+						ast.WithFlag("!"),
+						ast.WithPostings(
+							ast.NewPosting(account("Assets:ETrade:IVV"),
+								ast.WithAmount("+10", "IVV")),
+						),
 					),
-					transaction("2019-01-01", "", "", "Lamb tagine with wine",
-						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), amount("412", "EUR"), false, nil),
+					ast.NewTransaction(date("2019-01-01"), "Lamb tagine with wine",
+						ast.WithPostings(
+							ast.NewPosting(account("Assets:US:BofA:Checking"),
+								ast.WithAmount("4135.73", "USD"),
+								ast.WithPrice(ast.NewAmount("412", "EUR"))),
+						),
 					),
-					transaction("2019-01-01", "*", "", "Lamb tagine with wine",
-						posting("Assets:US:BofA:Checking", "", amount("4135.73", "USD"), amount("488.22", "EUR"), true, nil),
+					ast.NewTransaction(date("2019-01-01"), "Lamb tagine with wine",
+						ast.WithFlag("*"),
+						ast.WithPostings(
+							ast.NewPosting(account("Assets:US:BofA:Checking"),
+								ast.WithAmount("4135.73", "USD"),
+								ast.WithTotalPrice(ast.NewAmount("488.22", "EUR"))),
+						),
 					),
-					transaction("2019-01-01", "*", "Cafe Mogador", "Lamb tagine with wine"),
-					transaction("2019-01-01", "*", "Cafe Mogador", ""),
+					ast.NewTransaction(date("2019-01-01"), "Lamb tagine with wine",
+						ast.WithFlag("*"),
+						ast.WithPayee("Cafe Mogador"),
+					),
+					ast.NewTransaction(date("2019-01-01"), "",
+						ast.WithFlag("*"),
+						ast.WithPayee("Cafe Mogador"),
+					),
 				),
 				option("title", "Example Beancount file"),
 				option("operating_currency", "USD"),
@@ -1168,50 +1317,34 @@ func normalizeDirective(d ast.Directive) {
 	}
 }
 
+// Helper functions for tests
+
+// date is a test helper that panics on error (for convenience in test setup)
+func date(value string) *ast.Date {
+	d, err := ast.NewDate(value)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
+// account is a test helper that panics on error (for convenience in test setup)
+func account(name string) ast.Account {
+	acc, err := ast.NewAccount(name)
+	if err != nil {
+		panic(err)
+	}
+	return acc
+}
+
 // AST constructor
 func beancount(directives ...ast.Directive) *ast.AST {
 	return &ast.AST{Directives: directives}
 }
 
-// Directive constructors
-func open(d string, account ast.Account, constraintCurrencies []string, bookingMethod string) *ast.Open {
-	return &ast.Open{Date: date(d), Account: account, ConstraintCurrencies: constraintCurrencies, BookingMethod: bookingMethod}
-}
-
-func close(d string, account ast.Account) *ast.Close {
-	return &ast.Close{Date: date(d), Account: account}
-}
-
-func commodity(d string, currency string) *ast.Commodity {
-	return &ast.Commodity{Date: date(d), Currency: currency}
-}
-
-func balance(d string, account ast.Account, amount *ast.Amount) *ast.Balance {
-	return &ast.Balance{Date: date(d), Account: account, Amount: amount}
-}
-
-func pad(d string, account ast.Account, accountPad ast.Account) *ast.Pad {
-	return &ast.Pad{Date: date(d), Account: account, AccountPad: accountPad}
-}
-
-func note(d string, account ast.Account, description string) *ast.Note {
-	return &ast.Note{Date: date(d), Account: account, Description: description}
-}
-
-func doc(d string, account ast.Account, pathToDocument string) *ast.Document {
-	return &ast.Document{Date: date(d), Account: account, PathToDocument: pathToDocument}
-}
-
-func price(d string, commodity string, amount *ast.Amount) *ast.Price {
-	return &ast.Price{Date: date(d), Commodity: commodity, Amount: amount}
-}
-
-func event(d string, name string, value string) *ast.Event {
-	return &ast.Event{Date: date(d), Name: name, Value: value}
-}
-
-func custom(d string, t string, values ...*ast.CustomValue) *ast.Custom {
-	return &ast.Custom{Date: date(d), Type: t, Values: values}
+// Custom directive helpers (no builder exists in ast package yet)
+func custom(d *ast.Date, t string, values ...*ast.CustomValue) *ast.Custom {
+	return &ast.Custom{Date: d, Type: t, Values: values}
 }
 
 func customString(value string) *ast.CustomValue {
@@ -1230,54 +1363,12 @@ func customNumber(value string) *ast.CustomValue {
 	return &ast.CustomValue{Number: &value}
 }
 
-func transaction(d string, flag string, payee string, narration string, postings ...*ast.Posting) *ast.Transaction {
-	return &ast.Transaction{Date: date(d), Flag: flag, Payee: payee, Narration: narration, Postings: postings}
-}
-
-// Sub-element constructors
-func posting(account ast.Account, flag string, amount *ast.Amount, price *ast.Amount, priceTotal bool, cost *ast.Cost) *ast.Posting {
-	return &ast.Posting{Account: account, Flag: flag, Amount: amount, Price: price, PriceTotal: priceTotal, Cost: cost}
-}
-
-func amount(value string, currency string) *ast.Amount {
-	return &ast.Amount{Value: value, Currency: currency}
-}
-
-func cost(amount *ast.Amount, d *ast.Date) *ast.Cost {
-	return &ast.Cost{IsMerge: false, Amount: amount, Date: d, Label: ""}
-}
-
-func costWithLabel(amount *ast.Amount, d *ast.Date, label string) *ast.Cost {
-	return &ast.Cost{IsMerge: false, Amount: amount, Date: d, Label: label}
-}
-
-func emptyCost() *ast.Cost {
-	return &ast.Cost{IsMerge: false, Amount: nil, Date: nil, Label: ""}
-}
-
-func mergeCost() *ast.Cost {
-	return &ast.Cost{IsMerge: true, Amount: nil, Date: nil, Label: ""}
-}
-
+// Merge cost with label (no builder exists in ast package yet)
 func mergeCostWithLabel(label string) *ast.Cost {
 	return &ast.Cost{IsMerge: true, Amount: nil, Date: nil, Label: label}
 }
 
-func date(value string) *ast.Date {
-	d := &ast.Date{}
-
-	if err := d.Capture([]string{value}); err != nil {
-		panic(err)
-	}
-
-	return d
-}
-
-func meta(key string, value string) *ast.Metadata {
-	return &ast.Metadata{Key: key, Value: value}
-}
-
-// Node constructors
+// Node constructors (no builders exist in ast package)
 func option(name string, value string) *ast.Option {
 	return &ast.Option{Name: name, Value: value}
 }
@@ -1346,20 +1437,4 @@ func withPopmetas(a *ast.AST, popmetas ...*ast.Popmeta) *ast.AST {
 func withMeta[W ast.WithMetadata](w W, metadata ...*ast.Metadata) W {
 	w.AddMetadata(metadata...)
 	return w
-}
-
-func withLinks(t *ast.Transaction, links ...string) *ast.Transaction {
-	t.Links = make([]ast.Link, len(links))
-	for i, link := range links {
-		t.Links[i] = ast.Link(link)
-	}
-	return t
-}
-
-func withTags(t *ast.Transaction, tags ...string) *ast.Transaction {
-	t.Tags = make([]ast.Tag, len(tags))
-	for i, tag := range tags {
-		t.Tags[i] = ast.Tag(tag)
-	}
-	return t
 }
