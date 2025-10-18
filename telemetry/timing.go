@@ -57,7 +57,7 @@ func (c *TimingCollector) Start(name string) Timer {
 
 // Report outputs the timing tree to a writer.
 // Implemented in format.go
-func (c *TimingCollector) Report(w io.Writer) {
+func (c *TimingCollector) Report(w io.Writer, styles interface{}) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -65,7 +65,7 @@ func (c *TimingCollector) Report(w io.Writer) {
 		return
 	}
 
-	formatTimingTree(w, c.root)
+	formatTimingTree(w, c.root, styles)
 }
 
 // timingTimer is a Timer implementation that records to a TimingCollector.

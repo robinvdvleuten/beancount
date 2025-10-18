@@ -23,8 +23,8 @@ func ExampleTextFormatter() {
 		Directive: nil,
 	}
 
-	// Format for CLI output
-	formatter := errors.NewTextFormatter(nil)
+	// Format for CLI output (without styling for this example)
+	formatter := errors.NewTextFormatter(nil, nil)
 	output := formatter.Format(err)
 	fmt.Println(output)
 }

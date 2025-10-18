@@ -11,12 +11,18 @@ import (
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/output"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
-// Globals defines global flags available to all commands.
+// Globals defines global flags and context available to all commands.
 type Globals struct {
 	Telemetry bool `help:"Show timing telemetry for operations."`
+
+	// OutStyles provides styling for stdout output (injected by main)
+	OutStyles *output.Styles `kong:"-"`
+	// ErrStyles provides styling for stderr output (injected by main)
+	ErrStyles *output.Styles `kong:"-"`
 }
 
 type CheckCmd struct {
@@ -39,7 +45,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	ast, err := ldr.Load(runCtx, cmd.File.Filename)
 	if err != nil {
 		// Format parser errors consistently with ledger errors
-		errFormatter := errors.NewTextFormatter(nil)
+		errFormatter := errors.NewTextFormatter(nil, globals.ErrStyles)
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
@@ -54,25 +60,26 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		if stdErrors.As(err, &validationErrors) {
 			// Create a formatter for rendering errors
 			f := formatter.New()
-			errFormatter := errors.NewTextFormatter(f)
+			errFormatter := errors.NewTextFormatter(f, globals.ErrStyles)
 
 			// Format all errors
 			formatted := errFormatter.FormatAll(validationErrors.Errors)
 			_, _ = fmt.Fprint(ctx.Stderr, formatted)
 			_, _ = fmt.Fprintln(ctx.Stderr) // Add final newline
 
-			return fmt.Errorf("%d validation error(s) found", len(validationErrors.Errors))
+			errCount := globals.ErrStyles.Error(fmt.Sprintf("%d validation error(s) found", len(validationErrors.Errors)))
+			return fmt.Errorf("%s", errCount)
 		}
 		return err
 	}
 
 	// Success
-	_, _ = fmt.Fprintln(ctx.Stdout, "✓ Check passed")
+	_, _ = fmt.Fprintln(ctx.Stdout, globals.OutStyles.Success("✓ Check passed"))
 
 	// Output telemetry report if enabled
 	if globals.Telemetry {
 		_, _ = fmt.Fprintln(ctx.Stderr)
-		collector.Report(ctx.Stderr)
+		collector.Report(ctx.Stderr, globals.ErrStyles)
 	}
 
 	return nil
@@ -101,7 +108,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	ast, err := ldr.Load(runCtx, cmd.File.Filename)
 	if err != nil {
 		// Format parser errors consistently
-		errFormatter := errors.NewTextFormatter(nil)
+		errFormatter := errors.NewTextFormatter(nil, globals.ErrStyles)
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
@@ -135,7 +142,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Output telemetry report if enabled
 	if globals.Telemetry {
 		_, _ = fmt.Fprintln(ctx.Stderr)
-		collector.Report(ctx.Stderr)
+		collector.Report(ctx.Stderr, globals.ErrStyles)
 	}
 
 	return nil

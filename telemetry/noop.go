@@ -12,7 +12,7 @@ func (noOpCollector) Start(name string) Timer {
 }
 
 // Report does nothing.
-func (noOpCollector) Report(w io.Writer) {}
+func (noOpCollector) Report(w io.Writer, styles interface{}) {}
 
 // noOpTimer is a timer that does nothing.
 type noOpTimer struct{}

@@ -18,6 +18,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
+	"github.com/robinvdvleuten/beancount/output"
 )
 
 // Formatter formats errors for output in different formats.
@@ -32,14 +33,18 @@ type Formatter interface {
 // TextFormatter formats errors for command-line output in bean-check style.
 type TextFormatter struct {
 	formatter *formatter.Formatter
+	styles    *output.Styles
 }
 
 // NewTextFormatter creates a new text formatter.
-func NewTextFormatter(f *formatter.Formatter) *TextFormatter {
+func NewTextFormatter(f *formatter.Formatter, styles *output.Styles) *TextFormatter {
 	if f == nil {
 		f = formatter.New()
 	}
-	return &TextFormatter{formatter: f}
+	return &TextFormatter{
+		formatter: f,
+		styles:    styles,
+	}
 }
 
 // Format formats a single error in bean-check style.
@@ -92,13 +97,20 @@ func (tf *TextFormatter) formatWithPosition(pos ast.Position, message string) st
 // formatWithContext formats an error with directive context (bean-check style).
 func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, directive ast.Directive) string {
 	if directive == nil {
+		if tf.styles != nil {
+			return tf.styles.Error(message)
+		}
 		return message
 	}
 
 	var buf bytes.Buffer
 
-	// Write the error message
-	buf.WriteString(message)
+	// Write the error message with styling
+	if tf.styles != nil {
+		buf.WriteString(tf.styles.Error(message))
+	} else {
+		buf.WriteString(message)
+	}
 	buf.WriteString("\n\n")
 
 	// Write the formatted directive with proper indentation
@@ -125,29 +137,62 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 
 	case *ast.Balance:
 		buf.WriteString("   ")
-		fmt.Fprintf(&buf, "%s balance %s", d.Date.Format("2006-01-02"), d.Account)
+		dateStr := d.Date.Format("2006-01-02")
+		if tf.styles != nil {
+			fmt.Fprintf(&buf, "%s %s %s", dateStr, tf.styles.Keyword("balance"), tf.styles.Account(string(d.Account)))
+		} else {
+			fmt.Fprintf(&buf, "%s balance %s", dateStr, d.Account)
+		}
 		if d.Amount != nil {
-			fmt.Fprintf(&buf, "  %s %s", d.Amount.Value, d.Amount.Currency)
+			if tf.styles != nil {
+				fmt.Fprintf(&buf, "  %s", tf.styles.Amount(fmt.Sprintf("%s %s", d.Amount.Value, d.Amount.Currency)))
+			} else {
+				fmt.Fprintf(&buf, "  %s %s", d.Amount.Value, d.Amount.Currency)
+			}
 		}
 		buf.WriteByte('\n')
 
 	case *ast.Pad:
 		buf.WriteString("   ")
-		fmt.Fprintf(&buf, "%s pad %s %s\n", d.Date.Format("2006-01-02"), d.Account, d.AccountPad)
+		dateStr := d.Date.Format("2006-01-02")
+		if tf.styles != nil {
+			fmt.Fprintf(&buf, "%s %s %s %s\n", dateStr, tf.styles.Keyword("pad"), tf.styles.Account(string(d.Account)), tf.styles.Account(string(d.AccountPad)))
+		} else {
+			fmt.Fprintf(&buf, "%s pad %s %s\n", dateStr, d.Account, d.AccountPad)
+		}
 
 	case *ast.Note:
 		buf.WriteString("   ")
-		fmt.Fprintf(&buf, "%s note %s %q\n", d.Date.Format("2006-01-02"), d.Account, d.Description)
+		dateStr := d.Date.Format("2006-01-02")
+		if tf.styles != nil {
+			fmt.Fprintf(&buf, "%s %s %s %q\n", dateStr, tf.styles.Keyword("note"), tf.styles.Account(string(d.Account)), d.Description)
+		} else {
+			fmt.Fprintf(&buf, "%s note %s %q\n", dateStr, d.Account, d.Description)
+		}
 
 	case *ast.Document:
 		buf.WriteString("   ")
-		fmt.Fprintf(&buf, "%s document %s %q\n", d.Date.Format("2006-01-02"), d.Account, d.PathToDocument)
+		dateStr := d.Date.Format("2006-01-02")
+		if tf.styles != nil {
+			fmt.Fprintf(&buf, "%s %s %s %q\n", dateStr, tf.styles.Keyword("document"), tf.styles.Account(string(d.Account)), d.PathToDocument)
+		} else {
+			fmt.Fprintf(&buf, "%s document %s %q\n", dateStr, d.Account, d.PathToDocument)
+		}
 
 	case *ast.Open:
 		buf.WriteString("   ")
-		fmt.Fprintf(&buf, "%s open %s", d.Date.Format("2006-01-02"), d.Account)
+		dateStr := d.Date.Format("2006-01-02")
+		if tf.styles != nil {
+			fmt.Fprintf(&buf, "%s %s %s", dateStr, tf.styles.Keyword("open"), tf.styles.Account(string(d.Account)))
+		} else {
+			fmt.Fprintf(&buf, "%s open %s", dateStr, d.Account)
+		}
 		if len(d.ConstraintCurrencies) > 0 {
-			fmt.Fprintf(&buf, " %s", strings.Join(d.ConstraintCurrencies, ", "))
+			if tf.styles != nil {
+				fmt.Fprintf(&buf, " %s", tf.styles.Amount(strings.Join(d.ConstraintCurrencies, ", ")))
+			} else {
+				fmt.Fprintf(&buf, " %s", strings.Join(d.ConstraintCurrencies, ", "))
+			}
 		}
 		if d.BookingMethod != "" {
 			fmt.Fprintf(&buf, " %s", d.BookingMethod)
@@ -156,7 +201,12 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 
 	case *ast.Close:
 		buf.WriteString("   ")
-		fmt.Fprintf(&buf, "%s close %s\n", d.Date.Format("2006-01-02"), d.Account)
+		dateStr := d.Date.Format("2006-01-02")
+		if tf.styles != nil {
+			fmt.Fprintf(&buf, "%s %s %s\n", dateStr, tf.styles.Keyword("close"), tf.styles.Account(string(d.Account)))
+		} else {
+			fmt.Fprintf(&buf, "%s close %s\n", dateStr, d.Account)
+		}
 	}
 
 	return buf.String()

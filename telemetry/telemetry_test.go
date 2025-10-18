@@ -19,7 +19,7 @@ func TestNoOpCollector(t *testing.T) {
 	child.End()
 
 	var buf bytes.Buffer
-	collector.Report(&buf)
+	collector.Report(&buf, nil)
 
 	// Should produce no output
 	if buf.Len() != 0 {
@@ -64,7 +64,7 @@ func TestTimingCollectorBasic(t *testing.T) {
 	timer.End()
 
 	var buf bytes.Buffer
-	collector.Report(&buf)
+	collector.Report(&buf, nil)
 
 	output := buf.String()
 
@@ -99,7 +99,7 @@ func TestTimingCollectorHierarchical(t *testing.T) {
 	root.End()
 
 	var buf bytes.Buffer
-	collector.Report(&buf)
+	collector.Report(&buf, nil)
 
 	output := buf.String()
 
@@ -133,7 +133,7 @@ func TestTimingCollectorDeepNesting(t *testing.T) {
 	t1.End()
 
 	var buf bytes.Buffer
-	collector.Report(&buf)
+	collector.Report(&buf, nil)
 
 	output := buf.String()
 
@@ -174,7 +174,7 @@ func TestFormatDuration(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		got := formatDuration(tt.duration)
+		got := formatDuration(tt.duration, false)
 		if got != tt.want {
 			t.Errorf("formatDuration(%v) = %q, want %q", tt.duration, got, tt.want)
 		}
@@ -185,7 +185,7 @@ func TestTimingCollectorEmptyReport(t *testing.T) {
 	collector := NewTimingCollector()
 
 	var buf bytes.Buffer
-	collector.Report(&buf)
+	collector.Report(&buf, nil)
 
 	// Should produce no output when no timers have been started
 	if buf.Len() != 0 {

@@ -44,7 +44,8 @@ type Collector interface {
 
 	// Report outputs the collected telemetry to a writer.
 	// The format is implementation-specific.
-	Report(w io.Writer)
+	// The styles parameter can be used to add terminal styling (optional, can be nil).
+	Report(w io.Writer, styles interface{})
 }
 
 // Timer tracks a single operation's timing.

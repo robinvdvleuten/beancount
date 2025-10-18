@@ -2,8 +2,10 @@ package main
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/alecthomas/kong"
+	"github.com/robinvdvleuten/beancount/output"
 )
 
 var (
@@ -22,6 +24,11 @@ var (
 )
 
 func main() {
+	// Initialize globals with output styles before parsing
+	// This way they're available to all commands via the Globals instance
+	cli.OutStyles = output.NewStyles(os.Stdout)
+	cli.ErrStyles = output.NewStyles(os.Stderr)
+
 	ctx := kong.Parse(&cli,
 		kong.Vars{
 			"version": buildVersion(),
