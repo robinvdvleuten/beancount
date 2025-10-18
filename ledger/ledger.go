@@ -168,12 +168,9 @@ func (l *Ledger) processOpen(open *ast.Open) {
 
 	// Check if account already exists
 	if existing, ok := l.accounts[accountName]; ok {
-		// Check if it's already open
-		if !existing.IsClosed() {
-			l.addError(NewAccountAlreadyOpenError(open, existing.OpenDate))
-			return
-		}
-		// Account was closed before, allow reopening
+		// Duplicate open directive - not allowed (matches beancount behavior)
+		l.addError(NewAccountAlreadyOpenError(open, existing.OpenDate))
+		return
 	}
 
 	// Create new account
