@@ -155,7 +155,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 
 	// Optional amount
 	if p.check(NUMBER) || p.check(MINUS) {
-		amount, err := p.parseAmount()
+		amount, err := p.parseAmountOptional()
 		if err != nil {
 			return nil, err
 		}

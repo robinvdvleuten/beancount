@@ -65,6 +65,27 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	}, nil
 }
 
+// parseAmountOptional parses an amount with optional currency: NUMBER [CURRENCY]
+// If no currency is provided, Currency will be an empty string.
+func (p *Parser) parseAmountOptional() (*ast.Amount, error) {
+	numTok := p.expect(NUMBER, "expected number")
+	if numTok.Type == ILLEGAL {
+		return nil, p.errorAtToken(numTok, "expected number")
+	}
+
+	currency := ""
+	// Currency is optional - only parse if present
+	if p.check(IDENT) {
+		currTok := p.expect(IDENT, "expected currency")
+		currency = p.interner.InternBytes(currTok.Bytes(p.source))
+	}
+
+	return &ast.Amount{
+		Value:    numTok.String(p.source),
+		Currency: currency,
+	}, nil
+}
+
 // parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] }
 func (p *Parser) parseCost() (*ast.Cost, error) {
 	p.consume(LBRACE, "expected '{'")

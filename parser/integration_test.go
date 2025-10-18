@@ -114,3 +114,21 @@ func TestParseWithMetadata(t *testing.T) {
 
 	t.Logf("Successfully parsed with metadata!")
 }
+
+func TestParseAmountWithoutCurrency(t *testing.T) {
+	input := `2023-06-02 * "buy stocks"
+  Assets:Investments:Stock  100 STOCK {}
+  Assets:Cash -1600.00
+`
+
+	ast, err := ParseString(context.Background(), input)
+	if err != nil {
+		t.Fatalf("parse error: %v", err)
+	}
+
+	if len(ast.Directives) != 1 {
+		t.Fatalf("got %d directives, want 1", len(ast.Directives))
+	}
+
+	t.Logf("Successfully parsed transaction with amount without currency!")
+}
