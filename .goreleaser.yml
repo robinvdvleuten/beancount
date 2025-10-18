@@ -38,6 +38,18 @@ gomod:
 signs:
   - artifacts: checksum
 
+nfpms:
+  - vendor: robinvdvleuten
+    homepage: https://github.com/robinvdvleuten/beancount
+    maintainer: Robin van der Vleuten <robin@webstronauts.com>
+    description: A fast, lightweight Beancount parser and formatter written in Go
+    license: GPL-2.0
+    formats:
+      - deb
+      - rpm
+      - apk
+    bindir: /usr/bin
+
 homebrew_casks:
   - repository:
       owner: robinvdvleuten
@@ -56,6 +68,9 @@ homebrew_casks:
     homepage: "https://github.com/robinvdvleuten/beancount"
     description: "A fast, lightweight Beancount parser and formatter written in Go"
     skip_upload: auto
+
+checksum:
+  name_template: "checksums.txt"
 
 changelog:
   use: github
