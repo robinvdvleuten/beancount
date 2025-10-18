@@ -73,9 +73,9 @@ type CheckCmd struct {
 	File FileContentFlag `help:"Beancount input filename." arg:""`
 }
 
-func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
-	// Create context for cancellation support
-	runCtx := context.Background()
+func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals, signalCtx context.Context) error {
+	// Use signal-aware context from kong for cancellation support
+	runCtx := signalCtx
 
 	// Create telemetry collector if flag is set
 	var collector telemetry.Collector
@@ -150,9 +150,9 @@ type FormatCmd struct {
 	NumWidth       int             `help:"Width for numbers (auto if 0)." default:"0"`
 }
 
-func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
-	// Create context for cancellation support
-	runCtx := context.Background()
+func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals, signalCtx context.Context) error {
+	// Use signal-aware context from kong for cancellation support
+	runCtx := signalCtx
 
 	// Create telemetry collector if flag is set
 	var collector telemetry.Collector

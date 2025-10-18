@@ -1,8 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/output"
@@ -29,6 +32,10 @@ func main() {
 	cli.OutStyles = output.NewStyles(os.Stdout)
 	cli.ErrStyles = output.NewStyles(os.Stderr)
 
+	// Create signal-aware context for graceful cancellation
+	signalCtx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	ctx := kong.Parse(&cli,
 		kong.Vars{
 			"version": buildVersion(),
@@ -37,6 +44,7 @@ func main() {
 		kong.Description("A beancount file parser and formatter."),
 		kong.UsageOnError(),
 		kong.Bind(&cli.Globals),
+		kong.BindTo(signalCtx, (*context.Context)(nil)),
 	)
 
 	err := ctx.Run()
