@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bean-check:*)",
+      "Bash(bean-doctor:*)",
+      "Bash(go build:*)",
+      "Bash(go test:*)",
+      "Bash(gofmt:*)",
+      "Bash(golangci-lint run:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}
+
