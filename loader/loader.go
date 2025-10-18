@@ -87,13 +87,12 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
 		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+		defer parseTimer.End()
 		data, err := os.ReadFile(filename)
 		if err != nil {
-			parseTimer.End()
 			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 		}
 		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
-		parseTimer.End()
 		if err != nil {
 			// Wrap parser errors for consistent formatting
 			return nil, parser.NewParseError(filename, err)
@@ -103,14 +102,13 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 
 	// Recursive loading with include resolution
 	loadTimer := collector.Start(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
+	defer loadTimer.End()
 	state := &loaderState{
 		visited:   make(map[string]bool),
 		collector: collector,
 	}
 
-	ast, err := state.loadRecursive(ctx, filename)
-	loadTimer.End()
-	return ast, err
+	return state.loadRecursive(ctx, filename)
 }
 
 // loaderState tracks state during recursive loading.
@@ -136,14 +134,13 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 
 	// Read and parse the file
 	parseTimer := l.collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+	defer parseTimer.End()
 	data, err := os.ReadFile(filename)
 	if err != nil {
-		parseTimer.End()
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
 
 	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
-	parseTimer.End()
 	if err != nil {
 		// Wrap parser errors for consistent formatting
 		return nil, parser.NewParseError(filename, err)
