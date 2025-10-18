@@ -412,7 +412,6 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 			}
 		} else if len(pc.withoutAmounts) > 1 || len(balance) > 1 {
 			// Multiple missing postings OR multiple unbalanced currencies - ambiguous
-			result.residuals = make(map[string]string)
 			for currency, residual := range balance {
 				result.residuals[currency] = residual.String()
 			}
@@ -469,7 +468,6 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 				}
 			} else if len(balance) > 1 {
 				// Multiple currencies - ambiguous
-				result.residuals = make(map[string]string)
 				for currency, residual := range balance {
 					result.residuals[currency] = residual.String()
 				}
