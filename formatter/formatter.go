@@ -172,6 +172,10 @@ type Formatter struct {
 	// sourceLines holds the original source lines for preserving spacing.
 	// This is set during Format() and cleared after.
 	sourceLines []string
+
+	// autoCurrencyColumn indicates whether the currency column should be recalculated
+	// for each formatting operation.
+	autoCurrencyColumn bool
 }
 
 // Option is a functional option for configuring a Formatter.
@@ -181,7 +185,13 @@ type Option func(*Formatter)
 // This overrides PrefixWidth and NumWidth if set.
 func WithCurrencyColumn(col int) Option {
 	return func(f *Formatter) {
-		f.CurrencyColumn = col
+		if col > 0 {
+			f.CurrencyColumn = col
+			f.autoCurrencyColumn = false
+			return
+		}
+		f.CurrencyColumn = 0
+		f.autoCurrencyColumn = true
 	}
 }
 
@@ -216,9 +226,10 @@ func WithPreserveBlanks(preserve bool) Option {
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
-		CurrencyColumn:   0,    // 0 means auto-calculate
-		PreserveComments: true, // Preserve comments by default
-		PreserveBlanks:   true, // Preserve blank lines by default
+		CurrencyColumn:     0,    // 0 means auto-calculate
+		PreserveComments:   true, // Preserve comments by default
+		PreserveBlanks:     true, // Preserve blank lines by default
+		autoCurrencyColumn: true,
 	}
 
 	for _, opt := range opts {
@@ -361,7 +372,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 
 	// Determine the currency column based on the configuration
 	widthTimer := telemetry.StartTimer(ctx, "formatter.width_calculation")
-	if f.CurrencyColumn == 0 {
+	if f.autoCurrencyColumn {
 		f.CurrencyColumn = f.determineCurrencyColumn(ast)
 	}
 	widthTimer.End()
@@ -497,7 +508,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 // The currency column is calculated from the transaction itself if not explicitly set.
 func (f *Formatter) FormatTransaction(txn *ast.Transaction, w io.Writer) error {
 	// Determine the currency column if not set
-	if f.CurrencyColumn == 0 {
+	if f.autoCurrencyColumn {
 		// Create a minimal AST with just this transaction to calculate metrics
 		ast := &ast.AST{
 			Directives: []ast.Directive{txn},
