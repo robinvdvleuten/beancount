@@ -7,11 +7,14 @@ before:
 builds:
   - env:
       - CGO_ENABLED=0
+    flags:
+      - -trimpath
     ldflags: -s -w -X main.Version={{ .Version }} -X main.CommitSHA={{ .ShortCommit }}
     goos:
       - linux
       - windows
       - darwin
+    binary: beancount
     dir: ./cmd/beancount
 
 archives:
