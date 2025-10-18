@@ -14,6 +14,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -91,26 +92,21 @@ func (tf *TextFormatter) FormatAll(errs []error) string {
 
 // formatWithPosition formats an error message with position information.
 func (tf *TextFormatter) formatWithPosition(pos ast.Position, message string) string {
-	return message
+	return tf.formatErrorLine(pos, message)
 }
 
 // formatWithContext formats an error with directive context (bean-check style).
 func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, directive ast.Directive) string {
+	header := tf.formatErrorLine(pos, message)
+
 	if directive == nil {
-		if tf.styles != nil {
-			return tf.styles.Error(message)
-		}
-		return message
+		return header
 	}
 
 	var buf bytes.Buffer
 
 	// Write the error message with styling
-	if tf.styles != nil {
-		buf.WriteString(tf.styles.Error(message))
-	} else {
-		buf.WriteString(message)
-	}
+	buf.WriteString(header)
 	buf.WriteString("\n\n")
 
 	// Write the formatted directive with proper indentation
@@ -207,6 +203,46 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 		} else {
 			fmt.Fprintf(&buf, "%s close %s\n", dateStr, d.Account)
 		}
+	}
+
+	return buf.String()
+}
+
+// formatErrorLine builds the first line of an error with positional context.
+func (tf *TextFormatter) formatErrorLine(pos ast.Position, message string) string {
+	var buf strings.Builder
+	var hasPrefix bool
+
+	if pos.Filename != "" {
+		if tf.styles != nil {
+			buf.WriteString(tf.styles.FilePath(pos.Filename))
+		} else {
+			buf.WriteString(pos.Filename)
+		}
+		hasPrefix = true
+	}
+
+	if pos.Line > 0 {
+		if hasPrefix {
+			buf.WriteByte(':')
+		}
+		buf.WriteString(strconv.Itoa(pos.Line))
+		hasPrefix = true
+
+		if pos.Column > 0 {
+			buf.WriteByte(':')
+			buf.WriteString(strconv.Itoa(pos.Column))
+		}
+	}
+
+	if hasPrefix {
+		buf.WriteString(": ")
+	}
+
+	if tf.styles != nil {
+		buf.WriteString(tf.styles.Error(message))
+	} else {
+		buf.WriteString(message)
 	}
 
 	return buf.String()
