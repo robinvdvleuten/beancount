@@ -382,6 +382,14 @@ func (l *Ledger) processPad(ctx context.Context, pad *ast.Pad) {
 	// Validation passed - store pad directive
 	// Will be applied when next balance assertion is encountered
 	accountName := string(pad.Account)
+
+	// Check for duplicate pad directives
+	if existingPad, exists := l.padEntries[accountName]; exists {
+		l.addError(fmt.Errorf("%s: Duplicate pad directive for account %s (previous pad on %s)",
+			pad.Date.Format("2006-01-02"), accountName, existingPad.Date.Format("2006-01-02")))
+		return
+	}
+
 	l.padEntries[accountName] = pad
 }
 
