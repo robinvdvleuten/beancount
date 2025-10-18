@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/alecthomas/kong"
-	"github.com/robinvdvleuten/beancount"
 )
 
 var (
@@ -18,7 +17,7 @@ var (
 
 	cli struct {
 		Version kong.VersionFlag `help:"Show version information"`
-		beancount.Commands
+		Commands
 	}
 )
 

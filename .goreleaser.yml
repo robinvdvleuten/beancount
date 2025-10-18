@@ -15,7 +15,6 @@ builds:
       - windows
       - darwin
     binary: beancount
-    dir: ./cmd/beancount
 
 archives:
   - formats: [tar.gz]

@@ -29,12 +29,28 @@ This implementation currently supports:
 
 ## Installation
 
-Download the latest release for your platform from the [releases page](https://github.com/robinvdvleuten/beancount/releases).
+### Packages & Binaries
 
-Or, just install it with Go:
+If you use Brew, you can simply install the package:
 
-```bash
-go install github.com/robinvdvleuten/beancount@latest
+```sh
+brew install robinvdvleuten/tap/beancount
+```
+
+Or download a binary from the [releases](https://github.com/robinvdvleuten/beancount/releases)
+page. Linux (including ARM) binaries are available, as well as Debian, RPM AND APK
+packages.
+
+### Build From Source
+
+Alternatively you can also build `beancount` from source. Make sure you have a
+working Go environment (Go 1.24 or higher is required). See the
+[install instructions](https://golang.org/doc/install.html).
+
+To install beancount, simply run:
+
+```sh
+go install github.com/robinvdvleuten/beancount
 ```
 
 ## Usage
@@ -43,7 +59,7 @@ go install github.com/robinvdvleuten/beancount@latest
 
 Validate a Beancount file with full ledger checks:
 
-```bash
+```sh
 beancount check example.beancount
 ```
 
@@ -68,7 +84,7 @@ example.beancount:15: Transaction does not balance: (-500.00 USD)
 
 Format a Beancount file with automatic alignment:
 
-```bash
+```sh
 beancount format example.beancount
 
 # Specify currency column position
@@ -82,7 +98,7 @@ beancount format --prefix-width 50 --num-width 12 example.beancount
 
 Use the global `--telemetry` flag to see detailed timing breakdowns for any command:
 
-```bash
+```sh
 beancount --telemetry check example.beancount
 beancount --telemetry format example.beancount
 ```
@@ -188,7 +204,7 @@ See the [CSV Importer example](examples/csv_importer/) for a complete working ex
 
 Run the example:
 
-```bash
+```sh
 cd examples/csv_importer
 go run main.go transactions.csv
 ```

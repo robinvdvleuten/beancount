@@ -1,4 +1,4 @@
-package beancount
+package main
 
 import (
 	"bytes"
