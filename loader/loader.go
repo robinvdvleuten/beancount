@@ -111,6 +111,97 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	return state.loadRecursive(ctx, filename)
 }
 
+// LoadBytes parses beancount content from a byte slice with optional recursive include resolution.
+// The filename parameter is used for error reporting and as the base path for resolving includes.
+// When FollowIncludes is enabled, relative include paths are resolved from the directory of filename.
+func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*ast.AST, error) {
+	// Extract telemetry collector from context
+	collector := telemetry.FromContext(ctx)
+
+	if !l.FollowIncludes {
+		// Simple case: just parse the provided data
+		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+		defer parseTimer.End()
+		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+		if err != nil {
+			// Wrap parser errors for consistent formatting
+			return nil, parser.NewParseError(filename, err)
+		}
+		return result, nil
+	}
+
+	// For recursive loading, parse the initial data then follow includes from disk
+	parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+	parseTimer.End()
+	if err != nil {
+		return nil, parser.NewParseError(filename, err)
+	}
+
+	// If no includes, return as-is
+	if len(result.Includes) == 0 {
+		return result, nil
+	}
+
+	// Recursively load all includes from disk
+	loadTimer := collector.Start(fmt.Sprintf("loader.load includes for %s", filepath.Base(filename)))
+	defer loadTimer.End()
+	state := &loaderState{
+		visited:   make(map[string]bool),
+		collector: collector,
+	}
+
+	// Get absolute path for include resolution
+	// Special handling for STDIN ("-"): use current working directory as base
+	var absPath, baseDir string
+	if filename == "-" {
+		var err error
+		baseDir, err = os.Getwd()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get working directory for STDIN: %w", err)
+		}
+		absPath = filepath.Join(baseDir, "-") // Use a pseudo-path for visited tracking
+	} else {
+		var err error
+		absPath, err = filepath.Abs(filename)
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
+		}
+		baseDir = filepath.Dir(absPath)
+	}
+	state.visited[absPath] = true // Mark the main file as visited
+	var includedASTs []*ast.AST
+
+	for _, inc := range result.Includes {
+		// Check for cancellation
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		default:
+		}
+
+		// Resolve path relative to the main file's directory
+		includePath := inc.Filename
+		if !filepath.IsAbs(includePath) {
+			includePath = filepath.Join(baseDir, includePath)
+		}
+
+		// Recursively load the included file from disk
+		includedAST, err := state.loadRecursive(ctx, includePath)
+		if err != nil {
+			return nil, fmt.Errorf("in file %s: %w", filename, err)
+		}
+
+		includedASTs = append(includedASTs, includedAST)
+	}
+
+	// Merge all ASTs
+	mergeTimer := collector.Start("ast.merging")
+	merged := mergeASTs(result, includedASTs...)
+	mergeTimer.End()
+	return merged, nil
+}
+
 // loaderState tracks state during recursive loading.
 type loaderState struct {
 	visited   map[string]bool     // Absolute paths of files already loaded

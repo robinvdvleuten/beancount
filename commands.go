@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"io"
 	"os"
 
 	"github.com/alecthomas/kong"
@@ -14,6 +15,49 @@ import (
 	"github.com/robinvdvleuten/beancount/output"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
+
+// FileContentFlag is a custom flag that loads file contents from a path or STDIN.
+// It supports "-" as a special filename that reads from standard input.
+type FileContentFlag struct {
+	Filename string
+	Contents []byte
+}
+
+// Decode implements kong.MapperValue to customize file loading with STDIN support.
+func (f *FileContentFlag) Decode(ctx *kong.DecodeContext) error {
+	var filename string
+	err := ctx.Scan.PopValueInto("filename", &filename)
+	if err != nil {
+		return err
+	}
+
+	// Allow unsetting
+	if filename == "" {
+		*f = FileContentFlag{}
+		return nil
+	}
+
+	// Handle STDIN
+	if filename == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		f.Contents = data
+		f.Filename = filename
+		return nil
+	}
+
+	// Handle regular files
+	filename = kong.ExpandPath(filename)
+	data, err := os.ReadFile(filename)
+	if err != nil {
+		return fmt.Errorf("failed to open %q: %w", filename, err)
+	}
+	f.Contents = data
+	f.Filename = filename
+	return nil
+}
 
 // Globals defines global flags and context available to all commands.
 type Globals struct {
@@ -26,7 +70,7 @@ type Globals struct {
 }
 
 type CheckCmd struct {
-	File kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
+	File FileContentFlag `help:"Beancount input filename." arg:""`
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
@@ -41,8 +85,9 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 
 	// Load the input file and recursively resolve all includes
+	// Use LoadBytes to support STDIN and avoid re-reading from disk
 	ldr := loader.New(loader.WithFollowIncludes())
-	ast, err := ldr.Load(runCtx, cmd.File.Filename)
+	ast, err := ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
 	if err != nil {
 		// Format parser errors consistently with ledger errors
 		errFormatter := errors.NewTextFormatter(nil, globals.ErrStyles)
@@ -86,10 +131,10 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 }
 
 type FormatCmd struct {
-	File           kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
-	CurrencyColumn int                       `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
-	PrefixWidth    int                       `help:"Width in characters for account names (auto if 0)." default:"0"`
-	NumWidth       int                       `help:"Width for numbers (auto if 0)." default:"0"`
+	File           FileContentFlag `help:"Beancount input filename." arg:""`
+	CurrencyColumn int             `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
+	PrefixWidth    int             `help:"Width in characters for account names (auto if 0)." default:"0"`
+	NumWidth       int             `help:"Width for numbers (auto if 0)." default:"0"`
 }
 
 func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
@@ -104,8 +149,9 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 
 	// Load only the single file (don't follow includes)
+	// Use LoadBytes to support STDIN and avoid re-reading from disk
 	ldr := loader.New()
-	ast, err := ldr.Load(runCtx, cmd.File.Filename)
+	ast, err := ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
 	if err != nil {
 		// Format parser errors consistently
 		errFormatter := errors.NewTextFormatter(nil, globals.ErrStyles)
@@ -115,11 +161,8 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return fmt.Errorf("parse error")
 	}
 
-	// Read file contents for formatter (needs original source for comment preservation)
-	contents, err := os.ReadFile(cmd.File.Filename)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
-	}
+	// Use the already-loaded file contents (supports STDIN and avoids re-reading)
+	contents := cmd.File.Contents
 
 	// Create formatter with options
 	var opts []formatter.Option
