@@ -422,7 +422,18 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency st
 	}
 }
 
-// InvalidCostError is returned when a cost specification is invalid
+// InvalidCostError is returned when a cost specification is invalid.
+//
+// Cost specifications define the acquisition cost of commodities, used for
+// lot-based inventory tracking and capital gains calculations.
+//
+// Common causes:
+//   - Invalid decimal in cost amount (e.g., {abc USD})
+//   - Zero or invalid cost date
+//   - Merge costs {*} not yet implemented
+//
+// Example error message:
+//   "file.bean:15: Invalid cost specification (Posting #1: Assets:Stock): {500.x USD}: invalid decimal"
 type InvalidCostError struct {
 	Date         *ast.Date
 	Account      ast.Account
@@ -477,7 +488,17 @@ func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex
 	}
 }
 
-// InvalidPriceError is returned when a price specification is invalid
+// InvalidPriceError is returned when a price specification is invalid.
+//
+// Price specifications define the market value of commodities at transaction time,
+// used for conversion rates and reporting.
+//
+// Common causes:
+//   - Invalid decimal in price amount (e.g., @ abc USD)
+//   - Invalid total price specification (@@)
+//
+// Example error message:
+//   "file.bean:20: Invalid price specification (Posting #2: Expenses:Foreign): @ 1.x USD: invalid decimal"
 type InvalidPriceError struct {
 	Date         *ast.Date
 	Account      ast.Account
@@ -532,7 +553,18 @@ func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingInde
 	}
 }
 
-// InvalidMetadataError is returned when metadata is invalid
+// InvalidMetadataError is returned when metadata is invalid.
+//
+// Metadata provides key-value annotations on directives and postings for
+// additional context like invoice numbers, confirmation codes, etc.
+//
+// Common causes:
+//   - Duplicate metadata keys within same directive/posting
+//   - Empty metadata values
+//
+// Example error messages:
+//   "file.bean:10: Invalid metadata: key="invoice", value="": empty value"
+//   "file.bean:12: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
 type InvalidMetadataError struct {
 	Date       *ast.Date
 	Account    ast.Account // Empty if directive-level metadata
