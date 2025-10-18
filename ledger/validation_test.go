@@ -120,7 +120,7 @@ func TestValidateAccountsOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(tt.accounts, nil)
+			v := newValidator(tt.accounts, nil, nil)
 			errs := v.validateAccountsOpen(context.Background(), tt.txn)
 
 			if got := len(errs); got != tt.wantErrCount {
@@ -193,7 +193,7 @@ func TestValidateAmounts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(nil, nil) // validateAmounts doesn't need accounts
+			v := newValidator(nil, nil, nil) //validateAmounts doesn't need accounts
 			errs := v.validateAmounts(context.Background(), tt.txn)
 
 			if got := len(errs); got != tt.wantErrCount {
@@ -353,7 +353,7 @@ func TestCalculateBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(nil, nil) // calculateBalance doesn't need accounts
+			v := newValidator(nil, nil, nil) //calculateBalance doesn't need accounts
 			result, errs := v.calculateBalance(context.Background(), tt.txn)
 
 			if len(errs) > 0 {
@@ -564,7 +564,7 @@ func TestValidateTransaction_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(accounts, nil)
+			v := newValidator(accounts, nil, nil)
 			errs, result := v.validateTransaction(context.Background(), tt.txn)
 
 			if got := len(errs); got != tt.wantErrCount {
@@ -624,7 +624,7 @@ func BenchmarkValidateTransaction(b *testing.B) {
 		},
 	}
 
-	v := newValidator(accounts, nil)
+	v := newValidator(accounts, nil, nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -908,4 +908,253 @@ func findSubstring(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestValidateTransaction_ZeroAmountWithCost verifies that zero amounts with cost specs
+// are treated as additions (no-ops) rather than reductions
+func TestValidateTransaction_ZeroAmountWithCost(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	stock, _ := ast.NewAccount("Assets:Stock")
+
+	// Transaction with zero amount and cost spec
+	txn := ast.NewTransaction(date, "Zero stock purchase",
+		ast.WithPostings(
+			ast.NewPosting(stock, ast.WithAmount("0", "HOOL"), ast.WithCost(ast.NewCost(ast.NewAmount("500.00", "USD")))),
+			// No second posting needed - zero amount doesn't affect balance
+		),
+	)
+
+	accounts := map[string]*Account{
+		"Assets:Checking": {
+			Name:      checking,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Assets:Stock": {
+			Name:      stock,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+	}
+
+	v := newValidator(accounts, make(map[string]*ast.Pad), NewToleranceConfig())
+	ctx := context.Background()
+	errs, delta := v.validateTransaction(ctx, txn)
+
+	// Should succeed - zero amount is treated as addition (no-op)
+	if len(errs) > 0 {
+		t.Errorf("Expected no errors, got %d: %v", len(errs), errs)
+	}
+
+	if delta == nil {
+		t.Fatal("Expected delta, got nil")
+	}
+
+	// Check that the inventory change has OpAdd operation
+	if len(delta.InventoryChanges) != 1 {
+		t.Fatalf("Expected 1 inventory change, got %d", len(delta.InventoryChanges))
+	}
+
+	change := delta.InventoryChanges[0]
+	if change.Operation != OpAdd {
+		t.Errorf("Expected OpAdd for zero amount, got %v", change.Operation)
+	}
+	if change.Amount.String() != "0" {
+		t.Errorf("Expected amount 0, got %s", change.Amount.String())
+	}
+}
+
+// TestValidateTransaction_MissingAmountInBalancedTransaction verifies that postings
+// without amounts in already-balanced transactions properly return an error
+func TestValidateTransaction_MissingAmountInBalancedTransaction(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	savings, _ := ast.NewAccount("Assets:Savings")
+	expenses, _ := ast.NewAccount("Expenses:Unknown")
+
+	// Transaction that balances without the third posting
+	txn := ast.NewTransaction(date, "Bug example",
+		ast.WithPostings(
+			ast.NewPosting(checking, ast.WithAmount("100", "USD")),
+			ast.NewPosting(savings, ast.WithAmount("-100", "USD")),
+			ast.NewPosting(expenses), // No amount - can't infer (already balanced)
+		),
+	)
+
+	accounts := map[string]*Account{
+		"Assets:Checking": {
+			Name:      checking,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Assets:Savings": {
+			Name:      savings,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Expenses:Unknown": {
+			Name:      expenses,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+	}
+
+	v := newValidator(accounts, make(map[string]*ast.Pad), NewToleranceConfig())
+	ctx := context.Background()
+	errs, delta := v.validateTransaction(ctx, txn)
+
+	// Should error - posting without amount that can't be inferred
+	if len(errs) == 0 {
+		t.Fatal("Expected error for posting without inferrable amount, got none")
+	}
+
+	if delta != nil {
+		t.Errorf("Expected nil delta on error, got %v", delta)
+	}
+
+	// Check error message contains appropriate text
+	errStr := errs[0].Error()
+	if !findSubstring(errStr, "missing amount") || !findSubstring(errStr, "cannot be inferred") {
+		t.Errorf("Expected error about missing uninferrable amount, got: %s", errStr)
+	}
+}
+
+// TestValidateTransaction_ToleranceAwareInference verifies that amount inference
+// respects the tolerance configuration
+func TestValidateTransaction_ToleranceAwareInference(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	savings, _ := ast.NewAccount("Assets:Savings")
+	expenses, _ := ast.NewAccount("Expenses:Misc")
+
+	accounts := map[string]*Account{
+		"Assets:Checking": {
+			Name:      checking,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Assets:Savings": {
+			Name:      savings,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Expenses:Misc": {
+			Name:      expenses,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+	}
+
+	t.Run("residual within tolerance - cannot infer", func(t *testing.T) {
+		// Default tolerance for USD is 0.005 (inferred from 2 decimal places)
+		// Residual of 0.005 should be within tolerance
+		txn := ast.NewTransaction(date, "Within tolerance",
+			ast.WithPostings(
+				ast.NewPosting(checking, ast.WithAmount("100.005", "USD")),
+				ast.NewPosting(savings, ast.WithAmount("-100.00", "USD")),
+				ast.NewPosting(expenses), // Missing amount
+			),
+		)
+
+		v := newValidator(accounts, make(map[string]*ast.Pad), NewToleranceConfig())
+		ctx := context.Background()
+		errs, delta := v.validateTransaction(ctx, txn)
+
+		// Should error - residual is within tolerance, can't infer
+		if len(errs) == 0 {
+			t.Fatal("Expected error for posting without inferrable amount (within tolerance), got none")
+		}
+
+		if delta != nil {
+			t.Errorf("Expected nil delta on error, got %v", delta)
+		}
+
+		errStr := errs[0].Error()
+		if !findSubstring(errStr, "cannot be inferred") {
+			t.Errorf("Expected error about uninferrable amount, got: %s", errStr)
+		}
+	})
+
+	t.Run("residual outside tolerance - can infer", func(t *testing.T) {
+		// Default tolerance for USD is 0.005
+		// Residual of 0.50 is well outside tolerance
+		txn := ast.NewTransaction(date, "Outside tolerance",
+			ast.WithPostings(
+				ast.NewPosting(checking, ast.WithAmount("100.50", "USD")),
+				ast.NewPosting(savings, ast.WithAmount("-100.00", "USD")),
+				ast.NewPosting(expenses), // Missing amount - should infer -0.50 USD
+			),
+		)
+
+		v := newValidator(accounts, make(map[string]*ast.Pad), NewToleranceConfig())
+		ctx := context.Background()
+		errs, delta := v.validateTransaction(ctx, txn)
+
+		// Should succeed - residual is outside tolerance, can infer
+		if len(errs) > 0 {
+			t.Fatalf("Expected no errors, got %d: %v", len(errs), errs)
+		}
+
+		if delta == nil {
+			t.Fatal("Expected delta, got nil")
+		}
+
+		// Check that amount was inferred
+		if len(delta.InferredAmounts) != 1 {
+			t.Fatalf("Expected 1 inferred amount, got %d", len(delta.InferredAmounts))
+		}
+
+		// Find the inferred amount for expenses posting
+		var inferredAmount *ast.Amount
+		for posting, amount := range delta.InferredAmounts {
+			if posting.Account == expenses {
+				inferredAmount = amount
+				break
+			}
+		}
+
+		if inferredAmount == nil {
+			t.Fatal("Expected inferred amount for Expenses:Misc")
+		}
+
+		if inferredAmount.Value != "-0.5" && inferredAmount.Value != "-0.50" {
+			t.Errorf("Expected inferred amount -0.50, got %s", inferredAmount.Value)
+		}
+		if inferredAmount.Currency != "USD" {
+			t.Errorf("Expected currency USD, got %s", inferredAmount.Currency)
+		}
+	})
+
+	t.Run("custom tolerance configuration", func(t *testing.T) {
+		// Set up custom tolerance: 0.10 for USD
+		config, err := ParseToleranceConfig(map[string]string{
+			"inferred_tolerance_default": "USD:0.10",
+		})
+		if err != nil {
+			t.Fatalf("Failed to parse tolerance config: %v", err)
+		}
+
+		// Residual of 0.08 should be within custom tolerance of 0.10
+		txn := ast.NewTransaction(date, "Custom tolerance",
+			ast.WithPostings(
+				ast.NewPosting(checking, ast.WithAmount("100.08", "USD")),
+				ast.NewPosting(savings, ast.WithAmount("-100.00", "USD")),
+				ast.NewPosting(expenses), // Missing amount
+			),
+		)
+
+		v := newValidator(accounts, make(map[string]*ast.Pad), config)
+		ctx := context.Background()
+		errs, delta := v.validateTransaction(ctx, txn)
+
+		// Should error - 0.08 is within custom tolerance of 0.10
+		if len(errs) == 0 {
+			t.Fatal("Expected error (within custom tolerance), got none")
+		}
+
+		if delta != nil {
+			t.Errorf("Expected nil delta on error, got %v", delta)
+		}
+	})
 }

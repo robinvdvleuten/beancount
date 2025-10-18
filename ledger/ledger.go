@@ -39,7 +39,6 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
-	"github.com/shopspring/decimal"
 )
 
 // Ledger represents the state of the accounting ledger with account balances,
@@ -142,9 +141,9 @@ func (l *Ledger) Accounts() map[string]*Account {
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	switch d := directive.(type) {
 	case *ast.Open:
-		l.processOpen(d)
+		l.processOpen(ctx, d)
 	case *ast.Close:
-		l.processClose(d)
+		l.processClose(ctx, d)
 	case *ast.Transaction:
 		l.processTransaction(ctx, d)
 	case *ast.Balance:
@@ -163,58 +162,12 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 }
 
 // processOpen processes an Open directive
-func (l *Ledger) processOpen(open *ast.Open) {
-	accountName := string(open.Account)
-
-	// Check if account already exists
-	if existing, ok := l.accounts[accountName]; ok {
-		// Duplicate open directive - not allowed (matches beancount behavior)
-		l.addError(NewAccountAlreadyOpenError(open, existing.OpenDate))
-		return
-	}
-
-	// Create new account
-	account := &Account{
-		Name:                 open.Account,
-		Type:                 ParseAccountType(open.Account),
-		OpenDate:             open.Date,
-		ConstraintCurrencies: open.ConstraintCurrencies,
-		BookingMethod:        open.BookingMethod,
-		Metadata:             open.Metadata,
-		Inventory:            NewInventory(),
-	}
-
-	l.accounts[accountName] = account
-}
-
-// processClose processes a Close directive
-func (l *Ledger) processClose(close *ast.Close) {
-	accountName := string(close.Account)
-
-	// Check if account exists
-	account, ok := l.accounts[accountName]
-	if !ok {
-		l.addError(NewAccountNotClosedError(close))
-		return
-	}
-
-	// Check if already closed
-	if account.IsClosed() {
-		l.addError(NewAccountAlreadyClosedError(close, account.CloseDate))
-		return
-	}
-
-	// Close the account
-	account.CloseDate = close.Date
-}
-
-// processTransaction processes a Transaction directive
-func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
+func (l *Ledger) processOpen(ctx context.Context, open *ast.Open) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
 
 	// Run pure validation
-	errs, balanceResult := v.validateTransaction(ctx, txn)
+	errs, delta := v.validateOpen(ctx, open)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -222,82 +175,85 @@ func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
 		return
 	}
 
-	// Validation passed - now apply effects
-	l.applyTransaction(txn, balanceResult)
+	// Validation passed - now apply delta
+	l.ApplyOpenDelta(delta)
 }
 
-// applyTransaction mutates ledger state (inventory updates)
-// Only called after validation passes
-func (l *Ledger) applyTransaction(txn *ast.Transaction, result *balanceResult) {
-	for _, posting := range txn.Postings {
-		// Get the amount (either explicit or inferred)
-		var amountToUse *ast.Amount
-		if posting.Amount != nil {
-			amountToUse = posting.Amount
-		} else if inferredAmount, ok := result.inferredAmounts[posting]; ok {
-			amountToUse = inferredAmount
-		} else {
-			// No amount and couldn't infer - skip
-			continue
-		}
+// processClose processes a Close directive
+func (l *Ledger) processClose(ctx context.Context, close *ast.Close) {
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
 
-		accountName := string(posting.Account)
-		account, ok := l.accounts[accountName]
+	// Run pure validation
+	errs, delta := v.validateClose(ctx, close)
+
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
+		return
+	}
+
+	// Validation passed - now apply delta
+	l.ApplyCloseDelta(delta)
+}
+
+// processTransaction processes a Transaction directive
+func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
+
+	// Run pure validation
+	errs, delta := v.validateTransaction(ctx, txn)
+
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
+		return
+	}
+
+	// Validation passed - now apply delta
+	l.ApplyTransactionDelta(delta)
+}
+
+// ApplyTransactionDelta mutates ledger state by applying a transaction delta.
+// The delta contains all the inventory changes computed during validation.
+func (l *Ledger) ApplyTransactionDelta(delta *TransactionDelta) {
+	for _, change := range delta.InventoryChanges {
+		account, ok := l.accounts[change.Account]
 		if !ok {
+			// This shouldn't happen as validation checks account exists
 			continue
 		}
 
-		// Parse amount
-		amount, _ := ParseAmount(amountToUse) // We know it's valid from validation
-		currency := amountToUse.Currency
-
-		// Check if we have a cost (explicit, inferred, or empty)
-		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
-		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
-		hasInferredCost := false
-		var costToUse *ast.Cost
-
-		if hasExplicitCost {
-			costToUse = posting.Cost
-		} else if hasEmptyCost {
-			// Empty cost spec - use it directly for lot tracking
-			// For reductions, this triggers FIFO/LIFO booking
-			// For augmentations, the cost was inferred earlier
-			costToUse = posting.Cost
-		} else if inferredCost, ok := result.inferredCosts[posting]; ok {
-			// Use inferred cost - create a temporary Cost structure
-			hasInferredCost = true
-			costToUse = &ast.Cost{
-				Amount: inferredCost,
-			}
-		}
-
-		// Update lot inventory
-		if hasExplicitCost || hasEmptyCost || hasInferredCost {
-			// Has cost basis - add/reduce with lot tracking
-			lotSpec, err := ParseLotSpec(costToUse)
-			if err != nil {
-				l.addError(NewInvalidAmountError(txn, posting.Account, "cost", err))
-				continue
-			}
-
-			if amount.GreaterThan(decimal.Zero) {
-				// Adding to inventory
-				account.Inventory.AddLot(currency, amount, lotSpec)
+		switch change.Operation {
+		case OpAdd:
+			if change.LotSpec != nil {
+				// Add with lot tracking
+				account.Inventory.AddLot(change.Currency, change.Amount, change.LotSpec)
 			} else {
-				// Reducing from inventory
+				// Simple add (amount is always positive)
+				account.Inventory.Add(change.Currency, change.Amount)
+			}
+
+		case OpReduce:
+			if change.LotSpec != nil {
+				// Reduce from lot-tracked inventory using booking method
+				// Validator has already checked this will succeed
 				bookingMethod := account.BookingMethod
 				if bookingMethod == "" {
 					bookingMethod = "FIFO" // Default
 				}
-				err := account.Inventory.ReduceLot(currency, amount, lotSpec, bookingMethod)
+				// For OpReduce, amount is always positive, but ReduceLot expects negative
+				err := account.Inventory.ReduceLot(change.Currency, change.Amount.Neg(), change.LotSpec, bookingMethod)
 				if err != nil {
-					l.addError(NewInvalidAmountError(txn, posting.Account, "lot reduction", err))
+					// This should never happen - validator checks sufficiency
+					// If it does, it's a bug in the validator
+					panic(fmt.Sprintf("ReduceLot failed after validation: %v", err))
 				}
+			} else {
+				// Simple reduction (no lot tracking) - just add negative amount
+				account.Inventory.Add(change.Currency, change.Amount.Neg())
 			}
-		} else {
-			// No cost basis - simple add
-			account.Inventory.Add(currency, amount)
 		}
 	}
 }
@@ -305,10 +261,10 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, result *balanceResult) {
 // processBalance processes a Balance directive
 func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateBalance(ctx, balance)
+	errs, delta := v.validateBalance(ctx, balance)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -316,62 +272,67 @@ func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 		return
 	}
 
-	// Validation passed - now apply effects
-	l.applyBalance(balance)
+	// Validation passed - now apply delta
+	l.ApplyBalanceDelta(delta)
 }
 
-// applyBalance applies balance assertion and padding (mutation only)
-func (l *Ledger) applyBalance(balance *ast.Balance) {
-	// Parse expected amount (we know it's valid from validation)
-	expectedAmount, _ := ParseAmount(balance.Amount)
-	currency := balance.Amount.Currency
+// ApplyOpenDelta mutates ledger state by adding a new account.
+func (l *Ledger) ApplyOpenDelta(delta *OpenDelta) {
+	accountName := string(delta.Open.Account)
+	l.accounts[accountName] = delta.Account
+}
 
-	// Get account inventory
-	accountName := string(balance.Account)
+// ApplyCloseDelta mutates ledger state by closing an account.
+func (l *Ledger) ApplyCloseDelta(delta *CloseDelta) {
+	account := l.accounts[delta.AccountName] // We know it exists from validation
+	account.CloseDate = delta.Close.Date
+}
+
+// ApplyBalanceDelta mutates ledger state by applying a balance delta.
+// This includes applying padding if required and adding errors if balance doesn't match.
+// All checking is done in the validator - this just executes the delta.
+func (l *Ledger) ApplyBalanceDelta(delta *BalanceDelta) {
+	accountName := string(delta.Balance.Account)
 	account := l.accounts[accountName] // We know it exists from validation
+	currency := delta.Balance.Amount.Currency
 
-	// Get actual amount from inventory
-	actualAmount := account.Inventory.Get(currency)
+	// Apply padding if required
+	if delta.PadRequired {
+		// Add padding to the account
+		account.Inventory.Add(delta.PadCurrency, delta.PadAmount)
 
-	// Check if there's a pad directive for this account
-	if padEntry, hasPad := l.padEntries[accountName]; hasPad {
-		// Calculate the difference needed to reach expected balance
-		difference := expectedAmount.Sub(actualAmount)
-
-		// Apply padding if difference is significant
-		tolerance := l.toleranceConfig.GetDefaultTolerance(currency)
-		if difference.Abs().GreaterThan(tolerance) {
-			// Add difference to the account
-			account.Inventory.Add(currency, difference)
-
-			// Subtract from the pad account
-			padAccountName := string(padEntry.AccountPad)
-			if padAccount, ok := l.accounts[padAccountName]; ok {
-				padAccount.Inventory.Add(currency, difference.Neg())
-			}
+		// Subtract from the pad account
+		if padAccount, ok := l.accounts[delta.PadAccount]; ok {
+			padAccount.Inventory.Add(delta.PadCurrency, delta.PadAmount.Neg())
 		}
 
 		// Remove the pad entry after applying
 		delete(l.padEntries, accountName)
-
-		// Update actual amount after padding
-		actualAmount = account.Inventory.Get(currency)
 	}
 
-	// Check if amounts match within tolerance
-	tolerance := l.toleranceConfig.GetDefaultTolerance(currency)
-	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
-		l.addError(NewBalanceMismatchError(balance, expectedAmount.String(), actualAmount.String(), currency))
+	// Add error if validator determined balance doesn't match
+	if delta.BalanceMismatch {
+		l.addError(NewBalanceMismatchError(delta.Balance,
+			delta.ExpectedAmount.String(),
+			delta.FinalAmount.String(),
+			currency))
 	}
+}
+
+// ApplyPadDelta mutates ledger state by storing a pad directive.
+// The pad will be applied when the next balance assertion is encountered.
+// Assumes validation has already checked for duplicates.
+func (l *Ledger) ApplyPadDelta(delta *PadDelta) {
+	l.padEntries[delta.AccountName] = delta.Pad
 }
 
 // processPad processes a Pad directive
 func (l *Ledger) processPad(ctx context.Context, pad *ast.Pad) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validatePad(ctx, pad)
+	errs, delta := v.validatePad(ctx, pad)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -379,50 +340,40 @@ func (l *Ledger) processPad(ctx context.Context, pad *ast.Pad) {
 		return
 	}
 
-	// Validation passed - store pad directive
-	// Will be applied when next balance assertion is encountered
-	accountName := string(pad.Account)
-
-	// Check for duplicate pad directives
-	if existingPad, exists := l.padEntries[accountName]; exists {
-		l.addError(fmt.Errorf("%s: Duplicate pad directive for account %s (previous pad on %s)",
-			pad.Date.Format("2006-01-02"), accountName, existingPad.Date.Format("2006-01-02")))
-		return
-	}
-
-	l.padEntries[accountName] = pad
+	// Validation passed - now apply delta
+	l.ApplyPadDelta(delta)
 }
 
 // processNote processes a Note directive
 func (l *Ledger) processNote(ctx context.Context, note *ast.Note) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateNote(ctx, note)
+	errs, _ := v.validateNote(ctx, note)
 
 	// Collect validation errors
 	if len(errs) > 0 {
 		l.errors = append(l.errors, errs...)
 	}
 
-	// Note has no state mutation - just validation
+	// Note has no state mutation - no delta to apply
 }
 
 // processDocument processes a Document directive
 func (l *Ledger) processDocument(ctx context.Context, doc *ast.Document) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.accounts, l.padEntries, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateDocument(ctx, doc)
+	errs, _ := v.validateDocument(ctx, doc)
 
 	// Collect validation errors
 	if len(errs) > 0 {
 		l.errors = append(l.errors, errs...)
 	}
 
-	// Document has no state mutation - just validation
+	// Document has no state mutation - no delta to apply
 }
 
 // addError adds an error to the error collection

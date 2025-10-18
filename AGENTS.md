@@ -959,6 +959,107 @@ formatter.FormatTransaction(txn, os.Stdout)
 - All validation errors must include `Pos` and `Directive` fields for consistent formatting
 - Implement getter methods: `GetPosition()`, `GetDirective()`, `GetAccount()`, `GetDate()`
 
+#### Delta Pattern: Explicit Mutation Plans
+
+The ledger uses a **delta pattern** to separate validation from mutation, keeping validation pure and making all state changes explicit and inspectable.
+
+**Core Principle:** Validators return lightweight "delta" structs that describe what changes to make. These deltas are plain Go structs that can be logged, tested, and replayed. The ledger applies deltas only after validation passes.
+
+**Flow:**
+1. **Validate** → Compute delta (pure function, no side effects)
+2. **Check errors** → If validation failed, return errors
+3. **Apply delta** → Mutate state based on delta
+
+**Example:**
+```go
+// ❌ ANTI-PATTERN: Validation with side effects
+func (l *Ledger) processTransaction(txn *Transaction) {
+    // Validate and mutate in same function
+    if !l.isAccountOpen(txn.Account) {
+        l.errors = append(l.errors, err)
+        return
+    }
+    // Mutate directly during validation
+    l.accounts[txn.Account].Inventory.Add(txn.Amount)
+}
+
+// ✅ CORRECT: Validation returns delta, mutation separate
+func (l *Ledger) processTransaction(ctx context.Context, txn *Transaction) {
+    v := newValidator(l.accounts, l.toleranceConfig)
+
+    // Pure validation - returns delta describing changes
+    errs, delta := v.validateTransaction(ctx, txn)
+    if len(errs) > 0 {
+        l.errors = append(l.errors, errs...)
+        return
+    }
+
+    // Apply the delta to mutate state
+    l.ApplyTransactionDelta(delta)
+}
+
+// Validator method (pure function)
+func (v *validator) validateTransaction(ctx context.Context, txn *Transaction) ([]error, *TransactionDelta) {
+    // Run all validation checks
+    if errs := v.validateAccounts(txn); len(errs) > 0 {
+        return errs, nil
+    }
+
+    // Compute what changes to make (no mutation!)
+    inventoryChanges := computeInventoryChanges(txn)
+
+    delta := &TransactionDelta{
+        Transaction:      txn,
+        InferredAmounts:  inferredAmounts,
+        InventoryChanges: inventoryChanges,  // Explicit list of changes
+    }
+
+    return nil, delta
+}
+
+// Apply method (mutation only)
+func (l *Ledger) ApplyTransactionDelta(delta *TransactionDelta) {
+    // Simply execute the changes described in the delta
+    for _, change := range delta.InventoryChanges {
+        account := l.accounts[change.Account]
+        switch change.Operation {
+        case OpAdd:
+            account.Inventory.Add(change.Currency, change.Amount)
+        case OpReduce:
+            account.Inventory.Reduce(change.Currency, change.Amount)
+        }
+    }
+}
+```
+
+**Delta Types (see `ledger/deltas.go`):**
+- `TransactionDelta` - Inventory changes (add/reduce lots)
+- `BalanceDelta` - Padding amounts and balance checks
+- `PadDelta` - Store pad directive for later use
+- `OpenDelta` - Account to create
+- `CloseDelta` - Account to close
+- `NoteDelta`, `DocumentDelta` - No mutations (for consistency)
+
+**Benefits:**
+- **Pure validation** - No side effects, easier to test and reason about
+- **Inspectable** - Log deltas to see what will change: `fmt.Println(delta.String())`
+- **Testable** - Validate without applying: `errs, delta := validator.validateTransaction(txn)`
+- **Replayable** - Store deltas for audit trails or undo
+- **Debuggable** - Set breakpoints on apply methods to see mutations
+- **Go-like** - Concrete values passed around, no hidden state changes
+
+**Checklist for new directive types:**
+- [ ] Create a delta type in `ledger/deltas.go` with String() method
+- [ ] Validator returns `([]error, *XxxDelta)`
+- [ ] Validator is pure - computes delta, doesn't mutate
+- [ ] ApplyXxxDelta method mutates state based on delta
+- [ ] process method: validate → check errors → apply delta
+
+**When NOT to use deltas:**
+- Pure read operations (no state changes)
+- Trivial setters (just assigning a field)
+- When mutation is the entire purpose (builders, constructors)
+
 ### Errors Package
 
 - Provides formatting infrastructure, not domain errors

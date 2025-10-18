@@ -45,13 +45,13 @@ func TestLedger_ProcessOpen(t *testing.T) {
 		{
 			name: "open account with booking method",
 			input: `
-				2020-01-01 open Assets:Brokerage USD "STRICT"
+				2020-01-01 open Assets:Brokerage USD "FIFO"
 			`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				assert.Equal(t, "STRICT", acc.BookingMethod)
+				assert.Equal(t, "FIFO", acc.BookingMethod)
 			},
 		},
 		{

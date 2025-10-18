@@ -62,15 +62,21 @@ import (
 
 // validator provides transaction validation with read-only access to ledger state.
 // This is a separate type from Ledger to ensure validation cannot mutate state.
+//
+// Note: The validator holds references to mutable maps (accounts, padEntries) but
+// is trusted not to mutate them. This is a performance optimization - validators
+// only read state, never write. Copying these maps would be expensive.
 type validator struct {
 	accounts        map[string]*Account
+	padEntries      map[string]*ast.Pad // For checking duplicate pads
 	toleranceConfig *ToleranceConfig
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account, toleranceConfig *ToleranceConfig) *validator {
+func newValidator(accounts map[string]*Account, padEntries map[string]*ast.Pad, toleranceConfig *ToleranceConfig) *validator {
 	return &validator{
 		accounts:        accounts,
+		padEntries:      padEntries,
 		toleranceConfig: toleranceConfig,
 	}
 }
@@ -84,7 +90,8 @@ type postingClassification struct {
 	withExplicitCost []*ast.Posting
 }
 
-// balanceResult contains the result of transaction balancing
+// balanceResult contains intermediate balance calculation results
+// This is now internal to the validation process - the final result is TransactionDelta
 type balanceResult struct {
 	isBalanced      bool
 	residuals       map[string]string // currency -> residual amount
@@ -207,19 +214,8 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 			}
 		}
 
-		// Validate cost label if present
-		if posting.Cost.Label != "" {
-			// Labels must be non-empty strings (already guaranteed by parser)
-			// But we can add validation for label format if needed
-			if len(posting.Cost.Label) == 0 {
-				costSpec := "{...}"
-				if posting.Cost.Amount != nil {
-					costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
-				}
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
-					fmt.Errorf("cost label cannot be empty")))
-			}
-		}
+		// Cost labels are already validated by the parser (non-empty if present)
+		// No additional validation needed
 	}
 	return errs
 }
@@ -399,16 +395,34 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 		// Only infer if there's exactly ONE missing posting AND exactly ONE unbalanced currency
 		// Otherwise it's ambiguous
 		if len(pc.withoutAmounts) == 1 && len(balance) == 1 {
-			// Single missing posting and single unbalanced currency - we can infer
-			for currency, residual := range balance {
-				// Need to negate the residual to balance
-				needed := residual.Neg()
+			// Single missing posting and single currency
+			// Check if the residual is within tolerance (transaction is balanced)
+			var residual decimal.Decimal
+			var currency string
+			for c, r := range balance {
+				currency = c
+				residual = r
+			}
 
-				// Create the inferred amount
-				result.inferredAmounts[pc.withoutAmounts[0]] = &ast.Amount{
-					Value:    needed.String(),
-					Currency: currency,
+			// Check if residual is within tolerance
+			// If it is, the transaction is already balanced and we can't infer the amount
+			tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+			if residual.Abs().LessThanOrEqual(tolerance) {
+				// Transaction already balanced (within tolerance) - posting without amount is an error
+				for _, posting := range pc.withoutAmounts {
+					errs = append(errs, NewInvalidAmountError(txn, posting.Account, "missing amount",
+						fmt.Errorf("posting has no amount and amount cannot be inferred (transaction already balanced)")))
 				}
+				return nil, errs
+			}
+
+			// Need to negate the residual to balance
+			needed := residual.Neg()
+
+			// Create the inferred amount
+			result.inferredAmounts[pc.withoutAmounts[0]] = &ast.Amount{
+				Value:    needed.String(),
+				Currency: currency,
 			}
 		} else if len(pc.withoutAmounts) > 1 || len(balance) > 1 {
 			// Multiple missing postings OR multiple unbalanced currencies - ambiguous
@@ -417,6 +431,14 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 			}
 			result.isBalanced = false
 			return result, nil
+		} else {
+			// Single posting without amount, no currencies in balance
+			// This means no other postings have amounts either - error
+			for _, posting := range pc.withoutAmounts {
+				errs = append(errs, NewInvalidAmountError(txn, posting.Account, "missing amount",
+					fmt.Errorf("posting has no amount and amount cannot be inferred")))
+			}
+			return nil, errs
 		}
 	}
 
@@ -524,7 +546,187 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 	return result, nil
 }
 
-// validateTransaction runs all validation checks on a transaction.
+// canReduceLot checks if reducing from inventory will succeed
+// This duplicates the logic from Inventory.ReduceLot but without mutating
+func canReduceLot(inv *Inventory, currency string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
+	// amount should be positive here (we convert it in the caller)
+	reduceAmount := amount
+
+	// Empty spec {} means use booking method
+	if spec != nil && spec.IsEmpty() {
+		// Validate booking method
+		validMethods := []string{"FIFO", "LIFO", "STRICT", "AVERAGE", "NONE"}
+		isValid := false
+		for _, method := range validMethods {
+			if bookingMethod == method {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			return fmt.Errorf("unsupported booking method %q (supported: FIFO, LIFO, STRICT, AVERAGE, NONE)", bookingMethod)
+		}
+
+		// STRICT requires explicit lot specification
+		if bookingMethod == "STRICT" {
+			return fmt.Errorf("booking method STRICT requires explicit lot specification, got empty spec {}")
+		}
+
+		// Check if there's enough total inventory
+		lots := inv.GetLots(currency)
+		if len(lots) == 0 {
+			return fmt.Errorf("no lots available for %s", currency)
+		}
+		total := decimal.Zero
+		for _, lot := range lots {
+			total = total.Add(lot.Amount)
+		}
+		if total.LessThan(reduceAmount) {
+			return fmt.Errorf("insufficient total amount for %s: have %s, need %s",
+				currency, total.String(), reduceAmount.String())
+		}
+		return nil
+	}
+
+	// Specific lot spec - find matching lot
+	if spec != nil && spec.Cost != nil {
+		lots := inv.GetLots(currency)
+		for _, lot := range lots {
+			if lotSpecsMatch(lot.Spec, spec) {
+				if lot.Amount.LessThan(reduceAmount) {
+					return fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
+						spec.String(), lot.Amount.String(), reduceAmount.String())
+				}
+				return nil // Found and sufficient
+			}
+		}
+		return fmt.Errorf("lot not found: %s %s", currency, spec.String())
+	}
+
+	// No spec - simple reduction, always succeeds (creates negative balance)
+	return nil
+}
+
+// computeInventoryChanges builds the list of inventory mutations for a transaction.
+// This is a pure function that computes what changes would be made without mutating state.
+// It also validates that all reduction operations will succeed.
+func computeInventoryChanges(txn *ast.Transaction, balanceRes *balanceResult, accounts map[string]*Account) ([]InventoryChange, []error) {
+	var changes []InventoryChange
+	var errs []error
+
+	for _, posting := range txn.Postings {
+		// Get the amount (either explicit or inferred)
+		var amountToUse *ast.Amount
+		if posting.Amount != nil {
+			amountToUse = posting.Amount
+		} else if inferredAmount, ok := balanceRes.inferredAmounts[posting]; ok {
+			amountToUse = inferredAmount
+		} else {
+			// No amount and couldn't infer - skip
+			continue
+		}
+
+		accountName := string(posting.Account)
+
+		// Parse amount
+		amount, err := ParseAmount(amountToUse)
+		if err != nil {
+			// This shouldn't happen as we've already validated, but be safe
+			continue
+		}
+		currency := amountToUse.Currency
+
+		// Check if we have a cost (explicit, inferred, or empty)
+		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
+		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
+		hasInferredCost := false
+		var costToUse *ast.Cost
+
+		if hasExplicitCost {
+			costToUse = posting.Cost
+		} else if hasEmptyCost {
+			// Empty cost spec - use it directly for lot tracking
+			costToUse = posting.Cost
+		} else if inferredCost, ok := balanceRes.inferredCosts[posting]; ok {
+			// Use inferred cost - create a temporary Cost structure
+			hasInferredCost = true
+			costToUse = &ast.Cost{
+				Amount: inferredCost,
+			}
+		}
+
+		// Build inventory change
+		// STANDARDIZED: Always use absolute value for Amount, explicit Operation for direction
+		if hasExplicitCost || hasEmptyCost || hasInferredCost {
+			// Has cost basis - add/reduce with lot tracking
+			lotSpec, err := ParseLotSpec(costToUse)
+			if err != nil {
+				errs = append(errs, NewInvalidAmountError(txn, posting.Account, "cost", err))
+				continue
+			}
+
+			if amount.GreaterThanOrEqual(decimal.Zero) {
+				// Adding to inventory (or zero amount, which is a no-op addition)
+				changes = append(changes, InventoryChange{
+					Account:   accountName,
+					Currency:  currency,
+					Amount:    amount, // Positive as-is
+					LotSpec:   lotSpec,
+					Operation: OpAdd,
+				})
+			} else {
+				// Reducing from inventory - validate it will succeed
+				account, ok := accounts[accountName]
+				if !ok {
+					continue // Should not happen, already validated
+				}
+
+				reduceAmount := amount.Abs()
+				bookingMethod := account.BookingMethod
+				if bookingMethod == "" {
+					bookingMethod = "FIFO"
+				}
+
+				if err := canReduceLot(account.Inventory, currency, reduceAmount, lotSpec, bookingMethod); err != nil {
+					errs = append(errs, NewInvalidAmountError(txn, posting.Account, "lot reduction", err))
+					continue
+				}
+
+				changes = append(changes, InventoryChange{
+					Account:   accountName,
+					Currency:  currency,
+					Amount:    reduceAmount,
+					LotSpec:   lotSpec,
+					Operation: OpReduce,
+				})
+			}
+		} else {
+			// No cost basis - simple inventory update
+			// Use same convention: positive amount + explicit operation
+			if amount.GreaterThanOrEqual(decimal.Zero) {
+				changes = append(changes, InventoryChange{
+					Account:   accountName,
+					Currency:  currency,
+					Amount:    amount, // Positive as-is
+					LotSpec:   nil,
+					Operation: OpAdd,
+				})
+			} else {
+				changes = append(changes, InventoryChange{
+					Account:   accountName,
+					Currency:  currency,
+					Amount:    amount.Abs(), // Convert to positive
+					LotSpec:   nil,
+					Operation: OpReduce, // Now use OpReduce for consistency
+				})
+			}
+		}
+	}
+
+	return changes, errs
+}
+
+// validateTransaction runs all validation checks on a transaction and returns a delta.
 //
 // This is the main entry point for transaction validation. It orchestrates
 // all validation steps in sequence and collects all errors found.
@@ -536,20 +738,21 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //  4. validatePrices - Check price specifications are valid
 //  5. validateMetadata - Check metadata entries are valid
 //  6. calculateBalance - Calculate weights, infer amounts, check balance
+//  7. computeInventoryChanges - Compute inventory mutations
 //
 // The validation does NOT short-circuit on first error. Instead, it collects
 // all validation errors to provide comprehensive feedback to the user.
 //
 // Returns:
 //   - []error: All validation errors found (empty if validation passed)
-//   - *balanceResult: Balance calculation result (nil if validation failed)
+//   - *TransactionDelta: Delta containing inferred values and inventory changes (nil if validation failed)
 //
 // Performance: ~955ns/op with telemetry instrumentation enabled.
 //
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	errs, result := v.validateTransaction(ctx, txn)
+//	errs, delta := v.validateTransaction(ctx, txn)
 //	if len(errs) > 0 {
 //	    // Validation failed
 //	    fmt.Printf("Found %d validation errors:\n", len(errs))
@@ -558,9 +761,9 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //	    }
 //	    return
 //	}
-//	// Validation passed - result contains balance info and inferred amounts
-//	fmt.Printf("Transaction balanced: %v\n", result.isBalanced)
-func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *balanceResult) {
+//	// Validation passed - delta contains all planned mutations
+//	fmt.Printf("Transaction will make %d inventory changes\n", len(delta.InventoryChanges))
+func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *TransactionDelta) {
 	timer := telemetry.StartTimer(ctx, "validator.transaction")
 	defer timer.End()
 
@@ -616,35 +819,52 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	// 7. Check if balanced
 	if !balanceResult.isBalanced {
 		allErrors = append(allErrors, NewTransactionNotBalancedError(txn, balanceResult.residuals))
+		return allErrors, nil
 	}
 
-	return allErrors, balanceResult
+	// 8. Compute inventory changes
+	inventoryChanges, changeErrs := computeInventoryChanges(txn, balanceResult, v.accounts)
+	if len(changeErrs) > 0 {
+		allErrors = append(allErrors, changeErrs...)
+		return allErrors, nil
+	}
+
+	// Build the delta
+	delta := &TransactionDelta{
+		Transaction:      txn,
+		InferredAmounts:  balanceResult.inferredAmounts,
+		InferredCosts:    balanceResult.inferredCosts,
+		InventoryChanges: inventoryChanges,
+	}
+
+	return allErrors, delta
 }
 
-// validateBalance checks if a balance directive is valid.
+// validateBalance checks if a balance directive is valid and computes the delta.
 //
 // It validates that:
 //   - The account exists and is open at the balance date
 //   - The balance amount is parseable as a decimal number
 //
-// Balance directives assert that an account has a specific balance at a given date.
-// This validator only checks the directive syntax and account state, not the actual
-// balance (which is checked during the mutation phase).
+// It also computes:
+//   - The actual balance in the account
+//   - Whether padding is required (if a pad directive exists)
+//   - The pad amount and account if padding is needed
 //
-// Returns a slice of errors for validation failures.
+// Returns validation errors and a BalanceDelta describing the mutations to apply.
 //
 // Example:
 //
 //	// Valid: 2024-01-15 balance Assets:Checking 100.00 USD
-//	v := newValidator(ledger.accounts)
-//	errs := v.validateBalance(ctx, balance)
+//	v := newValidator(ledger.accounts, ledger.padEntries, ledger.toleranceConfig)
+//	errs, delta := v.validateBalance(ctx, balance)
 //	if len(errs) > 0 {
 //	    // Account doesn't exist or amount is invalid
 //	    for _, err := range errs {
 //	        fmt.Printf("Balance validation error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) []error {
+func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) ([]error, *BalanceDelta) {
 	var errs []error
 
 	// 1. Validate account is open
@@ -652,60 +872,119 @@ func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) [
 	acc, exists := v.accounts[accountName]
 	if !exists {
 		errs = append(errs, NewAccountNotOpenErrorFromBalance(balance))
-		return errs
+		return errs, nil
 	}
 
 	if !acc.IsOpen(balance.Date) {
 		errs = append(errs, NewAccountNotOpenErrorFromBalance(balance))
-		return errs
+		return errs, nil
 	}
 
 	// 2. Validate amount is parseable
-	if _, err := ParseAmount(balance.Amount); err != nil {
+	expectedAmount, err := ParseAmount(balance.Amount)
+	if err != nil {
 		errs = append(errs, NewInvalidAmountErrorFromBalance(balance, err))
-		return errs
+		return errs, nil
 	}
 
-	return errs
+	// 3. Get actual amount from inventory
+	currency := balance.Amount.Currency
+	actualAmount := acc.Inventory.Get(currency)
+
+	// 4. Check if there's a pad directive for this account
+	delta := &BalanceDelta{
+		Balance:        balance,
+		ActualAmount:   actualAmount,
+		ExpectedAmount: expectedAmount,
+		PadRequired:    false,
+	}
+
+	// Start with actual amount
+	finalAmount := actualAmount
+
+	if padEntry, hasPad := v.padEntries[accountName]; hasPad {
+		// Calculate the difference needed to reach expected balance
+		difference := expectedAmount.Sub(actualAmount)
+
+		// Check if padding is needed (difference exceeds tolerance)
+		tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+		if difference.Abs().GreaterThan(tolerance) {
+			delta.PadRequired = true
+			delta.PadAmount = difference
+			delta.PadCurrency = currency
+			delta.PadAccount = string(padEntry.AccountPad)
+
+			// Update final amount with padding
+			finalAmount = actualAmount.Add(difference)
+		}
+	}
+
+	delta.FinalAmount = finalAmount
+
+	// 5. Check if final balance matches expected (after padding if applied)
+	tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+	if !AmountEqual(expectedAmount, finalAmount, tolerance) {
+		delta.BalanceMismatch = true
+	}
+
+	return errs, delta
 }
 
-// validatePad checks if a pad directive is valid.
+// validatePad checks if a pad directive is valid and returns a delta.
 //
 // It validates that:
 //   - The main account exists and is open at the pad date
 //   - The pad account exists and is open at the pad date
+//   - No duplicate pad directive exists for the same account
 //
 // Pad directives automatically insert transactions to bring an account to a specific
 // balance determined by the next balance assertion. Both the account being padded
 // and the equity account used for padding must be open.
 //
-// Returns a slice of errors for validation failures.
+// Returns validation errors and a PadDelta to store the pad directive.
 //
 // Example:
 //
 //	// Valid: 2024-01-01 pad Assets:Checking Equity:Opening-Balances
-//	v := newValidator(ledger.accounts)
-//	errs := v.validatePad(ctx, pad)
+//	v := newValidator(ledger.accounts, ledger.padEntries)
+//	errs, delta := v.validatePad(ctx, pad)
 //	if len(errs) > 0 {
 //	    // One or both accounts don't exist or are closed
 //	    for _, err := range errs {
 //	        fmt.Printf("Pad validation error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
+func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) ([]error, *PadDelta) {
 	var errs []error
+	accountName := string(pad.Account)
 
-	// 1. Validate main account is open
+	// 1. Check for duplicate pad directives
+	if existingPad, exists := v.padEntries[accountName]; exists {
+		errs = append(errs, fmt.Errorf("%s: Duplicate pad directive for account %s (previous pad on %s)",
+			pad.Date.Format("2006-01-02"), accountName, existingPad.Date.Format("2006-01-02")))
+	}
+
+	// 2. Validate main account is open
 	if !v.isAccountOpen(pad.Account, pad.Date) {
 		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.Account))
 	}
 
-	// 2. Validate pad account is open
+	// 3. Validate pad account is open
 	if !v.isAccountOpen(pad.AccountPad, pad.Date) {
 		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.AccountPad))
 	}
 
-	return errs
+	if len(errs) > 0 {
+		return errs, nil
+	}
+
+	// Build delta
+	delta := &PadDelta{
+		Pad:         pad,
+		AccountName: accountName,
+	}
+
+	return errs, delta
 }
 
 // validateNote checks if a note directive is valid.
@@ -715,21 +994,22 @@ func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
 //   - The description is non-empty (enforced by parser, checked for safety)
 //
 // Note directives attach dated comments to accounts for documentation purposes.
+// They have no state mutations but return a delta for consistency.
 //
-// Returns a slice of errors for validation failures.
+// Returns validation errors and a NoteDelta (or nil if validation failed).
 //
 // Example:
 //
 //	// Valid: 2024-07-09 note Assets:Checking "Called bank about pending deposit"
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateNote(ctx, note)
+//	errs, delta := v.validateNote(ctx, note)
 //	if len(errs) > 0 {
 //	    // Account doesn't exist or is closed
 //	    for _, err := range errs {
 //	        fmt.Printf("Note validation error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validateNote(ctx context.Context, note *ast.Note) []error {
+func (v *validator) validateNote(ctx context.Context, note *ast.Note) ([]error, *NoteDelta) {
 	var errs []error
 
 	// 1. Validate account is open
@@ -743,14 +1023,25 @@ func (v *validator) validateNote(ctx context.Context, note *ast.Note) []error {
 		errs = append(errs, fmt.Errorf("note description cannot be empty"))
 	}
 
-	return errs
+	if len(errs) > 0 {
+		return errs, nil
+	}
+
+	delta := &NoteDelta{
+		Note: note,
+	}
+
+	return errs, delta
 }
 
 // validateDocument checks if a document directive is valid.
 //
 // Validates that the account exists and is open at the document date.
 // Document directives link external files to accounts for audit trails.
-func (v *validator) validateDocument(ctx context.Context, doc *ast.Document) []error {
+// They have no state mutations but return a delta for consistency.
+//
+// Returns validation errors and a DocumentDelta (or nil if validation failed).
+func (v *validator) validateDocument(ctx context.Context, doc *ast.Document) ([]error, *DocumentDelta) {
 	var errs []error
 
 	// 1. Validate account is open
@@ -764,7 +1055,99 @@ func (v *validator) validateDocument(ctx context.Context, doc *ast.Document) []e
 		errs = append(errs, fmt.Errorf("document path cannot be empty"))
 	}
 
-	return errs
+	if len(errs) > 0 {
+		return errs, nil
+	}
+
+	delta := &DocumentDelta{
+		Document: doc,
+	}
+
+	return errs, delta
+}
+
+// validateOpen checks if an open directive is valid and returns a delta.
+//
+// It validates that:
+//   - The account doesn't already exist (no duplicate opens)
+//
+// Returns validation errors and an OpenDelta containing the account to create.
+func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, *OpenDelta) {
+	var errs []error
+	accountName := string(open.Account)
+
+	// Check if account already exists
+	if existing, ok := v.accounts[accountName]; ok {
+		errs = append(errs, NewAccountAlreadyOpenError(open, existing.OpenDate))
+		return errs, nil
+	}
+
+	// Validate booking method if specified
+	if open.BookingMethod != "" {
+		validMethods := []string{"FIFO", "LIFO", "STRICT", "AVERAGE", "NONE"}
+		isValid := false
+		for _, method := range validMethods {
+			if open.BookingMethod == method {
+				isValid = true
+				break
+			}
+		}
+		if !isValid {
+			errs = append(errs, fmt.Errorf("%s: Unsupported booking method %q for account %s (supported: FIFO, LIFO, STRICT, AVERAGE, NONE)",
+				open.Date.Format("2006-01-02"), open.BookingMethod, accountName))
+			return errs, nil
+		}
+	}
+
+	// Pre-create the account
+	account := &Account{
+		Name:                 open.Account,
+		Type:                 ParseAccountType(open.Account),
+		OpenDate:             open.Date,
+		ConstraintCurrencies: open.ConstraintCurrencies,
+		BookingMethod:        open.BookingMethod,
+		Metadata:             open.Metadata,
+		Inventory:            NewInventory(),
+	}
+
+	delta := &OpenDelta{
+		Open:    open,
+		Account: account,
+	}
+
+	return errs, delta
+}
+
+// validateClose checks if a close directive is valid and returns a delta.
+//
+// It validates that:
+//   - The account exists
+//   - The account is not already closed
+//
+// Returns validation errors and a CloseDelta describing the account closure.
+func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]error, *CloseDelta) {
+	var errs []error
+	accountName := string(close.Account)
+
+	// Check if account exists
+	account, ok := v.accounts[accountName]
+	if !ok {
+		errs = append(errs, NewAccountNotClosedError(close))
+		return errs, nil
+	}
+
+	// Check if already closed
+	if account.IsClosed() {
+		errs = append(errs, NewAccountAlreadyClosedError(close, account.CloseDate))
+		return errs, nil
+	}
+
+	delta := &CloseDelta{
+		Close:       close,
+		AccountName: accountName,
+	}
+
+	return errs, delta
 }
 
 // isAccountOpen checks if an account is open at the given date
