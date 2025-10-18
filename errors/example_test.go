@@ -3,7 +3,6 @@ package errors_test
 import (
 	"fmt"
 
-	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/errors"
 	"github.com/robinvdvleuten/beancount/ledger"
@@ -16,7 +15,7 @@ func ExampleTextFormatter() {
 	err := &ledger.AccountNotOpenError{
 		Account: "Assets:Checking",
 		Date:    date,
-		Pos: lexer.Position{
+		Pos: ast.Position{
 			Filename: "test.beancount",
 			Line:     10,
 			Column:   1,
@@ -38,7 +37,7 @@ func ExampleJSONFormatter() {
 		&ledger.AccountNotOpenError{
 			Account: "Assets:Checking",
 			Date:    date,
-			Pos: lexer.Position{
+			Pos: ast.Position{
 				Filename: "test.beancount",
 				Line:     10,
 			},
@@ -49,7 +48,7 @@ func ExampleJSONFormatter() {
 			Expected: "100",
 			Actual:   "50",
 			Currency: "USD",
-			Pos: lexer.Position{
+			Pos: ast.Position{
 				Filename: "test.beancount",
 				Line:     20,
 			},

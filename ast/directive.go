@@ -1,7 +1,5 @@
 package ast
 
-import "github.com/alecthomas/participle/v2/lexer"
-
 // Commodity declares a commodity or currency that can be used in the ledger.
 // This directive is optional but helps document which currencies and commodities
 // are expected in your accounts. It establishes the existence of a tradable
@@ -13,7 +11,7 @@ import "github.com/alecthomas/participle/v2/lexer"
 //	  name: "US Dollar"
 //	  asset-class: "cash"
 type Commodity struct {
-	Pos      lexer.Position
+	Pos      Position
 	Date     *Date  `parser:"@Date 'commodity'"`
 	Currency string `parser:"@Ident"`
 
@@ -35,7 +33,7 @@ func (c *Commodity) Directive() string { return "commodity" }
 //	2014-05-01 open Assets:US:BofA:Checking USD
 //	2014-05-01 open Assets:Investments:Brokerage USD,EUR "FIFO"
 type Open struct {
-	Pos                  lexer.Position
+	Pos                  Position
 	Date                 *Date    `parser:"@Date 'open'"`
 	Account              Account  `parser:"@Account"`
 	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
@@ -58,7 +56,7 @@ func (o *Open) Directive() string { return "open" }
 //
 //	2015-09-23 close Assets:US:BofA:Checking
 type Close struct {
-	Pos     lexer.Position
+	Pos     Position
 	Date    *Date   `parser:"@Date 'close'"`
 	Account Account `parser:"@Account"`
 
@@ -80,7 +78,7 @@ func (c *Close) Directive() string { return "close" }
 //	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
 //	2014-08-09 balance Assets:Investments:Brokerage 10.00 HOOL {518.73 USD}
 type Balance struct {
-	Pos     lexer.Position
+	Pos     Position
 	Date    *Date   `parser:"@Date 'balance'"`
 	Account Account `parser:"@Account"`
 	Amount  *Amount `parser:"@@"`
@@ -103,7 +101,7 @@ func (b *Balance) Directive() string { return "balance" }
 //	2014-01-01 pad Assets:US:BofA:Checking Equity:Opening-Balances
 //	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
 type Pad struct {
-	Pos        lexer.Position
+	Pos        Position
 	Date       *Date   `parser:"@Date 'pad'"`
 	Account    Account `parser:"@Account"`
 	AccountPad Account `parser:"@Account"`
@@ -125,7 +123,7 @@ func (p *Pad) Directive() string { return "pad" }
 //
 //	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
 type Note struct {
-	Pos         lexer.Position
+	Pos         Position
 	Date        *Date   `parser:"@Date 'note'"`
 	Account     Account `parser:"@Account"`
 	Description string  `parser:"@String"`
@@ -148,7 +146,7 @@ func (n *Note) Directive() string { return "note" }
 //	2014-07-09 document Assets:US:BofA:Checking "/documents/bank-statements/2014-07.pdf"
 //	2014-11-02 document Liabilities:CreditCard "receipts/amazon-invoice-2014-11-02.pdf"
 type Document struct {
-	Pos            lexer.Position
+	Pos            Position
 	Date           *Date   `parser:"@Date 'document'"`
 	Account        Account `parser:"@Account"`
 	PathToDocument string  `parser:"@String"`
@@ -171,7 +169,7 @@ func (d *Document) Directive() string { return "document" }
 //	2014-07-09 price USD 1.08 CAD
 //	2015-04-30 price HOOL 582.26 USD
 type Price struct {
-	Pos       lexer.Position
+	Pos       Position
 	Date      *Date   `parser:"@Date 'price'"`
 	Commodity string  `parser:"@Ident"`
 	Amount    *Amount `parser:"@@"`
@@ -194,7 +192,7 @@ func (p *Price) Directive() string { return "price" }
 //	2014-07-09 event "location" "New York, USA"
 //	2014-09-01 event "employer" "Hooli Inc."
 type Event struct {
-	Pos   lexer.Position
+	Pos   Position
 	Date  *Date  `parser:"@Date 'event'"`
 	Name  string `parser:"@String"`
 	Value string `parser:"@String"`
@@ -217,7 +215,7 @@ func (e *Event) Directive() string { return "event" }
 //	2014-07-09 custom "budget" "..." TRUE 45.30 USD
 //	2015-01-01 custom "forecast" 100.00 USD FALSE "monthly"
 type Custom struct {
-	Pos    lexer.Position
+	Pos    Position
 	Date   *Date          `parser:"@Date 'custom'"`
 	Type   string         `parser:"@String"`
 	Values []*CustomValue `parser:"@@*"`

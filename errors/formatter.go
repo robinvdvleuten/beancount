@@ -16,7 +16,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
 )
@@ -47,7 +46,7 @@ func NewTextFormatter(f *formatter.Formatter) *TextFormatter {
 func (tf *TextFormatter) Format(err error) string {
 	// Check if this is an error with position and directive context
 	if e, ok := err.(interface {
-		GetPosition() lexer.Position
+		GetPosition() ast.Position
 		GetDirective() ast.Directive
 		Error() string
 	}); ok {
@@ -56,7 +55,7 @@ func (tf *TextFormatter) Format(err error) string {
 
 	// Check if this is an error with position only
 	if e, ok := err.(interface {
-		GetPosition() lexer.Position
+		GetPosition() ast.Position
 		Error() string
 	}); ok {
 		return tf.formatWithPosition(e.GetPosition(), e.Error())
@@ -86,12 +85,12 @@ func (tf *TextFormatter) FormatAll(errs []error) string {
 }
 
 // formatWithPosition formats an error message with position information.
-func (tf *TextFormatter) formatWithPosition(pos lexer.Position, message string) string {
+func (tf *TextFormatter) formatWithPosition(pos ast.Position, message string) string {
 	return message
 }
 
 // formatWithContext formats an error with directive context (bean-check style).
-func (tf *TextFormatter) formatWithContext(pos lexer.Position, message string, directive ast.Directive) string {
+func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, directive ast.Directive) string {
 	if directive == nil {
 		return message
 	}
@@ -212,7 +211,7 @@ func (jf *JSONFormatter) toJSON(err error) ErrorJSON {
 	}
 
 	// Extract position if available
-	if e, ok := err.(interface{ GetPosition() lexer.Position }); ok {
+	if e, ok := err.(interface{ GetPosition() ast.Position }); ok {
 		pos := e.GetPosition()
 		errJSON.Position = &PositionJSON{
 			Filename: pos.Filename,

@@ -1,7 +1,5 @@
 package ast
 
-import "github.com/alecthomas/participle/v2/lexer"
-
 // Option sets a configuration parameter that affects how the ledger is processed or
 // displayed. Options can control the ledger title, operating currency, plugin behavior,
 // and other processing settings. Options apply globally to the entire ledger.
@@ -12,7 +10,7 @@ import "github.com/alecthomas/participle/v2/lexer"
 //	option "operating_currency" "USD"
 //	option "booking_method" "STRICT"
 type Option struct {
-	Pos   lexer.Position
+	Pos   Position
 	Name  string `parser:"'option' @String"`
 	Value string `parser:"@String"`
 }
@@ -28,7 +26,7 @@ type Option struct {
 //	include "prices/2014.beancount"
 //	include "transactions/2014-expenses.beancount"
 type Include struct {
-	Pos      lexer.Position
+	Pos      Position
 	Filename string `parser:"'include' @String"`
 }
 
@@ -42,7 +40,7 @@ type Include struct {
 //	plugin "beancount.plugins.auto_accounts"
 //	plugin "beancount.plugins.check_commodity" "USD,EUR,GBP"
 type Plugin struct {
-	Pos    lexer.Position
+	Pos    Position
 	Name   string `parser:"'plugin' @String"`
 	Config string `parser:"@String?"`
 }
@@ -60,7 +58,7 @@ type Plugin struct {
 //	  Liabilities:CreditCard
 //	poptag #trip-europe
 type Pushtag struct {
-	Pos lexer.Position
+	Pos Position
 	Tag Tag `parser:"'pushtag' @Tag"`
 }
 
@@ -72,7 +70,7 @@ type Pushtag struct {
 //
 //	poptag #trip-europe
 type Poptag struct {
-	Pos lexer.Position
+	Pos Position
 	Tag Tag `parser:"'poptag' @Tag"`
 }
 
@@ -89,7 +87,7 @@ type Poptag struct {
 //	  Liabilities:CreditCard
 //	popmeta location:
 type Pushmeta struct {
-	Pos   lexer.Position
+	Pos   Position
 	Key   string `parser:"'pushmeta' @Ident ':'"`
 	Value string `parser:"@(~'\\n'+)"`
 }
@@ -103,7 +101,7 @@ type Pushmeta struct {
 //
 //	popmeta location:
 type Popmeta struct {
-	Pos lexer.Position
+	Pos Position
 	Key string `parser:"'popmeta' @Ident ':'"`
 }
 
