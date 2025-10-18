@@ -1,7 +1,5 @@
 package ast
 
-import "github.com/alecthomas/participle/v2/lexer"
-
 // Transaction records a financial transaction with a date, flag, optional payee,
 // narration, and a list of postings. The flag indicates transaction status: '*' for
 // cleared/complete transactions, '!' for pending/uncleared transactions, or 'P' for
@@ -19,7 +17,7 @@ import "github.com/alecthomas/participle/v2/lexer"
 //	  Assets:US:BofA:Checking                  -100.00 USD
 //	  Assets:US:BofA:Savings                    100.00 USD
 type Transaction struct {
-	Pos       lexer.Position
+	Pos       Position
 	Date      *Date  `parser:"@Date ('txn' | "`
 	Flag      string `parser:"@('*' | '!' | 'P') )"`
 	Payee     string `parser:"@(String (?= String))?"`
@@ -50,7 +48,7 @@ func (t *Transaction) Directive() string { return "transaction" }
 //	Expenses:Groceries              45.60 USD              ; Simple posting
 //	Assets:Checking                                        ; Inferred amount
 type Posting struct {
-	Pos         lexer.Position
+	Pos         Position
 	Flag        string  `parser:"@('*' | '!')?"`
 	Account     Account `parser:"@Account"`
 	Amount      *Amount `parser:"(@@"`

@@ -5,7 +5,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
@@ -15,8 +14,8 @@ import (
 type AccountNotOpenError struct {
 	Account   ast.Account
 	Date      *ast.Date
-	Pos       lexer.Position // Position in source file (includes filename)
-	Directive ast.Directive  // The directive that referenced the closed account
+	Pos       ast.Position  // Position in source file (includes filename)
+	Directive ast.Directive // The directive that referenced the closed account
 }
 
 func (e *AccountNotOpenError) Error() string {
@@ -29,7 +28,7 @@ func (e *AccountNotOpenError) Error() string {
 	return fmt.Sprintf("%s: Invalid reference to unknown account '%s'", location, e.Account)
 }
 
-func (e *AccountNotOpenError) GetPosition() lexer.Position {
+func (e *AccountNotOpenError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -50,7 +49,7 @@ type AccountAlreadyOpenError struct {
 	Account    ast.Account
 	Date       *ast.Date
 	OpenedDate *ast.Date
-	Pos        lexer.Position
+	Pos        ast.Position
 	Directive  ast.Directive
 }
 
@@ -64,7 +63,7 @@ func (e *AccountAlreadyOpenError) Error() string {
 		location, e.Account, e.OpenedDate.Format("2006-01-02"))
 }
 
-func (e *AccountAlreadyOpenError) GetPosition() lexer.Position {
+func (e *AccountAlreadyOpenError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -85,7 +84,7 @@ type AccountAlreadyClosedError struct {
 	Account    ast.Account
 	Date       *ast.Date
 	ClosedDate *ast.Date
-	Pos        lexer.Position
+	Pos        ast.Position
 	Directive  ast.Directive
 }
 
@@ -99,7 +98,7 @@ func (e *AccountAlreadyClosedError) Error() string {
 		location, e.Account, e.ClosedDate.Format("2006-01-02"))
 }
 
-func (e *AccountAlreadyClosedError) GetPosition() lexer.Position {
+func (e *AccountAlreadyClosedError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -119,7 +118,7 @@ func (e *AccountAlreadyClosedError) GetDate() *ast.Date {
 type AccountNotClosedError struct {
 	Account   ast.Account
 	Date      *ast.Date
-	Pos       lexer.Position
+	Pos       ast.Position
 	Directive ast.Directive
 }
 
@@ -133,7 +132,7 @@ func (e *AccountNotClosedError) Error() string {
 		location, e.Account)
 }
 
-func (e *AccountNotClosedError) GetPosition() lexer.Position {
+func (e *AccountNotClosedError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -151,7 +150,7 @@ func (e *AccountNotClosedError) GetDate() *ast.Date {
 
 // TransactionNotBalancedError is returned when a transaction doesn't balance
 type TransactionNotBalancedError struct {
-	Pos         lexer.Position    // Position in source file (includes filename)
+	Pos         ast.Position      // Position in source file (includes filename)
 	Date        *ast.Date         // Transaction date
 	Narration   string            // Transaction narration
 	Residuals   map[string]string // currency -> amount string (unbalanced amounts)
@@ -201,7 +200,7 @@ func (e *TransactionNotBalancedError) formatResiduals() string {
 	return buf.String()
 }
 
-func (e *TransactionNotBalancedError) GetPosition() lexer.Position {
+func (e *TransactionNotBalancedError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -219,7 +218,7 @@ type InvalidAmountError struct {
 	Account    ast.Account
 	Value      string
 	Underlying error
-	Pos        lexer.Position
+	Pos        ast.Position
 	Directive  ast.Directive
 }
 
@@ -233,7 +232,7 @@ func (e *InvalidAmountError) Error() string {
 		location, e.Value, e.Account, e.Underlying)
 }
 
-func (e *InvalidAmountError) GetPosition() lexer.Position {
+func (e *InvalidAmountError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -256,7 +255,7 @@ type BalanceMismatchError struct {
 	Expected  string // Expected amount
 	Actual    string // Actual amount in inventory
 	Currency  string
-	Pos       lexer.Position
+	Pos       ast.Position
 	Directive ast.Directive
 }
 
@@ -272,7 +271,7 @@ func (e *BalanceMismatchError) Error() string {
 		e.Actual, e.Currency)
 }
 
-func (e *BalanceMismatchError) GetPosition() lexer.Position {
+func (e *BalanceMismatchError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -440,7 +439,7 @@ type InvalidCostError struct {
 	PostingIndex int    // Index of posting in transaction (0-based)
 	CostSpec     string // String representation of the cost spec
 	Underlying   error
-	Pos          lexer.Position
+	Pos          ast.Position
 	Directive    ast.Directive
 }
 
@@ -459,7 +458,7 @@ func (e *InvalidCostError) Error() string {
 		location, postingInfo, e.CostSpec, e.Underlying)
 }
 
-func (e *InvalidCostError) GetPosition() lexer.Position {
+func (e *InvalidCostError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -505,7 +504,7 @@ type InvalidPriceError struct {
 	PostingIndex int    // Index of posting in transaction (0-based)
 	PriceSpec    string // String representation of the price spec
 	Underlying   error
-	Pos          lexer.Position
+	Pos          ast.Position
 	Directive    ast.Directive
 }
 
@@ -524,7 +523,7 @@ func (e *InvalidPriceError) Error() string {
 		location, postingInfo, e.PriceSpec, e.Underlying)
 }
 
-func (e *InvalidPriceError) GetPosition() lexer.Position {
+func (e *InvalidPriceError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -571,7 +570,7 @@ type InvalidMetadataError struct {
 	Key        string
 	Value      string
 	Reason     string // Why it's invalid (e.g., "duplicate key", "empty value")
-	Pos        lexer.Position
+	Pos        ast.Position
 	Directive  ast.Directive
 }
 
@@ -590,7 +589,7 @@ func (e *InvalidMetadataError) Error() string {
 		location, accountInfo, e.Key, e.Value, e.Reason)
 }
 
-func (e *InvalidMetadataError) GetPosition() lexer.Position {
+func (e *InvalidMetadataError) GetPosition() ast.Position {
 	return e.Pos
 }
 
@@ -609,7 +608,7 @@ func (e *InvalidMetadataError) GetDate() *ast.Date {
 // NewInvalidMetadataError creates an error for when metadata is invalid
 func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key, value, reason string) *InvalidMetadataError {
 	var date *ast.Date
-	var pos lexer.Position
+	var pos ast.Position
 
 	// Extract date and position from directive
 	switch d := directive.(type) {

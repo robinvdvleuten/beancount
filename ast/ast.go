@@ -7,7 +7,6 @@
 package ast
 
 import (
-	"github.com/alecthomas/participle/v2/lexer"
 	"golang.org/x/exp/slices"
 )
 
@@ -66,7 +65,7 @@ type Directive interface {
 
 // positionedItem represents any AST item that has a position in the source file.
 type positionedItem struct {
-	pos       lexer.Position
+	pos       Position
 	directive Directive
 	pushtag   *Pushtag
 	poptag    *Poptag
@@ -75,7 +74,7 @@ type positionedItem struct {
 }
 
 // getDirectivePos extracts the position from any directive type.
-func getDirectivePos(d Directive) lexer.Position {
+func getDirectivePos(d Directive) Position {
 	switch v := d.(type) {
 	case *Commodity:
 		return v.Pos
@@ -100,7 +99,7 @@ func getDirectivePos(d Directive) lexer.Position {
 	case *Transaction:
 		return v.Pos
 	default:
-		return lexer.Position{}
+		return Position{}
 	}
 }
 

@@ -3,64 +3,38 @@ package parser
 import (
 	"fmt"
 
-	"github.com/alecthomas/participle/v2"
-	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
-// ParseError represents a syntax error during parsing.
+// ParseError represents an error that occurred during parsing.
 type ParseError struct {
-	Pos        lexer.Position
-	Message    string
-	Underlying error
+	Pos     ast.Position
+	Message string
 }
 
 func (e *ParseError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = fmt.Sprintf("line %d", e.Pos.Line)
-	}
-
-	return fmt.Sprintf("%s: %s", location, e.Message)
+	return fmt.Sprintf("%s: %s", e.Pos, e.Message)
 }
 
-func (e *ParseError) GetPosition() lexer.Position {
-	return e.Pos
-}
-
-func (e *ParseError) GetDirective() ast.Directive {
-	return nil // Parse errors don't have directive context
-}
-
-func (e *ParseError) Unwrap() error {
-	return e.Underlying
-}
-
-// NewParseError creates a parse error from a participle error.
-// It extracts position information and creates a clean error message.
-func NewParseError(filename string, err error) *ParseError {
-	// Try to extract position from participle Error interface
-	if pErr, ok := err.(participle.Error); ok {
-		pos := pErr.Position()
-		return &ParseError{
-			Pos: lexer.Position{
-				Filename: filename,
-				Line:     pos.Line,
-				Column:   pos.Column,
-			},
-			Message:    pErr.Message(), // Clean message without position
-			Underlying: err,
-		}
-	}
-
-	// Fallback for other error types
+// newErrorf creates a new parse error with formatted message.
+func newErrorf(pos ast.Position, format string, args ...interface{}) *ParseError {
 	return &ParseError{
-		Pos: lexer.Position{
-			Filename: filename,
-			Line:     1,
-			Column:   1,
-		},
-		Message:    err.Error(),
-		Underlying: err,
+		Pos:     pos,
+		Message: fmt.Sprintf(format, args...),
+	}
+}
+
+// NewParseError wraps an existing parse error with filename context.
+// This is used by the loader to wrap errors from parser with file information.
+func NewParseError(filename string, err error) *ParseError {
+	// If it's already a ParseError, return it as-is (it already has position info)
+	if pErr, ok := err.(*ParseError); ok {
+		return pErr
+	}
+
+	// Otherwise, wrap it in a new ParseError
+	return &ParseError{
+		Pos:     ast.Position{Filename: filename, Line: 1, Column: 1},
+		Message: err.Error(),
 	}
 }
