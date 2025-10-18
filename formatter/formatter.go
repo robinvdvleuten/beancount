@@ -359,11 +359,8 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	default:
 	}
 
-	// Extract telemetry collector from context
-	collector := telemetry.FromContext(ctx)
-
 	// Determine the currency column based on the configuration
-	widthTimer := collector.Start("formatter.width_calculation")
+	widthTimer := telemetry.StartTimer(ctx, "formatter.width_calculation")
 	if f.CurrencyColumn == 0 {
 		f.CurrencyColumn = f.determineCurrencyColumn(ast)
 	}
@@ -374,7 +371,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	defer func() { f.sourceLines = nil }() // Clear after formatting
 
 	// Extract comments and blank lines if preservation is enabled
-	commentTimer := collector.Start("formatter.comment_extraction")
+	commentTimer := telemetry.StartTimer(ctx, "formatter.comment_extraction")
 	var lineContentMap map[int][]LineContent
 	if f.PreserveComments || f.PreserveBlanks {
 		comments, blanks := extractCommentsAndBlanks(sourceContent)
@@ -463,7 +460,7 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	lastLine := 0
 
 	// Format all items in order
-	formatTimer := collector.Start("formatter.directive_formatting")
+	formatTimer := telemetry.StartTimer(ctx, "formatter.directive_formatting")
 	for _, item := range items {
 		if lineContentMap != nil {
 			f.outputPrecedingContent(item.pos, lastLine, lineContentMap, &buf)

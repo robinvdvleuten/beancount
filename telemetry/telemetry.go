@@ -34,6 +34,7 @@ import (
 type contextKey struct{}
 
 var collectorKey = contextKey{}
+var parentTimerKey = contextKey{}
 
 // Collector is the main interface for collecting telemetry data.
 // Implementations can collect timings, metrics, or other telemetry data.
@@ -72,4 +73,24 @@ func FromContext(ctx context.Context) Collector {
 		return collector
 	}
 	return noOpCollector{}
+}
+
+// WithParentTimer adds a parent timer to a context.
+// This allows child operations to create nested timers even when running concurrently.
+func WithParentTimer(ctx context.Context, timer Timer) context.Context {
+	return context.WithValue(ctx, parentTimerKey, timer)
+}
+
+// StartTimer starts a new timer, using a parent timer from context if available.
+// This is the preferred way to start timers in concurrent operations.
+// If a parent timer is present in the context, creates a child timer.
+// Otherwise, uses the collector to start a new root-level timer.
+func StartTimer(ctx context.Context, name string) Timer {
+	// Check for parent timer first
+	if parent, ok := ctx.Value(parentTimerKey).(Timer); ok {
+		return parent.Child(name)
+	}
+	// Fall back to collector
+	collector := FromContext(ctx)
+	return collector.Start(name)
 }

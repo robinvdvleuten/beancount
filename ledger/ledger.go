@@ -87,9 +87,6 @@ func New() *Ledger {
 
 // Process processes an AST and builds the ledger state
 func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
-	// Extract telemetry collector from context
-	collector := telemetry.FromContext(ctx)
-
 	// Process options first
 	for _, opt := range tree.Options {
 		l.options[opt.Name] = opt.Value
@@ -103,7 +100,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	}
 
 	// Process directives in order (they're already sorted by date)
-	processTimer := collector.Start(fmt.Sprintf("ledger.processing (%d directives)", len(tree.Directives)))
+	processTimer := telemetry.StartTimer(ctx, fmt.Sprintf("ledger.processing (%d directives)", len(tree.Directives)))
 	for _, directive := range tree.Directives {
 		// Check for cancellation
 		select {

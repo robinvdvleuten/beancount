@@ -324,17 +324,14 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	default:
 	}
 
-	// Extract telemetry collector
-	collector := telemetry.FromContext(ctx)
-
 	// Lex
-	lexTimer := collector.Start("parser.lexing")
+	lexTimer := telemetry.StartTimer(ctx, "parser.lexing")
 	lexer := NewLexer(data, filename)
 	tokens := lexer.ScanAll()
 	lexTimer.End()
 
 	// Parse
-	parseTimer := collector.Start("parser.parsing")
+	parseTimer := telemetry.StartTimer(ctx, "parser.parsing")
 	parser := NewParser(data, tokens, filename, lexer.Interner())
 	tree, err := parser.Parse()
 	parseTimer.End()
@@ -344,7 +341,7 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	}
 
 	// Apply push/pop directives
-	pushPopTimer := collector.Start("parser.push_pop")
+	pushPopTimer := telemetry.StartTimer(ctx, "parser.push_pop")
 	if err := ast.ApplyPushPopDirectives(tree); err != nil {
 		pushPopTimer.End()
 		return nil, err
@@ -352,7 +349,7 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	pushPopTimer.End()
 
 	// Sort directives
-	sortTimer := collector.Start("parser.sorting")
+	sortTimer := telemetry.StartTimer(ctx, "parser.sorting")
 	err = ast.SortDirectives(tree)
 	sortTimer.End()
 

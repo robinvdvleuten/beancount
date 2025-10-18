@@ -358,8 +358,7 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 // calculateBalance computes weights and determines if transaction balances
 // This is a pure function - no side effects
 func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) (*balanceResult, []error) {
-	collector := telemetry.FromContext(ctx)
-	timer := collector.Start("validator.calculate_balance")
+	timer := telemetry.StartTimer(ctx, "validator.calculate_balance")
 	defer timer.End()
 	var errs []error
 	pc := classifyPostings(txn.Postings)
@@ -543,8 +542,7 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //	// Validation passed - result contains balance info and inferred amounts
 //	fmt.Printf("Transaction balanced: %v\n", result.isBalanced)
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *balanceResult) {
-	collector := telemetry.FromContext(ctx)
-	timer := collector.Start("validator.transaction")
+	timer := telemetry.StartTimer(ctx, "validator.transaction")
 	defer timer.End()
 
 	var allErrors []error

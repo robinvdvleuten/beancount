@@ -26,10 +26,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/telemetry"
+	"golang.org/x/sync/errgroup"
 )
 
 // Loader handles loading and parsing of Beancount files with optional include resolution.
@@ -81,12 +83,9 @@ func New(opts ...Option) *Loader {
 
 // Load parses a beancount file with optional recursive include resolution.
 func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
-	// Extract telemetry collector from context
-	collector := telemetry.FromContext(ctx)
-
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
-		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+		parseTimer := telemetry.StartTimer(ctx, fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 		defer parseTimer.End()
 		data, err := os.ReadFile(filename)
 		if err != nil {
@@ -101,26 +100,22 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	}
 
 	// Recursive loading with include resolution
-	loadTimer := collector.Start(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
+	loadTimer := telemetry.StartTimer(ctx, fmt.Sprintf("loader.load %s", filepath.Base(filename)))
 	defer loadTimer.End()
 	state := &loaderState{
-		visited:   make(map[string]bool),
-		collector: collector,
+		visited: make(map[string]bool),
 	}
 
-	return state.loadRecursive(ctx, filename)
+	return state.loadRecursive(ctx, filename, nil)
 }
 
 // LoadBytes parses beancount content from a byte slice with optional recursive include resolution.
 // The filename parameter is used for error reporting and as the base path for resolving includes.
 // When FollowIncludes is enabled, relative include paths are resolved from the directory of filename.
 func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*ast.AST, error) {
-	// Extract telemetry collector from context
-	collector := telemetry.FromContext(ctx)
-
 	if !l.FollowIncludes {
 		// Simple case: just parse the provided data
-		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+		parseTimer := telemetry.StartTimer(ctx, fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 		defer parseTimer.End()
 		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 		if err != nil {
@@ -131,7 +126,7 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 	}
 
 	// For recursive loading, parse the initial data then follow includes from disk
-	parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+	parseTimer := telemetry.StartTimer(ctx, fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 	parseTimer.End()
 	if err != nil {
@@ -144,11 +139,10 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 	}
 
 	// Recursively load all includes from disk
-	loadTimer := collector.Start(fmt.Sprintf("loader.load includes for %s", filepath.Base(filename)))
+	loadTimer := telemetry.StartTimer(ctx, fmt.Sprintf("loader.load includes for %s", filepath.Base(filename)))
 	defer loadTimer.End()
 	state := &loaderState{
-		visited:   make(map[string]bool),
-		collector: collector,
+		visited: make(map[string]bool),
 	}
 
 	// Get absolute path for include resolution
@@ -187,7 +181,7 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 		}
 
 		// Recursively load the included file from disk
-		includedAST, err := state.loadRecursive(ctx, includePath)
+		includedAST, err := state.loadRecursive(ctx, includePath, nil)
 		if err != nil {
 			return nil, fmt.Errorf("in file %s: %w", filename, err)
 		}
@@ -196,7 +190,7 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 	}
 
 	// Merge all ASTs
-	mergeTimer := collector.Start("ast.merging")
+	mergeTimer := loadTimer.Child("ast.merging")
 	merged := mergeASTs(result, includedASTs...)
 	mergeTimer.End()
 	return merged, nil
@@ -204,28 +198,39 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 
 // loaderState tracks state during recursive loading.
 type loaderState struct {
-	visited   map[string]bool     // Absolute paths of files already loaded
-	collector telemetry.Collector // Telemetry collector for tracking load operations
+	visited map[string]bool // Absolute paths of files already loaded
+	mu      sync.Mutex      // Protects visited map during concurrent loading
 }
 
 // loadRecursive recursively loads a file and all its includes.
-func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.AST, error) {
+// If timer is nil, a new timer will be created; otherwise the provided timer is used.
+func (l *loaderState) loadRecursive(ctx context.Context, filename string, timer telemetry.Timer) (*ast.AST, error) {
 	// Get absolute path for deduplication
 	absPath, err := filepath.Abs(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
 	}
 
+	// Read and parse the file
+	// Use provided timer or create a new one
+	var parseTimer telemetry.Timer
+	if timer != nil {
+		parseTimer = timer
+	} else {
+		parseTimer = telemetry.StartTimer(ctx, fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+	}
+	defer parseTimer.End()
+
 	// Check if already visited (deduplication - same file included multiple times)
+	// Lock to safely check and update the visited map during concurrent loading
+	l.mu.Lock()
 	if l.visited[absPath] {
+		l.mu.Unlock()
 		// Return empty AST - this file was already processed
 		return &ast.AST{}, nil
 	}
 	l.visited[absPath] = true
-
-	// Read and parse the file
-	parseTimer := l.collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
-	defer parseTimer.End()
+	l.mu.Unlock()
 	data, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
@@ -245,33 +250,54 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 
 	// Recursively load all includes and merge
 	baseDir := filepath.Dir(absPath)
-	var includedASTs []*ast.AST
 
-	for _, inc := range result.Includes {
-		// Check for cancellation
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
+	// Pre-allocate slice to preserve include order
+	includedASTs := make([]*ast.AST, len(result.Includes))
 
-		// Resolve path relative to the including file's directory
-		includePath := inc.Filename
-		if !filepath.IsAbs(includePath) {
-			includePath = filepath.Join(baseDir, includePath)
-		}
+	// Create child timers for all includes before spawning goroutines
+	// This ensures they appear as siblings in the telemetry tree
+	includeTimers := make([]telemetry.Timer, len(result.Includes))
+	for i, inc := range result.Includes {
+		includeTimers[i] = parseTimer.Child(fmt.Sprintf("loader.parse %s", filepath.Base(inc.Filename)))
+	}
 
-		// Recursively load the included file
-		includedAST, err := l.loadRecursive(ctx, includePath)
-		if err != nil {
-			return nil, fmt.Errorf("in file %s: %w", filename, err)
-		}
+	// Use errgroup to load includes concurrently
+	g, gctx := errgroup.WithContext(ctx)
 
-		includedASTs = append(includedASTs, includedAST)
+	for i, inc := range result.Includes {
+		// Capture loop variables for goroutine
+		i := i
+		inc := inc
+		childTimer := includeTimers[i]
+
+		g.Go(func() error {
+			// Resolve path relative to the including file's directory
+			includePath := inc.Filename
+			if !filepath.IsAbs(includePath) {
+				includePath = filepath.Join(baseDir, includePath)
+			}
+
+			// Set the parent timer in context so parser creates nested timers
+			childCtx := telemetry.WithParentTimer(gctx, childTimer)
+
+			// Recursively load the included file with the pre-created timer
+			includedAST, err := l.loadRecursive(childCtx, includePath, childTimer)
+			if err != nil {
+				return fmt.Errorf("in file %s: %w", filename, err)
+			}
+
+			includedASTs[i] = includedAST
+			return nil
+		})
+	}
+
+	// Wait for all includes to be loaded
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	// Merge all ASTs
-	mergeTimer := l.collector.Start("ast.merging")
+	mergeTimer := parseTimer.Child("ast.merging")
 	merged := mergeASTs(result, includedASTs...)
 	mergeTimer.End()
 	return merged, nil
