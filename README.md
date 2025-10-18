@@ -191,8 +191,9 @@ fmtr := formatter.New()
 // Format a single transaction
 fmtr.FormatTransaction(txn, os.Stdout)
 
-// Format an entire AST
-fmtr.Format(context.Background(), ast, sourceContent, os.Stdout)
+// Format an entire AST with expression preservation
+fmtr := formatter.New(formatter.WithSource(sourceContent))
+fmtr.Format(context.Background(), ast, os.Stdout)
 ```
 
 ### Complete Example

@@ -1,0 +1,64 @@
+;; Test file for arithmetic expressions in amounts
+;; Demonstrates the expression feature added per TODO.txt
+
+option "title" "Expression Examples"
+option "operating_currency" "USD"
+
+;; Example from TODO.txt - splitting a bill
+2014-10-05 * "Split bill at restaurant"
+  Liabilities:CreditCard         -45.00 USD
+  Assets:Receivable:John         ((40.00/3) + 5) USD  ; John's share plus tip
+  Assets:Receivable:Michael      40.00/3 USD          ; Michael's share
+  Assets:Receivable:Peter        40.00/3 USD          ; Peter's share
+
+;; Simple arithmetic operations
+2023-01-15 * "Groceries with calculation"
+  Expenses:Food:Groceries        10 + 5 + 3.50 USD    ; Total of items
+  Assets:Cash
+
+2023-01-16 * "Fuel - calculated amount"
+  Expenses:Transport:Fuel        15.5 * 1.2 USD       ; Liters × price per liter
+  Assets:Cash
+
+;; Using parentheses for precedence
+2023-02-01 * "Investment return calculation"
+  Assets:Investment:Stocks       (100 + 50) * 1.05 USD  ; Principal plus gain
+  Income:Investment:Gains
+
+;; Division for splitting costs
+2023-02-10 * "Shared expense"
+  Expenses:Utilities:Internet    60.00 / 3 USD  ; Split among 3 roommates
+  Assets:Receivable:Roommate1    60.00 / 3 USD
+  Assets:Receivable:Roommate2    60.00 / 3 USD
+  Assets:Cash                    -60.00 USD
+
+;; Complex expression with multiple operations
+2023-03-05 * "Monthly budget calculation"
+  Expenses:Budget:Entertainment  (100 - 25) + (50 * 0.5) USD  ; Adjusted budget
+  Assets:Checking
+
+;; Negative amounts in expressions
+2023-04-01 * "Refund calculation"
+  Assets:Bank                    -(100 - 15) USD  ; Refund after deduction
+  Expenses:Services
+
+;; Expression in cost specification
+2023-05-10 * "Stock purchase with calculated cost"
+  Assets:Investment:AAPL         10 AAPL {150.00 / 1.05 USD}  ; Cost basis adjustment
+  Assets:Cash                    -(10 * (150.00 / 1.05)) USD
+
+;; Mixed: simple and expression amounts in same transaction
+2023-06-15 * "Shopping trip"
+  Expenses:Food                  50.00 USD              ; Simple amount
+  Expenses:Clothes               (100 - 20) USD         ; Discounted price
+  Expenses:Transport             10 + 5 USD             ; Taxi + tip
+  Assets:Cash                    -165.00 USD            ; Total
+
+;; Edge case: very precise division
+2023-07-20 * "Precise calculation"
+  Expenses:Test                  100.00 / 3 USD  ; Results in repeating decimal
+  Assets:Cash                    -33.34 USD      ; Rounded for balance
+
+2023-07-20 * "Balance the precise calculation"
+  Assets:Cash                    0.01 USD  ; Rounding adjustment
+  Equity:Rounding

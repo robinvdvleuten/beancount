@@ -169,9 +169,13 @@ type Formatter struct {
 	// Default: true
 	PreserveBlanks bool
 
-	// sourceLines holds the original source lines for preserving spacing.
-	// This is set during Format() and cleared after.
-	sourceLines []string
+	// sourceContent holds the original source bytes for extracting spans and lines.
+	// Passed as parameter to Format() to enable expression preservation.
+	sourceContent []byte
+
+	// lineOffsets caches byte offsets for each line (built on first access).
+	// Index i contains the byte offset where line i+1 starts (1-indexed lines).
+	lineOffsets []int
 
 	// autoCurrencyColumn indicates whether the currency column should be recalculated
 	// for each formatting operation.
@@ -223,6 +227,16 @@ func WithPreserveBlanks(preserve bool) Option {
 	}
 }
 
+// WithSource sets the source content for expression preservation.
+// When set, the formatter will preserve original expression syntax (e.g., "(10 + 20)")
+// instead of showing evaluated values (e.g., "30").
+func WithSource(source []byte) Option {
+	return func(f *Formatter) {
+		f.sourceContent = source
+		f.lineOffsets = nil
+	}
+}
+
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
@@ -264,7 +278,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 					metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
 
 					// Calculate number width
-					numWidth := runewidth.StringWidth(posting.Amount.Value)
+					numWidth := runewidth.StringWidth(f.amountDisplayText(posting.Amount))
 					metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 
 					// Calculate total width for currency column
@@ -277,7 +291,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			if d.Amount != nil {
 				// Calculate width: date + "balance" + account + spacing + number
 				width := DateWidth + 1 + BalanceKeywordWidth + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
-				numWidth := runewidth.StringWidth(d.Amount.Value)
+				numWidth := runewidth.StringWidth(f.amountDisplayText(d.Amount))
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
@@ -287,7 +301,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			if d.Amount != nil {
 				// Calculate width: date + "price" + commodity + spacing + number
 				width := DateWidth + 1 + PriceKeywordWidth + runewidth.StringWidth(d.Commodity) + MinimumSpacing
-				numWidth := runewidth.StringWidth(d.Amount.Value)
+				numWidth := runewidth.StringWidth(f.amountDisplayText(d.Amount))
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
@@ -355,14 +369,76 @@ type astItem struct {
 // getOriginalLine returns the original line from source by line number (1-indexed).
 // Returns empty string if line number is out of bounds.
 func (f *Formatter) getOriginalLine(lineNum int) string {
-	if lineNum < 1 || lineNum > len(f.sourceLines) {
+	if len(f.sourceContent) == 0 {
 		return ""
 	}
-	return f.sourceLines[lineNum-1]
+
+	// Build line offset index on first access (lazy initialization)
+	if f.lineOffsets == nil {
+		f.buildLineOffsets()
+	}
+
+	if lineNum < 1 || lineNum > len(f.lineOffsets) {
+		return ""
+	}
+
+	// Extract line from sourceContent using offsets
+	start := f.lineOffsets[lineNum-1]
+	var end int
+	if lineNum < len(f.lineOffsets) {
+		end = f.lineOffsets[lineNum] - 1 // -1 to exclude the newline
+	} else {
+		end = len(f.sourceContent)
+	}
+
+	if start >= len(f.sourceContent) {
+		return ""
+	}
+	if end > len(f.sourceContent) {
+		end = len(f.sourceContent)
+	}
+
+	return string(f.sourceContent[start:end])
 }
 
-// Comments and blank lines from sourceContent are preserved based on Formatter configuration.
-func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []byte, w io.Writer) error {
+// buildLineOffsets builds the line offset index for efficient line extraction.
+func (f *Formatter) buildLineOffsets() {
+	// Estimate capacity: average 50 bytes per line
+	estimatedLines := len(f.sourceContent)/50 + 10
+	f.lineOffsets = make([]int, 0, estimatedLines)
+
+	// First line starts at offset 0
+	f.lineOffsets = append(f.lineOffsets, 0)
+
+	// Find all newlines and record offsets
+	for i, b := range f.sourceContent {
+		if b == '\n' {
+			f.lineOffsets = append(f.lineOffsets, i+1) // Next line starts after newline
+		}
+	}
+}
+
+// amountDisplayText returns the text to display for an amount.
+// If the amount has a span, it returns the original source text (preserving expressions).
+// Otherwise, it returns the evaluated value.
+func (f *Formatter) amountDisplayText(amount *ast.Amount) string {
+	if amount == nil {
+		return ""
+	}
+	// Use original source if available (preserves expressions like "(100 + 50)")
+	if text := amount.Span.Text(f.sourceContent); text != "" {
+		return text
+	}
+	// Fall back to evaluated value
+	return amount.Value
+}
+
+// Format formats a Beancount AST and writes the output to the writer.
+// Comments and blank lines are preserved based on Formatter configuration.
+//
+// To preserve expression syntax (e.g., "(10 + 20)"), configure the formatter with
+// WithSource() option. Otherwise expressions will be displayed as evaluated values.
+func (f *Formatter) Format(ctx context.Context, ast *ast.AST, w io.Writer) error {
 	// Check for cancellation before starting
 	select {
 	case <-ctx.Done():
@@ -377,15 +453,11 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	}
 	widthTimer.End()
 
-	// Store source lines for preserving original spacing
-	f.sourceLines = strings.Split(string(sourceContent), "\n")
-	defer func() { f.sourceLines = nil }() // Clear after formatting
-
 	// Extract comments and blank lines if preservation is enabled
 	commentTimer := telemetry.StartTimer(ctx, "formatter.comment_extraction")
 	var lineContentMap map[int][]LineContent
-	if f.PreserveComments || f.PreserveBlanks {
-		comments, blanks := extractCommentsAndBlanks(sourceContent)
+	if (f.PreserveComments || f.PreserveBlanks) && f.sourceContent != nil {
+		comments, blanks := extractCommentsAndBlanks(f.sourceContent)
 
 		// Filter based on configuration
 		if !f.PreserveComments {
@@ -506,6 +578,9 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 // FormatTransaction formats a single transaction and writes the output to the writer.
 // This method is useful for rendering individual transactions, such as in error messages.
 // The currency column is calculated from the transaction itself if not explicitly set.
+//
+// Use WithSource() to configure source content for preserving expression syntax (e.g., "(10 + 20) USD").
+// Without configured source, expressions will be displayed as evaluated values (e.g., "30 USD").
 func (f *Formatter) FormatTransaction(txn *ast.Transaction, w io.Writer) error {
 	// Determine the currency column if not set
 	if f.autoCurrencyColumn {
@@ -924,7 +999,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 		} else if val.BooleanValue != nil {
 			buf.WriteString(*val.BooleanValue)
 		} else if val.Amount != nil {
-			buf.WriteString(val.Amount.Value)
+			buf.WriteString(f.amountDisplayText(val.Amount))
 			buf.WriteByte(' ')
 			buf.WriteString(val.Amount.Currency)
 		} else if val.Number != nil {
@@ -1095,6 +1170,7 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 		}
 
 		// Add price annotation if present (e.g., @ 1.50 EUR or @@ 150.00 EUR)
+		// Preserve expression syntax when source is available (e.g., @ (100 + 50) USD)
 		if p.Price != nil {
 			if p.PriceTotal {
 				buf.WriteString(" @@")
@@ -1102,7 +1178,7 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 				buf.WriteString(" @")
 			}
 			buf.WriteByte(' ')
-			buf.WriteString(p.Price.Value)
+			buf.WriteString(f.amountDisplayText(p.Price))
 			buf.WriteByte(' ')
 			buf.WriteString(p.Price.Currency)
 		}
@@ -1121,14 +1197,15 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 	}
 
 	// Calculate padding needed using display width
-	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amount.Value)
+	amountText := f.amountDisplayText(amount)
+	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amountText)
 	if padding < MinimumSpacing {
 		padding = MinimumSpacing
 	}
 
 	// Use strings.Repeat for efficient padding
 	buf.WriteString(strings.Repeat(" ", padding))
-	buf.WriteString(amount.Value)
+	buf.WriteString(amountText)
 	buf.WriteByte(' ')
 	buf.WriteString(amount.Currency)
 }
@@ -1141,8 +1218,11 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 
 	buf.WriteByte('{')
 
-	if cost.Amount != nil {
-		buf.WriteString(cost.Amount.Value)
+	// Handle merge cost {*}
+	if cost.IsMerge {
+		buf.WriteByte('*')
+	} else if cost.Amount != nil {
+		buf.WriteString(f.amountDisplayText(cost.Amount))
 		buf.WriteByte(' ')
 		buf.WriteString(cost.Amount.Currency)
 	}
@@ -1171,7 +1251,7 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 		buf.WriteString("  ")
 		buf.WriteString(m.Key)
 		buf.WriteString(": \"")
-		buf.WriteString(m.Value)
+		buf.WriteString(escapeString(m.Value))
 		buf.WriteString("\"\n")
 	}
 }

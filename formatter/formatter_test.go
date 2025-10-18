@@ -72,9 +72,9 @@ func TestFormat(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// For now, just verify no error - actual formatting will be implemented in later steps
@@ -88,9 +88,9 @@ func TestFormat(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New(WithCurrencyColumn(70))
+		f := New(WithSource([]byte(source)), WithCurrencyColumn(70))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		assert.Equal(t, 70, f.CurrencyColumn)
@@ -104,9 +104,9 @@ func TestFormat(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have calculated a currency column
@@ -222,9 +222,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "option \"title\" \"My Ledger\"\n"
@@ -236,9 +236,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "include \"2024.beancount\"\n"
@@ -250,9 +250,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-01-01 commodity USD\n"
@@ -264,9 +264,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-01-01 open Assets:Checking\n"
@@ -278,9 +278,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Currencies should have minimal spacing (2 spaces), not aligned
@@ -294,9 +294,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-12-31 close Assets:Checking\n"
@@ -308,9 +308,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have aligned amount
@@ -323,9 +323,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-01-01 pad Assets:Checking Equity:Opening-Balances\n"
@@ -337,9 +337,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-01-01 note Assets:Checking \"Initial balance\"\n"
@@ -351,9 +351,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-01-01 document Assets:Checking \"/path/to/doc.pdf\"\n"
@@ -365,9 +365,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have aligned amount
@@ -380,9 +380,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-01-01 event \"location\" \"New York\"\n"
@@ -398,9 +398,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -424,9 +424,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should contain tags
@@ -443,9 +443,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should contain link
@@ -462,9 +462,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should contain metadata (with quotes)
@@ -480,9 +480,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should contain cost
@@ -498,9 +498,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should contain price
@@ -512,9 +512,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "plugin \"beancount.plugins.auto_accounts\"\n"
@@ -526,9 +526,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "plugin \"beancount.plugins.check_commodity\" \"USD,EUR\"\n"
@@ -540,9 +540,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "2021-06-01 custom \"budget\" \"quarterly\" TRUE 10000.00 USD\n"
@@ -555,9 +555,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -570,9 +570,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "pushtag #vacation\n"
@@ -584,9 +584,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "poptag #vacation\n"
@@ -598,9 +598,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "pushmeta trip: \"NYC Summer 2021\"\n"
@@ -612,9 +612,9 @@ func TestFormatDirectives(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		expected := "popmeta trip:\n"
@@ -633,9 +633,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -667,9 +667,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should handle long account names gracefully
@@ -688,9 +688,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// All amounts should be present and properly aligned
@@ -710,9 +710,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -740,9 +740,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// All currencies should be present and aligned
@@ -760,9 +760,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have both payee and narration quoted
@@ -779,9 +779,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -800,9 +800,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have complete cost specification
@@ -818,9 +818,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have @@ for total price
@@ -837,9 +837,9 @@ func TestTransactionEdgeCases(t *testing.T) {
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have posting-level metadata properly indented (with quotes)
@@ -859,9 +859,9 @@ func TestFormattingIdempotency(t *testing.T) {
 		ast1, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f1 := New()
+		f1 := New(WithSource([]byte(source)))
 		var buf1 bytes.Buffer
-		err = f1.Format(context.Background(), ast1, []byte(source), &buf1)
+		err = f1.Format(context.Background(), ast1, &buf1)
 		assert.NoError(t, err)
 
 		formatted1 := buf1.String()
@@ -870,9 +870,9 @@ func TestFormattingIdempotency(t *testing.T) {
 		ast2, err := parser.ParseString(context.Background(), formatted1)
 		assert.NoError(t, err)
 
-		f2 := New()
+		f2 := New(WithSource([]byte(formatted1)))
 		var buf2 bytes.Buffer
-		err = f2.Format(context.Background(), ast2, []byte(formatted1), &buf2)
+		err = f2.Format(context.Background(), ast2, &buf2)
 		assert.NoError(t, err)
 
 		formatted2 := buf2.String()
@@ -893,9 +893,9 @@ func TestFormatterWidthOptions(t *testing.T) {
 
 	t.Run("WithCurrencyColumn", func(t *testing.T) {
 		// CurrencyColumn overrides other options
-		f := New(WithCurrencyColumn(60))
+		f := New(WithSource([]byte(source)), WithCurrencyColumn(60))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Currency should be at column 60
@@ -906,9 +906,9 @@ func TestFormatterWidthOptions(t *testing.T) {
 
 	t.Run("WithPrefixWidth", func(t *testing.T) {
 		// Only set prefix width, num width auto-calculated
-		f := New(WithPrefixWidth(40))
+		f := New(WithSource([]byte(source)), WithPrefixWidth(40))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -918,9 +918,9 @@ func TestFormatterWidthOptions(t *testing.T) {
 
 	t.Run("WithNumWidth", func(t *testing.T) {
 		// Only set num width, prefix width auto-calculated
-		f := New(WithNumWidth(15))
+		f := New(WithSource([]byte(source)), WithNumWidth(15))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -930,9 +930,9 @@ func TestFormatterWidthOptions(t *testing.T) {
 
 	t.Run("WithPrefixAndNumWidth", func(t *testing.T) {
 		// Both prefix and num width set
-		f := New(WithPrefixWidth(40), WithNumWidth(12))
+		f := New(WithSource([]byte(source)), WithPrefixWidth(40), WithNumWidth(12))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Currency column should be 40 + 12 = 52
@@ -945,9 +945,9 @@ func TestFormatterWidthOptions(t *testing.T) {
 
 	t.Run("CurrencyColumnOverridesPrefixAndNumWidth", func(t *testing.T) {
 		// CurrencyColumn should override PrefixWidth and NumWidth
-		f := New(WithCurrencyColumn(70), WithPrefixWidth(40), WithNumWidth(12))
+		f := New(WithSource([]byte(source)), WithCurrencyColumn(70), WithPrefixWidth(40), WithNumWidth(12))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// CurrencyColumn should be 70 (not 40 + 12 = 52)

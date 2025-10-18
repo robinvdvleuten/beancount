@@ -94,8 +94,6 @@ func (l *Lexer) scanToken() Token {
 			return l.scanDate(start, startLine, startCol)
 		}
 		return l.scanNumber(start, startLine, startCol)
-	case ch == '-' && l.peekIsDigit():
-		return l.scanNumber(start, startLine, startCol)
 
 	// Strings: "..."
 	case ch == '"':
@@ -130,6 +128,16 @@ func (l *Lexer) scanToken() Token {
 		return Token{LBRACE, start, l.pos, startLine, startCol}
 	case ch == '}':
 		return Token{RBRACE, start, l.pos, startLine, startCol}
+	case ch == '(':
+		return Token{LPAREN, start, l.pos, startLine, startCol}
+	case ch == ')':
+		return Token{RPAREN, start, l.pos, startLine, startCol}
+	case ch == '+':
+		return Token{PLUS, start, l.pos, startLine, startCol}
+	case ch == '/':
+		return Token{SLASH, start, l.pos, startLine, startCol}
+	case ch == '-':
+		return Token{MINUS, start, l.pos, startLine, startCol}
 
 	// @ or @@
 	case ch == '@':
@@ -384,14 +392,6 @@ func (l *Lexer) peek() byte {
 		return 0
 	}
 	return l.source[l.pos]
-}
-
-func (l *Lexer) peekIsDigit() bool {
-	if l.pos >= len(l.source) {
-		return false
-	}
-	ch := l.source[l.pos]
-	return ch >= '0' && ch <= '9'
 }
 
 func (l *Lexer) advance() byte {

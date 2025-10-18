@@ -26,9 +26,9 @@ option "title" "Test"
 		assert.NoError(t, err)
 
 		// Format to buffer
-		f := formatter.New()
+		f := formatter.New(formatter.WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -50,9 +50,9 @@ option "title" "Test"
 		assert.NoError(t, err)
 
 		// Format with custom column
-		f := formatter.New(formatter.WithCurrencyColumn(60))
+		f := formatter.New(formatter.WithSource([]byte(source)), formatter.WithCurrencyColumn(60))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -68,9 +68,9 @@ option "title" "Test"
 		ast, err := parser.ParseBytes(context.Background(), []byte(source))
 		assert.NoError(t, err)
 
-		f := formatter.New()
+		f := formatter.New(formatter.WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Empty file produces minimal output
@@ -98,9 +98,9 @@ option "title" "Integration Test"
 		ast, err := parser.ParseBytes(context.Background(), []byte(source))
 		assert.NoError(t, err)
 
-		f := formatter.New()
+		f := formatter.New(formatter.WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()

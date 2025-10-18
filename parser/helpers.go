@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -44,13 +45,71 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	return account, nil
 }
 
-// parseAmount parses an amount: NUMBER CURRENCY
+// parseAmount parses an amount: NUMBER CURRENCY or EXPRESSION CURRENCY
+//
+// Supports arithmetic expressions in amounts:
+//
+//	100.50 USD           → simple amount (fast path)
+//	-50.00 USD           → negative number (preserves formatting)
+//	(40.00/3) USD        → expression evaluated at parse time
+//	40.00/3 + 5 USD      → expression with operators
+//	((40.00/3) + 5) USD  → complex expression
+//
+// Expressions are evaluated at parse time and stored as decimal strings
+// to maintain backward compatibility with the AST.
 func (p *Parser) parseAmount() (*ast.Amount, error) {
-	numTok := p.expect(NUMBER, "expected number")
-	if numTok.Type == ILLEGAL {
-		return nil, p.errorAtToken(numTok, "expected number")
+	var valueStr string
+	var span ast.Span
+
+	// Capture start position
+	startPos := p.peek().Start
+
+	// Special case: simple negative number (MINUS + NUMBER + non-operator)
+	// Preserve original formatting instead of evaluating as expression
+	if p.check(MINUS) && p.peekAhead(1).Type == NUMBER {
+		// Check if this is truly a simple negative (not followed by operator)
+		tokenAfterNumber := p.peekAhead(2)
+		isSimpleNegative := tokenAfterNumber.Type != PLUS &&
+			tokenAfterNumber.Type != MINUS &&
+			tokenAfterNumber.Type != ASTERISK &&
+			tokenAfterNumber.Type != SLASH
+
+		if isSimpleNegative {
+			minusTok := p.advance() // consume MINUS
+			numTok := p.advance()   // consume NUMBER
+			// Concatenate to preserve original formatting like "-50.00"
+			valueStr = minusTok.String(p.source) + numTok.String(p.source)
+			span = ast.Span{Start: minusTok.Start, End: numTok.End}
+		} else {
+			// This is an expression like "-5 + 10"
+			result, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			valueStr = result.String()
+			span = ast.Span{Start: startPos, End: p.previous().End}
+		}
+	} else if p.isExpressionStart() {
+		// Parse and evaluate the expression
+		result, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert evaluated result to string for AST storage
+		valueStr = result.String()
+		span = ast.Span{Start: startPos, End: p.previous().End}
+	} else {
+		// Fast path: simple positive number (unchanged, zero allocations preserved)
+		numTok := p.expect(NUMBER, "expected number")
+		if numTok.Type == ILLEGAL {
+			return nil, p.errorAtToken(numTok, "expected number")
+		}
+		valueStr = numTok.String(p.source)
+		span = ast.Span{Start: numTok.Start, End: numTok.End}
 	}
 
+	// Parse currency (same for both simple and expression amounts)
 	currTok := p.expect(IDENT, "expected currency")
 	if currTok.Type == ILLEGAL {
 		return nil, p.errorAtToken(currTok, "expected currency")
@@ -60,17 +119,65 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	currency := p.interner.InternBytes(currTok.Bytes(p.source))
 
 	return &ast.Amount{
-		Value:    numTok.String(p.source),
+		Value:    valueStr,
 		Currency: currency,
+		Span:     span,
 	}, nil
 }
 
-// parseAmountOptional parses an amount with optional currency: NUMBER [CURRENCY]
+// parseAmountOptional parses an amount with optional currency: NUMBER [CURRENCY] or EXPRESSION [CURRENCY]
 // If no currency is provided, Currency will be an empty string.
+// This is used for postings where the currency may be omitted (will be inferred).
 func (p *Parser) parseAmountOptional() (*ast.Amount, error) {
-	numTok := p.expect(NUMBER, "expected number")
-	if numTok.Type == ILLEGAL {
-		return nil, p.errorAtToken(numTok, "expected number")
+	var valueStr string
+	var span ast.Span
+
+	// Capture start position
+	startPos := p.peek().Start
+
+	// Special case: simple negative number (MINUS + NUMBER + non-operator)
+	// Preserve original formatting instead of evaluating as expression
+	if p.check(MINUS) && p.peekAhead(1).Type == NUMBER {
+		// Check if this is truly a simple negative (not followed by operator)
+		tokenAfterNumber := p.peekAhead(2)
+		isSimpleNegative := tokenAfterNumber.Type != PLUS &&
+			tokenAfterNumber.Type != MINUS &&
+			tokenAfterNumber.Type != ASTERISK &&
+			tokenAfterNumber.Type != SLASH
+
+		if isSimpleNegative {
+			minusTok := p.advance() // consume MINUS
+			numTok := p.advance()   // consume NUMBER
+			// Concatenate to preserve original formatting like "-50.00"
+			valueStr = minusTok.String(p.source) + numTok.String(p.source)
+			span = ast.Span{Start: minusTok.Start, End: numTok.End}
+		} else {
+			// This is an expression like "-5 + 10"
+			result, err := p.parseExpression()
+			if err != nil {
+				return nil, err
+			}
+			valueStr = result.String()
+			span = ast.Span{Start: startPos, End: p.previous().End}
+		}
+	} else if p.isExpressionStart() {
+		// Parse and evaluate the expression
+		result, err := p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
+
+		// Convert evaluated result to string for AST storage
+		valueStr = result.String()
+		span = ast.Span{Start: startPos, End: p.previous().End}
+	} else {
+		// Fast path: simple positive number
+		numTok := p.expect(NUMBER, "expected number")
+		if numTok.Type == ILLEGAL {
+			return nil, p.errorAtToken(numTok, "expected number")
+		}
+		valueStr = numTok.String(p.source)
+		span = ast.Span{Start: numTok.Start, End: numTok.End}
 	}
 
 	currency := ""
@@ -81,32 +188,36 @@ func (p *Parser) parseAmountOptional() (*ast.Amount, error) {
 	}
 
 	return &ast.Amount{
-		Value:    numTok.String(p.source),
+		Value:    valueStr,
 		Currency: currency,
+		Span:     span,
 	}, nil
 }
 
 // parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] }
 func (p *Parser) parseCost() (*ast.Cost, error) {
-	p.consume(LBRACE, "expected '{'")
+	lbrace := p.consume(LBRACE, "expected '{'")
+	startPos := lbrace.Start
 
 	cost := &ast.Cost{}
 
 	// Check for merge cost {*}
 	if p.match(ASTERISK) {
 		cost.IsMerge = true
-		p.consume(RBRACE, "expected '}'")
+		rbrace := p.consume(RBRACE, "expected '}'")
+		cost.Span = ast.Span{Start: startPos, End: rbrace.End}
 		return cost, nil
 	}
 
 	// Check for empty cost {}
 	if p.check(RBRACE) {
-		p.advance()
+		rbrace := p.advance()
+		cost.Span = ast.Span{Start: startPos, End: rbrace.End}
 		return cost, nil
 	}
 
-	// Parse amount if present
-	if p.check(NUMBER) {
+	// Parse amount if present (including expressions starting with LPAREN or MINUS)
+	if p.check(NUMBER) || p.check(LPAREN) || p.check(MINUS) {
 		amt, err := p.parseAmount()
 		if err != nil {
 			return nil, err
@@ -133,7 +244,8 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		}
 	}
 
-	p.consume(RBRACE, "expected '}'")
+	rbrace := p.consume(RBRACE, "expected '}'")
+	cost.Span = ast.Span{Start: startPos, End: rbrace.End}
 	return cost, nil
 }
 
@@ -207,10 +319,10 @@ func (p *Parser) parseMetadata() []*ast.Metadata {
 		}
 
 		p.advance() // consume key
-		p.consume(COLON, "expected ':'")
+		colon := p.consume(COLON, "expected ':'")
 
 		// Read rest of line as value
-		value := p.parseRestOfLine()
+		value := p.parseRestOfLine(colon.End)
 
 		// Unquote the value if it's a quoted string
 		// The formatter will re-add quotes when formatting
@@ -238,21 +350,39 @@ func (p *Parser) isKeyword(typ TokenType) bool {
 }
 
 // parseRestOfLine reads all tokens until end of line and returns as string.
-func (p *Parser) parseRestOfLine() string {
-	currentLine := p.peek().Line
-
-	var parts []string
-	for !p.isAtEnd() && p.peek().Line == currentLine {
-		tok := p.advance()
-		parts = append(parts, tok.String(p.source))
+// prevEnd should be the end offset of the previously consumed token so we can
+// reconstruct any literal spacing between tokens.
+func (p *Parser) parseRestOfLine(prevEnd int) string {
+	if p.isAtEnd() {
+		return ""
 	}
 
-	return strings.TrimSpace(strings.Join(parts, " "))
+	currentLine := p.peek().Line
+
+	var buf strings.Builder
+	lastEnd := prevEnd
+
+	for !p.isAtEnd() && p.peek().Line == currentLine {
+		tok := p.advance()
+
+		if gap := tok.Start - lastEnd; gap > 0 {
+			buf.WriteString(string(p.source[lastEnd:tok.Start]))
+		}
+
+		buf.WriteString(tok.String(p.source))
+		lastEnd = tok.End
+	}
+
+	return strings.TrimSpace(buf.String())
 }
 
 // unquoteString removes surrounding quotes from a string.
 func (p *Parser) unquoteString(s string) string {
 	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
+		unquoted, err := strconv.Unquote(s)
+		if err == nil {
+			return unquoted
+		}
 		return s[1 : len(s)-1]
 	}
 	return s

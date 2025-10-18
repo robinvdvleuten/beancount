@@ -13,6 +13,7 @@ import (
 type Amount struct {
 	Value    string `parser:"@Number"`
 	Currency string `parser:"@Ident"`
+	Span     Span   // Source span for preserving original formatting (e.g., expressions)
 }
 
 // Cost represents the cost basis specification for a posting, used primarily for tracking
@@ -33,6 +34,7 @@ type Cost struct {
 	Amount  *Amount `parser:"| @@)?"`
 	Date    *Date   `parser:"(',' @Date)?"`
 	Label   string  `parser:"(',' @String)? '}'"`
+	Span    Span    // Source span for preserving original cost syntax
 }
 
 // IsEmpty returns true if this is an empty cost specification {}.

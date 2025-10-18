@@ -20,9 +20,9 @@ option "title" "Test"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Verify comments are preserved
@@ -42,9 +42,9 @@ option "title" "Test"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -74,9 +74,9 @@ option "title" "Test"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		assert.True(t, bytes.Contains(buf.Bytes(), []byte("; Opening accounts")),
@@ -92,9 +92,9 @@ option "title" "Test"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New(WithPreserveComments(false))
+		f := New(WithSource([]byte(source)), WithPreserveComments(false))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Comment should not be in output
@@ -110,9 +110,9 @@ option "title" "Test"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New(WithPreserveBlanks(false))
+		f := New(WithSource([]byte(source)), WithPreserveBlanks(false))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Should have minimal blank lines
@@ -139,9 +139,9 @@ option "title" "Test"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// All comments should be preserved
@@ -233,9 +233,9 @@ option "operating_currency" "EUR"
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err = f.Format(context.Background(), ast, &buf)
 		assert.NoError(t, err)
 
 		// Verify hash headers are preserved
