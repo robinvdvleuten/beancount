@@ -69,3 +69,71 @@ func TestTextFormatter_Format_WithDirectiveContext(t *testing.T) {
 
 	assert.Equal(t, expected, output)
 }
+
+func TestTextFormatter_Format_WithMetadata(t *testing.T) {
+	tf := NewTextFormatter(nil, nil)
+
+	date := &ast.Date{Time: time.Date(2024, time.January, 10, 0, 0, 0, 0, time.UTC)}
+	directive := &ast.Balance{
+		Pos: ast.Position{
+			Filename: "ledger.bean",
+			Line:     12,
+		},
+		Date:    date,
+		Account: ast.Account("Assets:Cash"),
+	}
+	directive.AddMetadata(
+		&ast.Metadata{Key: "source", Value: "\"statement\""},
+		&ast.Metadata{Key: "confidence", Value: "0.95"},
+	)
+
+	err := directiveError{
+		pos:       directive.Pos,
+		directive: directive,
+		msg:       "balance assertion failed",
+	}
+
+	output := tf.Format(err)
+	expected := "ledger.bean:12: balance assertion failed\n\n" +
+		"   1 │ 2024-01-10 balance Assets:Cash\n" +
+		"   2 │   source: \"statement\"\n" +
+		"   3 │   confidence: 0.95\n"
+
+	assert.Equal(t, expected, output)
+}
+
+func TestTextFormatter_Format_CustomDirective(t *testing.T) {
+	tf := NewTextFormatter(nil, nil)
+
+	date := &ast.Date{Time: time.Date(2024, time.January, 10, 0, 0, 0, 0, time.UTC)}
+	directive := &ast.Custom{
+		Pos: ast.Position{
+			Filename: "ledger.bean",
+			Line:     15,
+		},
+		Date: date,
+		Type: "budget",
+		Values: []*ast.CustomValue{
+			{String: strPtr("marketing")},
+			{Number: strPtr("12.5")},
+			{Amount: &ast.Amount{Value: "45.30", Currency: "USD"}},
+			{BooleanValue: strPtr("TRUE")},
+		},
+	}
+
+	err := directiveError{
+		pos:       directive.Pos,
+		directive: directive,
+		msg:       "custom directive invalid",
+	}
+
+	output := tf.Format(err)
+	expected := "ledger.bean:15: custom directive invalid\n\n" +
+		"   1 │ 2024-01-10 custom \"budget\" \"marketing\" 12.5 45.30 USD TRUE\n"
+
+	assert.Equal(t, expected, output)
+}
+
+func strPtr(value string) *string {
+	return &value
+}

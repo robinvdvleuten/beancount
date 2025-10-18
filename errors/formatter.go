@@ -127,172 +127,260 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 	buf.WriteString(header)
 	buf.WriteString("\n\n")
 
-	writeSingleLine := func(line string) {
-		if line == "" {
-			return
-		}
-		tf.writeNumberedLines(&buf, []string{line}, 1, -1, 0)
-	}
-
-	// Write the formatted directive with proper indentation
-	switch d := directive.(type) {
-	case *ast.Transaction:
-		// Use the formatter to format transactions
-		var txnBuf bytes.Buffer
-		txnFormatter := formatter.New()
-		if tf.formatter != nil && tf.formatter.CurrencyColumn > 0 {
-			txnFormatter = formatter.New(formatter.WithCurrencyColumn(tf.formatter.CurrencyColumn))
-		}
-
-		if err := txnFormatter.FormatTransaction(d, &txnBuf); err == nil {
-			// Indent each line with 3 spaces
-			raw := strings.TrimRight(txnBuf.String(), "\n")
-			if raw != "" {
-				lines := strings.Split(raw, "\n")
-				tf.writeNumberedLines(&buf, lines, 1, -1, 0)
-			}
-		}
-
-	case *ast.Balance:
-		dateStr := d.Date.Format("2006-01-02")
-		keyword := "balance"
-		account := string(d.Account)
-
-		if tf.styles != nil {
-			dateStr = tf.styles.Date(dateStr)
-			keyword = tf.styles.Keyword(keyword)
-			account = tf.styles.Account(account)
-		}
-
-		var line strings.Builder
-		line.WriteString(dateStr)
-		line.WriteByte(' ')
-		line.WriteString(keyword)
-		line.WriteByte(' ')
-		line.WriteString(account)
-
-		if d.Amount != nil {
-			value := d.Amount.Value
-			currency := d.Amount.Currency
-			if tf.styles != nil {
-				value = tf.styles.Number(value)
-				currency = tf.styles.Currency(currency)
-			}
-			line.WriteString("  ")
-			line.WriteString(value)
-			line.WriteByte(' ')
-			line.WriteString(currency)
-		}
-
-		writeSingleLine(line.String())
-
-	case *ast.Pad:
-		dateStr := d.Date.Format("2006-01-02")
-		keyword := "pad"
-		account := string(d.Account)
-		target := string(d.AccountPad)
-
-		if tf.styles != nil {
-			dateStr = tf.styles.Date(dateStr)
-			keyword = tf.styles.Keyword(keyword)
-			account = tf.styles.Account(account)
-			target = tf.styles.Account(target)
-		}
-
-		writeSingleLine(fmt.Sprintf("%s %s %s %s", dateStr, keyword, account, target))
-
-	case *ast.Note:
-		dateStr := d.Date.Format("2006-01-02")
-		keyword := "note"
-		account := string(d.Account)
-		description := fmt.Sprintf("%q", d.Description)
-
-		if tf.styles != nil {
-			dateStr = tf.styles.Date(dateStr)
-			keyword = tf.styles.Keyword(keyword)
-			account = tf.styles.Account(account)
-			description = tf.styles.String(description)
-		}
-
-		writeSingleLine(fmt.Sprintf("%s %s %s %s", dateStr, keyword, account, description))
-
-	case *ast.Document:
-		dateStr := d.Date.Format("2006-01-02")
-		keyword := "document"
-		account := string(d.Account)
-		path := fmt.Sprintf("%q", d.PathToDocument)
-
-		if tf.styles != nil {
-			dateStr = tf.styles.Date(dateStr)
-			keyword = tf.styles.Keyword(keyword)
-			account = tf.styles.Account(account)
-			path = tf.styles.String(path)
-		}
-
-		writeSingleLine(fmt.Sprintf("%s %s %s %s", dateStr, keyword, account, path))
-
-	case *ast.Open:
-		dateStr := d.Date.Format("2006-01-02")
-		keyword := "open"
-		account := string(d.Account)
-		currencies := d.ConstraintCurrencies
-		booking := d.BookingMethod
-
-		if tf.styles != nil {
-			dateStr = tf.styles.Date(dateStr)
-			keyword = tf.styles.Keyword(keyword)
-			account = tf.styles.Account(account)
-		}
-
-		var line strings.Builder
-		line.WriteString(dateStr)
-		line.WriteByte(' ')
-		line.WriteString(keyword)
-		line.WriteByte(' ')
-		line.WriteString(account)
-
-		if len(currencies) > 0 {
-			var rendered string
-			if tf.styles != nil {
-				parts := make([]string, 0, len(currencies))
-				for _, cur := range currencies {
-					parts = append(parts, tf.styles.Currency(cur))
-				}
-				rendered = strings.Join(parts, ", ")
-			} else {
-				rendered = strings.Join(currencies, ", ")
-			}
-			line.WriteByte(' ')
-			line.WriteString(rendered)
-		}
-
-		if booking != "" {
-			if tf.styles != nil {
-				line.WriteByte(' ')
-				line.WriteString(tf.styles.Keyword(booking))
-			} else {
-				line.WriteByte(' ')
-				line.WriteString(booking)
-			}
-		}
-
-		writeSingleLine(line.String())
-
-	case *ast.Close:
-		dateStr := d.Date.Format("2006-01-02")
-		keyword := "close"
-		account := string(d.Account)
-
-		if tf.styles != nil {
-			dateStr = tf.styles.Date(dateStr)
-			keyword = tf.styles.Keyword(keyword)
-			account = tf.styles.Account(account)
-		}
-
-		writeSingleLine(fmt.Sprintf("%s %s %s", dateStr, keyword, account))
+	lines := tf.directiveLines(directive)
+	if len(lines) > 0 {
+		tf.writeNumberedLines(&buf, lines, 1, -1, 0)
 	}
 
 	return buf.String()
+}
+
+func (tf *TextFormatter) directiveLines(directive ast.Directive) []string {
+	switch d := directive.(type) {
+	case *ast.Transaction:
+		return tf.transactionLines(d)
+	case *ast.Balance:
+		line := fmt.Sprintf("%s %s %s", tf.renderDate(d.Date), tf.styleKeyword("balance"), tf.styleAccount(string(d.Account)))
+		if amount := tf.renderAmount(d.Amount); amount != "" {
+			line += "  " + amount
+		}
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Pad:
+		line := fmt.Sprintf("%s %s %s %s", tf.renderDate(d.Date), tf.styleKeyword("pad"), tf.styleAccount(string(d.Account)), tf.styleAccount(string(d.AccountPad)))
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Note:
+		line := fmt.Sprintf("%s %s %s %s", tf.renderDate(d.Date), tf.styleKeyword("note"), tf.styleAccount(string(d.Account)), tf.renderStringLiteral(d.Description))
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Document:
+		line := fmt.Sprintf("%s %s %s %s", tf.renderDate(d.Date), tf.styleKeyword("document"), tf.styleAccount(string(d.Account)), tf.renderStringLiteral(d.PathToDocument))
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Open:
+		line := fmt.Sprintf("%s %s %s", tf.renderDate(d.Date), tf.styleKeyword("open"), tf.styleAccount(string(d.Account)))
+		if rendered := tf.renderCurrencyList(d.ConstraintCurrencies); rendered != "" {
+			line += " " + rendered
+		}
+		if d.BookingMethod != "" {
+			line += " " + tf.styleKeyword(d.BookingMethod)
+		}
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Close:
+		line := fmt.Sprintf("%s %s %s", tf.renderDate(d.Date), tf.styleKeyword("close"), tf.styleAccount(string(d.Account)))
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Commodity:
+		line := fmt.Sprintf("%s %s %s", tf.renderDate(d.Date), tf.styleKeyword("commodity"), tf.styleCurrency(d.Currency))
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Price:
+		line := fmt.Sprintf("%s %s %s", tf.renderDate(d.Date), tf.styleKeyword("price"), tf.styleCurrency(d.Commodity))
+		if amount := tf.renderAmount(d.Amount); amount != "" {
+			line += " " + amount
+		}
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Event:
+		line := fmt.Sprintf("%s %s %s %s", tf.renderDate(d.Date), tf.styleKeyword("event"), tf.renderStringLiteral(d.Name), tf.renderStringLiteral(d.Value))
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	case *ast.Custom:
+		line := fmt.Sprintf("%s %s %s", tf.renderDate(d.Date), tf.styleKeyword("custom"), tf.renderStringLiteral(d.Type))
+		if len(d.Values) > 0 {
+			values := make([]string, 0, len(d.Values))
+			for _, v := range d.Values {
+				if rendered := tf.renderCustomValue(v); rendered != "" {
+					values = append(values, rendered)
+				}
+			}
+			if len(values) > 0 {
+				line += " " + strings.Join(values, " ")
+			}
+		}
+		return tf.appendMetadataLines([]string{line}, d.Metadata)
+	default:
+		return nil
+	}
+}
+
+func (tf *TextFormatter) transactionLines(txn *ast.Transaction) []string {
+	var txnBuf bytes.Buffer
+	txnFormatter := formatter.New()
+	if tf.formatter != nil && tf.formatter.CurrencyColumn > 0 {
+		txnFormatter = formatter.New(formatter.WithCurrencyColumn(tf.formatter.CurrencyColumn))
+	}
+
+	if err := txnFormatter.FormatTransaction(txn, &txnBuf); err != nil {
+		return nil
+	}
+
+	raw := strings.TrimSuffix(txnBuf.String(), "\n")
+	if raw == "" {
+		return nil
+	}
+	return strings.Split(raw, "\n")
+}
+
+func (tf *TextFormatter) appendMetadataLines(lines []string, metadata []*ast.Metadata) []string {
+	if len(metadata) == 0 {
+		return lines
+	}
+
+	for _, meta := range metadata {
+		if meta == nil {
+			continue
+		}
+		lines = append(lines, tf.formatMetadataEntry(meta))
+	}
+
+	return lines
+}
+
+func (tf *TextFormatter) formatMetadataEntry(meta *ast.Metadata) string {
+	key := meta.Key
+	value := strings.TrimSpace(meta.Value)
+
+	if tf.styles != nil {
+		key = tf.styleKeyword(key)
+		value = tf.styleMetadataValue(value)
+	}
+
+	return fmt.Sprintf("  %s: %s", key, value)
+}
+
+func (tf *TextFormatter) renderAmount(amount *ast.Amount) string {
+	if amount == nil {
+		return ""
+	}
+
+	value := amount.Value
+	currency := amount.Currency
+
+	if tf.styles != nil {
+		value = tf.styleNumber(value)
+		currency = tf.styleCurrency(currency)
+	}
+
+	return strings.TrimSpace(fmt.Sprintf("%s %s", value, currency))
+}
+
+func (tf *TextFormatter) renderCurrencyList(currencies []string) string {
+	if len(currencies) == 0 {
+		return ""
+	}
+
+	rendered := make([]string, 0, len(currencies))
+	for _, cur := range currencies {
+		rendered = append(rendered, tf.styleCurrency(cur))
+	}
+
+	return strings.Join(rendered, ", ")
+}
+
+func (tf *TextFormatter) renderStringLiteral(value string) string {
+	literal := strconv.Quote(value)
+	if tf.styles != nil {
+		return tf.styleString(literal)
+	}
+	return literal
+}
+
+func (tf *TextFormatter) renderCustomValue(value *ast.CustomValue) string {
+	switch {
+	case value == nil:
+		return ""
+	case value.String != nil:
+		return tf.renderStringLiteral(*value.String)
+	case value.BooleanValue != nil:
+		return tf.styleKeyword(*value.BooleanValue)
+	case value.Amount != nil:
+		return tf.renderAmount(value.Amount)
+	case value.Number != nil:
+		num := *value.Number
+		if tf.styles != nil {
+			num = tf.styleNumber(num)
+		}
+		return num
+	default:
+		return ""
+	}
+}
+
+func (tf *TextFormatter) renderDate(date *ast.Date) string {
+	if date == nil {
+		return ""
+	}
+	formatted := date.Format("2006-01-02")
+	if tf.styles != nil {
+		return tf.styles.Date(formatted)
+	}
+	return formatted
+}
+
+func (tf *TextFormatter) styleKeyword(text string) string {
+	if tf.styles == nil {
+		return text
+	}
+	return tf.styles.Keyword(text)
+}
+
+func (tf *TextFormatter) styleAccount(text string) string {
+	if tf.styles == nil {
+		return text
+	}
+	return tf.styles.Account(text)
+}
+
+func (tf *TextFormatter) styleCurrency(text string) string {
+	if tf.styles == nil {
+		return text
+	}
+	return tf.styles.Currency(text)
+}
+
+func (tf *TextFormatter) styleNumber(text string) string {
+	if tf.styles == nil {
+		return text
+	}
+	return tf.styles.Number(text)
+}
+
+func (tf *TextFormatter) styleString(text string) string {
+	if tf.styles == nil {
+		return text
+	}
+	return tf.styles.String(text)
+}
+
+func (tf *TextFormatter) styleMetadataValue(value string) string {
+	if value == "" {
+		return value
+	}
+
+	if tf.styles == nil {
+		return value
+	}
+
+	if strings.HasPrefix(value, "\"") && strings.HasSuffix(value, "\"") {
+		return tf.styles.String(value)
+	}
+
+	switch strings.ToUpper(value) {
+	case "TRUE", "FALSE":
+		return tf.styles.Keyword(value)
+	}
+
+	if fields := strings.Fields(value); len(fields) == 2 && tf.isNumberLike(fields[0]) {
+		return fmt.Sprintf("%s %s", tf.styles.Number(fields[0]), tf.styles.Currency(fields[1]))
+	}
+
+	if tf.isNumberLike(value) {
+		return tf.styles.Number(value)
+	}
+
+	return value
+}
+
+func (tf *TextFormatter) isNumberLike(value string) bool {
+	if value == "" {
+		return false
+	}
+	_, err := strconv.ParseFloat(value, 64)
+	return err == nil
 }
 
 // formatErrorLine builds the first line of an error with positional context.
