@@ -396,26 +396,28 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 
 	// Infer missing amounts if possible
 	if len(pc.withoutAmounts) > 0 {
-		// Group missing postings by currency (if they have costs, we can infer the currency)
-		// For now, handle the simple case: one missing posting per currency
-		for currency, residual := range balance {
-			// Need to negate the residual to balance
-			needed := residual.Neg()
+		// Only infer if there's exactly ONE missing posting AND exactly ONE unbalanced currency
+		// Otherwise it's ambiguous
+		if len(pc.withoutAmounts) == 1 && len(balance) == 1 {
+			// Single missing posting and single unbalanced currency - we can infer
+			for currency, residual := range balance {
+				// Need to negate the residual to balance
+				needed := residual.Neg()
 
-			// Find if there's exactly one posting without amount that could use this currency
-			// For simplicity, if there's ONE missing posting and ONE unbalanced currency, assign it
-			if len(pc.withoutAmounts) == 1 {
 				// Create the inferred amount
 				result.inferredAmounts[pc.withoutAmounts[0]] = &ast.Amount{
 					Value:    needed.String(),
 					Currency: currency,
 				}
-			} else if len(pc.withoutAmounts) > 1 {
-				// Ambiguous - can't infer
-				result.residuals = map[string]string{currency: residual.String()}
-				result.isBalanced = false
-				return result, nil
 			}
+		} else if len(pc.withoutAmounts) > 1 || len(balance) > 1 {
+			// Multiple missing postings OR multiple unbalanced currencies - ambiguous
+			result.residuals = make(map[string]string)
+			for currency, residual := range balance {
+				result.residuals[currency] = residual.String()
+			}
+			result.isBalanced = false
+			return result, nil
 		}
 	}
 
@@ -486,19 +488,32 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 		amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
 	}
 
+	// Add inferred amounts to balance for verification
+	for _, inferredAmount := range result.inferredAmounts {
+		amount, err := ParseAmount(inferredAmount)
+		if err != nil {
+			continue // Shouldn't happen, but be safe
+		}
+		currency := inferredAmount.Currency
+
+		// Add inferred amount to the balance
+		current := balance[currency]
+		balance[currency] = current.Add(amount)
+
+		// Also add to amounts for tolerance calculation
+		amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
+	}
+
 	// Check each currency balance with inferred tolerance
 	for currency, residual := range balance {
 		// Infer tolerance from the amounts in this transaction
 		amounts := amountsByCurrency[currency]
 		tolerance := InferTolerance(amounts, currency, v.toleranceConfig)
 
-		// If we inferred an amount for this currency, it should now be balanced
-		if len(result.inferredAmounts) == 0 {
-			if residual.Abs().GreaterThan(tolerance) {
-				result.residuals[currency] = residual.String()
-			}
+		// Check if residual is within tolerance (applies to all currencies)
+		if residual.Abs().GreaterThan(tolerance) {
+			result.residuals[currency] = residual.String()
 		}
-		// If we did inference, the balance should be zero (we'll verify below)
 	}
 
 	result.isBalanced = len(result.residuals) == 0
