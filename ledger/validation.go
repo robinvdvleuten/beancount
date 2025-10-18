@@ -442,6 +442,12 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 				continue
 			}
 
+			// Cannot infer cost for zero amounts (would cause division by zero)
+			if amount.IsZero() {
+				// Zero amount with cost spec - skip inference
+				continue
+			}
+
 			// Look for a residual currency that can be used for the cost
 			// Simple case: if there's one residual currency, use it
 			if len(balance) == 1 {
