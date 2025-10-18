@@ -179,6 +179,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals, signalCtx context
 
 	// Create formatter with options
 	var opts []formatter.Option
+	opts = append(opts, formatter.WithSource(contents))
 	if cmd.CurrencyColumn > 0 {
 		opts = append(opts, formatter.WithCurrencyColumn(cmd.CurrencyColumn))
 	}
@@ -191,7 +192,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals, signalCtx context
 	f := formatter.New(opts...)
 
 	// Format and output to stdout
-	if err := f.Format(runCtx, ast, contents, ctx.Stdout); err != nil {
+	if err := f.Format(runCtx, ast, ctx.Stdout); err != nil {
 		return err
 	}
 

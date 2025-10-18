@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestLexerBasicTokens(t *testing.T) {
@@ -57,15 +59,10 @@ func TestLexerBasicTokens(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) != len(tt.want) {
-				t.Fatalf("got %d tokens, want %d", len(tokens), len(tt.want))
-			}
+			assert.Equal(t, len(tt.want), len(tokens))
 
 			for i, tok := range tokens {
-				if tok.Type != tt.want[i] {
-					t.Errorf("token %d: got type %s, want %s",
-						i, tok.Type, tt.want[i])
-				}
+				assert.Equal(t, tt.want[i], tok.Type, "token %d type mismatch", i)
 			}
 		})
 	}
@@ -78,8 +75,6 @@ func TestLexerNumbers(t *testing.T) {
 	}{
 		{"123", "123"},
 		{"123.45", "123.45"},
-		{"-123", "-123"},
-		{"-123.45", "-123.45"},
 		{"0.50", "0.50"},
 		{"1000000", "1000000"},
 	}
@@ -89,17 +84,41 @@ func TestLexerNumbers(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 
-			if tokens[0].Type != NUMBER {
-				t.Errorf("got type %s, want NUMBER", tokens[0].Type)
-			}
+			assert.Equal(t, NUMBER, tokens[0].Type)
 
 			got := tokens[0].String(lexer.source)
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestLexerNegativeNumbers(t *testing.T) {
+	// After adding expression support, negative numbers are tokenized as MINUS + NUMBER
+	// This allows proper handling of both unary minus (e.g., -5) and binary subtraction (e.g., 5 - 3)
+	tests := []struct {
+		input      string
+		wantTokens []TokenType
+		wantValues []string
+	}{
+		{"-123", []TokenType{MINUS, NUMBER, EOF}, []string{"-", "123"}},
+		{"-123.45", []TokenType{MINUS, NUMBER, EOF}, []string{"-", "123.45"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			lexer := NewLexer([]byte(tt.input), "test")
+			tokens := lexer.ScanAll()
+
+			assert.Equal(t, len(tt.wantTokens), len(tokens))
+
+			for i, wantType := range tt.wantTokens {
+				assert.Equal(t, wantType, tokens[i].Type, "token %d type mismatch", i)
+				if i < len(tt.wantValues) {
+					got := tokens[i].String(lexer.source)
+					assert.Equal(t, tt.wantValues[i], got, "token %d value mismatch", i)
+				}
 			}
 		})
 	}
@@ -121,18 +140,12 @@ func TestLexerStrings(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 
-			if tokens[0].Type != STRING {
-				t.Errorf("got type %s, want STRING", tokens[0].Type)
-			}
+			assert.Equal(t, STRING, tokens[0].Type)
 
 			got := tokens[0].String(lexer.source)
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -154,18 +167,12 @@ func TestLexerAccounts(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 
-			if tokens[0].Type != ACCOUNT {
-				t.Errorf("got type %s, want ACCOUNT", tokens[0].Type)
-			}
+			assert.Equal(t, ACCOUNT, tokens[0].Type)
 
 			got := tokens[0].String(lexer.source)
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -182,18 +189,12 @@ func TestLexerDates(t *testing.T) {
 			lexer := NewLexer([]byte(input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 
-			if tokens[0].Type != DATE {
-				t.Errorf("got type %s, want DATE", tokens[0].Type)
-			}
+			assert.Equal(t, DATE, tokens[0].Type)
 
 			got := tokens[0].String(lexer.source)
-			if got != input {
-				t.Errorf("got %q, want %q", got, input)
-			}
+			assert.Equal(t, input, got)
 		})
 	}
 }
@@ -225,13 +226,9 @@ func TestLexerKeywords(t *testing.T) {
 			lexer := NewLexer([]byte(input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 
-			if tokens[0].Type != want {
-				t.Errorf("got type %s, want %s", tokens[0].Type, want)
-			}
+			assert.Equal(t, want, tokens[0].Type)
 		})
 	}
 }
@@ -254,13 +251,9 @@ func TestLexerTagsAndLinks(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 
-			if tokens[0].Type != tt.want {
-				t.Errorf("got type %s, want %s", tokens[0].Type, tt.want)
-			}
+			assert.Equal(t, tt.want, tokens[0].Type)
 		})
 	}
 }
@@ -278,14 +271,10 @@ func TestLexerComments(t *testing.T) {
 	// Comments should be skipped
 	expectedTypes := []TokenType{DATE, OPEN, ACCOUNT, EOF}
 
-	if len(tokens) != len(expectedTypes) {
-		t.Fatalf("got %d tokens, want %d (comments should be skipped)", len(tokens), len(expectedTypes))
-	}
+	assert.Equal(t, len(expectedTypes), len(tokens), "comments should be skipped")
 
 	for i, tok := range tokens {
-		if tok.Type != expectedTypes[i] {
-			t.Errorf("token %d: got type %s, want %s", i, tok.Type, expectedTypes[i])
-		}
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
 	}
 }
 
@@ -310,15 +299,10 @@ func TestLexerTransaction(t *testing.T) {
 		EOF,
 	}
 
-	if len(tokens) != len(expectedTypes) {
-		t.Fatalf("got %d tokens, want %d", len(tokens), len(expectedTypes))
-	}
+	assert.Equal(t, len(expectedTypes), len(tokens))
 
 	for i, tok := range tokens {
-		if tok.Type != expectedTypes[i] {
-			t.Errorf("token %d: got type %s, want %s (text: %q)",
-				i, tok.Type, expectedTypes[i], tok.String(lexer.source))
-		}
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch (text: %q)", i, tok.String(lexer.source))
 	}
 }
 
@@ -337,14 +321,10 @@ func TestLexerBalance(t *testing.T) {
 		EOF,
 	}
 
-	if len(tokens) != len(expectedTypes) {
-		t.Fatalf("got %d tokens, want %d", len(tokens), len(expectedTypes))
-	}
+	assert.Equal(t, len(expectedTypes), len(tokens))
 
 	for i, tok := range tokens {
-		if tok.Type != expectedTypes[i] {
-			t.Errorf("token %d: got type %s, want %s", i, tok.Type, expectedTypes[i])
-		}
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
 	}
 }
 
@@ -364,14 +344,10 @@ func TestLexerCost(t *testing.T) {
 		EOF,
 	}
 
-	if len(tokens) != len(expectedTypes) {
-		t.Fatalf("got %d tokens, want %d", len(tokens), len(expectedTypes))
-	}
+	assert.Equal(t, len(expectedTypes), len(tokens))
 
 	for i, tok := range tokens {
-		if tok.Type != expectedTypes[i] {
-			t.Errorf("token %d: got type %s, want %s", i, tok.Type, expectedTypes[i])
-		}
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
 	}
 }
 
@@ -385,22 +361,16 @@ Assets:Bank:Checking
 	tokens := lexer.ScanAll()
 
 	// Should have 3 ACCOUNT tokens + EOF
-	if len(tokens) != 4 {
-		t.Fatalf("got %d tokens, want 4", len(tokens))
-	}
+	assert.Equal(t, 4, len(tokens))
 
 	// All three should be the same account
 	for i := 0; i < 3; i++ {
-		if tokens[i].Type != ACCOUNT {
-			t.Errorf("token %d: expected ACCOUNT", i)
-		}
+		assert.Equal(t, ACCOUNT, tokens[i].Type, "token %d: expected ACCOUNT", i)
 	}
 
 	// Test that the interner is available and works
 	interner := lexer.Interner()
-	if interner == nil {
-		t.Fatal("interner should be available")
-	}
+	assert.NotEqual(t, nil, interner, "interner should be available")
 
 	// Manually intern the account strings (this is what the parser will do)
 	acc1 := interner.InternBytes(tokens[0].Bytes(lexer.source))
@@ -410,14 +380,10 @@ Assets:Bank:Checking
 	// All three should return the same pointer (string interning)
 	// Note: We can't use == on strings for pointer comparison in Go,
 	// but we can verify they're equal and the pool has only 1 entry
-	if acc1 != acc2 || acc2 != acc3 {
-		t.Error("all three account names should be equal")
-	}
+	assert.True(t, acc1 == acc2 && acc2 == acc3, "all three account names should be equal")
 
 	// The interner should have exactly 1 unique string after interning
-	if interner.Size() != 1 {
-		t.Errorf("interner size: got %d, want 1 (string deduplication)", interner.Size())
-	}
+	assert.Equal(t, 1, interner.Size(), "string deduplication")
 }
 
 func TestLexerLineAndColumn(t *testing.T) {
@@ -429,10 +395,8 @@ func TestLexerLineAndColumn(t *testing.T) {
 	tokens := lexer.ScanAll()
 
 	// First token should be on line 1, column 1
-	if tokens[0].Line != 1 || tokens[0].Column != 1 {
-		t.Errorf("first token: got line %d col %d, want line 1 col 1",
-			tokens[0].Line, tokens[0].Column)
-	}
+	assert.Equal(t, 1, tokens[0].Line, "first token line")
+	assert.Equal(t, 1, tokens[0].Column, "first token column")
 
 	// Find the second DATE token (should be on line 2)
 	secondDateIdx := -1
@@ -443,13 +407,9 @@ func TestLexerLineAndColumn(t *testing.T) {
 		}
 	}
 
-	if secondDateIdx == -1 {
-		t.Fatal("didn't find second DATE token")
-	}
+	assert.NotEqual(t, -1, secondDateIdx, "didn't find second DATE token")
 
-	if tokens[secondDateIdx].Line != 2 {
-		t.Errorf("second date: got line %d, want line 2", tokens[secondDateIdx].Line)
-	}
+	assert.Equal(t, 2, tokens[secondDateIdx].Line, "second date line")
 }
 
 // Benchmark zero-copy performance

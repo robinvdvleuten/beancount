@@ -470,13 +470,20 @@ func TestFormatCmd(t *testing.T) {
 
 ### Assertion Library
 
-Use `github.com/alecthomas/assert/v2` for assertions:
+**REQUIRED:** All tests MUST use `github.com/alecthomas/assert/v2` for assertions:
 
 ```go
 assert.NoError(t, err)
 assert.Equal(t, expected, actual)
 assert.True(t, condition, "optional message")
+assert.Error(t, err, "expected an error")
+assert.NotEqual(t, nil, value, "expected non-nil value")
 ```
+
+**DO NOT use:**
+- `if err != nil { t.Fatalf(...) }`
+- `if got != want { t.Errorf(...) }`
+- Manual error checking in tests
 
 ### Test Coverage
 
@@ -928,7 +935,8 @@ txn := ast.NewClearedTransaction(date, csvPayee,
     ast.NewPosting(checkingAccount, ast.WithAmount(csvAmount, "USD")),
 )
 
-formatter.FormatTransaction(txn, os.Stdout)
+fmtr := formatter.New()
+fmtr.FormatTransaction(txn, os.Stdout)
 ```
 
 **Rules:**

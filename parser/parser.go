@@ -221,9 +221,9 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		return nil, err
 	}
 
-	p.consume(COLON, "expected ':'")
+	colon := p.consume(COLON, "expected ':'")
 
-	value := p.parseRestOfLine()
+	value := p.parseRestOfLine(colon.End)
 
 	return &ast.Pushmeta{
 		Pos:   tokenPosition(tok, p.filename),

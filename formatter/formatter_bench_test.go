@@ -26,13 +26,13 @@ option "title" "Test Ledger"
 			b.Fatal(err)
 		}
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -65,13 +65,13 @@ option "operating_currency" "USD"
 			b.Fatal(err)
 		}
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -100,13 +100,13 @@ option "operating_currency" "USD"
 			b.Fatal(err)
 		}
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -133,13 +133,13 @@ option "title" "Test Ledger"
 			b.Fatal(err)
 		}
 
-		f := New()
+		f := New(WithSource([]byte(source)))
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, &buf); err != nil {
 				b.Fatal(err)
 			}
 		}
@@ -159,13 +159,13 @@ option "title" "Test Ledger"
 			b.Fatal(err)
 		}
 
-		f := New(WithPreserveComments(false), WithPreserveBlanks(false))
+		f := New(WithSource([]byte(source)), WithPreserveComments(false), WithPreserveBlanks(false))
 		b.ResetTimer()
 		b.ReportAllocs()
 
 		for i := 0; i < b.N; i++ {
 			var buf bytes.Buffer
-			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
+			if err := f.Format(context.Background(), ast, &buf); err != nil {
 				b.Fatal(err)
 			}
 		}

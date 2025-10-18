@@ -153,8 +153,8 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	}
 	posting.Account = account
 
-	// Optional amount
-	if p.check(NUMBER) || p.check(MINUS) {
+	// Optional amount (simple number, expression, or negative)
+	if p.check(NUMBER) || p.check(MINUS) || p.check(LPAREN) {
 		amount, err := p.parseAmountOptional()
 		if err != nil {
 			return nil, err
