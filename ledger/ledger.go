@@ -104,7 +104,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		default:
 		}
 
-		l.processDirective(directive)
+		l.processDirective(ctx, directive)
 	}
 	processTimer.End()
 
@@ -133,14 +133,14 @@ func (l *Ledger) Accounts() map[string]*Account {
 }
 
 // processDirective processes a single directive
-func (l *Ledger) processDirective(directive ast.Directive) {
+func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	switch d := directive.(type) {
 	case *ast.Open:
 		l.processOpen(d)
 	case *ast.Close:
 		l.processClose(d)
 	case *ast.Transaction:
-		l.processTransaction(d)
+		l.processTransaction(ctx, d)
 	case *ast.Balance:
 		l.processBalance(d)
 	case *ast.Pad:
@@ -206,156 +206,32 @@ func (l *Ledger) processClose(close *ast.Close) {
 }
 
 // processTransaction processes a Transaction directive
-func (l *Ledger) processTransaction(txn *ast.Transaction) {
-	// Single-pass validation, classification, and weight calculation
-	hasErrors := false
-	var postingsWithoutAmounts []*ast.Posting
-	var postingsWithEmptyCosts []*ast.Posting // Postings with {} empty cost specs
-	var allWeights []WeightSet
+func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts)
 
-	for _, posting := range txn.Postings {
-		// Validate account is open
-		if !l.isAccountOpen(posting.Account, txn.Date) {
-			l.addError(NewAccountNotOpenError(txn, posting.Account))
-			hasErrors = true
-			continue
-		}
+	// Run pure validation
+	errs, balanceResult := v.validateTransaction(ctx, txn)
 
-		// Classify posting and calculate weights if amount present
-		if posting.Amount == nil {
-			postingsWithoutAmounts = append(postingsWithoutAmounts, posting)
-		} else {
-			// Calculate weights immediately
-			weights, err := CalculateWeights(posting)
-			if err != nil {
-				l.addError(NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
-				hasErrors = true
-				continue
-			}
-
-			// Check if this is an empty cost spec (returns empty weights)
-			if len(weights) == 0 && posting.Cost != nil && posting.Cost.IsEmpty() {
-				postingsWithEmptyCosts = append(postingsWithEmptyCosts, posting)
-			} else {
-				allWeights = append(allWeights, weights)
-			}
-		}
-	}
-
-	// If we have errors, don't continue
-	if hasErrors {
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
 		return
 	}
 
-	// Balance the weights
-	balance := BalanceWeights(allWeights)
-	defer putBalanceMap(balance)
+	// Validation passed - now apply effects
+	l.applyTransaction(txn, balanceResult)
+}
 
-	// Infer missing amounts
-	inferredAmounts := getInferredAmountsMap()
-	defer putInferredAmountsMap(inferredAmounts)
-
-	if len(postingsWithoutAmounts) > 0 {
-		// Group missing postings by currency (if they have costs, we can infer the currency)
-		// For now, handle the simple case: one missing posting per currency
-		for currency, residual := range balance {
-			// Need to negate the residual to balance
-			needed := residual.Neg()
-
-			// Find if there's exactly one posting without amount that could use this currency
-			// For simplicity, if there's ONE missing posting and ONE unbalanced currency, assign it
-			if len(postingsWithoutAmounts) == 1 {
-				// Create the inferred amount
-				inferredAmounts[postingsWithoutAmounts[0]] = &ast.Amount{
-					Value:    needed.String(),
-					Currency: currency,
-				}
-			} else if len(postingsWithoutAmounts) > 1 {
-				// Ambiguous - can't infer
-				residuals := map[string]string{currency: residual.String()}
-				l.addError(NewTransactionNotBalancedError(txn, residuals))
-				return
-			}
-		}
-	}
-
-	// Infer costs for empty cost specs {}
-	// Note: Only infer costs for AUGMENTATIONS (positive amounts)
-	// For REDUCTIONS (negative amounts), empty cost spec means "use booking method"
-	inferredCosts := make(map[*ast.Posting]*ast.Amount)
-
-	if len(postingsWithEmptyCosts) > 0 {
-		// For each posting with empty cost spec, infer the cost from the residual
-		for _, posting := range postingsWithEmptyCosts {
-			// Parse the commodity amount
-			amount, err := ParseAmount(posting.Amount)
-			if err != nil {
-				continue // Already validated earlier
-			}
-
-			// Only infer cost for augmentations (positive amounts)
-			// For reductions (negative amounts), empty cost spec means "use booking method"
-			if amount.IsNegative() {
-				// This is a reduction - don't infer cost, let booking method handle it
-				// The weight is already 0, which is correct - we'll calculate actual
-				// weight when we reduce lots using FIFO/LIFO
-				continue
-			}
-
-			// Look for a residual currency that can be used for the cost
-			// Simple case: if there's one residual currency, use it
-			if len(balance) == 1 {
-				for currency, residual := range balance {
-					// Calculate the cost per unit needed to balance
-					// If residual is -5000 USD and amount is 10 HOOL
-					// We need +5000 USD, so cost per unit = 5000 / 10 = 500 USD
-					costPerUnit := residual.Neg().Div(amount)
-
-					// Store the inferred cost
-					inferredCosts[posting] = &ast.Amount{
-						Value:    costPerUnit.String(),
-						Currency: currency,
-					}
-
-					// Add this weight to the balance
-					totalCost := amount.Mul(costPerUnit)
-					balance[currency] = balance[currency].Add(totalCost)
-				}
-			} else if len(balance) > 1 {
-				// Multiple currencies - ambiguous
-				// For now, report error (could be improved to match currencies intelligently)
-				residuals := map[string]string{}
-				l.addError(NewTransactionNotBalancedError(txn, residuals))
-				return
-			}
-		}
-	}
-
-	// Check if balanced (within tolerance) after inference
-	tolerance := GetTolerance("")
-	residuals := make(map[string]string) // Not pooled - persists in error struct
-	for currency, amount := range balance {
-		// If we inferred an amount for this currency, it should now be balanced
-		if len(inferredAmounts) == 0 {
-			if amount.Abs().GreaterThan(tolerance) {
-				residuals[currency] = amount.String()
-			}
-		}
-		// If we did inference, the balance should be zero (we'll verify below)
-	}
-
-	if len(residuals) > 0 {
-		l.addError(NewTransactionNotBalancedError(txn, residuals))
-		return // Don't update inventory if not balanced
-	}
-
-	// Update inventories
+// applyTransaction mutates ledger state (inventory updates)
+// Only called after validation passes
+func (l *Ledger) applyTransaction(txn *ast.Transaction, result *balanceResult) {
 	for _, posting := range txn.Postings {
 		// Get the amount (either explicit or inferred)
 		var amountToUse *ast.Amount
 		if posting.Amount != nil {
 			amountToUse = posting.Amount
-		} else if inferredAmount, ok := inferredAmounts[posting]; ok {
+		} else if inferredAmount, ok := result.inferredAmounts[posting]; ok {
 			amountToUse = inferredAmount
 		} else {
 			// No amount and couldn't infer - skip
@@ -369,7 +245,7 @@ func (l *Ledger) processTransaction(txn *ast.Transaction) {
 		}
 
 		// Parse amount
-		amount, _ := ParseAmount(amountToUse)
+		amount, _ := ParseAmount(amountToUse) // We know it's valid from validation
 		currency := amountToUse.Currency
 
 		// Check if we have a cost (explicit, inferred, or empty)
@@ -385,7 +261,7 @@ func (l *Ledger) processTransaction(txn *ast.Transaction) {
 			// For reductions, this triggers FIFO/LIFO booking
 			// For augmentations, the cost was inferred earlier
 			costToUse = posting.Cost
-		} else if inferredCost, ok := inferredCosts[posting]; ok {
+		} else if inferredCost, ok := result.inferredCosts[posting]; ok {
 			// Use inferred cost - create a temporary Cost structure
 			hasInferredCost = true
 			costToUse = &ast.Cost{

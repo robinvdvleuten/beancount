@@ -7,20 +7,20 @@ import (
 
 // Weight represents the contribution of a posting to the transaction balance
 // A posting can contribute multiple weights (e.g., commodity + cost currency)
-type Weight struct {
+type weight struct {
 	Amount   decimal.Decimal
 	Currency string
 }
 
-// WeightSet is a collection of weights from a single posting
-type WeightSet []Weight
+// weightSet is a collection of weights from a single posting
+type weightSet []weight
 
-// CalculateWeights calculates all weights contributed by a posting
+// calculateWeights calculates all weights contributed by a posting
 // This handles cost basis and price annotations
-func CalculateWeights(posting *ast.Posting) (WeightSet, error) {
+func calculateWeights(posting *ast.Posting) (weightSet, error) {
 	if posting.Amount == nil {
 		// No amount specified - this will be inferred (not implemented yet)
-		return WeightSet{}, nil
+		return weightSet{}, nil
 	}
 
 	// Parse the main amount
@@ -36,12 +36,12 @@ func CalculateWeights(posting *ast.Posting) (WeightSet, error) {
 	hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
 	hasPrice := posting.Price != nil
 
-	var weights WeightSet
+	var weights weightSet
 
 	if hasEmptyCost {
 		// Empty cost spec {} - cost will be inferred to balance the transaction
 		// Return empty weights; cost inference happens in processTransaction()
-		return WeightSet{}, nil
+		return weightSet{}, nil
 
 	} else if hasExplicitCost {
 		// Cost: {X CURR} or {X CURR} @ Y CURR2
@@ -55,7 +55,7 @@ func CalculateWeights(posting *ast.Posting) (WeightSet, error) {
 		costCurrency := posting.Cost.Amount.Currency
 		totalCost := amount.Mul(costAmount)
 
-		weights = WeightSet{
+		weights = weightSet{
 			{Amount: totalCost, Currency: costCurrency},
 		}
 
@@ -82,13 +82,13 @@ func CalculateWeights(posting *ast.Posting) (WeightSet, error) {
 			priceWeight = amount.Mul(priceAmount)
 		}
 
-		weights = WeightSet{
+		weights = weightSet{
 			{Amount: priceWeight, Currency: priceCurrency},
 		}
 
 	} else {
 		// No cost or price: just the commodity amount
-		weights = WeightSet{
+		weights = weightSet{
 			{Amount: amount, Currency: currency},
 		}
 	}
@@ -96,10 +96,10 @@ func CalculateWeights(posting *ast.Posting) (WeightSet, error) {
 	return weights, nil
 }
 
-// BalanceWeights accumulates weights from multiple postings
+// balanceWeights accumulates weights from multiple postings
 // Returns a map of currency -> total amount
 // NOTE: Caller must call putBalanceMap() when done with the returned map
-func BalanceWeights(allWeights []WeightSet) map[string]decimal.Decimal {
+func balanceWeights(allWeights []weightSet) map[string]decimal.Decimal {
 	balance := getBalanceMap()
 
 	for _, weights := range allWeights {

@@ -8,7 +8,7 @@ import (
 )
 
 // LotSpec uniquely identifies a lot by its cost basis
-type LotSpec struct {
+type lotSpec struct {
 	Cost         *decimal.Decimal // Cost per unit (nil if no cost basis)
 	CostCurrency string           // Currency of the cost
 	Date         *ast.Date        // Optional acquisition date
@@ -16,18 +16,18 @@ type LotSpec struct {
 }
 
 // IsEmpty returns true if this is an empty cost specification {}
-func (ls *LotSpec) IsEmpty() bool {
+func (ls *lotSpec) IsEmpty() bool {
 	return ls.Cost == nil && ls.Date == nil && ls.Label == ""
 }
 
 // IsMerge returns true if this represents a merge cost {*}
 // Note: This is handled separately in ast.Cost.IsMergeCost()
-func (ls *LotSpec) IsMerge() bool {
+func (ls *lotSpec) IsMerge() bool {
 	return false // Merge is handled at parser level
 }
 
 // Equal checks if two lot specs are equal
-func (ls *LotSpec) Equal(other *LotSpec) bool {
+func (ls *lotSpec) Equal(other *lotSpec) bool {
 	if ls == nil && other == nil {
 		return true
 	}
@@ -65,7 +65,7 @@ func (ls *LotSpec) Equal(other *LotSpec) bool {
 }
 
 // String returns a string representation of the lot spec
-func (ls *LotSpec) String() string {
+func (ls *lotSpec) String() string {
 	if ls == nil || ls.IsEmpty() {
 		return "{}"
 	}
@@ -97,15 +97,15 @@ func (ls *LotSpec) String() string {
 }
 
 // Lot represents a specific lot of a commodity with cost basis
-type Lot struct {
+type lot struct {
 	Commodity string
 	Amount    decimal.Decimal
-	Spec      *LotSpec
+	Spec      *lotSpec
 }
 
-// NewLot creates a new lot
-func NewLot(commodity string, amount decimal.Decimal, spec *LotSpec) *Lot {
-	return &Lot{
+// newLot creates a new lot
+func newLot(commodity string, amount decimal.Decimal, spec *lotSpec) *lot {
+	return &lot{
 		Commodity: commodity,
 		Amount:    amount,
 		Spec:      spec,
@@ -113,7 +113,7 @@ func NewLot(commodity string, amount decimal.Decimal, spec *LotSpec) *Lot {
 }
 
 // String returns a string representation of the lot
-func (l *Lot) String() string {
+func (l *lot) String() string {
 	if l.Spec == nil || l.Spec.IsEmpty() {
 		return fmt.Sprintf("%s %s", l.Amount.String(), l.Commodity)
 	}
@@ -121,14 +121,14 @@ func (l *Lot) String() string {
 }
 
 // ParseLotSpec creates a LotSpec from ast.Cost
-func ParseLotSpec(cost *ast.Cost) (*LotSpec, error) {
+func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 	if cost == nil {
 		return nil, nil
 	}
 
 	// Empty cost {}
 	if cost.IsEmpty() {
-		return &LotSpec{}, nil
+		return &lotSpec{}, nil
 	}
 
 	// Merge cost {*} - return special marker
@@ -137,7 +137,7 @@ func ParseLotSpec(cost *ast.Cost) (*LotSpec, error) {
 		return nil, fmt.Errorf("merge cost {*} not yet implemented")
 	}
 
-	spec := &LotSpec{
+	spec := &lotSpec{
 		Date:  cost.Date,
 		Label: cost.Label,
 	}

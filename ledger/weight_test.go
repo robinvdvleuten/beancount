@@ -27,14 +27,14 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 	assert.Equal(t, 2, len(txn.Postings))
 
 	// Test cash posting (no cost)
-	cashWeights, err := CalculateWeights(txn.Postings[0])
+	cashWeights, err := calculateWeights(txn.Postings[0])
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(cashWeights))
 	assert.Equal(t, "USD", cashWeights[0].Currency)
 	assert.Equal(t, "-500", cashWeights[0].Amount.String())
 
 	// Test stock posting (with cost)
-	stockWeights, err := CalculateWeights(txn.Postings[1])
+	stockWeights, err := calculateWeights(txn.Postings[1])
 	assert.NoError(t, err)
 	t.Logf("Stock weights: %+v", stockWeights)
 	t.Logf("Posting.Cost: %+v", txn.Postings[1].Cost)
@@ -48,15 +48,15 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 }
 
 func TestBalanceWeights(t *testing.T) {
-	// Test that BalanceWeights correctly sums weights
-	allWeights := []WeightSet{
+	// Test that balanceWeights correctly sums weights
+	allWeights := []weightSet{
 		// Cash posting
 		{{Amount: mustDecimal("-500"), Currency: "USD"}},
 		// Stock posting with cost (only cost weight, not commodity!)
 		{{Amount: mustDecimal("500"), Currency: "USD"}},
 	}
 
-	balance := BalanceWeights(allWeights)
+	balance := balanceWeights(allWeights)
 	defer putBalanceMap(balance)
 
 	t.Logf("Balance: %+v", balance)
@@ -114,7 +114,7 @@ func TestCalculateWeights_Price(t *testing.T) {
 	assert.True(t, ok)
 
 	// Test stock posting (with cost and price)
-	stockWeights, err := CalculateWeights(txn.Postings[0])
+	stockWeights, err := calculateWeights(txn.Postings[0])
 	assert.NoError(t, err)
 
 	// When BOTH cost and price are present, COST is used for weight (price is informational)

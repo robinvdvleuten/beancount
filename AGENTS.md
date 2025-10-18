@@ -644,7 +644,61 @@ func New(opts ...Option) *Formatter {
 }
 ```
 
+### State as Receiver Pattern
+
+When operations require shared state (validation, processing, transformation), **use state as a receiver** instead of passing it as a parameter.
+
+**❌ ANTI-PATTERN: Passing state as parameters**
+```go
+type ProcessorContext struct {
+    Config   *Config
+    Accounts map[string]*Account
+}
+
+// Have to pass procCtx to every helper function
+func processTransaction(ctx context.Context, txn *Transaction, procCtx ProcessorContext) error {
+    return validateAndApply(ctx, txn, procCtx)  // procCtx passed everywhere
+}
+```
+
+**✅ CORRECT: State as receiver**
+```go
+type processor struct {
+    config   *Config
+    accounts map[string]*Account
+}
+
+func newProcessor(config *Config, accounts map[string]*Account) *processor {
+    return &processor{config: config, accounts: accounts}
+}
+
+// State accessed via receiver, not passed as parameter
+func (p *processor) processTransaction(ctx context.Context, txn *Transaction) error {
+    if !p.config.Enabled {  // Access p.config directly
+        return nil
+    }
+    return p.validateAndApply(ctx, txn)  // No state passing needed
+}
+
+func (p *processor) validateAndApply(ctx context.Context, txn *Transaction) error {
+    acc := p.accounts[txn.Account]  // Access p.accounts directly
+    // ...
+}
+```
+
+**Common types:** validators, processors, builders, transformers, analyzers
+
+**Real examples:** Kubernetes `strategy`, etcd `EtcdServer`, CockroachDB `planner`, Go stdlib `parser`
+
+**Checklist:**
+- [ ] Create processor type with state as unexported fields
+- [ ] Make methods receivers on the type
+- [ ] Accept `context.Context` as first parameter (if needed)
+- [ ] Never pass state as parameters
+- [ ] Use unexported types for internal use (e.g., `type validator struct`)
+
 ### Interface Assertion
+
 Verify interface implementation at compile time:
 
 ```go

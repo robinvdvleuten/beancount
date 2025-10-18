@@ -11,13 +11,13 @@ import (
 // Inventory tracks lots of commodities with cost basis
 type Inventory struct {
 	// Map: commodity -> list of lots
-	lots map[string][]*Lot
+	lots map[string][]*lot
 }
 
 // NewInventory creates a new inventory
 func NewInventory() *Inventory {
 	return &Inventory{
-		lots: make(map[string][]*Lot),
+		lots: make(map[string][]*lot),
 	}
 }
 
@@ -28,7 +28,7 @@ func (inv *Inventory) Add(commodity string, amount decimal.Decimal) {
 }
 
 // AddLot adds an amount with a specific cost basis
-func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *LotSpec) {
+func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lotSpec) {
 	// Find existing lot with matching spec
 	lots := inv.lots[commodity]
 	for _, lot := range lots {
@@ -40,7 +40,7 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *Lot
 	}
 
 	// Create new lot
-	newLot := NewLot(commodity, amount, spec)
+	newLot := newLot(commodity, amount, spec)
 	inv.lots[commodity] = append(inv.lots[commodity], newLot)
 }
 
@@ -54,12 +54,12 @@ func (inv *Inventory) Get(commodity string) decimal.Decimal {
 }
 
 // GetLots returns all lots for a commodity
-func (inv *Inventory) GetLots(commodity string) []*Lot {
+func (inv *Inventory) GetLots(commodity string) []*lot {
 	return inv.lots[commodity]
 }
 
 // ReduceLot reduces from a specific lot or uses booking method
-func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *LotSpec, bookingMethod string) error {
+func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
 	// Reducing means amount should be negative
 	if amount.GreaterThanOrEqual(decimal.Zero) {
 		return fmt.Errorf("reduce amount must be negative, got %s", amount.String())
@@ -85,7 +85,7 @@ func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *
 }
 
 // reduceSpecificLot reduces from a specific lot matching the spec
-func (inv *Inventory) reduceSpecificLot(commodity string, amount decimal.Decimal, spec *LotSpec) error {
+func (inv *Inventory) reduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
 	lots := inv.lots[commodity]
 
 	// Find matching lot
@@ -122,7 +122,7 @@ func (inv *Inventory) reduceWithBooking(commodity string, amount decimal.Decimal
 
 	// For now, implement FIFO (oldest first)
 	// Sort lots by date (lots without date come first)
-	sortedLots := make([]*Lot, len(lots))
+	sortedLots := make([]*lot, len(lots))
 	copy(sortedLots, lots)
 	sort.Slice(sortedLots, func(i, j int) bool {
 		// Lots without date come first
@@ -167,9 +167,9 @@ func (inv *Inventory) reduceWithBooking(commodity string, amount decimal.Decimal
 }
 
 // removeLot removes a lot from the inventory
-func (inv *Inventory) removeLot(commodity string, lotToRemove *Lot) {
+func (inv *Inventory) removeLot(commodity string, lotToRemove *lot) {
 	lots := inv.lots[commodity]
-	newLots := make([]*Lot, 0, len(lots)-1)
+	newLots := make([]*lot, 0, len(lots)-1)
 	for _, lot := range lots {
 		if lot != lotToRemove {
 			newLots = append(newLots, lot)
@@ -226,7 +226,7 @@ func (inv *Inventory) String() string {
 }
 
 // lotSpecsMatch checks if two lot specs match
-func lotSpecsMatch(a, b *LotSpec) bool {
+func lotSpecsMatch(a, b *lotSpec) bool {
 	// Both nil
 	if a == nil && b == nil {
 		return true
