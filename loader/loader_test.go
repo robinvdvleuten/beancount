@@ -378,6 +378,55 @@ include "included.beancount"
 	assert.Equal(t, "USD", optionsMap["operating_currency"])
 }
 
+func TestLoadOptionsUniqueMerged(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create included file with unique option and shared option
+	includedFile := filepath.Join(tmpDir, "included.beancount")
+	err := os.WriteFile(includedFile, []byte(`
+option "tolerance" "USD:0.01"
+option "title" "Included File"
+
+2024-01-01 open Assets:Savings USD
+`), 0644)
+	assert.NoError(t, err)
+
+	// Create main file with different unique option and shared option
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	err = os.WriteFile(mainFile, []byte(`
+option "operating_currency" "USD"
+option "title" "Main File"
+
+include "included.beancount"
+
+2024-01-02 open Assets:Checking USD
+`), 0644)
+	assert.NoError(t, err)
+
+	// Load with following includes
+	ldr := New(WithFollowIncludes())
+	tree, err := ldr.Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+
+	// Should have 3 options: unique from both files + main file override for duplicate
+	assert.Equal(t, 3, len(tree.Options))
+
+	// Build options map
+	optionsMap := make(map[string]string)
+	for _, opt := range tree.Options {
+		optionsMap[opt.Name] = opt.Value
+	}
+
+	// Verify unique option from included file is preserved
+	assert.Equal(t, "USD:0.01", optionsMap["tolerance"])
+
+	// Verify unique option from main file is present
+	assert.Equal(t, "USD", optionsMap["operating_currency"])
+
+	// Verify main file option overrides included file
+	assert.Equal(t, "Main File", optionsMap["title"])
+}
+
 func TestLoadPluginsMerged(t *testing.T) {
 	tmpDir := t.TempDir()
 

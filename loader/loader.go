@@ -283,7 +283,6 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 	result := &ast.AST{
 		Directives: make(ast.Directives, 0, len(main.Directives)),
-		Options:    main.Options,   // Main file options take precedence
 		Includes:   nil,            // All includes resolved, so clear this
 		Plugins:    main.Plugins,   // Start with main file plugins
 		Pushtags:   main.Pushtags,  // Start with main file pushtags
@@ -291,6 +290,26 @@ func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 		Pushmetas:  main.Pushmetas, // Start with main file pushmetas
 		Popmetas:   main.Popmetas,  // Start with main file popmetas
 	}
+
+	// Merge options: main file options override duplicates, but preserve unique options from includes
+	// Build a map of main file option names for deduplication
+	mainOptionsMap := make(map[string]bool)
+	for _, opt := range main.Options {
+		mainOptionsMap[opt.Name] = true
+	}
+
+	// Add options from included files (only if not overridden by main file)
+	for _, inc := range included {
+		for _, opt := range inc.Options {
+			if !mainOptionsMap[opt.Name] {
+				result.Options = append(result.Options, opt)
+				mainOptionsMap[opt.Name] = true // Mark as added to avoid duplicates from multiple includes
+			}
+		}
+	}
+
+	// Add main file options last (these have precedence)
+	result.Options = append(result.Options, main.Options...)
 
 	// Add main file directives
 	result.Directives = append(result.Directives, main.Directives...)
