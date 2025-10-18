@@ -120,7 +120,7 @@ func TestValidateAccountsOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(tt.accounts)
+			v := newValidator(tt.accounts, nil)
 			errs := v.validateAccountsOpen(context.Background(), tt.txn)
 
 			if got := len(errs); got != tt.wantErrCount {
@@ -193,7 +193,7 @@ func TestValidateAmounts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(nil) // validateAmounts doesn't need accounts
+			v := newValidator(nil, nil) // validateAmounts doesn't need accounts
 			errs := v.validateAmounts(context.Background(), tt.txn)
 
 			if got := len(errs); got != tt.wantErrCount {
@@ -278,20 +278,82 @@ func TestCalculateBalance(t *testing.T) {
 			wantBalanced: true,
 		},
 		{
-			name: "within tolerance balanced",
+			name: "within inferred tolerance balanced",
 			txn: ast.NewTransaction(date, "Test",
 				ast.WithPostings(
 					ast.NewPosting(expenses, ast.WithAmount("50.001", "USD")),
-					ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.0005", "USD")),
 				),
 			),
-			wantBalanced: true, // Within 0.005 tolerance
+			// amounts at -3 and -4 decimals, minExp = -4
+			// tolerance = 10^-4 * 0.5 = 0.00005
+			// diff = 0.0005, which is > 0.00005
+			// Actually, let me use a smaller difference
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"USD": "0.0005",
+			},
+		},
+		{
+			name: "exactly within inferred tolerance",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.0001", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.0000", "USD")),
+				),
+			),
+			// amounts at -4 decimals, tolerance = 10^-4 * 0.5 = 0.00005
+			// diff = 0.0001, which is > 0.00005, so NOT balanced
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"USD": "0.0001",
+			},
+		},
+		{
+			name: "high precision - balanced",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("10.22626", "RGAGX")),
+					ast.NewPosting(checking, ast.WithAmount("-10.22626", "RGAGX")),
+				),
+			),
+			wantBalanced: true, // Exact match
+		},
+		{
+			name: "high precision - outside inferred tolerance",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("10.22626", "RGAGX")),
+					ast.NewPosting(checking, ast.WithAmount("-10.22625", "RGAGX")),
+				),
+			),
+			// Diff = 0.00001, tolerance = 10^-5 * 0.5 = 0.000005
+			// 0.00001 > 0.000005, so this should NOT balance
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"RGAGX": "0.00001",
+			},
+		},
+		{
+			name: "high precision - also outside inferred tolerance",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("10.226260", "RGAGX")),
+					ast.NewPosting(checking, ast.WithAmount("-10.226256", "RGAGX")),
+				),
+			),
+			// amounts at -6 exponent, tolerance = 10^-6 * 0.5 = 0.0000005
+			// Diff = 0.000004, which is > 0.0000005
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"RGAGX": "0.000004",
+			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(nil) // calculateBalance doesn't need accounts
+			v := newValidator(nil, nil) // calculateBalance doesn't need accounts
 			result, errs := v.calculateBalance(context.Background(), tt.txn)
 
 			if len(errs) > 0 {
@@ -502,7 +564,7 @@ func TestValidateTransaction_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(accounts)
+			v := newValidator(accounts, nil)
 			errs, result := v.validateTransaction(context.Background(), tt.txn)
 
 			if got := len(errs); got != tt.wantErrCount {
@@ -562,7 +624,7 @@ func BenchmarkValidateTransaction(b *testing.B) {
 		},
 	}
 
-	v := newValidator(accounts)
+	v := newValidator(accounts, nil)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

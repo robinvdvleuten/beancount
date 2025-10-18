@@ -6,6 +6,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
+	"github.com/shopspring/decimal"
 )
 
 // Validation Architecture
@@ -62,12 +63,16 @@ import (
 // validator provides transaction validation with read-only access to ledger state.
 // This is a separate type from Ledger to ensure validation cannot mutate state.
 type validator struct {
-	accounts map[string]*Account
+	accounts        map[string]*Account
+	toleranceConfig *ToleranceConfig
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account) *validator {
-	return &validator{accounts: accounts}
+func newValidator(accounts map[string]*Account, toleranceConfig *ToleranceConfig) *validator {
+	return &validator{
+		accounts:        accounts,
+		toleranceConfig: toleranceConfig,
+	}
 }
 
 // postingClassification groups postings by their characteristics
@@ -99,14 +104,14 @@ type balanceResult struct {
 //
 // Example:
 //
-//   v := newValidator(ledger.accounts)
-//   errs := v.validateAccountsOpen(ctx, txn)
-//   if len(errs) > 0 {
-//       // txn references closed or non-existent accounts
-//       for _, err := range errs {
-//           fmt.Printf("Account error: %v\n", err)
-//       }
-//   }
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateAccountsOpen(ctx, txn)
+//	if len(errs) > 0 {
+//	    // txn references closed or non-existent accounts
+//	    for _, err := range errs {
+//	        fmt.Printf("Account error: %v\n", err)
+//	    }
+//	}
 func (v *validator) validateAccountsOpen(ctx context.Context, txn *ast.Transaction) []error {
 	var errs []error
 	for _, posting := range txn.Postings {
@@ -151,16 +156,16 @@ func (v *validator) validateAmounts(ctx context.Context, txn *ast.Transaction) [
 //
 // Example:
 //
-//   // Valid cost: 10 HOOL {500.00 USD}
-//   v := newValidator(ledger.accounts)
-//   errs := v.validateCosts(ctx, txn)
-//   if len(errs) > 0 {
-//       // Found invalid cost specifications
-//       for _, err := range errs {
-//           fmt.Printf("Cost error: %v\n", err)
-//           // Example: "2024-01-15: Invalid cost specification (Posting #1: Assets:Stock): {abc USD}: invalid decimal"
-//       }
-//   }
+//	// Valid cost: 10 HOOL {500.00 USD}
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateCosts(ctx, txn)
+//	if len(errs) > 0 {
+//	    // Found invalid cost specifications
+//	    for _, err := range errs {
+//	        fmt.Printf("Cost error: %v\n", err)
+//	        // Example: "2024-01-15: Invalid cost specification (Posting #1: Assets:Stock): {abc USD}: invalid decimal"
+//	    }
+//	}
 func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
@@ -230,16 +235,16 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 //
 // Example:
 //
-//   // Valid price: 100 EUR @ 1.20 USD
-//   v := newValidator(ledger.accounts)
-//   errs := v.validatePrices(ctx, txn)
-//   if len(errs) > 0 {
-//       // Found invalid price specifications
-//       for _, err := range errs {
-//           fmt.Printf("Price error: %v\n", err)
-//           // Example: "2024-01-15: Invalid price specification (Posting #2: Expenses:Foreign): @ abc USD: invalid decimal"
-//       }
-//   }
+//	// Valid price: 100 EUR @ 1.20 USD
+//	v := newValidator(ledger.accounts)
+//	errs := v.validatePrices(ctx, txn)
+//	if len(errs) > 0 {
+//	    // Found invalid price specifications
+//	    for _, err := range errs {
+//	        fmt.Printf("Price error: %v\n", err)
+//	        // Example: "2024-01-15: Invalid price specification (Posting #2: Expenses:Foreign): @ abc USD: invalid decimal"
+//	    }
+//	}
 func (v *validator) validatePrices(ctx context.Context, txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
@@ -277,16 +282,16 @@ func (v *validator) validatePrices(ctx context.Context, txn *ast.Transaction) []
 //
 // Example:
 //
-//   v := newValidator(ledger.accounts)
-//   errs := v.validateMetadata(ctx, txn)
-//   if len(errs) > 0 {
-//       // Found invalid or duplicate metadata
-//       for _, err := range errs {
-//           fmt.Printf("Metadata error: %v\n", err)
-//           // Example: "2024-01-15: Invalid metadata: key="invoice", value="": empty value"
-//           // Example: "2024-01-15: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
-//       }
-//   }
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateMetadata(ctx, txn)
+//	if len(errs) > 0 {
+//	    // Found invalid or duplicate metadata
+//	    for _, err := range errs {
+//	        fmt.Printf("Metadata error: %v\n", err)
+//	        // Example: "2024-01-15: Invalid metadata: key="invoice", value="": empty value"
+//	        // Example: "2024-01-15: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
+//	    }
+//	}
 func (v *validator) validateMetadata(ctx context.Context, txn *ast.Transaction) []error {
 	var errs []error
 
@@ -468,12 +473,30 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 	}
 
 	// Check if balanced (within tolerance) after inference
-	tolerance := GetTolerance("")
-	for currency, amount := range balance {
+	// Collect amounts per currency for tolerance inference
+	amountsByCurrency := make(map[string][]decimal.Decimal)
+	for _, posting := range txn.Postings {
+		if posting.Amount == nil {
+			continue
+		}
+		amount, err := ParseAmount(posting.Amount)
+		if err != nil {
+			continue // Already validated earlier
+		}
+		currency := posting.Amount.Currency
+		amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
+	}
+
+	// Check each currency balance with inferred tolerance
+	for currency, residual := range balance {
+		// Infer tolerance from the amounts in this transaction
+		amounts := amountsByCurrency[currency]
+		tolerance := InferTolerance(amounts, currency, v.toleranceConfig)
+
 		// If we inferred an amount for this currency, it should now be balanced
 		if len(result.inferredAmounts) == 0 {
-			if amount.Abs().GreaterThan(tolerance) {
-				result.residuals[currency] = amount.String()
+			if residual.Abs().GreaterThan(tolerance) {
+				result.residuals[currency] = residual.String()
 			}
 		}
 		// If we did inference, the balance should be zero (we'll verify below)
@@ -507,18 +530,18 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //
 // Example:
 //
-//   v := newValidator(ledger.accounts)
-//   errs, result := v.validateTransaction(ctx, txn)
-//   if len(errs) > 0 {
-//       // Validation failed
-//       fmt.Printf("Found %d validation errors:\n", len(errs))
-//       for _, err := range errs {
-//           fmt.Printf("  - %v\n", err)
-//       }
-//       return
-//   }
-//   // Validation passed - result contains balance info and inferred amounts
-//   fmt.Printf("Transaction balanced: %v\n", result.isBalanced)
+//	v := newValidator(ledger.accounts)
+//	errs, result := v.validateTransaction(ctx, txn)
+//	if len(errs) > 0 {
+//	    // Validation failed
+//	    fmt.Printf("Found %d validation errors:\n", len(errs))
+//	    for _, err := range errs {
+//	        fmt.Printf("  - %v\n", err)
+//	    }
+//	    return
+//	}
+//	// Validation passed - result contains balance info and inferred amounts
+//	fmt.Printf("Transaction balanced: %v\n", result.isBalanced)
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *balanceResult) {
 	collector := telemetry.FromContext(ctx)
 	timer := collector.Start("validation.transaction")
@@ -595,15 +618,15 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 //
 // Example:
 //
-//   // Valid: 2024-01-15 balance Assets:Checking 100.00 USD
-//   v := newValidator(ledger.accounts)
-//   errs := v.validateBalance(ctx, balance)
-//   if len(errs) > 0 {
-//       // Account doesn't exist or amount is invalid
-//       for _, err := range errs {
-//           fmt.Printf("Balance validation error: %v\n", err)
-//       }
-//   }
+//	// Valid: 2024-01-15 balance Assets:Checking 100.00 USD
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateBalance(ctx, balance)
+//	if len(errs) > 0 {
+//	    // Account doesn't exist or amount is invalid
+//	    for _, err := range errs {
+//	        fmt.Printf("Balance validation error: %v\n", err)
+//	    }
+//	}
 func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) []error {
 	var errs []error
 
@@ -643,15 +666,15 @@ func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) [
 //
 // Example:
 //
-//   // Valid: 2024-01-01 pad Assets:Checking Equity:Opening-Balances
-//   v := newValidator(ledger.accounts)
-//   errs := v.validatePad(ctx, pad)
-//   if len(errs) > 0 {
-//       // One or both accounts don't exist or are closed
-//       for _, err := range errs {
-//           fmt.Printf("Pad validation error: %v\n", err)
-//       }
-//   }
+//	// Valid: 2024-01-01 pad Assets:Checking Equity:Opening-Balances
+//	v := newValidator(ledger.accounts)
+//	errs := v.validatePad(ctx, pad)
+//	if len(errs) > 0 {
+//	    // One or both accounts don't exist or are closed
+//	    for _, err := range errs {
+//	        fmt.Printf("Pad validation error: %v\n", err)
+//	    }
+//	}
 func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
 	var errs []error
 
@@ -680,15 +703,15 @@ func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
 //
 // Example:
 //
-//   // Valid: 2024-07-09 note Assets:Checking "Called bank about pending deposit"
-//   v := newValidator(ledger.accounts)
-//   errs := v.validateNote(ctx, note)
-//   if len(errs) > 0 {
-//       // Account doesn't exist or is closed
-//       for _, err := range errs {
-//           fmt.Printf("Note validation error: %v\n", err)
-//       }
-//   }
+//	// Valid: 2024-07-09 note Assets:Checking "Called bank about pending deposit"
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateNote(ctx, note)
+//	if len(errs) > 0 {
+//	    // Account doesn't exist or is closed
+//	    for _, err := range errs {
+//	        fmt.Printf("Note validation error: %v\n", err)
+//	    }
+//	}
 func (v *validator) validateNote(ctx context.Context, note *ast.Note) []error {
 	var errs []error
 

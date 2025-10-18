@@ -50,10 +50,11 @@ import (
 // use, verifies balance assertions, and processes pad directives. All validation errors
 // are collected and returned together after processing.
 type Ledger struct {
-	accounts   map[string]*Account
-	errors     []error
-	options    map[string]string
-	padEntries map[string]*ast.Pad // account -> pad directive
+	accounts        map[string]*Account
+	errors          []error
+	options         map[string]string
+	padEntries      map[string]*ast.Pad // account -> pad directive
+	toleranceConfig *ToleranceConfig
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -76,10 +77,11 @@ func (e *ValidationErrors) Unwrap() []error {
 // New creates a new empty ledger
 func New() *Ledger {
 	return &Ledger{
-		accounts:   make(map[string]*Account),
-		errors:     make([]error, 0),
-		options:    make(map[string]string),
-		padEntries: make(map[string]*ast.Pad),
+		accounts:        make(map[string]*Account),
+		errors:          make([]error, 0),
+		options:         make(map[string]string),
+		padEntries:      make(map[string]*ast.Pad),
+		toleranceConfig: NewToleranceConfig(),
 	}
 }
 
@@ -91,6 +93,13 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	// Process options first
 	for _, opt := range tree.Options {
 		l.options[opt.Name] = opt.Value
+	}
+
+	// Parse tolerance configuration from options
+	if config, err := ParseToleranceConfig(l.options); err != nil {
+		l.errors = append(l.errors, err)
+	} else {
+		l.toleranceConfig = config
 	}
 
 	// Process directives in order (they're already sorted by date)
@@ -208,7 +217,7 @@ func (l *Ledger) processClose(close *ast.Close) {
 // processTransaction processes a Transaction directive
 func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts)
+	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
 	errs, balanceResult := v.validateTransaction(ctx, txn)
@@ -302,7 +311,7 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, result *balanceResult) {
 // processBalance processes a Balance directive
 func (l *Ledger) processBalance(balance *ast.Balance) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts)
+	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
 	errs := v.validateBalance(context.Background(), balance)
@@ -336,7 +345,7 @@ func (l *Ledger) applyBalance(balance *ast.Balance) {
 		difference := expectedAmount.Sub(actualAmount)
 
 		// Apply padding if difference is significant
-		tolerance := GetTolerance(currency)
+		tolerance := l.toleranceConfig.GetDefaultTolerance(currency)
 		if difference.Abs().GreaterThan(tolerance) {
 			// Add difference to the account
 			account.Inventory.Add(currency, difference)
@@ -356,7 +365,7 @@ func (l *Ledger) applyBalance(balance *ast.Balance) {
 	}
 
 	// Check if amounts match within tolerance
-	tolerance := GetTolerance(currency)
+	tolerance := l.toleranceConfig.GetDefaultTolerance(currency)
 	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
 		l.addError(NewBalanceMismatchError(balance, expectedAmount.String(), actualAmount.String(), currency))
 	}
@@ -365,7 +374,7 @@ func (l *Ledger) applyBalance(balance *ast.Balance) {
 // processPad processes a Pad directive
 func (l *Ledger) processPad(pad *ast.Pad) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts)
+	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
 	errs := v.validatePad(context.Background(), pad)
@@ -385,7 +394,7 @@ func (l *Ledger) processPad(pad *ast.Pad) {
 // processNote processes a Note directive
 func (l *Ledger) processNote(note *ast.Note) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts)
+	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
 	errs := v.validateNote(context.Background(), note)
@@ -401,7 +410,7 @@ func (l *Ledger) processNote(note *ast.Note) {
 // processDocument processes a Document directive
 func (l *Ledger) processDocument(doc *ast.Document) {
 	// Create validator with read-only view of current state
-	v := newValidator(l.accounts)
+	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
 	errs := v.validateDocument(context.Background(), doc)
