@@ -217,3 +217,30 @@ func aggregateNode(node *timerNode) {
 	// Replace children with aggregated list
 	node.children = newChildren
 }
+
+// nodeDuration returns the effective duration for a timer node.
+// It prefers aggregated duration when available, falls back to measured
+// start/end duration, and finally sums child durations when the node did
+// not record its own measurements.
+func nodeDuration(node *timerNode) time.Duration {
+	if node == nil {
+		return 0
+	}
+
+	if node.duration > 0 {
+		return node.duration
+	}
+
+	if !node.end.IsZero() {
+		duration := node.end.Sub(node.start)
+		if duration > 0 {
+			return duration
+		}
+	}
+
+	var total time.Duration
+	for _, child := range node.children {
+		total += nodeDuration(child)
+	}
+	return total
+}

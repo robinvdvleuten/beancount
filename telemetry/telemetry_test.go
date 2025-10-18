@@ -77,6 +77,11 @@ func TestTimingCollectorBasic(t *testing.T) {
 	if !strings.Contains(output, "ms") {
 		t.Errorf("Output should contain duration, got: %s", output)
 	}
+
+	// Should contain total time header
+	if !strings.Contains(output, "Total:") {
+		t.Errorf("Output should contain total time header, got: %s", output)
+	}
 }
 
 func TestTimingCollectorHierarchical(t *testing.T) {
@@ -117,6 +122,11 @@ func TestTimingCollectorHierarchical(t *testing.T) {
 	// Should have tree structure (contains tree characters)
 	if !strings.Contains(output, "├─") && !strings.Contains(output, "└─") {
 		t.Errorf("Output should contain tree structure, got: %s", output)
+	}
+
+	// Should include total time header
+	if !strings.Contains(output, "Total:") {
+		t.Errorf("Output should contain total time header, got: %s", output)
 	}
 }
 

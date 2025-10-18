@@ -24,11 +24,16 @@ func formatTimingTree(w io.Writer, root *timerNode, stylesInterface interface{})
 	}
 
 	// Calculate duration (use aggregated duration if set, otherwise calculate from start/end)
-	var duration time.Duration
-	if root.duration > 0 {
-		duration = root.duration
+	duration := nodeDuration(root)
+	totalDuration := duration
+
+	totalLabel := "Total"
+	if styles != nil {
+		label := styles.Keyword(totalLabel)
+		timing := formatDuration(totalDuration, false)
+		_, _ = fmt.Fprintf(w, "%s: %s\n", label, timing)
 	} else {
-		duration = root.end.Sub(root.start)
+		_, _ = fmt.Fprintf(w, "%s: %s\n", totalLabel, formatDuration(totalDuration, false))
 	}
 
 	// Format root node (with call count if aggregated)
@@ -57,12 +62,7 @@ func formatTimingTree(w io.Writer, root *timerNode, stylesInterface interface{})
 // formatNode recursively formats a node and its children.
 func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool, styles *output.Styles) {
 	// Calculate duration (use aggregated duration if set, otherwise calculate from start/end)
-	var duration time.Duration
-	if node.duration > 0 {
-		duration = node.duration
-	} else {
-		duration = node.end.Sub(node.start)
-	}
+	duration := nodeDuration(node)
 
 	// Determine if this is a slow operation (>= 100ms)
 	isSlowOperation := duration >= 100*time.Millisecond
