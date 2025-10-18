@@ -148,13 +148,13 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 	case *ast.Transaction:
 		l.processTransaction(ctx, d)
 	case *ast.Balance:
-		l.processBalance(d)
+		l.processBalance(ctx, d)
 	case *ast.Pad:
-		l.processPad(d)
+		l.processPad(ctx, d)
 	case *ast.Note:
-		l.processNote(d)
+		l.processNote(ctx, d)
 	case *ast.Document:
-		l.processDocument(d)
+		l.processDocument(ctx, d)
 	default:
 		// Unknown directive type - ignore for now
 		// Note: Price, Commodity, and Event directives are intentionally not processed
@@ -306,12 +306,12 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, result *balanceResult) {
 }
 
 // processBalance processes a Balance directive
-func (l *Ledger) processBalance(balance *ast.Balance) {
+func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 	// Create validator with read-only view of current state
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateBalance(context.Background(), balance)
+	errs := v.validateBalance(ctx, balance)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -369,12 +369,12 @@ func (l *Ledger) applyBalance(balance *ast.Balance) {
 }
 
 // processPad processes a Pad directive
-func (l *Ledger) processPad(pad *ast.Pad) {
+func (l *Ledger) processPad(ctx context.Context, pad *ast.Pad) {
 	// Create validator with read-only view of current state
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validatePad(context.Background(), pad)
+	errs := v.validatePad(ctx, pad)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -389,12 +389,12 @@ func (l *Ledger) processPad(pad *ast.Pad) {
 }
 
 // processNote processes a Note directive
-func (l *Ledger) processNote(note *ast.Note) {
+func (l *Ledger) processNote(ctx context.Context, note *ast.Note) {
 	// Create validator with read-only view of current state
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateNote(context.Background(), note)
+	errs := v.validateNote(ctx, note)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -405,12 +405,12 @@ func (l *Ledger) processNote(note *ast.Note) {
 }
 
 // processDocument processes a Document directive
-func (l *Ledger) processDocument(doc *ast.Document) {
+func (l *Ledger) processDocument(ctx context.Context, doc *ast.Document) {
 	// Create validator with read-only view of current state
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateDocument(context.Background(), doc)
+	errs := v.validateDocument(ctx, doc)
 
 	// Collect validation errors
 	if len(errs) > 0 {
