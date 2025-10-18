@@ -1,5 +1,7 @@
 # beancount
 
+![beancounting-gopher](https://github.com/user-attachments/assets/e73f4046-22d2-4824-b8f0-11a1b4702cfa)
+
 A fast, lightweight [Beancount](https://beancount.github.io/) parser and formatter written in Go.
 
 [![Latest Release](https://img.shields.io/github/release/robinvdvleuten/beancount.svg?style=flat-square)](https://github.com/robinvdvleuten/beancount/releases)
