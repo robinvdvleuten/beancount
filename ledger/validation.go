@@ -359,7 +359,7 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 // This is a pure function - no side effects
 func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) (*balanceResult, []error) {
 	collector := telemetry.FromContext(ctx)
-	timer := collector.Start("validation.calculate_balance")
+	timer := collector.Start("validator.calculate_balance")
 	defer timer.End()
 	var errs []error
 	pc := classifyPostings(txn.Postings)
@@ -544,41 +544,41 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //	fmt.Printf("Transaction balanced: %v\n", result.isBalanced)
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *balanceResult) {
 	collector := telemetry.FromContext(ctx)
-	timer := collector.Start("validation.transaction")
+	timer := collector.Start("validator.transaction")
 	defer timer.End()
 
 	var allErrors []error
 
 	// 1. Validate accounts are open
-	accountsTimer := timer.Child("validation.accounts")
+	accountsTimer := timer.Child("validator.accounts")
 	if errs := v.validateAccountsOpen(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 	accountsTimer.End()
 
 	// 2. Validate amounts are parseable
-	amountsTimer := timer.Child("validation.amounts")
+	amountsTimer := timer.Child("validator.amounts")
 	if errs := v.validateAmounts(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 	amountsTimer.End()
 
 	// 3. Validate cost specifications
-	costsTimer := timer.Child("validation.costs")
+	costsTimer := timer.Child("validator.costs")
 	if errs := v.validateCosts(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 	costsTimer.End()
 
 	// 4. Validate price specifications
-	pricesTimer := timer.Child("validation.prices")
+	pricesTimer := timer.Child("validator.prices")
 	if errs := v.validatePrices(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 	pricesTimer.End()
 
 	// 5. Validate metadata
-	metadataTimer := timer.Child("validation.metadata")
+	metadataTimer := timer.Child("validator.metadata")
 	if errs := v.validateMetadata(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}

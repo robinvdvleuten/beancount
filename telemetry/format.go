@@ -23,16 +23,28 @@ func formatTimingTree(w io.Writer, root *timerNode, stylesInterface interface{})
 		styles = s
 	}
 
-	// Calculate duration
-	duration := root.end.Sub(root.start)
+	// Calculate duration (use aggregated duration if set, otherwise calculate from start/end)
+	var duration time.Duration
+	if root.duration > 0 {
+		duration = root.duration
+	} else {
+		duration = root.end.Sub(root.start)
+	}
 
-	// Format root node
+	// Format root node (with call count if aggregated)
+	var nodeName string
+	if root.callCount > 1 {
+		nodeName = fmt.Sprintf("%s (%d calls)", root.name, root.callCount)
+	} else {
+		nodeName = root.name
+	}
+
 	if styles != nil {
-		name := styles.Keyword(root.name)
+		name := styles.Keyword(nodeName)
 		timing := formatDuration(duration, false)
 		_, _ = fmt.Fprintf(w, "%s: %s\n", name, timing)
 	} else {
-		_, _ = fmt.Fprintf(w, "%s: %s\n", root.name, formatDuration(duration, false))
+		_, _ = fmt.Fprintf(w, "%s: %s\n", nodeName, formatDuration(duration, false))
 	}
 
 	// Format children recursively
@@ -44,8 +56,13 @@ func formatTimingTree(w io.Writer, root *timerNode, stylesInterface interface{})
 
 // formatNode recursively formats a node and its children.
 func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool, styles *output.Styles) {
-	// Calculate duration
-	duration := node.end.Sub(node.start)
+	// Calculate duration (use aggregated duration if set, otherwise calculate from start/end)
+	var duration time.Duration
+	if node.duration > 0 {
+		duration = node.duration
+	} else {
+		duration = node.end.Sub(node.start)
+	}
 
 	// Determine if this is a slow operation (>= 100ms)
 	isSlowOperation := duration >= 100*time.Millisecond
@@ -60,6 +77,14 @@ func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool, styles
 		extension = "│  "
 	}
 
+	// Format node name (with call count if aggregated)
+	var nodeName string
+	if node.callCount > 1 {
+		nodeName = fmt.Sprintf("%s (%d calls)", node.name, node.callCount)
+	} else {
+		nodeName = node.name
+	}
+
 	// Format this node
 	if styles != nil {
 		treeChars := styles.Dim(prefix + branch)
@@ -69,9 +94,9 @@ func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool, styles
 		} else {
 			timing = styles.Dim(timing)
 		}
-		_, _ = fmt.Fprintf(w, "%s%s: %s\n", treeChars, node.name, timing)
+		_, _ = fmt.Fprintf(w, "%s%s: %s\n", treeChars, nodeName, timing)
 	} else {
-		_, _ = fmt.Fprintf(w, "%s%s%s: %s\n", prefix, branch, node.name, formatDuration(duration, false))
+		_, _ = fmt.Fprintf(w, "%s%s%s: %s\n", prefix, branch, nodeName, formatDuration(duration, false))
 	}
 
 	// Format children

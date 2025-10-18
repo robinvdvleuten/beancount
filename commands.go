@@ -94,6 +94,13 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
+
+		// Output telemetry report if enabled
+		if globals.Telemetry {
+			_, _ = fmt.Fprintln(ctx.Stderr)
+			collector.Report(ctx.Stderr, globals.ErrStyles)
+		}
+
 		return fmt.Errorf("parse error")
 	}
 
@@ -111,6 +118,12 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 			formatted := errFormatter.FormatAll(validationErrors.Errors)
 			_, _ = fmt.Fprint(ctx.Stderr, formatted)
 			_, _ = fmt.Fprintln(ctx.Stderr) // Add final newline
+
+			// Output telemetry report if enabled
+			if globals.Telemetry {
+				_, _ = fmt.Fprintln(ctx.Stderr)
+				collector.Report(ctx.Stderr, globals.ErrStyles)
+			}
 
 			errCount := globals.ErrStyles.Error(fmt.Sprintf("%d validation error(s) found", len(validationErrors.Errors)))
 			return fmt.Errorf("%s", errCount)
