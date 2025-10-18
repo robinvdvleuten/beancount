@@ -39,6 +39,7 @@ homebrew_casks:
   - repository:
       owner: robinvdvleuten
       name: homebrew-tap
+    binary: beancount
     hooks:
       post:
         install: |
