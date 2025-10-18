@@ -235,11 +235,13 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string, timer 
 	// This ensures atomic check-mark-read operation during concurrent loading
 	// File I/O is relatively fast compared to parsing, which happens outside the lock
 	data, err := os.ReadFile(filename)
-	l.mu.Unlock()
-
 	if err != nil {
+		// Clean up visited map on read failure to allow retry
+		delete(l.visited, absPath)
+		l.mu.Unlock()
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
+	l.mu.Unlock()
 
 	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 	if err != nil {
