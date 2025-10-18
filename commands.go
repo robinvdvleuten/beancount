@@ -135,7 +135,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	f := formatter.New(opts...)
 
 	// Format and output to stdout
-	if err := f.Format(runCtx, ast, contents, os.Stdout); err != nil {
+	if err := f.Format(runCtx, ast, contents, ctx.Stdout); err != nil {
 		return err
 	}
 
