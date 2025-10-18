@@ -125,14 +125,22 @@ func (inv *Inventory) reduceWithBooking(commodity string, amount decimal.Decimal
 	sortedLots := make([]*lot, len(lots))
 	copy(sortedLots, lots)
 	sort.Slice(sortedLots, func(i, j int) bool {
-		// Lots without date come first
-		if sortedLots[i].Spec == nil || sortedLots[i].Spec.Date == nil {
-			return true
-		}
-		if sortedLots[j].Spec == nil || sortedLots[j].Spec.Date == nil {
+		iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
+		jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
+
+		// Both lack dates - maintain stable order (not less than)
+		if !iHasDate && !jHasDate {
 			return false
 		}
-		// Sort by date
+		// i lacks date, j has date - i comes first
+		if !iHasDate {
+			return true
+		}
+		// j lacks date, i has date - j comes first
+		if !jHasDate {
+			return false
+		}
+		// Both have dates - compare chronologically
 		return sortedLots[i].Spec.Date.Before(sortedLots[j].Spec.Date.Time)
 	})
 
