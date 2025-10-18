@@ -65,7 +65,7 @@ func TestTextFormatter_Format_WithDirectiveContext(t *testing.T) {
 
 	output := tf.Format(err)
 	expected := "ledger.bean:12: balance assertion failed\n\n" +
-		"   2024-01-10 balance Assets:Cash\n"
+		"   1 │ 2024-01-10 balance Assets:Cash\n"
 
 	assert.Equal(t, expected, output)
 }

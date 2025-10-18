@@ -14,9 +14,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
+	"unicode"
 
+	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/output"
@@ -92,7 +95,22 @@ func (tf *TextFormatter) FormatAll(errs []error) string {
 
 // formatWithPosition formats an error message with position information.
 func (tf *TextFormatter) formatWithPosition(pos ast.Position, message string) string {
-	return tf.formatErrorLine(pos, message)
+	header := tf.formatErrorLine(pos, message)
+	if pos.Filename == "" || pos.Line <= 0 {
+		return header
+	}
+
+	lines, startLine, highlightIdx := tf.loadSourceContext(pos)
+	if len(lines) == 0 {
+		return header
+	}
+
+	var buf strings.Builder
+	buf.WriteString(header)
+	buf.WriteString("\n\n")
+	tf.writeNumberedLines(&buf, lines, startLine, highlightIdx, pos.Column)
+
+	return buf.String()
 }
 
 // formatWithContext formats an error with directive context (bean-check style).
@@ -103,11 +121,18 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 		return header
 	}
 
-	var buf bytes.Buffer
+	var buf strings.Builder
 
 	// Write the error message with styling
 	buf.WriteString(header)
 	buf.WriteString("\n\n")
+
+	writeSingleLine := func(line string) {
+		if line == "" {
+			return
+		}
+		tf.writeNumberedLines(&buf, []string{line}, 1, -1, 0)
+	}
 
 	// Write the formatted directive with proper indentation
 	switch d := directive.(type) {
@@ -121,88 +146,150 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 
 		if err := txnFormatter.FormatTransaction(d, &txnBuf); err == nil {
 			// Indent each line with 3 spaces
-			lines := bytes.Split(txnBuf.Bytes(), []byte("\n"))
-			for _, line := range lines {
-				if len(line) > 0 {
-					buf.WriteString("   ")
-					buf.Write(line)
-					buf.WriteByte('\n')
-				}
+			raw := strings.TrimRight(txnBuf.String(), "\n")
+			if raw != "" {
+				lines := strings.Split(raw, "\n")
+				tf.writeNumberedLines(&buf, lines, 1, -1, 0)
 			}
 		}
 
 	case *ast.Balance:
-		buf.WriteString("   ")
 		dateStr := d.Date.Format("2006-01-02")
+		keyword := "balance"
+		account := string(d.Account)
+
 		if tf.styles != nil {
-			fmt.Fprintf(&buf, "%s %s %s", dateStr, tf.styles.Keyword("balance"), tf.styles.Account(string(d.Account)))
-		} else {
-			fmt.Fprintf(&buf, "%s balance %s", dateStr, d.Account)
+			dateStr = tf.styles.Date(dateStr)
+			keyword = tf.styles.Keyword(keyword)
+			account = tf.styles.Account(account)
 		}
+
+		var line strings.Builder
+		line.WriteString(dateStr)
+		line.WriteByte(' ')
+		line.WriteString(keyword)
+		line.WriteByte(' ')
+		line.WriteString(account)
+
 		if d.Amount != nil {
+			value := d.Amount.Value
+			currency := d.Amount.Currency
 			if tf.styles != nil {
-				fmt.Fprintf(&buf, "  %s", tf.styles.Amount(fmt.Sprintf("%s %s", d.Amount.Value, d.Amount.Currency)))
-			} else {
-				fmt.Fprintf(&buf, "  %s %s", d.Amount.Value, d.Amount.Currency)
+				value = tf.styles.Number(value)
+				currency = tf.styles.Currency(currency)
 			}
+			line.WriteString("  ")
+			line.WriteString(value)
+			line.WriteByte(' ')
+			line.WriteString(currency)
 		}
-		buf.WriteByte('\n')
+
+		writeSingleLine(line.String())
 
 	case *ast.Pad:
-		buf.WriteString("   ")
 		dateStr := d.Date.Format("2006-01-02")
+		keyword := "pad"
+		account := string(d.Account)
+		target := string(d.AccountPad)
+
 		if tf.styles != nil {
-			fmt.Fprintf(&buf, "%s %s %s %s\n", dateStr, tf.styles.Keyword("pad"), tf.styles.Account(string(d.Account)), tf.styles.Account(string(d.AccountPad)))
-		} else {
-			fmt.Fprintf(&buf, "%s pad %s %s\n", dateStr, d.Account, d.AccountPad)
+			dateStr = tf.styles.Date(dateStr)
+			keyword = tf.styles.Keyword(keyword)
+			account = tf.styles.Account(account)
+			target = tf.styles.Account(target)
 		}
+
+		writeSingleLine(fmt.Sprintf("%s %s %s %s", dateStr, keyword, account, target))
 
 	case *ast.Note:
-		buf.WriteString("   ")
 		dateStr := d.Date.Format("2006-01-02")
+		keyword := "note"
+		account := string(d.Account)
+		description := fmt.Sprintf("%q", d.Description)
+
 		if tf.styles != nil {
-			fmt.Fprintf(&buf, "%s %s %s %q\n", dateStr, tf.styles.Keyword("note"), tf.styles.Account(string(d.Account)), d.Description)
-		} else {
-			fmt.Fprintf(&buf, "%s note %s %q\n", dateStr, d.Account, d.Description)
+			dateStr = tf.styles.Date(dateStr)
+			keyword = tf.styles.Keyword(keyword)
+			account = tf.styles.Account(account)
+			description = tf.styles.String(description)
 		}
+
+		writeSingleLine(fmt.Sprintf("%s %s %s %s", dateStr, keyword, account, description))
 
 	case *ast.Document:
-		buf.WriteString("   ")
 		dateStr := d.Date.Format("2006-01-02")
+		keyword := "document"
+		account := string(d.Account)
+		path := fmt.Sprintf("%q", d.PathToDocument)
+
 		if tf.styles != nil {
-			fmt.Fprintf(&buf, "%s %s %s %q\n", dateStr, tf.styles.Keyword("document"), tf.styles.Account(string(d.Account)), d.PathToDocument)
-		} else {
-			fmt.Fprintf(&buf, "%s document %s %q\n", dateStr, d.Account, d.PathToDocument)
+			dateStr = tf.styles.Date(dateStr)
+			keyword = tf.styles.Keyword(keyword)
+			account = tf.styles.Account(account)
+			path = tf.styles.String(path)
 		}
+
+		writeSingleLine(fmt.Sprintf("%s %s %s %s", dateStr, keyword, account, path))
 
 	case *ast.Open:
-		buf.WriteString("   ")
 		dateStr := d.Date.Format("2006-01-02")
+		keyword := "open"
+		account := string(d.Account)
+		currencies := d.ConstraintCurrencies
+		booking := d.BookingMethod
+
 		if tf.styles != nil {
-			fmt.Fprintf(&buf, "%s %s %s", dateStr, tf.styles.Keyword("open"), tf.styles.Account(string(d.Account)))
-		} else {
-			fmt.Fprintf(&buf, "%s open %s", dateStr, d.Account)
+			dateStr = tf.styles.Date(dateStr)
+			keyword = tf.styles.Keyword(keyword)
+			account = tf.styles.Account(account)
 		}
-		if len(d.ConstraintCurrencies) > 0 {
+
+		var line strings.Builder
+		line.WriteString(dateStr)
+		line.WriteByte(' ')
+		line.WriteString(keyword)
+		line.WriteByte(' ')
+		line.WriteString(account)
+
+		if len(currencies) > 0 {
+			var rendered string
 			if tf.styles != nil {
-				fmt.Fprintf(&buf, " %s", tf.styles.Amount(strings.Join(d.ConstraintCurrencies, ", ")))
+				parts := make([]string, 0, len(currencies))
+				for _, cur := range currencies {
+					parts = append(parts, tf.styles.Currency(cur))
+				}
+				rendered = strings.Join(parts, ", ")
 			} else {
-				fmt.Fprintf(&buf, " %s", strings.Join(d.ConstraintCurrencies, ", "))
+				rendered = strings.Join(currencies, ", ")
+			}
+			line.WriteByte(' ')
+			line.WriteString(rendered)
+		}
+
+		if booking != "" {
+			if tf.styles != nil {
+				line.WriteByte(' ')
+				line.WriteString(tf.styles.Keyword(booking))
+			} else {
+				line.WriteByte(' ')
+				line.WriteString(booking)
 			}
 		}
-		if d.BookingMethod != "" {
-			fmt.Fprintf(&buf, " %s", d.BookingMethod)
-		}
-		buf.WriteByte('\n')
+
+		writeSingleLine(line.String())
 
 	case *ast.Close:
-		buf.WriteString("   ")
 		dateStr := d.Date.Format("2006-01-02")
+		keyword := "close"
+		account := string(d.Account)
+
 		if tf.styles != nil {
-			fmt.Fprintf(&buf, "%s %s %s\n", dateStr, tf.styles.Keyword("close"), tf.styles.Account(string(d.Account)))
-		} else {
-			fmt.Fprintf(&buf, "%s close %s\n", dateStr, d.Account)
+			dateStr = tf.styles.Date(dateStr)
+			keyword = tf.styles.Keyword(keyword)
+			account = tf.styles.Account(account)
 		}
+
+		writeSingleLine(fmt.Sprintf("%s %s %s", dateStr, keyword, account))
 	}
 
 	return buf.String()
@@ -210,32 +297,35 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 
 // formatErrorLine builds the first line of an error with positional context.
 func (tf *TextFormatter) formatErrorLine(pos ast.Position, message string) string {
-	var buf strings.Builder
+	var prefixBuilder strings.Builder
 	var hasPrefix bool
 
 	if pos.Filename != "" {
-		if tf.styles != nil {
-			buf.WriteString(tf.styles.FilePath(pos.Filename))
-		} else {
-			buf.WriteString(pos.Filename)
-		}
+		prefixBuilder.WriteString(pos.Filename)
 		hasPrefix = true
 	}
 
 	if pos.Line > 0 {
 		if hasPrefix {
-			buf.WriteByte(':')
+			prefixBuilder.WriteByte(':')
 		}
-		buf.WriteString(strconv.Itoa(pos.Line))
+		prefixBuilder.WriteString(strconv.Itoa(pos.Line))
 		hasPrefix = true
 
 		if pos.Column > 0 {
-			buf.WriteByte(':')
-			buf.WriteString(strconv.Itoa(pos.Column))
+			prefixBuilder.WriteByte(':')
+			prefixBuilder.WriteString(strconv.Itoa(pos.Column))
 		}
 	}
 
+	var buf strings.Builder
 	if hasPrefix {
+		prefix := prefixBuilder.String()
+		if tf.styles != nil {
+			buf.WriteString(tf.styles.Position(prefix))
+		} else {
+			buf.WriteString(prefix)
+		}
 		buf.WriteString(": ")
 	}
 
@@ -318,4 +408,114 @@ func (jf *JSONFormatter) toJSON(err error) ErrorJSON {
 	}
 
 	return errJSON
+}
+
+func (tf *TextFormatter) loadSourceContext(pos ast.Position) ([]string, int, int) {
+	data, err := os.ReadFile(pos.Filename)
+	if err != nil {
+		return nil, 0, 0
+	}
+
+	lines := strings.Split(string(data), "\n")
+	if pos.Line < 1 || pos.Line > len(lines) {
+		return nil, 0, 0
+	}
+
+	lineIndex := pos.Line - 1
+	start := lineIndex - 2
+	if start < 0 {
+		start = 0
+	}
+	end := lineIndex + 1
+	if end >= len(lines) {
+		end = len(lines) - 1
+	}
+
+	context := lines[start : end+1]
+	return context, start + 1, lineIndex - start
+}
+
+func (tf *TextFormatter) writeNumberedLines(buf *strings.Builder, lines []string, startLine int, highlightIdx int, caretColumn int) {
+	if len(lines) == 0 {
+		return
+	}
+
+	maxLineNumber := startLine + len(lines) - 1
+	width := len(strconv.Itoa(maxLineNumber))
+	indent := "   "
+
+	for i, line := range lines {
+		lineNumber := startLine + i
+		prefix := fmt.Sprintf("%s%*d │ ", indent, width, lineNumber)
+		if tf.styles != nil {
+			buf.WriteString(tf.styles.LineNumber(prefix))
+		} else {
+			buf.WriteString(prefix)
+		}
+		buf.WriteString(line)
+		buf.WriteByte('\n')
+
+		if i == highlightIdx && caretColumn > 0 {
+			caretPrefix := fmt.Sprintf("%s%*s │ ", indent, width, "")
+			if tf.styles != nil {
+				buf.WriteString(tf.styles.LineNumber(caretPrefix))
+			} else {
+				buf.WriteString(caretPrefix)
+			}
+			buf.WriteString(tf.buildCaretLine(line, caretColumn))
+			buf.WriteByte('\n')
+		}
+	}
+}
+
+func (tf *TextFormatter) buildCaretLine(line string, column int) string {
+	if column <= 0 {
+		column = 1
+	}
+
+	runes := []rune(line)
+	index := column - 1
+	if index < 0 {
+		index = 0
+	}
+	if index > len(runes) {
+		index = len(runes)
+	}
+
+	var spacing strings.Builder
+	for _, r := range runes[:index] {
+		width := runewidth.RuneWidth(r)
+		if width < 1 {
+			width = 1
+		}
+		for i := 0; i < width; i++ {
+			spacing.WriteByte(' ')
+		}
+	}
+
+	highlightWidth := 0
+	for j := index; j < len(runes); j++ {
+		r := runes[j]
+		if j > index && unicode.IsSpace(r) {
+			break
+		}
+		if unicode.IsSpace(r) {
+			break
+		}
+		width := runewidth.RuneWidth(r)
+		if width < 1 {
+			width = 1
+		}
+		highlightWidth += width
+	}
+	if highlightWidth == 0 {
+		highlightWidth = 1
+	}
+
+	caret := strings.Repeat("^", highlightWidth)
+	if tf.styles != nil {
+		caret = tf.styles.Error(caret)
+	}
+
+	return spacing.String() + caret
 }

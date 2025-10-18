@@ -56,6 +56,48 @@ func (s *Styles) Amount(text string) string {
 		String()
 }
 
+// Date returns a styled date literal (blue).
+func (s *Styles) Date(text string) string {
+	return s.output.String(text).
+		Foreground(s.output.Color("4")).
+		String()
+}
+
+// Number returns a styled numeric literal (cyan).
+func (s *Styles) Number(text string) string {
+	return s.output.String(text).
+		Foreground(s.output.Color("6")).
+		String()
+}
+
+// Currency returns a styled currency code (magenta + bold).
+func (s *Styles) Currency(text string) string {
+	return s.output.String(text).
+		Foreground(s.output.Color("5")).
+		Bold().
+		String()
+}
+
+// String returns a styled quoted string literal (green).
+func (s *Styles) String(text string) string {
+	return s.output.String(text).
+		Foreground(s.output.Color("2")).
+		String()
+}
+
+// LineNumber returns a styled line number (dimmed).
+func (s *Styles) LineNumber(text string) string {
+	return s.Dim(text)
+}
+
+// Position returns a styled file position like "file:line:column" (cyan + bold).
+func (s *Styles) Position(text string) string {
+	return s.output.String(text).
+		Foreground(s.output.Color("6")).
+		Bold().
+		String()
+}
+
 // Keyword returns a styled keyword (bold).
 func (s *Styles) Keyword(text string) string {
 	return s.output.String(text).
