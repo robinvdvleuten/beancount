@@ -584,3 +584,266 @@ func BenchmarkClassifyPostings(b *testing.B) {
 		classifyPostings(postings)
 	}
 }
+
+func TestValidateCosts(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	stock, _ := ast.NewAccount("Assets:Investments:Stock")
+
+	tests := []struct {
+		name         string
+		txn          *ast.Transaction
+		wantErrCount int
+		wantErrType  string
+	}{
+		{
+			name: "valid explicit cost",
+			txn: ast.NewTransaction(date, "Buy stock",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCost(ast.NewAmount("500.00", "USD")))),
+					ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "valid empty cost",
+			txn: ast.NewTransaction(date, "Sell stock",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("-10", "HOOL"), ast.WithCost(ast.NewEmptyCost())),
+					ast.NewPosting(checking, ast.WithAmount("5500.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "no cost specs - valid",
+			txn: ast.NewTransaction(date, "Regular transaction",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("100", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &validator{accounts: make(map[string]*Account)}
+			errs := v.validateCosts(context.Background(), tt.txn)
+
+			if got := len(errs); got != tt.wantErrCount {
+				t.Errorf("validateCosts() error count = %v, want %v", got, tt.wantErrCount)
+				if len(errs) > 0 {
+					t.Logf("Errors: %v", errs)
+				}
+			}
+		})
+	}
+}
+
+func TestValidatePrices(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Foreign")
+
+	tests := []struct {
+		name         string
+		txn          *ast.Transaction
+		wantErrCount int
+	}{
+		{
+			name: "valid per-unit price",
+			txn: ast.NewTransaction(date, "Foreign expense",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("100", "EUR"), ast.WithPrice(ast.NewAmount("1.20", "USD"))),
+					ast.NewPosting(checking, ast.WithAmount("-120", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "no price specs - valid",
+			txn: ast.NewTransaction(date, "Regular transaction",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("100", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &validator{accounts: make(map[string]*Account)}
+			errs := v.validatePrices(context.Background(), tt.txn)
+
+			if got := len(errs); got != tt.wantErrCount {
+				t.Errorf("validatePrices() error count = %v, want %v", got, tt.wantErrCount)
+				if len(errs) > 0 {
+					t.Logf("Errors: %v", errs)
+				}
+			}
+		})
+	}
+}
+
+func TestValidateMetadata(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Groceries")
+
+	tests := []struct {
+		name         string
+		txn          *ast.Transaction
+		wantErrCount int
+		wantErrMsg   string
+	}{
+		{
+			name: "no metadata - valid",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "valid transaction metadata",
+			txn: func() *ast.Transaction {
+				txn := ast.NewTransaction(date, "Test",
+					ast.WithPostings(
+						ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+						ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+					),
+				)
+				txn.Metadata = []*ast.Metadata{
+					{Key: "invoice", Value: "INV-123"},
+				}
+				return txn
+			}(),
+			wantErrCount: 0,
+		},
+		{
+			name: "duplicate metadata keys",
+			txn: func() *ast.Transaction {
+				txn := ast.NewTransaction(date, "Test",
+					ast.WithPostings(
+						ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+						ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+					),
+				)
+				txn.Metadata = []*ast.Metadata{
+					{Key: "invoice", Value: "INV-123"},
+					{Key: "invoice", Value: "INV-456"},
+				}
+				return txn
+			}(),
+			wantErrCount: 1,
+			wantErrMsg:   "duplicate key",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := &validator{accounts: make(map[string]*Account)}
+			errs := v.validateMetadata(context.Background(), tt.txn)
+
+			if got := len(errs); got != tt.wantErrCount {
+				t.Errorf("validateMetadata() error count = %v, want %v", got, tt.wantErrCount)
+				if len(errs) > 0 {
+					t.Logf("Errors: %v", errs)
+				}
+			}
+
+			if tt.wantErrMsg != "" && len(errs) > 0 {
+				if !contains(errs[0].Error(), tt.wantErrMsg) {
+					t.Errorf("error message = %q, want to contain %q", errs[0].Error(), tt.wantErrMsg)
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkValidateCosts(b *testing.B) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	stock, _ := ast.NewAccount("Assets:Investments:Stock")
+
+	txn := ast.NewTransaction(date, "Buy stock",
+		ast.WithPostings(
+			ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCost(ast.NewAmount("500.00", "USD")))),
+			ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+		),
+	)
+
+	v := &validator{accounts: make(map[string]*Account)}
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.validateCosts(ctx, txn)
+	}
+}
+
+func BenchmarkValidatePrices(b *testing.B) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Foreign")
+
+	txn := ast.NewTransaction(date, "Foreign expense",
+		ast.WithPostings(
+			ast.NewPosting(expenses, ast.WithAmount("100", "EUR"), ast.WithPrice(ast.NewAmount("1.20", "USD"))),
+			ast.NewPosting(checking, ast.WithAmount("-120", "USD")),
+		),
+	)
+
+	v := &validator{accounts: make(map[string]*Account)}
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.validatePrices(ctx, txn)
+	}
+}
+
+func BenchmarkValidateMetadata(b *testing.B) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Groceries")
+
+	txn := ast.NewTransaction(date, "Test",
+		ast.WithPostings(
+			ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+			ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+		),
+	)
+	txn.Metadata = []*ast.Metadata{
+		{Key: "invoice", Value: "INV-123"},
+		{Key: "category", Value: "food"},
+	}
+
+	v := &validator{accounts: make(map[string]*Account)}
+	ctx := context.Background()
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		v.validateMetadata(ctx, txn)
+	}
+}
+
+// Helper function to check if a string contains a substring
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
+		(len(s) > 0 && len(substr) > 0 && s[0:] != "" && findSubstring(s, substr)))
+}
+
+func findSubstring(s, substr string) bool {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
+}

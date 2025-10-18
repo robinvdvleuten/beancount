@@ -301,28 +301,31 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, result *balanceResult) {
 
 // processBalance processes a Balance directive
 func (l *Ledger) processBalance(balance *ast.Balance) {
-	// Validate account is open
-	if !l.isAccountOpen(balance.Account, balance.Date) {
-		l.addError(NewAccountNotOpenErrorFromBalance(balance))
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts)
+
+	// Run pure validation
+	errs := v.validateBalance(context.Background(), balance)
+
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
 		return
 	}
 
-	// Parse expected amount
-	expectedAmount, err := ParseAmount(balance.Amount)
-	if err != nil {
-		l.addError(NewInvalidAmountErrorFromBalance(balance, err))
-		return
-	}
+	// Validation passed - now apply effects
+	l.applyBalance(balance)
+}
 
+// applyBalance applies balance assertion and padding (mutation only)
+func (l *Ledger) applyBalance(balance *ast.Balance) {
+	// Parse expected amount (we know it's valid from validation)
+	expectedAmount, _ := ParseAmount(balance.Amount)
 	currency := balance.Amount.Currency
 
 	// Get account inventory
 	accountName := string(balance.Account)
-	account, ok := l.accounts[accountName]
-	if !ok {
-		// This shouldn't happen since we checked IsOpen above, but be safe
-		return
-	}
+	account := l.accounts[accountName] // We know it exists from validation
 
 	// Get actual amount from inventory
 	actualAmount := account.Inventory.Get(currency)
@@ -361,47 +364,54 @@ func (l *Ledger) processBalance(balance *ast.Balance) {
 
 // processPad processes a Pad directive
 func (l *Ledger) processPad(pad *ast.Pad) {
-	// Validate accounts are open
-	if !l.isAccountOpen(pad.Account, pad.Date) {
-		l.addError(NewAccountNotOpenErrorFromPad(pad, pad.Account))
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts)
+
+	// Run pure validation
+	errs := v.validatePad(context.Background(), pad)
+
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
 		return
 	}
 
-	if !l.isAccountOpen(pad.AccountPad, pad.Date) {
-		l.addError(NewAccountNotOpenErrorFromPad(pad, pad.AccountPad))
-		return
-	}
-
-	// Store pad directive - will be applied when next balance assertion is encountered
+	// Validation passed - store pad directive
+	// Will be applied when next balance assertion is encountered
 	accountName := string(pad.Account)
 	l.padEntries[accountName] = pad
 }
 
 // processNote processes a Note directive
 func (l *Ledger) processNote(note *ast.Note) {
-	// Validate account is open
-	if !l.isAccountOpen(note.Account, note.Date) {
-		l.addError(NewAccountNotOpenErrorFromNote(note))
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts)
+
+	// Run pure validation
+	errs := v.validateNote(context.Background(), note)
+
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
 	}
 
+	// Note has no state mutation - just validation
 }
 
 // processDocument processes a Document directive
 func (l *Ledger) processDocument(doc *ast.Document) {
-	// Validate account is open
-	if !l.isAccountOpen(doc.Account, doc.Date) {
-		l.addError(NewAccountNotOpenErrorFromDocument(doc))
-	}
-}
+	// Create validator with read-only view of current state
+	v := newValidator(l.accounts)
 
-// isAccountOpen checks if an account is open at the given date
-func (l *Ledger) isAccountOpen(account ast.Account, date *ast.Date) bool {
-	accountName := string(account)
-	acc, ok := l.accounts[accountName]
-	if !ok {
-		return false
+	// Run pure validation
+	errs := v.validateDocument(context.Background(), doc)
+
+	// Collect validation errors
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
 	}
-	return acc.IsOpen(date)
+
+	// Document has no state mutation - just validation
 }
 
 // addError adds an error to the error collection

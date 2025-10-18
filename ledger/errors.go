@@ -421,3 +421,196 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency st
 		Directive: balance,
 	}
 }
+
+// InvalidCostError is returned when a cost specification is invalid
+type InvalidCostError struct {
+	Date         *ast.Date
+	Account      ast.Account
+	PostingIndex int    // Index of posting in transaction (0-based)
+	CostSpec     string // String representation of the cost spec
+	Underlying   error
+	Pos          lexer.Position
+	Directive    ast.Directive
+}
+
+func (e *InvalidCostError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
+	postingInfo := ""
+	if e.PostingIndex >= 0 {
+		postingInfo = fmt.Sprintf(" (Posting #%d: %s)", e.PostingIndex+1, e.Account)
+	}
+
+	return fmt.Sprintf("%s: Invalid cost specification%s: %s: %v",
+		location, postingInfo, e.CostSpec, e.Underlying)
+}
+
+func (e *InvalidCostError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *InvalidCostError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *InvalidCostError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *InvalidCostError) GetDate() *ast.Date {
+	return e.Date
+}
+
+// NewInvalidCostError creates an error for when a cost specification is invalid
+func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *InvalidCostError {
+	return &InvalidCostError{
+		Date:         txn.Date,
+		Account:      account,
+		PostingIndex: postingIndex,
+		CostSpec:     costSpec,
+		Underlying:   err,
+		Pos:          txn.Pos,
+		Directive:    txn,
+	}
+}
+
+// InvalidPriceError is returned when a price specification is invalid
+type InvalidPriceError struct {
+	Date         *ast.Date
+	Account      ast.Account
+	PostingIndex int    // Index of posting in transaction (0-based)
+	PriceSpec    string // String representation of the price spec
+	Underlying   error
+	Pos          lexer.Position
+	Directive    ast.Directive
+}
+
+func (e *InvalidPriceError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
+	postingInfo := ""
+	if e.PostingIndex >= 0 {
+		postingInfo = fmt.Sprintf(" (Posting #%d: %s)", e.PostingIndex+1, e.Account)
+	}
+
+	return fmt.Sprintf("%s: Invalid price specification%s: %s: %v",
+		location, postingInfo, e.PriceSpec, e.Underlying)
+}
+
+func (e *InvalidPriceError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *InvalidPriceError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *InvalidPriceError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *InvalidPriceError) GetDate() *ast.Date {
+	return e.Date
+}
+
+// NewInvalidPriceError creates an error for when a price specification is invalid
+func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingIndex int, priceSpec string, err error) *InvalidPriceError {
+	return &InvalidPriceError{
+		Date:         txn.Date,
+		Account:      account,
+		PostingIndex: postingIndex,
+		PriceSpec:    priceSpec,
+		Underlying:   err,
+		Pos:          txn.Pos,
+		Directive:    txn,
+	}
+}
+
+// InvalidMetadataError is returned when metadata is invalid
+type InvalidMetadataError struct {
+	Date       *ast.Date
+	Account    ast.Account // Empty if directive-level metadata
+	Key        string
+	Value      string
+	Reason     string // Why it's invalid (e.g., "duplicate key", "empty value")
+	Pos        lexer.Position
+	Directive  ast.Directive
+}
+
+func (e *InvalidMetadataError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" && e.Date != nil {
+		location = e.Date.Format("2006-01-02")
+	}
+
+	accountInfo := ""
+	if e.Account != "" {
+		accountInfo = fmt.Sprintf(" (account %s)", e.Account)
+	}
+
+	return fmt.Sprintf("%s: Invalid metadata%s: key=%q, value=%q: %s",
+		location, accountInfo, e.Key, e.Value, e.Reason)
+}
+
+func (e *InvalidMetadataError) GetPosition() lexer.Position {
+	return e.Pos
+}
+
+func (e *InvalidMetadataError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *InvalidMetadataError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *InvalidMetadataError) GetDate() *ast.Date {
+	return e.Date
+}
+
+// NewInvalidMetadataError creates an error for when metadata is invalid
+func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key, value, reason string) *InvalidMetadataError {
+	var date *ast.Date
+	var pos lexer.Position
+
+	// Extract date and position from directive
+	switch d := directive.(type) {
+	case *ast.Transaction:
+		date = d.Date
+		pos = d.Pos
+	case *ast.Balance:
+		date = d.Date
+		pos = d.Pos
+	case *ast.Pad:
+		date = d.Date
+		pos = d.Pos
+	case *ast.Note:
+		date = d.Date
+		pos = d.Pos
+	case *ast.Document:
+		date = d.Date
+		pos = d.Pos
+	case *ast.Open:
+		date = d.Date
+		pos = d.Pos
+	case *ast.Close:
+		date = d.Date
+		pos = d.Pos
+	}
+
+	return &InvalidMetadataError{
+		Date:      date,
+		Account:   account,
+		Key:       key,
+		Value:     value,
+		Reason:    reason,
+		Pos:       pos,
+		Directive: directive,
+	}
+}

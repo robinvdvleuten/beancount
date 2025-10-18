@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -63,6 +64,135 @@ func (v *validator) validateAmounts(ctx context.Context, txn *ast.Transaction) [
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
 		}
 	}
+	return errs
+}
+
+// validateCosts checks all cost specifications are valid
+func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []error {
+	var errs []error
+	for i, posting := range txn.Postings {
+		if posting.Cost == nil {
+			continue // No cost specification
+		}
+
+		// Empty cost {} is valid
+		if posting.Cost.IsEmpty() {
+			continue
+		}
+
+		// Merge cost {*} is not yet implemented
+		if posting.Cost.IsMergeCost() {
+			errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{*}",
+				fmt.Errorf("merge cost {*} not yet implemented")))
+			continue
+		}
+
+		// Validate cost amount if present
+		if posting.Cost.Amount != nil {
+			if _, err := ParseAmount(posting.Cost.Amount); err != nil {
+				costSpec := fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
+			}
+		}
+
+		// Validate cost date if present
+		if posting.Cost.Date != nil {
+			// Date is already validated by the parser, but we can add additional checks
+			// For now, just ensure it's not a zero date
+			if posting.Cost.Date.IsZero() {
+				costSpec := "{...}"
+				if posting.Cost.Amount != nil {
+					costSpec = fmt.Sprintf("{%s %s, ...}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+				}
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
+					fmt.Errorf("cost date cannot be zero")))
+			}
+		}
+
+		// Validate cost label if present
+		if posting.Cost.Label != "" {
+			// Labels must be non-empty strings (already guaranteed by parser)
+			// But we can add validation for label format if needed
+			if len(posting.Cost.Label) == 0 {
+				costSpec := "{...}"
+				if posting.Cost.Amount != nil {
+					costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+				}
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
+					fmt.Errorf("cost label cannot be empty")))
+			}
+		}
+	}
+	return errs
+}
+
+// validatePrices checks all price specifications are valid
+func (v *validator) validatePrices(ctx context.Context, txn *ast.Transaction) []error {
+	var errs []error
+	for i, posting := range txn.Postings {
+		if posting.Price == nil {
+			continue // No price specification
+		}
+
+		// Validate price amount
+		if _, err := ParseAmount(posting.Price); err != nil {
+			priceSpec := fmt.Sprintf("@ %s %s", posting.Price.Value, posting.Price.Currency)
+			if posting.PriceTotal {
+				priceSpec = fmt.Sprintf("@@ %s %s", posting.Price.Value, posting.Price.Currency)
+			}
+			errs = append(errs, NewInvalidPriceError(txn, posting.Account, i, priceSpec, err))
+			continue
+		}
+
+		// Validate that price currency differs from posting currency
+		// (It's valid but unusual to have the same currency)
+		// For now, we'll allow it but could add a warning system later
+	}
+	return errs
+}
+
+// validateMetadata checks metadata entries are valid
+func (v *validator) validateMetadata(ctx context.Context, txn *ast.Transaction) []error {
+	var errs []error
+
+	// Validate transaction-level metadata
+	if len(txn.Metadata) > 0 {
+		seen := make(map[string]bool)
+		for _, meta := range txn.Metadata {
+			// Check for duplicate keys
+			if seen[meta.Key] {
+				errs = append(errs, NewInvalidMetadataError(txn, "", meta.Key, meta.Value, "duplicate key"))
+				continue
+			}
+			seen[meta.Key] = true
+
+			// Check for empty values (though parser might prevent this)
+			if meta.Value == "" {
+				errs = append(errs, NewInvalidMetadataError(txn, "", meta.Key, meta.Value, "empty value"))
+			}
+		}
+	}
+
+	// Validate posting-level metadata
+	for _, posting := range txn.Postings {
+		if len(posting.Metadata) > 0 {
+			seen := make(map[string]bool)
+			for _, meta := range posting.Metadata {
+				// Check for duplicate keys
+				if seen[meta.Key] {
+					errs = append(errs, NewInvalidMetadataError(txn, posting.Account, meta.Key, meta.Value, "duplicate key"))
+					continue
+				}
+				seen[meta.Key] = true
+
+				// Check for empty values
+				if meta.Value == "" {
+					errs = append(errs, NewInvalidMetadataError(txn, posting.Account, meta.Key, meta.Value, "empty value"))
+				}
+			}
+		}
+	}
+
 	return errs
 }
 
@@ -241,22 +371,132 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	}
 	amountsTimer.End()
 
+	// 3. Validate cost specifications
+	costsTimer := timer.Child("validation.costs")
+	if errs := v.validateCosts(ctx, txn); len(errs) > 0 {
+		allErrors = append(allErrors, errs...)
+	}
+	costsTimer.End()
+
+	// 4. Validate price specifications
+	pricesTimer := timer.Child("validation.prices")
+	if errs := v.validatePrices(ctx, txn); len(errs) > 0 {
+		allErrors = append(allErrors, errs...)
+	}
+	pricesTimer.End()
+
+	// 5. Validate metadata
+	metadataTimer := timer.Child("validation.metadata")
+	if errs := v.validateMetadata(ctx, txn); len(errs) > 0 {
+		allErrors = append(allErrors, errs...)
+	}
+	metadataTimer.End()
+
 	// If basic validation failed, don't proceed to balance calculation
 	if len(allErrors) > 0 {
 		return allErrors, nil
 	}
 
-	// 3. Calculate balance and infer amounts
+	// 6. Calculate balance and infer amounts
 	balanceResult, errs := v.calculateBalance(ctx, txn)
 	if len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 		return allErrors, nil
 	}
 
-	// 4. Check if balanced
+	// 7. Check if balanced
 	if !balanceResult.isBalanced {
 		allErrors = append(allErrors, NewTransactionNotBalancedError(txn, balanceResult.residuals))
 	}
 
 	return allErrors, balanceResult
+}
+
+// validateBalance checks if a balance directive is valid
+func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) []error {
+	var errs []error
+
+	// 1. Validate account is open
+	accountName := string(balance.Account)
+	acc, exists := v.accounts[accountName]
+	if !exists {
+		errs = append(errs, NewAccountNotOpenErrorFromBalance(balance))
+		return errs
+	}
+
+	if !acc.IsOpen(balance.Date) {
+		errs = append(errs, NewAccountNotOpenErrorFromBalance(balance))
+		return errs
+	}
+
+	// 2. Validate amount is parseable
+	if _, err := ParseAmount(balance.Amount); err != nil {
+		errs = append(errs, NewInvalidAmountErrorFromBalance(balance, err))
+		return errs
+	}
+
+	return errs
+}
+
+// validatePad checks if a pad directive is valid
+func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
+	var errs []error
+
+	// 1. Validate main account is open
+	if !v.isAccountOpen(pad.Account, pad.Date) {
+		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.Account))
+	}
+
+	// 2. Validate pad account is open
+	if !v.isAccountOpen(pad.AccountPad, pad.Date) {
+		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.AccountPad))
+	}
+
+	return errs
+}
+
+// validateNote checks if a note directive is valid
+func (v *validator) validateNote(ctx context.Context, note *ast.Note) []error {
+	var errs []error
+
+	// 1. Validate account is open
+	if !v.isAccountOpen(note.Account, note.Date) {
+		errs = append(errs, NewAccountNotOpenErrorFromNote(note))
+	}
+
+	// 2. Validate description is non-empty
+	if note.Description == "" {
+		// This is already enforced by the parser, but check anyway
+		errs = append(errs, fmt.Errorf("note description cannot be empty"))
+	}
+
+	return errs
+}
+
+// validateDocument checks if a document directive is valid
+func (v *validator) validateDocument(ctx context.Context, doc *ast.Document) []error {
+	var errs []error
+
+	// 1. Validate account is open
+	if !v.isAccountOpen(doc.Account, doc.Date) {
+		errs = append(errs, NewAccountNotOpenErrorFromDocument(doc))
+	}
+
+	// 2. Validate path is non-empty
+	if doc.PathToDocument == "" {
+		// This is already enforced by the parser, but check anyway
+		errs = append(errs, fmt.Errorf("document path cannot be empty"))
+	}
+
+	return errs
+}
+
+// isAccountOpen checks if an account is open at the given date
+func (v *validator) isAccountOpen(account ast.Account, date *ast.Date) bool {
+	accountName := string(account)
+	acc, ok := v.accounts[accountName]
+	if !ok {
+		return false
+	}
+	return acc.IsOpen(date)
 }
