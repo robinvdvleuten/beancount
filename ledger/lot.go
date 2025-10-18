@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
@@ -70,7 +71,6 @@ func (ls *lotSpec) String() string {
 		return "{}"
 	}
 
-	result := "{"
 	parts := make([]string, 0, 3)
 
 	if ls.Cost != nil {
@@ -85,15 +85,16 @@ func (ls *lotSpec) String() string {
 		parts = append(parts, fmt.Sprintf("\"%s\"", ls.Label))
 	}
 
+	var buf strings.Builder
+	buf.WriteByte('{')
 	for i, part := range parts {
 		if i > 0 {
-			result += ", "
+			buf.WriteString(", ")
 		}
-		result += part
+		buf.WriteString(part)
 	}
-
-	result += "}"
-	return result
+	buf.WriteByte('}')
+	return buf.String()
 }
 
 // Lot represents a specific lot of a commodity with cost basis

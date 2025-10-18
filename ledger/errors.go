@@ -3,6 +3,7 @@ package ledger
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	"github.com/alecthomas/participle/v2/lexer"
 	"github.com/robinvdvleuten/beancount/ast"
@@ -185,16 +186,19 @@ func (e *TransactionNotBalancedError) formatResiduals() string {
 	sort.Strings(currencies)
 
 	// Format as "(amount1 CUR1, amount2 CUR2, ...)"
-	result := "("
+	var buf strings.Builder
+	buf.WriteByte('(')
 	for i, currency := range currencies {
 		if i > 0 {
-			result += ", "
+			buf.WriteString(", ")
 		}
-		result += fmt.Sprintf("%s %s", e.Residuals[currency], currency)
+		buf.WriteString(e.Residuals[currency])
+		buf.WriteByte(' ')
+		buf.WriteString(currency)
 	}
-	result += ")"
+	buf.WriteByte(')')
 
-	return result
+	return buf.String()
 }
 
 func (e *TransactionNotBalancedError) GetPosition() lexer.Position {
