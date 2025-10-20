@@ -44,18 +44,33 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	return account, nil
 }
 
-// parseAmount parses an amount: NUMBER CURRENCY
+// parseAmount parses an amount: NUMBER CURRENCY or (EXPRESSION) CURRENCY
+// Expressions are captured as-is (not evaluated) and stored in Amount.Value.
+// The ledger phase evaluates expressions when computing balances.
 func (p *Parser) parseAmount() (*ast.Amount, error) {
-	numTok := p.peek()
-	if numTok.Type == NUMBER {
-		p.advance() // consume the NUMBER token
+	var value string
+
+	// Check if next character in source is '(' (start of expression)
+	// We need to look at the raw source since '(' is not tokenized
+	tok := p.peek()
+	if tok.Start < len(p.source) && p.source[tok.Start] == '(' {
+		// Capture expression text without evaluating
+		value = p.parseExpression()
 	} else {
-		numTok = p.expect(NUMBER, "expected number")
-		if numTok.Type == ILLEGAL {
-			return nil, p.errorAtToken(numTok, "expected number")
+		// Plain number
+		numTok := p.peek()
+		if numTok.Type == NUMBER {
+			p.advance()
+		} else {
+			numTok = p.expect(NUMBER, "expected number")
+			if numTok.Type == ILLEGAL {
+				return nil, p.errorAtToken(numTok, "expected number or expression")
+			}
 		}
+		value = numTok.String(p.source)
 	}
 
+	// Parse currency (same for both plain and expression)
 	currTok := p.expect(IDENT, "expected currency")
 	if currTok.Type == ILLEGAL {
 		return nil, p.errorAtEndOfPrevious("expected currency")
@@ -65,9 +80,50 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	currency := p.interner.InternBytes(currTok.Bytes(p.source))
 
 	return &ast.Amount{
-		Value:    numTok.String(p.source),
+		Value:    value,
 		Currency: currency,
 	}, nil
+}
+
+// parseExpression captures an expression's text from source without evaluating it.
+// Scans the source starting from current position to find matching parentheses.
+// Returns the full expression text including parentheses: "(5 + 3)"
+func (p *Parser) parseExpression() string {
+	startPos := p.peek().Start
+
+	// Scan through source to find matching closing paren
+	pos := startPos
+	if pos >= len(p.source) || p.source[pos] != '(' {
+		// Should not happen, but return empty string
+		return ""
+	}
+
+	depth := 0
+	for pos < len(p.source) {
+		ch := p.source[pos]
+		if ch == '(' {
+			depth++
+		} else if ch == ')' {
+			depth--
+			if depth == 0 {
+				// Found matching closing paren
+				endPos := pos + 1
+				exprText := string(p.source[startPos:endPos])
+
+				// Now consume all the tokens that were part of this expression
+				// We need to advance past the expression in the token stream
+				for !p.isAtEnd() && p.peek().Start < endPos {
+					p.advance()
+				}
+
+				return exprText
+			}
+		}
+		pos++
+	}
+
+	// Unmatched parentheses - return what we have
+	return string(p.source[startPos:pos])
 }
 
 // parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] }

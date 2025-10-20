@@ -153,8 +153,10 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	}
 	posting.Account = account
 
-	// Optional amount
-	if p.check(NUMBER) {
+	// Optional amount (either NUMBER or expression starting with '(')
+	tok := p.peek()
+	hasAmount := p.check(NUMBER) || (tok.Start < len(p.source) && p.source[tok.Start] == '(')
+	if hasAmount {
 		amount, err := p.parseAmount()
 		if err != nil {
 			return nil, err
