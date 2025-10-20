@@ -9,7 +9,7 @@ import (
 // TimingCollector collects hierarchical timing data.
 // It builds a tree structure of timers that can be reported as a nested view.
 type TimingCollector struct {
-	root    *timerNode
+	roots   []*timerNode
 	current *timerNode
 	mu      sync.Mutex
 }
@@ -38,9 +38,9 @@ func (c *TimingCollector) Start(name string) Timer {
 		start: time.Now(),
 	}
 
-	// If this is the first timer, it becomes the root
-	if c.root == nil {
-		c.root = node
+	// If no current timer, this becomes a new root
+	if c.current == nil {
+		c.roots = append(c.roots, node)
 		c.current = node
 	} else {
 		// Add as child of current node
@@ -61,11 +61,13 @@ func (c *TimingCollector) Report(w io.Writer) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	if c.root == nil {
+	if len(c.roots) == 0 {
 		return
 	}
 
-	formatTimingTree(w, c.root)
+	for _, root := range c.roots {
+		formatTimingTree(w, root)
+	}
 }
 
 // timingTimer is a Timer implementation that records to a TimingCollector.
@@ -81,10 +83,8 @@ func (t *timingTimer) End() {
 
 	t.node.end = time.Now()
 
-	// Move current back to parent
-	if t.node.parent != nil {
-		t.collector.current = t.node.parent
-	}
+	// Move current back to parent (or nil if this was a root)
+	t.collector.current = t.node.parent
 }
 
 // Child creates a nested timer.
@@ -101,6 +101,7 @@ func (t *timingTimer) Child(name string) Timer {
 	}
 
 	t.node.children = append(t.node.children, node)
+	t.collector.current = node
 
 	return &timingTimer{
 		collector: t.collector,

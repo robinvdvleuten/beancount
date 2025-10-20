@@ -5,6 +5,7 @@ import (
 	stdErrors "errors"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/errors"
@@ -29,9 +30,21 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 	// Create telemetry collector if flag is set
 	var collector telemetry.Collector
+	var checkTimer telemetry.Timer
 	if globals.Telemetry {
 		collector = telemetry.NewTimingCollector()
 		runCtx = telemetry.WithCollector(runCtx, collector)
+
+		// Create root check timer
+		checkTimer = collector.Start(fmt.Sprintf("check %s", filepath.Base(cmd.File.Filename)))
+		runCtx = telemetry.WithRootTimer(runCtx, checkTimer)
+
+		// Defer telemetry report - runs regardless of early returns
+		defer func() {
+			checkTimer.End()
+			_, _ = fmt.Fprintln(ctx.Stderr)
+			collector.Report(ctx.Stderr)
+		}()
 	}
 
 	// Load the input file and recursively resolve all includes
@@ -69,12 +82,6 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Success
 	_, _ = fmt.Fprintln(ctx.Stdout, "✓ Check passed")
 
-	// Output telemetry report if enabled
-	if globals.Telemetry {
-		_, _ = fmt.Fprintln(ctx.Stderr)
-		collector.Report(ctx.Stderr)
-	}
-
 	return nil
 }
 
@@ -94,6 +101,12 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	if globals.Telemetry {
 		collector = telemetry.NewTimingCollector()
 		runCtx = telemetry.WithCollector(runCtx, collector)
+
+		// Defer telemetry report - runs regardless of early returns
+		defer func() {
+			_, _ = fmt.Fprintln(ctx.Stderr)
+			collector.Report(ctx.Stderr)
+		}()
 	}
 
 	// Load only the single file (don't follow includes)
@@ -130,12 +143,6 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Format and output to stdout
 	if err := f.Format(runCtx, ast, contents, os.Stdout); err != nil {
 		return err
-	}
-
-	// Output telemetry report if enabled
-	if globals.Telemetry {
-		_, _ = fmt.Fprintln(ctx.Stderr)
-		collector.Report(ctx.Stderr)
 	}
 
 	return nil

@@ -432,7 +432,8 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency st
 //   - Merge costs {*} not yet implemented
 //
 // Example error message:
-//   "file.bean:15: Invalid cost specification (Posting #1: Assets:Stock): {500.x USD}: invalid decimal"
+//
+//	"file.bean:15: Invalid cost specification (Posting #1: Assets:Stock): {500.x USD}: invalid decimal"
 type InvalidCostError struct {
 	Date         *ast.Date
 	Account      ast.Account
@@ -497,7 +498,8 @@ func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex
 //   - Invalid total price specification (@@)
 //
 // Example error message:
-//   "file.bean:20: Invalid price specification (Posting #2: Expenses:Foreign): @ 1.x USD: invalid decimal"
+//
+//	"file.bean:20: Invalid price specification (Posting #2: Expenses:Foreign): @ 1.x USD: invalid decimal"
 type InvalidPriceError struct {
 	Date         *ast.Date
 	Account      ast.Account
@@ -562,16 +564,17 @@ func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingInde
 //   - Empty metadata values
 //
 // Example error messages:
-//   "file.bean:10: Invalid metadata: key="invoice", value="": empty value"
-//   "file.bean:12: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
+//
+//	"file.bean:10: Invalid metadata: key="invoice", value="": empty value"
+//	"file.bean:12: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
 type InvalidMetadataError struct {
-	Date       *ast.Date
-	Account    ast.Account // Empty if directive-level metadata
-	Key        string
-	Value      string
-	Reason     string // Why it's invalid (e.g., "duplicate key", "empty value")
-	Pos        ast.Position
-	Directive  ast.Directive
+	Date      *ast.Date
+	Account   ast.Account // Empty if directive-level metadata
+	Key       string
+	Value     string
+	Reason    string // Why it's invalid (e.g., "duplicate key", "empty value")
+	Pos       ast.Position
+	Directive ast.Directive
 }
 
 func (e *InvalidMetadataError) Error() string {

@@ -192,3 +192,108 @@ func TestTimingCollectorEmptyReport(t *testing.T) {
 		t.Errorf("Empty collector should produce no output, got: %s", buf.String())
 	}
 }
+
+func TestWithRootTimerDoesNotOverwriteCollector(t *testing.T) {
+	// Regression test for bug where WithRootTimer would overwrite the collector
+	// in context because both context keys were equal (empty struct instances).
+	collector := NewTimingCollector()
+	ctx := WithCollector(context.Background(), collector)
+
+	// Verify collector is retrievable
+	retrieved := FromContext(ctx)
+	if retrievedTiming, ok := retrieved.(*TimingCollector); !ok || retrievedTiming != collector {
+		t.Error("Collector should be retrievable after WithCollector")
+	}
+
+	// Add a root timer to the context
+	rootTimer := collector.Start("root")
+	ctx = WithRootTimer(ctx, rootTimer)
+
+	// Verify collector is STILL retrievable after WithRootTimer
+	retrieved = FromContext(ctx)
+	if retrievedTiming, ok := retrieved.(*TimingCollector); !ok || retrievedTiming != collector {
+		t.Error("Collector should still be retrievable after WithRootTimer")
+	}
+
+	// Verify root timer is also retrievable
+	retrievedTimer := RootTimerFromContext(ctx)
+	if retrievedTimer == nil {
+		t.Error("Root timer should be retrievable")
+	}
+
+	rootTimer.End()
+}
+
+func TestCollectorStartWithRootTimer(t *testing.T) {
+	// Test that demonstrates the bug fix: parser timers should nest under loader.parse
+	// when using both Child() and Start() with the same collector.
+	collector := NewTimingCollector()
+	ctx := WithCollector(context.Background(), collector)
+
+	// Simulate check command creating root timer
+	checkTimer := collector.Start("check")
+	ctx = WithRootTimer(ctx, checkTimer)
+
+	// Simulate loader creating timers via Child()
+	rootTimer := RootTimerFromContext(ctx)
+	loadTimer := rootTimer.Child("loader.load")
+	parseTimer := loadTimer.Child("loader.parse")
+
+	// Simulate parser creating timers via Start() (using collector from context)
+	parserCollector := FromContext(ctx)
+	lexTimer := parserCollector.Start("parser.lexing")
+	lexTimer.End()
+
+	parsingTimer := parserCollector.Start("parser.parsing")
+	parsingTimer.End()
+
+	parseTimer.End()
+	loadTimer.End()
+	checkTimer.End()
+
+	// Verify the hierarchy is correct
+	var buf bytes.Buffer
+	collector.Report(&buf)
+	output := buf.String()
+
+	// Parser timers should be nested under loader.parse
+	if !strings.Contains(output, "check") {
+		t.Errorf("Output should contain 'check', got: %s", output)
+	}
+	if !strings.Contains(output, "loader.load") {
+		t.Errorf("Output should contain 'loader.load', got: %s", output)
+	}
+	if !strings.Contains(output, "loader.parse") {
+		t.Errorf("Output should contain 'loader.parse', got: %s", output)
+	}
+	if !strings.Contains(output, "parser.lexing") {
+		t.Errorf("Output should contain 'parser.lexing', got: %s", output)
+	}
+	if !strings.Contains(output, "parser.parsing") {
+		t.Errorf("Output should contain 'parser.parsing', got: %s", output)
+	}
+
+	// Verify parser timers appear after loader.parse (indicating they're nested)
+	lines := strings.Split(output, "\n")
+	foundParse := false
+	foundLexing := false
+	for _, line := range lines {
+		if strings.Contains(line, "loader.parse") {
+			foundParse = true
+		}
+		if foundParse && strings.Contains(line, "parser.lexing") {
+			foundLexing = true
+			// parser.lexing should be indented more than loader.parse
+			// (it has more leading spaces before the tree character)
+			if !strings.Contains(line, "   ") && !strings.Contains(line, "│  ") {
+				t.Errorf("parser.lexing should be indented under loader.parse, got: %s", line)
+			}
+		}
+	}
+	if !foundParse {
+		t.Error("Should find loader.parse in output")
+	}
+	if !foundLexing {
+		t.Error("Should find parser.lexing after loader.parse in output")
+	}
+}

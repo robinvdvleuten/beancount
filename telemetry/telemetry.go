@@ -31,9 +31,12 @@ import (
 )
 
 // contextKey is a private type for context keys to avoid collisions
-type contextKey struct{}
+type contextKey int
 
-var collectorKey = contextKey{}
+const (
+	collectorKey contextKey = iota
+	rootTimerKey
+)
 
 // Collector is the main interface for collecting telemetry data.
 // Implementations can collect timings, metrics, or other telemetry data.
@@ -71,4 +74,19 @@ func FromContext(ctx context.Context) Collector {
 		return collector
 	}
 	return noOpCollector{}
+}
+
+// WithRootTimer adds the root timer to a context.
+// The root timer can be retrieved later with RootTimerFromContext.
+func WithRootTimer(ctx context.Context, timer Timer) context.Context {
+	return context.WithValue(ctx, rootTimerKey, timer)
+}
+
+// RootTimerFromContext extracts the root timer from context.
+// If no root timer is present, returns nil.
+func RootTimerFromContext(ctx context.Context) Timer {
+	if timer, ok := ctx.Value(rootTimerKey).(Timer); ok {
+		return timer
+	}
+	return nil
 }
