@@ -17,13 +17,16 @@ func (d Directives) Len() int           { return len(d) }
 func (d Directives) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (d Directives) Less(i, j int) bool { return compareDirectives(d[i], d[j]) < 0 }
 
-// compareDirectives compares two directives by their date, then by type priority.
-// Returns -1 if a < b, 0 if a == b, 1 if a > b.
+// compareDirectives compares two directives by their date, then by type priority,
+// then by source position (line number). Returns -1 if a < b, 0 if a == b, 1 if a > b.
+// This implements a stable sort that preserves source order for same-date, same-type
+// directives, matching the behavior of the official Python beancount implementation.
 //
 // For same-date directives, the processing order is:
 //  1. Open (accounts must be opened before use)
 //  2. Close (process closes before transactions that might use closed accounts)
 //  3. All other directives (transactions, balance, pad, etc.)
+//  4. Within same type, sort by line number (preserves source order)
 func compareDirectives(a, b Directive) int {
 	// First compare by date
 	if a.date().Before(b.date().Time) {
@@ -41,7 +44,46 @@ func compareDirectives(a, b Directive) int {
 		return 1
 	}
 
+	// Same date and type - compare by line number to preserve source order
+	aLine := getDirectiveLine(a)
+	bLine := getDirectiveLine(b)
+	if aLine < bLine {
+		return -1
+	} else if aLine > bLine {
+		return 1
+	}
+
 	return 0
+}
+
+// getDirectiveLine extracts the line number from a directive for stable sorting.
+func getDirectiveLine(d Directive) int {
+	switch v := d.(type) {
+	case *Transaction:
+		return v.Pos.Line
+	case *Open:
+		return v.Pos.Line
+	case *Close:
+		return v.Pos.Line
+	case *Balance:
+		return v.Pos.Line
+	case *Pad:
+		return v.Pos.Line
+	case *Note:
+		return v.Pos.Line
+	case *Document:
+		return v.Pos.Line
+	case *Commodity:
+		return v.Pos.Line
+	case *Price:
+		return v.Pos.Line
+	case *Event:
+		return v.Pos.Line
+	case *Custom:
+		return v.Pos.Line
+	default:
+		return 0
+	}
 }
 
 // directiveTypePriority returns the processing priority for a directive type.
