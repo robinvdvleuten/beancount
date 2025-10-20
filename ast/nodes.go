@@ -11,8 +11,8 @@ package ast
 //	option "booking_method" "STRICT"
 type Option struct {
 	Pos   Position
-	Name  string `parser:"'option' @String"`
-	Value string `parser:"@String"`
+	Name  string
+	Value string
 }
 
 // Include imports and processes directives from another Beancount file, allowing you
@@ -27,7 +27,7 @@ type Option struct {
 //	include "transactions/2014-expenses.beancount"
 type Include struct {
 	Pos      Position
-	Filename string `parser:"'include' @String"`
+	Filename string
 }
 
 // Plugin loads a processing plugin that can transform or validate the ledger data.
@@ -41,8 +41,8 @@ type Include struct {
 //	plugin "beancount.plugins.check_commodity" "USD,EUR,GBP"
 type Plugin struct {
 	Pos    Position
-	Name   string `parser:"'plugin' @String"`
-	Config string `parser:"@String?"`
+	Name   string
+	Config string
 }
 
 // Pushtag pushes a tag onto the tag stack, causing all subsequent transactions in the
@@ -59,7 +59,7 @@ type Plugin struct {
 //	poptag #trip-europe
 type Pushtag struct {
 	Pos Position
-	Tag Tag `parser:"'pushtag' @Tag"`
+	Tag Tag
 }
 
 // Poptag removes a tag from the tag stack, ending the automatic application of that tag
@@ -71,7 +71,7 @@ type Pushtag struct {
 //	poptag #trip-europe
 type Poptag struct {
 	Pos Position
-	Tag Tag `parser:"'poptag' @Tag"`
+	Tag Tag
 }
 
 // Pushmeta pushes a metadata key-value pair onto the metadata stack, causing all
@@ -88,8 +88,8 @@ type Poptag struct {
 //	popmeta location:
 type Pushmeta struct {
 	Pos   Position
-	Key   string `parser:"'pushmeta' @Ident ':'"`
-	Value string `parser:"@(~'\\n'+)"`
+	Key   string
+	Value string
 }
 
 // Popmeta removes a metadata key from the metadata stack, ending the automatic application
@@ -102,7 +102,7 @@ type Pushmeta struct {
 //	popmeta location:
 type Popmeta struct {
 	Pos Position
-	Key string `parser:"'popmeta' @Ident ':'"`
+	Key string
 }
 
 // Node is a constraint for AST nodes that have a Pos field.

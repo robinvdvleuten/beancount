@@ -18,16 +18,16 @@ package ast
 //	  Assets:US:BofA:Savings                    100.00 USD
 type Transaction struct {
 	Pos       Position
-	Date      *Date  `parser:"@Date ('txn' | "`
-	Flag      string `parser:"@('*' | '!' | 'P') )"`
-	Payee     string `parser:"@(String (?= String))?"`
-	Narration string `parser:"@String?"`
-	Links     []Link `parser:"@Link*"`
-	Tags      []Tag  `parser:"@Tag*"`
+	Date      *Date
+	Flag      string
+	Payee     string
+	Narration string
+	Links     []Link
+	Tags      []Tag
 
 	withMetadata
 
-	Postings []*Posting `parser:"@@*"`
+	Postings []*Posting
 }
 
 var _ Directive = &Transaction{}
@@ -49,13 +49,13 @@ func (t *Transaction) Directive() string { return "transaction" }
 //	Assets:Checking                                        ; Inferred amount
 type Posting struct {
 	Pos         Position
-	Flag        string  `parser:"@('*' | '!')?"`
-	Account     Account `parser:"@Account"`
-	Amount      *Amount `parser:"(@@"`
-	Cost        *Cost   `parser:"@@?"`
-	PriceMarker string  `parser:"( '@'"` // Matches @ price marker (grammar only, always empty)
-	PriceTotal  bool    `parser:"@'@'?"` // Captures presence of second @ for total price
-	Price       *Amount `parser:"@@)?)?"`
+	Flag        string
+	Account     Account
+	Amount      *Amount
+	Cost        *Cost
+	PriceMarker string // Matches @ price marker (grammar only, always empty)
+	PriceTotal  bool   // Captures presence of second @ for total price
+	Price       *Amount
 
 	withMetadata
 }

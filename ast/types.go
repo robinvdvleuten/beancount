@@ -11,8 +11,8 @@ import (
 // The value is stored as a string to preserve the exact decimal representation from
 // the input, avoiding floating-point precision issues.
 type Amount struct {
-	Value    string `parser:"@Number"`
-	Currency string `parser:"@Ident"`
+	Value    string
+	Currency string
 }
 
 // Cost represents the cost basis specification for a posting, used primarily for tracking
@@ -29,10 +29,10 @@ type Amount struct {
 //	10 HOOL {}                        ; Any lot (automatic selection)
 //	10 HOOL {*}                       ; Merge/average all lots
 type Cost struct {
-	IsMerge bool    `parser:"'{' (@'*'"`
-	Amount  *Amount `parser:"| @@)?"`
-	Date    *Date   `parser:"(',' @Date)?"`
-	Label   string  `parser:"(',' @String)? '}'"`
+	IsMerge bool
+	Amount  *Amount
+	Date    *Date
+	Label   string
 }
 
 // IsEmpty returns true if this is an empty cost specification {}.
@@ -160,6 +160,6 @@ func (t *Tag) Capture(values []string) error {
 //	    confirmation: "CONF123456"
 //	  Expenses:Services
 type Metadata struct {
-	Key   string `parser:"@Ident ':'"`
-	Value string `parser:"@(~'\\n'+)"`
+	Key   string
+	Value string
 }

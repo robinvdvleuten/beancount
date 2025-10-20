@@ -31,14 +31,14 @@ func compareDirectives(a, b Directive) int {
 // AST represents a parsed Beancount file containing directives, options, includes,
 // and other top-level elements.
 type AST struct {
-	Directives Directives  `parser:"(@@"`
-	Options    []*Option   `parser:"| @@"`
-	Includes   []*Include  `parser:"| @@"`
-	Plugins    []*Plugin   `parser:"| @@"`
-	Pushtags   []*Pushtag  `parser:"| @@"`
-	Poptags    []*Poptag   `parser:"| @@"`
-	Pushmetas  []*Pushmeta `parser:"| @@"`
-	Popmetas   []*Popmeta  `parser:"| @@ | ~ignore)*"`
+	Directives Directives
+	Options    []*Option
+	Includes   []*Include
+	Plugins    []*Plugin
+	Pushtags   []*Pushtag
+	Poptags    []*Poptag
+	Pushmetas  []*Pushmeta
+	Popmetas   []*Popmeta
 }
 
 // WithMetadata is an interface for AST nodes that can have metadata attached.
@@ -48,7 +48,7 @@ type WithMetadata interface {
 
 // withMetadata is an embeddable struct that implements WithMetadata.
 type withMetadata struct {
-	Metadata []*Metadata `parser:"@@*"`
+	Metadata []*Metadata
 }
 
 func (w *withMetadata) AddMetadata(m ...*Metadata) {

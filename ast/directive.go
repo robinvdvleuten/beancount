@@ -12,8 +12,8 @@ package ast
 //	  asset-class: "cash"
 type Commodity struct {
 	Pos      Position
-	Date     *Date  `parser:"@Date 'commodity'"`
-	Currency string `parser:"@Ident"`
+	Date     *Date
+	Currency string
 
 	withMetadata
 }
@@ -34,12 +34,12 @@ func (c *Commodity) Directive() string { return "commodity" }
 //	2014-05-01 open Assets:Investments:Brokerage USD,EUR "FIFO"
 type Open struct {
 	Pos                  Position
-	Date                 *Date    `parser:"@Date 'open'"`
-	Account              Account  `parser:"@Account"`
-	ConstraintCurrencies []string `parser:"(@Ident (',' @Ident)*)?"`
-	BookingMethod        string   `parser:"@String?"`
+	Date                 *Date
+	Account              Account
+	ConstraintCurrencies []string
+	BookingMethod        string
 
-	withMetadata `parser:""`
+	withMetadata
 }
 
 var _ Directive = &Open{}
@@ -57,8 +57,8 @@ func (o *Open) Directive() string { return "open" }
 //	2015-09-23 close Assets:US:BofA:Checking
 type Close struct {
 	Pos     Position
-	Date    *Date   `parser:"@Date 'close'"`
-	Account Account `parser:"@Account"`
+	Date    *Date
+	Account Account
 
 	withMetadata
 }
@@ -79,9 +79,9 @@ func (c *Close) Directive() string { return "close" }
 //	2014-08-09 balance Assets:Investments:Brokerage 10.00 HOOL {518.73 USD}
 type Balance struct {
 	Pos     Position
-	Date    *Date   `parser:"@Date 'balance'"`
-	Account Account `parser:"@Account"`
-	Amount  *Amount `parser:"@@"`
+	Date    *Date
+	Account Account
+	Amount  *Amount
 
 	withMetadata
 }
@@ -102,9 +102,9 @@ func (b *Balance) Directive() string { return "balance" }
 //	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
 type Pad struct {
 	Pos        Position
-	Date       *Date   `parser:"@Date 'pad'"`
-	Account    Account `parser:"@Account"`
-	AccountPad Account `parser:"@Account"`
+	Date       *Date
+	Account    Account
+	AccountPad Account
 
 	withMetadata
 }
@@ -124,9 +124,9 @@ func (p *Pad) Directive() string { return "pad" }
 //	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
 type Note struct {
 	Pos         Position
-	Date        *Date   `parser:"@Date 'note'"`
-	Account     Account `parser:"@Account"`
-	Description string  `parser:"@String"`
+	Date        *Date
+	Account     Account
+	Description string
 
 	withMetadata
 }
@@ -147,9 +147,9 @@ func (n *Note) Directive() string { return "note" }
 //	2014-11-02 document Liabilities:CreditCard "receipts/amazon-invoice-2014-11-02.pdf"
 type Document struct {
 	Pos            Position
-	Date           *Date   `parser:"@Date 'document'"`
-	Account        Account `parser:"@Account"`
-	PathToDocument string  `parser:"@String"`
+	Date           *Date
+	Account        Account
+	PathToDocument string
 
 	withMetadata
 }
@@ -170,9 +170,9 @@ func (d *Document) Directive() string { return "document" }
 //	2015-04-30 price HOOL 582.26 USD
 type Price struct {
 	Pos       Position
-	Date      *Date   `parser:"@Date 'price'"`
-	Commodity string  `parser:"@Ident"`
-	Amount    *Amount `parser:"@@"`
+	Date      *Date
+	Commodity string
+	Amount    *Amount
 
 	withMetadata
 }
@@ -193,9 +193,9 @@ func (p *Price) Directive() string { return "price" }
 //	2014-09-01 event "employer" "Hooli Inc."
 type Event struct {
 	Pos   Position
-	Date  *Date  `parser:"@Date 'event'"`
-	Name  string `parser:"@String"`
-	Value string `parser:"@String"`
+	Date  *Date
+	Name  string
+	Value string
 
 	withMetadata
 }
@@ -216,9 +216,9 @@ func (e *Event) Directive() string { return "event" }
 //	2015-01-01 custom "forecast" 100.00 USD FALSE "monthly"
 type Custom struct {
 	Pos    Position
-	Date   *Date          `parser:"@Date 'custom'"`
-	Type   string         `parser:"@String"`
-	Values []*CustomValue `parser:"@@*"`
+	Date   *Date
+	Type   string
+	Values []*CustomValue
 
 	withMetadata
 }
@@ -231,10 +231,10 @@ func (c *Custom) Directive() string { return "custom" }
 // CustomValue represents a single value in a custom directive, which can be a string,
 // number, boolean, or amount. Only one field will be non-nil/non-zero for each value.
 type CustomValue struct {
-	String       *string `parser:"@String"`
-	BooleanValue *string `parser:"| @('TRUE' | 'FALSE')"`
-	Amount       *Amount `parser:"| @@"`
-	Number       *string `parser:"| @Number"`
+	String       *string
+	BooleanValue *string
+	Amount       *Amount
+	Number       *string
 }
 
 // GetValue returns the actual value stored in this CustomValue as an interface{}.
