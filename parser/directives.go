@@ -47,6 +47,7 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 
 	// Optional constraint currencies
 	if p.check(IDENT) {
+		open.ConstraintCurrencies = make([]string, 0, 2)
 		currency, err := p.parseIdent()
 		if err != nil {
 			return nil, err
@@ -254,7 +255,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		Pos:    pos,
 		Date:   date,
 		Type:   customType,
-		Values: []*ast.CustomValue{},
+		Values: make([]*ast.CustomValue, 0, 4),
 	}
 
 	// Parse custom values until we hit metadata or end of line

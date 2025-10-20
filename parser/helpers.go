@@ -330,6 +330,14 @@ func (p *Parser) unquoteString(s string) string {
 	return s
 }
 
+// skipLine skips all tokens on the current line.
+func (p *Parser) skipLine() {
+	line := p.peek().Line
+	for !p.isAtEnd() && p.peek().Line == line {
+		p.advance()
+	}
+}
+
 // Helper methods for token navigation
 
 func (p *Parser) peek() Token {

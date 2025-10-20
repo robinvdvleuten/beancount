@@ -104,10 +104,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		default:
 			// Skip unknown tokens/lines
 			// This handles org-mode headers (* Options) and other non-directive lines
-			currentLine := p.peek().Line
-			for !p.isAtEnd() && p.peek().Line == currentLine {
-				p.advance()
-			}
+			p.skipLine()
 		}
 	}
 
@@ -223,12 +220,10 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 
 	p.consume(COLON, "expected ':'")
 
-	value := p.parseRestOfLine()
-
 	return &ast.Pushmeta{
 		Pos:   tokenPosition(tok, p.filename),
 		Key:   key,
-		Value: value,
+		Value: p.parseRestOfLine(),
 	}, nil
 }
 

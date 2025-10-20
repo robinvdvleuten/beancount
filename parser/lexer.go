@@ -29,13 +29,19 @@ func NewLexer(source []byte, filename string) *Lexer {
 	// This pre-allocation eliminates many slice growth operations
 	estimatedTokens := len(source)/20 + 1000
 
+	// Scale interner capacity with source size
+	internerCap := len(source) / 40
+	if internerCap < 2000 {
+		internerCap = 2000
+	}
+
 	return &Lexer{
 		source:   source,
 		filename: filename,
 		line:     1,
 		column:   1,
 		tokens:   make([]Token, 0, estimatedTokens),
-		interner: NewInterner(2000), // Account names + currencies
+		interner: NewInterner(internerCap),
 	}
 }
 
@@ -261,6 +267,7 @@ func (l *Lexer) scanLink(start, line, col int) Token {
 // Accounts contain colons (Assets:Bank:Checking), identifiers don't (USD).
 func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 	// First character (capital letter) already consumed
+	hasColon := false
 
 	for l.pos < len(l.source) {
 		ch := l.source[l.pos]
@@ -268,12 +275,13 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 			(ch < '0' || ch > '9') && ch != ':' && ch != '-' {
 			break
 		}
+		if ch == ':' {
+			hasColon = true
+		}
 		l.advance()
 	}
 
-	// Check if this is an account (contains ':')
-	segment := l.source[start:l.pos]
-	if bytes.IndexByte(segment, ':') != -1 {
+	if hasColon {
 		return Token{ACCOUNT, start, l.pos, line, col}
 	}
 

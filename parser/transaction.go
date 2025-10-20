@@ -99,7 +99,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 // parsePostings parses all postings for a transaction.
 // Postings are indented lines following the transaction header.
 func (p *Parser) parsePostings() ([]*ast.Posting, error) {
-	var postings []*ast.Posting
+	postings := make([]*ast.Posting, 0, 4)
 
 	// Postings must be indented (column > 1)
 	// We detect them by checking if the next token is on a new line,
@@ -154,7 +154,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	posting.Account = account
 
 	// Optional amount
-	if p.check(NUMBER) || p.check(MINUS) {
+	if p.check(NUMBER) {
 		amount, err := p.parseAmount()
 		if err != nil {
 			return nil, err
