@@ -30,7 +30,7 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	tok := p.expect(ACCOUNT, "expected account")
 	if tok.Type == ILLEGAL {
 		actualTok := p.peek()
-		return "", p.errorAtToken(actualTok, "expected account but got %s %q", actualTok.Type, actualTok.String(p.source))
+		return "", p.errorAtEndOfPrevious("expected account but got %s %q", actualTok.Type, actualTok.String(p.source))
 	}
 
 	// Intern account name for memory efficiency
@@ -53,7 +53,7 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 
 	currTok := p.expect(IDENT, "expected currency")
 	if currTok.Type == ILLEGAL {
-		return nil, p.errorAtToken(currTok, "expected currency")
+		return nil, p.errorAtEndOfPrevious("expected currency")
 	}
 
 	// Intern currency code (USD, EUR, etc.)
@@ -120,7 +120,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 func (p *Parser) parseString() (string, error) {
 	tok := p.expect(STRING, "expected string")
 	if tok.Type == ILLEGAL {
-		return "", p.errorAtToken(tok, "expected string")
+		return "", p.errorAtEndOfPrevious("expected string")
 	}
 
 	return p.unquoteString(tok.String(p.source)), nil
@@ -130,7 +130,7 @@ func (p *Parser) parseString() (string, error) {
 func (p *Parser) parseIdent() (string, error) {
 	tok := p.expect(IDENT, "expected identifier")
 	if tok.Type == ILLEGAL {
-		return "", p.errorAtToken(tok, "expected identifier")
+		return "", p.errorAtEndOfPrevious("expected identifier")
 	}
 
 	return tok.String(p.source), nil
@@ -140,7 +140,7 @@ func (p *Parser) parseIdent() (string, error) {
 func (p *Parser) parseTag() (ast.Tag, error) {
 	tok := p.expect(TAG, "expected tag")
 	if tok.Type == ILLEGAL {
-		return "", p.errorAtToken(tok, "expected tag")
+		return "", p.errorAtEndOfPrevious("expected tag")
 	}
 
 	var tag ast.Tag
@@ -155,7 +155,7 @@ func (p *Parser) parseTag() (ast.Tag, error) {
 func (p *Parser) parseLink() (ast.Link, error) {
 	tok := p.expect(LINK, "expected link")
 	if tok.Type == ILLEGAL {
-		return "", p.errorAtToken(tok, "expected link")
+		return "", p.errorAtEndOfPrevious("expected link")
 	}
 
 	var link ast.Link
@@ -328,4 +328,23 @@ func tokenPosition(tok Token, filename string) ast.Position {
 		Line:     tok.Line,
 		Column:   tok.Column,
 	}
+}
+
+// errorAtEndOfPrevious creates an error positioned at the end of the previous token.
+// This is used when a required token is missing in a sequence, so the error points
+// to where the token was expected (after the last valid token) rather than at the
+// next token's position (which might be on a different line).
+func (p *Parser) errorAtEndOfPrevious(format string, args ...interface{}) error {
+	if p.pos == 0 {
+		// Fallback: use current token position if no previous token
+		return p.errorAtToken(p.peek(), format, args...)
+	}
+	prev := p.previous()
+	pos := ast.Position{
+		Filename: p.filename,
+		Offset:   prev.End,
+		Line:     prev.Line,
+		Column:   prev.Column + (prev.End - prev.Start),
+	}
+	return newErrorf(pos, format, args...)
 }
