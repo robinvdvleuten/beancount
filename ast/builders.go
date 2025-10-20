@@ -98,7 +98,7 @@ func NewTag(name string) Tag {
 	return Tag(name)
 }
 
-// NewMetadata creates a Metadata key-value pair.
+// NewMetadata creates a Metadata key-value pair with a string value.
 // The key should be a valid identifier, and the value can be any string.
 //
 // Example:
@@ -106,8 +106,10 @@ func NewTag(name string) Tag {
 //	meta := ast.NewMetadata("invoice", "INV-2024-001")
 func NewMetadata(key, value string) *Metadata {
 	return &Metadata{
-		Key:   key,
-		Value: value,
+		Key: key,
+		Value: &MetadataValue{
+			StringValue: &value,
+		},
 	}
 }
 

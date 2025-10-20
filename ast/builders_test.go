@@ -134,7 +134,8 @@ func TestNewTag(t *testing.T) {
 func TestNewMetadata(t *testing.T) {
 	meta := NewMetadata("invoice", "INV-2024-001")
 	assert.Equal(t, "invoice", meta.Key)
-	assert.Equal(t, "INV-2024-001", meta.Value)
+	assert.Equal(t, "string", meta.Value.Type())
+	assert.Equal(t, "INV-2024-001", meta.Value.String())
 }
 
 func TestNewTransaction(t *testing.T) {

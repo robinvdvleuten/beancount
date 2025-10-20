@@ -46,9 +46,14 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 
 // parseAmount parses an amount: NUMBER CURRENCY
 func (p *Parser) parseAmount() (*ast.Amount, error) {
-	numTok := p.expect(NUMBER, "expected number")
-	if numTok.Type == ILLEGAL {
-		return nil, p.errorAtToken(numTok, "expected number")
+	numTok := p.peek()
+	if numTok.Type == NUMBER {
+		p.advance() // consume the NUMBER token
+	} else {
+		numTok = p.expect(NUMBER, "expected number")
+		if numTok.Type == ILLEGAL {
+			return nil, p.errorAtToken(numTok, "expected number")
+		}
 	}
 
 	currTok := p.expect(IDENT, "expected currency")
@@ -188,12 +193,8 @@ func (p *Parser) parseMetadata() []*ast.Metadata {
 		p.advance() // consume key
 		p.consume(COLON, "expected ':'")
 
-		// Read rest of line as value
-		value := p.parseRestOfLine()
-
-		// Unquote the value if it's a quoted string
-		// The formatter will re-add quotes when formatting
-		value = p.unquoteString(value)
+		// Parse the metadata value based on token type
+		value := p.parseMetadataValue()
 
 		metadata = append(metadata, &ast.Metadata{
 			Key:   keyTok.String(p.source),
@@ -202,6 +203,98 @@ func (p *Parser) parseMetadata() []*ast.Metadata {
 	}
 
 	return metadata
+}
+
+// parseMetadataValue parses a typed metadata value. Beancount supports 8 value types:
+// strings, dates, accounts, currencies, tags, links, numbers, amounts, and booleans.
+func (p *Parser) parseMetadataValue() *ast.MetadataValue {
+	tok := p.peek()
+
+	// Parse based on token type with specific-to-general order
+	switch tok.Type {
+	case STRING:
+		// String (quoted) - most specific
+		str, err := p.parseString()
+		if err == nil {
+			return &ast.MetadataValue{StringValue: &str}
+		}
+
+	case DATE:
+		// Date (ISO format)
+		date, err := p.parseDate()
+		if err == nil {
+			return &ast.MetadataValue{Date: date}
+		}
+
+	case TAG:
+		// Tag (with # prefix)
+		tag, err := p.parseTag()
+		if err == nil {
+			return &ast.MetadataValue{Tag: &tag}
+		}
+
+	case LINK:
+	 // Link (with ^ prefix)
+	 link, err := p.parseLink()
+	 if err == nil {
+	  return &ast.MetadataValue{Link: &link}
+	 }
+
+	case ACCOUNT:
+	// Account (colon-separated)
+	account, err := p.parseAccount()
+	if err == nil {
+	return &ast.MetadataValue{Account: &account}
+	}
+
+	case NUMBER:
+		// Could be Number or Amount - need LL(2) lookahead
+		if p.peekAhead(1).Type == IDENT {
+			// Amount (number + currency)
+			amount, err := p.parseAmount()
+			if err == nil {
+				return &ast.MetadataValue{Amount: amount}
+			}
+		} else {
+			// Just a number
+			numStr := tok.String(p.source)
+			p.advance()
+			return &ast.MetadataValue{Number: &numStr}
+		}
+
+	case IDENT:
+		// Could be Account, Currency, or Boolean
+		identStr := tok.String(p.source)
+
+		// Check for Boolean (TRUE/FALSE)
+		if identStr == "TRUE" {
+			p.advance()
+			trueVal := true
+			return &ast.MetadataValue{Boolean: &trueVal}
+		}
+		if identStr == "FALSE" {
+			p.advance()
+			falseVal := false
+			return &ast.MetadataValue{Boolean: &falseVal}
+		}
+
+		// Check for Account (contains colon)
+		if strings.Contains(identStr, ":") {
+			account, err := p.parseAccount()
+			if err == nil {
+				return &ast.MetadataValue{Account: &account}
+			}
+		}
+
+		// Otherwise treat as Currency
+		p.advance()
+		return &ast.MetadataValue{Currency: &identStr}
+	}
+
+	// Fallback: read rest of line as string
+	value := p.parseRestOfLine()
+	value = p.unquoteString(value)
+	return &ast.MetadataValue{StringValue: &value}
 }
 
 // isKeyword returns true if the token type is a keyword.

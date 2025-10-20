@@ -1153,6 +1153,54 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 	buf.WriteByte('}')
 }
 
+// formatMetadataValue formats a typed metadata value according to Beancount formatting rules.
+// Only string values are quoted; all other types are output unquoted.
+func (f *Formatter) formatMetadataValue(value *ast.MetadataValue, buf *strings.Builder) {
+	if value == nil {
+		return
+	}
+
+	switch {
+	case value.StringValue != nil:
+		// Strings are quoted and escaped
+		buf.WriteByte('"')
+		buf.WriteString(escapeString(*value.StringValue))
+		buf.WriteByte('"')
+	case value.Date != nil:
+		// Dates are unquoted ISO format
+		buf.WriteString(value.Date.Format("2006-01-02"))
+	case value.Account != nil:
+		// Accounts are unquoted colon-separated
+		buf.WriteString(string(*value.Account))
+	case value.Currency != nil:
+		// Currencies are unquoted uppercase identifiers
+		buf.WriteString(*value.Currency)
+	case value.Tag != nil:
+		// Tags get # prefix restored
+		buf.WriteByte('#')
+		buf.WriteString(string(*value.Tag))
+	case value.Link != nil:
+		// Links get ^ prefix restored
+		buf.WriteByte('^')
+		buf.WriteString(string(*value.Link))
+	case value.Number != nil:
+		// Numbers are unquoted (stored as string for precision)
+		buf.WriteString(*value.Number)
+	case value.Amount != nil:
+		// Amounts are unquoted "value currency"
+		buf.WriteString(value.Amount.Value)
+		buf.WriteByte(' ')
+		buf.WriteString(value.Amount.Currency)
+	case value.Boolean != nil:
+		// Booleans are unquoted TRUE/FALSE
+		if *value.Boolean {
+			buf.WriteString("TRUE")
+		} else {
+			buf.WriteString("FALSE")
+		}
+	}
+}
+
 // formatMetadata formats metadata entries with proper indentation.
 func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 	if len(metadata) == 0 {
@@ -1162,8 +1210,8 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 	for _, m := range metadata {
 		buf.WriteString("  ")
 		buf.WriteString(m.Key)
-		buf.WriteString(": \"")
-		buf.WriteString(m.Value)
-		buf.WriteString("\"\n")
+		buf.WriteString(": ")
+		f.formatMetadataValue(m.Value, buf)
+		buf.WriteByte('\n')
 	}
 }

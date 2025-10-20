@@ -740,9 +740,10 @@ func TestValidateMetadata(t *testing.T) {
 						ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 					),
 				)
+				inv123 := "INV-123"
 				txn.Metadata = []*ast.Metadata{
-					{Key: "invoice", Value: "INV-123"},
-				}
+				 {Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
+			}
 				return txn
 			}(),
 			wantErrCount: 0,
@@ -756,10 +757,12 @@ func TestValidateMetadata(t *testing.T) {
 						ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 					),
 				)
+				inv123 := "INV-123"
+				inv456 := "INV-456"
 				txn.Metadata = []*ast.Metadata{
-					{Key: "invoice", Value: "INV-123"},
-					{Key: "invoice", Value: "INV-456"},
-				}
+				 {Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
+				{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv456}},
+			}
 				return txn
 			}(),
 			wantErrCount: 1,
@@ -834,9 +837,11 @@ func BenchmarkValidateMetadata(b *testing.B) {
 			ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 		),
 	)
+	inv123 := "INV-123"
+	food := "food"
 	txn.Metadata = []*ast.Metadata{
-		{Key: "invoice", Value: "INV-123"},
-		{Key: "category", Value: "food"},
+		{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
+		{Key: "category", Value: &ast.MetadataValue{StringValue: &food}},
 	}
 
 	v := &validator{accounts: make(map[string]*Account)}
@@ -1320,9 +1325,10 @@ func TestValidateOpen(t *testing.T) {
 					Date:    date2024,
 					Account: checking,
 				}
+				note := "Test account"
 				open.Metadata = []*ast.Metadata{
-					{Key: "note", Value: "Test account"},
-				}
+				 {Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
+			}
 				return open
 			}(),
 			wantErrCount:     0,

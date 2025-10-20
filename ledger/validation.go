@@ -407,8 +407,8 @@ func (v *validator) validateMetadata(ctx context.Context, txn *ast.Transaction) 
 			}
 			seen[meta.Key] = true
 
-			// Check for empty values (though parser might prevent this)
-			if meta.Value == "" {
+			// Check for empty values (empty string values)
+			if meta.Value != nil && meta.Value.StringValue != nil && *meta.Value.StringValue == "" {
 				errs = append(errs, NewInvalidMetadataError(txn, "", meta.Key, meta.Value, "empty value"))
 			}
 		}
@@ -426,8 +426,8 @@ func (v *validator) validateMetadata(ctx context.Context, txn *ast.Transaction) 
 				}
 				seen[meta.Key] = true
 
-				// Check for empty values
-				if meta.Value == "" {
+				// Check for empty values (empty string values)
+				if meta.Value != nil && meta.Value.StringValue != nil && *meta.Value.StringValue == "" {
 					errs = append(errs, NewInvalidMetadataError(txn, posting.Account, meta.Key, meta.Value, "empty value"))
 				}
 			}

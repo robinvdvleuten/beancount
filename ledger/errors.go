@@ -571,7 +571,7 @@ type InvalidMetadataError struct {
 	Date      *ast.Date
 	Account   ast.Account // Empty if directive-level metadata
 	Key       string
-	Value     string
+	Value     *ast.MetadataValue
 	Reason    string // Why it's invalid (e.g., "duplicate key", "empty value")
 	Pos       ast.Position
 	Directive ast.Directive
@@ -588,8 +588,13 @@ func (e *InvalidMetadataError) Error() string {
 		accountInfo = fmt.Sprintf(" (account %s)", e.Account)
 	}
 
+	valueStr := ""
+	if e.Value != nil {
+		valueStr = e.Value.String()
+	}
+
 	return fmt.Sprintf("%s: Invalid metadata%s: key=%q, value=%q: %s",
-		location, accountInfo, e.Key, e.Value, e.Reason)
+		location, accountInfo, e.Key, valueStr, e.Reason)
 }
 
 func (e *InvalidMetadataError) GetPosition() ast.Position {
@@ -609,7 +614,7 @@ func (e *InvalidMetadataError) GetDate() *ast.Date {
 }
 
 // NewInvalidMetadataError creates an error for when metadata is invalid
-func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key, value, reason string) *InvalidMetadataError {
+func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key string, value *ast.MetadataValue, reason string) *InvalidMetadataError {
 	var date *ast.Date
 	var pos ast.Position
 

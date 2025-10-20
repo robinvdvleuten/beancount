@@ -147,19 +147,112 @@ func (t *Tag) Capture(values []string) error {
 	return nil
 }
 
+// MetadataValue represents a typed value that can be stored in metadata. Beancount supports
+// eight different value types: strings, dates, accounts, currencies, tags, links, numbers,
+// amounts, and booleans. This is a discriminated union where exactly one of the pointer
+// fields should be non-nil to indicate the value type.
+//
+// Example metadata with different value types:
+//
+//	invoice: "INV-2024-001"           ; String (quoted)
+//	trip-start: 2024-01-15            ; Date (ISO format)
+//	linked-account: Assets:Checking   ; Account (colon-separated)
+//	target-currency: USD              ; Currency (uppercase identifier)
+//	category: #vacation               ; Tag (with # prefix)
+//	ref: ^invoice123                  ; Link (with ^ prefix)
+//	quantity: 42                      ; Number (decimal)
+//	budget: 1000.00 USD               ; Amount (number + currency)
+//	active: TRUE                      ; Boolean (uppercase TRUE/FALSE)
+type MetadataValue struct {
+	StringValue   *string
+	Date          *Date
+	Account       *Account
+	Currency      *string
+	Tag           *Tag
+	Link          *Link
+	Number        *string // Stored as string to preserve precision
+	Amount        *Amount
+	Boolean       *bool
+}
+
+// Type returns a string representation of the metadata value's type.
+func (m *MetadataValue) Type() string {
+	if m == nil {
+		return "nil"
+	}
+	switch {
+	case m.StringValue != nil:
+		return "string"
+	case m.Date != nil:
+		return "date"
+	case m.Account != nil:
+		return "account"
+	case m.Currency != nil:
+		return "currency"
+	case m.Tag != nil:
+		return "tag"
+	case m.Link != nil:
+		return "link"
+	case m.Number != nil:
+		return "number"
+	case m.Amount != nil:
+		return "amount"
+	case m.Boolean != nil:
+		return "boolean"
+	default:
+		return "unknown"
+	}
+}
+
+// String returns a string representation of the metadata value.
+func (m *MetadataValue) String() string {
+	if m == nil {
+		return ""
+	}
+	switch {
+	case m.StringValue != nil:
+		return *m.StringValue
+	case m.Date != nil:
+		return m.Date.Format("2006-01-02")
+	case m.Account != nil:
+		return string(*m.Account)
+	case m.Currency != nil:
+		return *m.Currency
+	case m.Tag != nil:
+		return string(*m.Tag)
+	case m.Link != nil:
+		return string(*m.Link)
+	case m.Number != nil:
+		return *m.Number
+	case m.Amount != nil:
+		return m.Amount.Value + " " + m.Amount.Currency
+	case m.Boolean != nil:
+		if *m.Boolean {
+			return "TRUE"
+		}
+		return "FALSE"
+	default:
+		return ""
+	}
+}
+
 // Metadata represents a key-value pair that can be attached to any directive or posting.
 // Metadata entries are indented on lines immediately following the directive or posting
 // they annotate. They provide a flexible way to attach arbitrary structured information
 // such as invoice numbers, confirmation codes, or custom categorization.
 //
+// Metadata values can be of various types including strings, dates, accounts, currencies,
+// tags, links, numbers, amounts, and booleans. See MetadataValue for details.
+//
 // Example:
 //
 //	2014-05-05 * "Payment"
 //	  invoice: "INV-2014-05-001"
+//	  trip-start: 2024-01-15
 //	  Assets:Checking  -100.00 USD
 //	    confirmation: "CONF123456"
 //	  Expenses:Services
 type Metadata struct {
 	Key   string
-	Value string
+	Value *MetadataValue
 }
