@@ -116,7 +116,8 @@ func (l *Lexer) scanToken() Token {
 		return l.scanLink(start, startLine, startCol)
 
 	// Accounts (start with capital) or identifiers
-	case ch >= 'A' && ch <= 'Z':
+	// Also check for non-ASCII bytes that might be Unicode uppercase or other letters
+	case ch >= 'A' && ch <= 'Z' || ch >= 0x80:
 		return l.scanAccountOrIdent(start, startLine, startCol)
 
 	// Keywords or identifiers (start with lowercase)
@@ -263,18 +264,27 @@ func (l *Lexer) scanLink(start, line, col int) Token {
 	return Token{LINK, start, l.pos, line, col}
 }
 
-// scanAccountOrIdent scans an account name or identifier starting with capital letter.
+// scanAccountOrIdent scans an account name or identifier starting with capital letter or Unicode character.
 // Accounts contain colons (Assets:Bank:Checking), identifiers don't (USD).
+// Supports Unicode letters (French, German, Chinese, Japanese, Korean, Arabic, etc.)
 func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
-	// First character (capital letter) already consumed
+	// First character (capital letter or Unicode) already consumed
 	hasColon := false
 
 	for l.pos < len(l.source) {
 		ch := l.source[l.pos]
-		if (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') &&
-			(ch < '0' || ch > '9') && ch != ':' && ch != '-' {
+
+		// Accept: letters (ASCII or UTF-8), digits, colons, hyphens
+		// UTF-8 continuation bytes (0x80-0xBF) and start bytes (0xC0-0xFF) are accepted
+		isASCIILetter := (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+		isDigit := ch >= '0' && ch <= '9'
+		isUTF8 := ch >= 0x80 // UTF-8 multi-byte character
+		isSpecial := ch == ':' || ch == '-'
+
+		if !isASCIILetter && !isDigit && !isUTF8 && !isSpecial {
 			break
 		}
+
 		if ch == ':' {
 			hasColon = true
 		}

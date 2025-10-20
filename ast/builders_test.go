@@ -78,6 +78,28 @@ func TestNewAccount(t *testing.T) {
 		{"InvalidType", "Foo:Bar", true},
 		{"SingleSegment", "Assets", true},
 		{"Empty", "", true},
+
+		// Unicode support - matching official beancount behavior
+		{"French", "Assets:Bank:Société-Générale", false},
+		{"German", "Expenses:Café:München", false},
+		{"Spanish", "Liabilities:Préstamos", false},
+		{"Chinese", "Assets:银行:中国", false},
+		{"Japanese", "Income:会社:給料", false},
+		{"Korean", "Assets:은행:계좌", false},
+		{"Cyrillic", "Expenses:Кафе:Москва", false},
+		{"Greek", "Assets:Τράπεζα:Αθήνα", false},
+		{"Arabic", "Assets:بنك:حساب", false},
+		{"Mixed", "Assets:Café:München:中国", false},
+
+		// Edge cases
+		{"WithDigit", "Assets:Bank123:Account", false},
+		{"StartWithDigit", "Assets:3Bank:Account", false},
+		{"MultipleHyphens", "Assets:My-Big-Long-Account-Name", false},
+
+		// Invalid cases
+		{"LowercaseStart", "Assets:bank:Account", true},
+		{"SpecialChar", "Assets:Bank$Account", true},
+		{"Space", "Assets:Bank Account", true},
 	}
 
 	for _, tt := range tests {

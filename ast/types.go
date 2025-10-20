@@ -87,8 +87,16 @@ func (a *Account) Capture(values []string) error {
 }
 
 // accountSegmentRegex validates account segments (after first).
-// Must start with uppercase letter or digit, can contain alphanumerics and hyphens.
-var accountSegmentRegex = regexp.MustCompile(`^[A-Z0-9][A-Za-z0-9-]*$`)
+// Must start with uppercase Unicode letter, digit, or any non-ASCII Unicode character.
+// Can contain Unicode letters, digits, and hyphens.
+// Matches official beancount behavior supporting international characters including
+// scripts without case distinction (Chinese, Japanese, Korean, Arabic, Hebrew, Thai, etc.).
+// Pattern: [\p{Lu}\p{Nd}\p{Lo}][\p{L}\p{Nd}-]*
+// - \p{Lu} = Unicode uppercase letters (Latin, Cyrillic, Greek, etc.)
+// - \p{Nd} = Unicode decimal digits
+// - \p{Lo} = Other letters (Chinese, Japanese, Korean, Arabic, Hebrew, etc.)
+// - \p{L}  = All Unicode letters (any case, any script)
+var accountSegmentRegex = regexp.MustCompile(`^[\p{Lu}\p{Nd}\p{Lo}][\p{L}\p{Nd}-]*$`)
 
 // isValidAccountSegment checks if an account segment (after first) is valid.
 func isValidAccountSegment(segment string) bool {
