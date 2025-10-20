@@ -4,11 +4,13 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
 
 	"github.com/alecthomas/kong"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/errors"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
@@ -16,16 +18,78 @@ import (
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
+// FileOrStdin is a flag value that accepts either a file path or "-" for stdin.
+// When "-" is provided, it reads from os.Stdin and sets Contents.
+// When a file path is provided, it just validates the filename exists.
+// For stdin input, Filename is set to "<stdin>" and Contents is populated.
+// For file input, Filename is set and Contents is nil (will be read by loader).
+//
+// Example usage:
+//
+//	type MyCmd struct {
+//	    Input FileOrStdin `arg:"" help:"Input file or - for stdin"`
+//	}
+//
+//	// User runs: myapp -
+//	// Result: cmd.Input.Filename = "<stdin>", cmd.Input.Contents = [stdin data]
+//
+//	// User runs: myapp file.txt
+//	// Result: cmd.Input.Filename = "file.txt", cmd.Input.Contents = nil
+type FileOrStdin struct {
+	Filename string
+	Contents []byte // Only populated for stdin, nil for files
+}
+
+// Decode implements kong.MapperValue to customize how the flag value is decoded.
+// For stdin ("-" or empty), reads from os.Stdin.
+// For files, just validates the filename exists but doesn't read contents.
+func (f *FileOrStdin) Decode(ctx *kong.DecodeContext) error {
+	var filename string
+	if err := ctx.Scan.PopValueInto("filename", &filename); err != nil {
+		return err
+	}
+
+	if filename == "-" || filename == "" {
+		// Read from stdin
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		f.Filename = "<stdin>"
+		f.Contents = contents
+		return nil
+	}
+
+	// For files, just validate the file exists but don't read contents yet
+	if _, err := os.Stat(filename); err != nil {
+		return err
+	}
+	f.Filename = filename
+	f.Contents = nil // Will be read by loader
+
+	return nil
+}
+
 // Globals defines global flags available to all commands.
 type Globals struct {
 	Telemetry bool `help:"Show timing telemetry for operations."`
 }
 
 type CheckCmd struct {
-	File kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
+	File FileOrStdin `help:"Beancount input filename (use '-' for stdin, or omit for stdin)." arg:"" optional:""`
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
+	// If no filename provided, read from stdin
+	if cmd.File.Filename == "" {
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		cmd.File.Filename = "<stdin>"
+		cmd.File.Contents = contents
+	}
+
 	// Create context for cancellation support
 	runCtx := context.Background()
 
@@ -57,9 +121,18 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		defer reportTelemetry()
 	}
 
-	// Load the input file and recursively resolve all includes
-	ldr := loader.New(loader.WithFollowIncludes())
-	ast, err := ldr.Load(runCtx, cmd.File.Filename)
+	// Load input: use LoadBytes for stdin, Load for files
+	var ast *ast.AST
+	var err error
+	if cmd.File.Filename == "<stdin>" {
+		// Stdin: contents already read by FileOrStdin.Decode
+		ldr := loader.New(loader.WithFollowIncludes())
+		ast, err = ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
+	} else {
+		// File: use Load which handles includes properly
+		ldr := loader.New(loader.WithFollowIncludes())
+		ast, err = ldr.Load(runCtx, cmd.File.Filename)
+	}
 	if err != nil {
 		// Format parser errors consistently with ledger errors
 		errFormatter := errors.NewTextFormatter(nil)
@@ -107,13 +180,23 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 }
 
 type FormatCmd struct {
-	File           kong.NamedFileContentFlag `help:"Beancount input filename." arg:""`
-	CurrencyColumn int                       `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
-	PrefixWidth    int                       `help:"Width in characters for account names (auto if 0)." default:"0"`
-	NumWidth       int                       `help:"Width for numbers (auto if 0)." default:"0"`
+	File           FileOrStdin `help:"Beancount input filename (use '-' for stdin, or omit for stdin)." arg:"" optional:""`
+	CurrencyColumn int         `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
+	PrefixWidth    int         `help:"Width in characters for account names (auto if 0)." default:"0"`
+	NumWidth       int         `help:"Width for numbers (auto if 0)." default:"0"`
 }
 
 func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
+	// If no filename provided, read from stdin
+	if cmd.File.Filename == "" {
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		cmd.File.Filename = "<stdin>"
+		cmd.File.Contents = contents
+	}
+
 	// Create context for cancellation support
 	runCtx := context.Background()
 
@@ -130,9 +213,18 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		}()
 	}
 
-	// Load only the single file (don't follow includes)
-	ldr := loader.New()
-	ast, err := ldr.Load(runCtx, cmd.File.Filename)
+	// Load input: use LoadBytes for stdin, Load for files
+	var ast *ast.AST
+	var err error
+	if cmd.File.Filename == "<stdin>" {
+		// Stdin: contents already read by FileOrStdin.Decode
+		ldr := loader.New()
+		ast, err = ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
+	} else {
+		// File: use Load (though format doesn't follow includes, this is consistent)
+		ldr := loader.New()
+		ast, err = ldr.Load(runCtx, cmd.File.Filename)
+	}
 	if err != nil {
 		// Format parser errors consistently
 		errFormatter := errors.NewTextFormatter(nil)
@@ -140,12 +232,6 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
 		return fmt.Errorf("parse error")
-	}
-
-	// Read file contents for formatter (needs original source for comment preservation)
-	contents, err := os.ReadFile(cmd.File.Filename)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
 	}
 
 	// Create formatter with options
@@ -162,6 +248,18 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	f := formatter.New(opts...)
 
 	// Format and output to stdout
+	var contents []byte
+	if cmd.File.Filename == "<stdin>" {
+		// Contents already read for stdin
+		contents = cmd.File.Contents
+	} else {
+		// Read file contents for formatter (needs original source for comment preservation)
+		var err error
+		contents, err = os.ReadFile(cmd.File.Filename)
+		if err != nil {
+			return fmt.Errorf("failed to read file: %w", err)
+		}
+	}
 	if err := f.Format(runCtx, ast, contents, os.Stdout); err != nil {
 		return err
 	}

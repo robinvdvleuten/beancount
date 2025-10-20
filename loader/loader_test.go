@@ -2,12 +2,14 @@ package loader
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/parser"
 )
 
 func TestLoadSingleFile(t *testing.T) {
@@ -418,4 +420,93 @@ include "included.beancount"
 	// Main file plugins come first
 	assert.Equal(t, "beancount.plugins.check_commodity", pluginNames[0])
 	assert.Equal(t, "beancount.plugins.auto_accounts", pluginNames[1])
+}
+
+func TestLoadBytes(t *testing.T) {
+	t.Run("BasicLoadBytes", func(t *testing.T) {
+		testData := []byte(`
+2024-01-01 open Assets:Checking USD
+2024-01-02 * "Test"
+  Assets:Checking  100.00 USD
+  Equity:Opening-Balances
+`)
+
+		// Test without FollowIncludes
+		ldr := New()
+		tree, err := ldr.LoadBytes(context.Background(), "test.beancount", testData)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(tree.Directives))
+
+		// Test with FollowIncludes (should work the same for data without includes)
+		ldr = New(WithFollowIncludes())
+		tree, err = ldr.LoadBytes(context.Background(), "test.beancount", testData)
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(tree.Directives))
+	})
+
+	t.Run("LoadBytesWithIncludesNoFollow", func(t *testing.T) {
+		testData := []byte(`
+include "accounts.beancount"
+
+2024-01-01 open Assets:Checking USD
+`)
+
+		// Without FollowIncludes, includes should be preserved
+		ldr := New()
+		tree, err := ldr.LoadBytes(context.Background(), "main.beancount", testData)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(tree.Includes))
+		assert.Equal(t, "accounts.beancount", tree.Includes[0].Filename)
+	})
+
+	t.Run("LoadBytesWithIncludesFollowStdin", func(t *testing.T) {
+		testData := []byte(`
+include "accounts.beancount"
+
+2024-01-01 open Assets:Checking USD
+`)
+
+		// With FollowIncludes and stdin filename, should error
+		ldr := New(WithFollowIncludes())
+		_, err := ldr.LoadBytes(context.Background(), "<stdin>", testData)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "include directives are not supported when reading from stdin")
+	})
+
+	t.Run("LoadBytesWithIncludesFollowFile", func(t *testing.T) {
+		testData := []byte(`
+include "accounts.beancount"
+
+2024-01-01 open Assets:Checking USD
+`)
+
+		// With FollowIncludes and file filename, should error (for simplicity)
+		ldr := New(WithFollowIncludes())
+		_, err := ldr.LoadBytes(context.Background(), "/path/to/main.beancount", testData)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "include directives found; use Load() instead of LoadBytes() to resolve includes")
+	})
+
+	t.Run("LoadBytesStdinFilename", func(t *testing.T) {
+		testData := []byte(`
+2024-01-01 open Assets:Checking USD
+`)
+
+		// Test with stdin filename
+		ldr := New()
+		tree, err := ldr.LoadBytes(context.Background(), "<stdin>", testData)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(tree.Directives))
+	})
+
+	t.Run("LoadBytesParseError", func(t *testing.T) {
+		testData := []byte(`2024-01-01 invalid directive`)
+
+		ldr := New()
+		_, err := ldr.LoadBytes(context.Background(), "test.beancount", testData)
+		assert.Error(t, err)
+		// Should be a ParseError
+		var parseErr *parser.ParseError
+		assert.True(t, errors.As(err, &parseErr))
+	})
 }

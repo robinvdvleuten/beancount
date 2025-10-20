@@ -294,7 +294,14 @@ func (p *Parser) consume(typ TokenType, message string) Token {
 	// Return illegal token and record error
 	tok := p.peek()
 	_ = p.errorAtToken(tok, "%s", message) // Error recorded, return handled by ILLEGAL token
-	return Token{Type: ILLEGAL}
+	// Return the peeked token but marked as illegal, preserving position info
+	return Token{
+		Type:   ILLEGAL,
+		Start:  tok.Start,
+		End:    tok.End,
+		Line:   tok.Line,
+		Column: tok.Column,
+	}
 }
 
 func (p *Parser) expect(typ TokenType, message string) Token {

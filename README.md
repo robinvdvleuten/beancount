@@ -65,6 +65,12 @@ Validate a Beancount file with full ledger checks:
 beancount check example.beancount
 ```
 
+Or read from stdin (omit filename or use `-`):
+
+```sh
+echo "2024-01-01 open Assets:Checking USD" | beancount check
+```
+
 This command validates:
 - Transaction balance across all currencies
 - Account open/close dates are respected
@@ -94,6 +100,12 @@ beancount format --currency-column 60 example.beancount
 
 # Customize account name and number widths
 beancount format --prefix-width 50 --num-width 12 example.beancount
+```
+
+Or read from stdin (omit filename or use `-`):
+
+```sh
+echo "2024-01-01 open Assets:Checking USD" | beancount format
 ```
 
 ### Telemetry
