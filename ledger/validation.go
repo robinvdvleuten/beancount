@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -1014,12 +1015,68 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	return errs, delta
 }
 
+// createPaddingTransaction creates a synthetic transaction for pad directive.
+// The transaction has flag "P" and narration matching official beancount format.
+//
+// Example output:
+//
+//	2020-01-01 P "(Padding inserted for Balance of 1000.00 USD for difference 1000.00 USD)"
+//	  Assets:Checking         1000.00 USD
+//	  Equity:Opening-Balances -1000.00 USD
+func createPaddingTransaction(
+	date *ast.Date,
+	paddedAccount ast.Account,
+	padSourceAccount ast.Account,
+	difference decimal.Decimal,
+	differenceStr string, // Original string representation for formatting
+	currency string,
+	expectedAmount decimal.Decimal,
+	expectedAmountStr string, // Original string representation for formatting
+) *ast.Transaction {
+	// Format narration matching official beancount
+	// Use strings.Builder for efficient string construction
+	var narration strings.Builder
+	narration.WriteString("(Padding inserted for Balance of ")
+	narration.WriteString(expectedAmountStr)
+	narration.WriteString(" ")
+	narration.WriteString(currency)
+	narration.WriteString(" for difference ")
+	narration.WriteString(differenceStr)
+	narration.WriteString(" ")
+	narration.WriteString(currency)
+	narration.WriteString(")")
+
+	// Calculate negative amount string (preserve formatting)
+	var negDifferenceStr string
+	if differenceStr[0] == '-' {
+		negDifferenceStr = differenceStr[1:] // Remove minus sign
+	} else {
+		negDifferenceStr = "-" + differenceStr // Add minus sign
+	}
+
+	// Build transaction using AST builders
+	txn := ast.NewTransaction(date, narration.String(),
+		ast.WithFlag("P"),
+		ast.WithPostings(
+			ast.NewPosting(paddedAccount,
+				ast.WithAmount(differenceStr, currency),
+			),
+			ast.NewPosting(padSourceAccount,
+				ast.WithAmount(negDifferenceStr, currency),
+			),
+		),
+	)
+
+	return txn
+}
+
 // calculateBalanceDelta calculates the balance delta for a balance assertion.
 //
 // It validates that:
 //   - Pad directive (if present) comes chronologically BEFORE the balance assertion
 //   - Account balance matches expected balance (within tolerance)
 //   - Calculates padding adjustments needed
+//   - Generates synthetic padding transaction if needed
 //
 // Returns BalanceDelta (mutations) and error (validation failure).
 // Errors are returned separately from the delta to keep deltas pure.
@@ -1071,14 +1128,32 @@ func (v *validator) calculateBalanceDelta(ctx context.Context,
 		if difference.Abs().GreaterThan(tolerance) {
 			delta.PaddingAdjustments[currency] = difference
 			delta.PadAccountName = string(padEntry.AccountPad)
-			delta.ShouldRemovePad = true
+
+			// Generate synthetic padding transaction
+			// Determine decimal places from balance amount
+			decimalPlaces := int32(2) // default
+			if dotIndex := strings.Index(balance.Amount.Value, "."); dotIndex >= 0 {
+				decimalPlaces = int32(len(balance.Amount.Value) - dotIndex - 1)
+			}
+
+			delta.SyntheticTransaction = createPaddingTransaction(
+				padEntry.Date,                         // Use pad date, not balance date
+				balance.Account,                       // Account being padded
+				padEntry.AccountPad,                   // Source of padding
+				difference,                            // Amount to pad
+				difference.StringFixed(decimalPlaces), // Format with same precision as balance
+				currency,                              // Currency
+				expectedAmount,                        // For narration
+				balance.Amount.Value,                  // Original string for expected amount
+			)
 
 			// Calculate what actual will be after padding
 			actualAmountAfterPadding = actualAmount.Add(difference)
-		} else {
-			// Difference within tolerance - still remove pad
-			delta.ShouldRemovePad = true
 		}
+
+		// Mark pad as used (but don't remove it yet - may be needed for other currencies)
+		// Removal happens at end of processing
+		delta.ShouldRemovePad = false
 	}
 
 	// Check if amounts match within tolerance (after padding)

@@ -88,18 +88,19 @@ func (d *CloseDelta) HasMutations() bool {
 // BalanceDelta describes changes from a balance assertion.
 // Does NOT include validation errors - those are returned separately.
 type BalanceDelta struct {
-	AccountName        string
-	Currency           string
-	ExpectedAmount     decimal.Decimal
-	ActualAmount       decimal.Decimal            // Before padding
-	PaddingAdjustments map[string]decimal.Decimal // currency -> amount
-	PadAccountName     string                     // Where padding comes from
-	ShouldRemovePad    bool                       // True if pad was consumed
+	AccountName          string
+	Currency             string
+	ExpectedAmount       decimal.Decimal
+	ActualAmount         decimal.Decimal            // Before padding
+	PaddingAdjustments   map[string]decimal.Decimal // currency -> amount
+	PadAccountName       string                     // Where padding comes from
+	ShouldRemovePad      bool                       // True if pad was consumed
+	SyntheticTransaction *ast.Transaction           // Padding transaction to insert into AST (nil if no padding)
 }
 
 // HasMutations returns true if delta requires state changes
 func (d *BalanceDelta) HasMutations() bool {
-	return len(d.PaddingAdjustments) > 0 || d.ShouldRemovePad
+	return len(d.PaddingAdjustments) > 0 || d.ShouldRemovePad || d.SyntheticTransaction != nil
 }
 
 // PadDelta describes storing a pad directive (no immediate mutation)

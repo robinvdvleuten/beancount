@@ -17,15 +17,44 @@ func (d Directives) Len() int           { return len(d) }
 func (d Directives) Swap(i, j int)      { d[i], d[j] = d[j], d[i] }
 func (d Directives) Less(i, j int) bool { return compareDirectives(d[i], d[j]) < 0 }
 
-// compareDirectives compares two directives by their date.
+// compareDirectives compares two directives by their date, then by type priority.
 // Returns -1 if a < b, 0 if a == b, 1 if a > b.
+//
+// For same-date directives, the processing order is:
+//  1. Open (accounts must be opened before use)
+//  2. Close (process closes before transactions that might use closed accounts)
+//  3. All other directives (transactions, balance, pad, etc.)
 func compareDirectives(a, b Directive) int {
+	// First compare by date
 	if a.date().Before(b.date().Time) {
 		return -1
 	} else if a.date().After(b.date().Time) {
 		return 1
 	}
+
+	// Same date - compare by type priority
+	aPriority := directiveTypePriority(a)
+	bPriority := directiveTypePriority(b)
+	if aPriority < bPriority {
+		return -1
+	} else if aPriority > bPriority {
+		return 1
+	}
+
 	return 0
+}
+
+// directiveTypePriority returns the processing priority for a directive type.
+// Lower numbers are processed first.
+func directiveTypePriority(d Directive) int {
+	switch d.(type) {
+	case *Open:
+		return 0 // Process opens first
+	case *Close:
+		return 1 // Process closes second
+	default:
+		return 2 // All others (transactions, balance, pad, note, etc.)
+	}
 }
 
 // AST represents a parsed Beancount file containing directives, options, includes,

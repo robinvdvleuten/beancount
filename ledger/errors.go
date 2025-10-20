@@ -752,3 +752,47 @@ func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account,
 		Directive:         txn,
 	}
 }
+
+// UnusedPadWarning is returned when a pad directive is never consumed by a balance assertion
+type UnusedPadWarning struct {
+	Pad     *ast.Pad
+	Account string
+}
+
+func (e *UnusedPadWarning) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pad.Pos.Filename, e.Pad.Pos.Line)
+	if e.Pad.Pos.Filename == "" {
+		location = e.Pad.Date.Format("2006-01-02")
+	}
+
+	return fmt.Sprintf("%s: Unused Pad entry\n\n   %s pad %s %s",
+		location,
+		e.Pad.Date.Format("2006-01-02"),
+		e.Pad.Account,
+		e.Pad.AccountPad,
+	)
+}
+
+func (e *UnusedPadWarning) GetPosition() ast.Position {
+	return e.Pad.Pos
+}
+
+func (e *UnusedPadWarning) GetDirective() ast.Directive {
+	return e.Pad
+}
+
+func (e *UnusedPadWarning) GetAccount() ast.Account {
+	return e.Pad.Account
+}
+
+func (e *UnusedPadWarning) GetDate() *ast.Date {
+	return e.Pad.Date
+}
+
+// NewUnusedPadWarning creates a warning for an unused pad directive
+func NewUnusedPadWarning(pad *ast.Pad) *UnusedPadWarning {
+	return &UnusedPadWarning{
+		Pad:     pad,
+		Account: string(pad.Account),
+	}
+}

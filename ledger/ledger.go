@@ -36,6 +36,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -50,11 +51,13 @@ import (
 // use, verifies balance assertions, and processes pad directives. All validation errors
 // are collected and returned together after processing.
 type Ledger struct {
-	accounts        map[string]*Account
-	errors          []error
-	options         map[string][]string
-	padEntries      map[string]*ast.Pad // account -> pad directive
-	toleranceConfig *ToleranceConfig
+	accounts              map[string]*Account
+	errors                []error
+	options               map[string][]string
+	padEntries            map[string]*ast.Pad // account -> pad directive
+	usedPads              map[string]bool     // account -> whether pad was used
+	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
+	toleranceConfig       *ToleranceConfig
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -66,7 +69,17 @@ func (e *ValidationErrors) Error() string {
 	if len(e.Errors) == 1 {
 		return e.Errors[0].Error()
 	}
-	return fmt.Sprintf("%d validation errors occurred", len(e.Errors))
+
+	// Show all errors plus summary
+	var buf strings.Builder
+	for i, err := range e.Errors {
+		if i > 0 {
+			buf.WriteString("\n\n")
+		}
+		buf.WriteString(err.Error())
+	}
+	buf.WriteString(fmt.Sprintf("\n\n%d validation error(s) found", len(e.Errors)))
+	return buf.String()
 }
 
 // Unwrap returns the underlying errors for error unwrapping
@@ -81,6 +94,7 @@ func New() *Ledger {
 		errors:          make([]error, 0),
 		options:         make(map[string][]string),
 		padEntries:      make(map[string]*ast.Pad),
+		usedPads:        make(map[string]bool),
 		toleranceConfig: NewToleranceConfig(),
 	}
 }
@@ -144,6 +158,35 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		l.processDirective(ctx, directive)
 	}
 	processTimer.End()
+
+	// Insert synthetic padding transactions into AST and process them
+	if len(l.syntheticTransactions) > 0 {
+		insertTimer := collector.Start(fmt.Sprintf("ledger.synthetic_txn_insertion (%d transactions)", len(l.syntheticTransactions)))
+
+		// Add synthetic transactions to AST
+		for _, txn := range l.syntheticTransactions {
+			tree.Directives = append(tree.Directives, txn)
+		}
+
+		// Re-sort to maintain chronological order
+		// Use stable sort to preserve original ordering for same-date directives
+		_ = ast.SortDirectives(tree)
+
+		// Process synthetic transactions to update inventory
+		// Note: These transactions are pre-validated and always balance
+		for _, txn := range l.syntheticTransactions {
+			l.processTransaction(ctx, txn)
+		}
+
+		insertTimer.End()
+	}
+
+	// Check for unused pad directives (pads that were never referenced by any balance)
+	for accountName, pad := range l.padEntries {
+		if !l.usedPads[accountName] {
+			l.errors = append(l.errors, NewUnusedPadWarning(pad))
+		}
+	}
 
 	// Return collected errors
 	if len(l.errors) > 0 {
@@ -344,6 +387,12 @@ func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 	accountName := string(balance.Account)
 	padEntry := l.padEntries[accountName]
 
+	// Mark pad as used if it existed (even if validation fails)
+	// A pad is "used" if any balance assertion references it
+	if padEntry != nil {
+		l.usedPads[accountName] = true
+	}
+
 	// Calculate delta (returns error separately, not in delta)
 	delta, err := v.calculateBalanceDelta(ctx, balance, padEntry)
 	if err != nil {
@@ -351,30 +400,20 @@ func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 		return
 	}
 
-	// Apply mutations
+	// Store synthetic transaction for AST insertion
+	if delta.SyntheticTransaction != nil {
+		l.syntheticTransactions = append(l.syntheticTransactions, delta.SyntheticTransaction)
+	}
+
+	// Apply mutations (but don't remove pad yet)
 	l.applyBalance(delta)
 }
 
 // applyBalance applies the balance delta to the ledger (mutation only)
 func (l *Ledger) applyBalance(delta *BalanceDelta) {
-	account := l.accounts[delta.AccountName]
-
-	// Apply padding adjustments
-	for currency, adjustment := range delta.PaddingAdjustments {
-		account.Inventory.Add(currency, adjustment)
-
-		// Apply opposite to pad account
-		if padAccount, ok := l.accounts[delta.PadAccountName]; ok {
-			padAccount.Inventory.Add(currency, adjustment.Neg())
-		}
-	}
-
-	// Remove pad entry if consumed
-	if delta.ShouldRemovePad {
-		delete(l.padEntries, delta.AccountName)
-	}
-
-	// No error handling here - errors returned from calculateBalanceDelta
+	// Note: Padding adjustments are applied by processing synthetic transactions
+	// (not here, to avoid double-application)
+	// Pad removal happens at end of processing to support multiple currencies
 }
 
 // processPad processes a Pad directive

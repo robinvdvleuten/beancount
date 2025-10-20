@@ -1024,14 +1024,15 @@ func TestPadTiming(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "pad without subsequent balance - allowed",
+			name: "pad without subsequent balance - generates warning",
 			input: `
 				2020-01-01 open Assets:Checking USD
 				2020-01-01 open Equity:Opening
 
 				2020-01-02 pad Assets:Checking Equity:Opening
 			`,
-			wantErr: false,
+			wantErr: true,
+			errMsg:  "Unused Pad entry",
 		},
 		{
 			name: "pad then transaction then balance",
@@ -1525,7 +1526,7 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			},
 			wantErr:             false,
 			wantPadding:         true,
-			wantShouldRemovePad: true,
+			wantShouldRemovePad: false, // Pads are now tracked separately and removed at end of processing
 		},
 		{
 			name: "pad timing validation - pad must come before balance",
