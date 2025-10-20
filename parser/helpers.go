@@ -101,9 +101,10 @@ func (p *Parser) parseExpression() string {
 	depth := 0
 	for pos < len(p.source) {
 		ch := p.source[pos]
-		if ch == '(' {
+		switch ch {
+		case '(':
 			depth++
-		} else if ch == ')' {
+		case ')':
 			depth--
 			if depth == 0 {
 				// Found matching closing paren

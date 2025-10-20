@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -11,6 +13,19 @@ import (
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/parser"
 )
+
+// getBinaryName returns the platform-specific binary name for tests
+func getBinaryName() string {
+	if runtime.GOOS == "windows" {
+		return "beancount-test.exe"
+	}
+	return "beancount-test"
+}
+
+// cleanupBinary removes the test binary in a cross-platform way
+func cleanupBinary(name string) {
+	_ = os.Remove(name)
+}
 
 func TestFormatCmd(t *testing.T) {
 	t.Run("BasicFormatting", func(t *testing.T) {
@@ -121,14 +136,15 @@ option "title" "Integration Test"
 // TestStdinIntegration tests the full stdin functionality by running the compiled binary
 func TestStdinIntegration(t *testing.T) {
 	t.Run("CheckStdinSuccess", func(t *testing.T) {
+		binaryName := getBinaryName()
 		// Build the binary
-		cmd := exec.Command("go", "build", "-o", "beancount-test", ".")
+		cmd := exec.Command("go", "build", "-o", binaryName, ".")
 		err := cmd.Run()
 		assert.NoError(t, err)
-		defer func() { _ = exec.Command("rm", "beancount-test").Run() }()
+		defer cleanupBinary(binaryName)
 
 		// Test successful check with stdin (using -)
-		checkCmd := exec.Command("./beancount-test", "check", "-")
+		checkCmd := exec.Command("./"+binaryName, "check", "-")
 		checkCmd.Stdin = strings.NewReader("2024-01-01 open Assets:Checking USD")
 		output, err := checkCmd.CombinedOutput()
 		assert.NoError(t, err)
@@ -136,14 +152,15 @@ func TestStdinIntegration(t *testing.T) {
 	})
 
 	t.Run("CheckStdinDefault", func(t *testing.T) {
+		binaryName := getBinaryName()
 		// Build the binary
-		cmd := exec.Command("go", "build", "-o", "beancount-test", ".")
+		cmd := exec.Command("go", "build", "-o", binaryName, ".")
 		err := cmd.Run()
 		assert.NoError(t, err)
-		defer func() { _ = exec.Command("rm", "beancount-test").Run() }()
+		defer cleanupBinary(binaryName)
 
 		// Test successful check with stdin (no arguments = default to stdin)
-		checkCmd := exec.Command("./beancount-test", "check")
+		checkCmd := exec.Command("./"+binaryName, "check")
 		checkCmd.Stdin = strings.NewReader("2024-01-01 open Assets:Checking USD")
 		output, err := checkCmd.CombinedOutput()
 		assert.NoError(t, err)
@@ -151,14 +168,15 @@ func TestStdinIntegration(t *testing.T) {
 	})
 
 	t.Run("FormatStdin", func(t *testing.T) {
+		binaryName := getBinaryName()
 		// Build the binary
-		cmd := exec.Command("go", "build", "-o", "beancount-test", ".")
+		cmd := exec.Command("go", "build", "-o", binaryName, ".")
 		err := cmd.Run()
 		assert.NoError(t, err)
-		defer func() { _ = exec.Command("rm", "beancount-test").Run() }()
+		defer cleanupBinary(binaryName)
 
 		// Test format with stdin (using -)
-		formatCmd := exec.Command("./beancount-test", "format", "-")
+		formatCmd := exec.Command("./"+binaryName, "format", "-")
 		formatCmd.Stdin = strings.NewReader("2024-01-01 open Assets:Checking USD")
 		output, err := formatCmd.Output()
 		assert.NoError(t, err)
@@ -166,14 +184,15 @@ func TestStdinIntegration(t *testing.T) {
 	})
 
 	t.Run("FormatStdinDefault", func(t *testing.T) {
+		binaryName := getBinaryName()
 		// Build the binary
-		cmd := exec.Command("go", "build", "-o", "beancount-test", ".")
+		cmd := exec.Command("go", "build", "-o", binaryName, ".")
 		err := cmd.Run()
 		assert.NoError(t, err)
-		defer func() { _ = exec.Command("rm", "beancount-test").Run() }()
+		defer cleanupBinary(binaryName)
 
 		// Test format with stdin (no arguments = default to stdin)
-		formatCmd := exec.Command("./beancount-test", "format")
+		formatCmd := exec.Command("./"+binaryName, "format")
 		formatCmd.Stdin = strings.NewReader("2024-01-01 open Assets:Checking USD")
 		output, err := formatCmd.Output()
 		assert.NoError(t, err)
@@ -181,13 +200,14 @@ func TestStdinIntegration(t *testing.T) {
 	})
 
 	t.Run("CheckStdinError", func(t *testing.T) {
+		binaryName := getBinaryName()
 		// Build the binary
-		cmd := exec.Command("go", "build", "-o", "beancount-test", ".")
+		cmd := exec.Command("go", "build", "-o", binaryName, ".")
 		assert.NoError(t, cmd.Run())
-		defer func() { _ = exec.Command("rm", "beancount-test").Run() }()
+		defer cleanupBinary(binaryName)
 
 		// Test error handling with stdin
-		checkCmd := exec.Command("./beancount-test", "check", "-")
+		checkCmd := exec.Command("./"+binaryName, "check", "-")
 		checkCmd.Stdin = strings.NewReader("2024-01-01 invalid directive")
 		output, err := checkCmd.CombinedOutput()
 		assert.Error(t, err)
@@ -196,13 +216,14 @@ func TestStdinIntegration(t *testing.T) {
 	})
 
 	t.Run("CheckStdinWithIncludesError", func(t *testing.T) {
+		binaryName := getBinaryName()
 		// Build the binary
-		cmd := exec.Command("go", "build", "-o", "beancount-test", ".")
+		cmd := exec.Command("go", "build", "-o", binaryName, ".")
 		assert.NoError(t, cmd.Run())
-		defer func() { _ = exec.Command("rm", "beancount-test").Run() }()
+		defer cleanupBinary(binaryName)
 
 		// Test include directive error with stdin
-		checkCmd := exec.Command("./beancount-test", "check", "-")
+		checkCmd := exec.Command("./"+binaryName, "check", "-")
 		checkCmd.Stdin = strings.NewReader(`include "accounts.beancount"
 2024-01-01 open Assets:Checking USD`)
 		output, err := checkCmd.CombinedOutput()
