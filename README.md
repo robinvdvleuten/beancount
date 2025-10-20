@@ -110,17 +110,21 @@ This displays a hierarchical breakdown of where time is spent during execution:
 ```
 ✓ Check passed
 
-loader.load example.beancount: 125ms
-├─ loader.parse example.beancount: 85ms
-│  ├─ parser.lexing: 75ms
-│  ├─ parser.push_pop: 5ms
-│  └─ parser.sorting: 5ms
-├─ loader.parse accounts.beancount: 35ms
-│  ├─ parser.lexing: 30ms
-│  ├─ parser.push_pop: 3ms
-│  └─ parser.sorting: 2ms
-├─ ast.merging: 2ms
-└─ ledger.processing (1523 directives): 3ms
+check example.beancount: 125ms
+├─ loader.load example.beancount: 85ms
+│  └─ loader.parse: 85ms
+│     ├─ parser.lexing: 75ms
+│     ├─ parser.parsing: 8ms
+│     ├─ parser.push_pop: ~1ms
+│     └─ parser.sorting: 245µs
+├─ loader.load accounts.beancount: 35ms
+│  └─ loader.parse: 35ms
+│     ├─ parser.lexing: 30ms
+│     ├─ parser.parsing: ~4ms
+│     ├─ parser.push_pop: 823µs
+│     └─ parser.sorting: 156µs
+├─ ast.merging: ~2ms
+└─ ledger.processing (1523 directives): ~3ms
 ```
 
 The telemetry output is written to stderr, making it easy to separate from command results.

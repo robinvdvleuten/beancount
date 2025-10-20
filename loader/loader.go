@@ -142,7 +142,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 
 	// ALL files get the same treatment: loader.load -> loader.parse -> parser timers
 	loadTimer := l.rootTimer.Child(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
-	parseTimer := loadTimer.Child(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+	parseTimer := loadTimer.Child("loader.parse")
 
 	// Read and parse the file
 	data, err := os.ReadFile(filename)
@@ -189,7 +189,9 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		// Recursively load the included file
 		includedAST, err := l.loadRecursive(ctx, includePath)
 		if err != nil {
-			return nil, fmt.Errorf("in file %s: %w", filename, err)
+			// Don't wrap ParseError - it already contains full path information
+			// Just propagate the error up the include chain
+			return nil, err
 		}
 
 		includedASTs = append(includedASTs, includedAST)
@@ -280,7 +282,9 @@ func (l *loaderState) loadRecursiveFlat(ctx context.Context, filename string) (*
 		includedAST, err := l.loadRecursiveFlat(ctx, includePath)
 		if err != nil {
 			mergeTimer.End()
-			return nil, fmt.Errorf("in file %s: %w", filename, err)
+			// Don't wrap ParseError - it already contains full path information
+			// Just propagate the error up the include chain
+			return nil, err
 		}
 
 		includedASTs = append(includedASTs, includedAST)

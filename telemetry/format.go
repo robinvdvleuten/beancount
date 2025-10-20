@@ -55,10 +55,23 @@ func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool) {
 }
 
 // formatDuration formats a duration for display.
-// Shows milliseconds for < 1s, seconds for >= 1s.
+// Shows microseconds for < 1ms, milliseconds for < 1s, seconds for >= 1s.
+// Prefixes with ~ when rounding loses significant precision.
 func formatDuration(d time.Duration) string {
+	if d < time.Millisecond {
+		// Show microseconds for very fast operations (< 1ms)
+		us := float64(d) / float64(time.Microsecond)
+		return fmt.Sprintf("%.0fµs", us)
+	}
 	if d < time.Second {
 		ms := float64(d) / float64(time.Millisecond)
+		// Check if rounding to integer ms loses significant precision
+		truncatedMs := int(ms)
+		truncated := time.Duration(truncatedMs) * time.Millisecond
+		// Add ~ if the fractional part is >= 50µs
+		if d > truncated && d-truncated >= 50*time.Microsecond {
+			return fmt.Sprintf("~%.0fms", ms)
+		}
 		return fmt.Sprintf("%.0fms", ms)
 	}
 	s := float64(d) / float64(time.Second)

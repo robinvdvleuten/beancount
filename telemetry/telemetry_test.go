@@ -164,10 +164,24 @@ func TestFormatDuration(t *testing.T) {
 		duration time.Duration
 		want     string
 	}{
+		// Microsecond precision for < 1ms
+		{100 * time.Microsecond, "100µs"},
+		{500 * time.Microsecond, "500µs"},
+		{999 * time.Microsecond, "999µs"},
+		// Exact milliseconds (no rounding indicator)
 		{1 * time.Millisecond, "1ms"},
 		{10 * time.Millisecond, "10ms"},
 		{100 * time.Millisecond, "100ms"},
 		{999 * time.Millisecond, "999ms"},
+		// Rounded milliseconds (with ~ indicator when precision lost >= 50µs)
+		{1*time.Millisecond + 50*time.Microsecond, "~1ms"},
+		{1*time.Millisecond + 100*time.Microsecond, "~1ms"},
+		{1*time.Millisecond + 142*time.Microsecond, "~1ms"},
+		{5*time.Millisecond + 500*time.Microsecond, "~6ms"}, // 5.5ms rounds up to 6ms
+		// Below rounding threshold (no ~ indicator)
+		{1*time.Millisecond + 49*time.Microsecond, "1ms"},
+		{1*time.Millisecond + 25*time.Microsecond, "1ms"},
+		// Seconds
 		{1 * time.Second, "1.00s"},
 		{1500 * time.Millisecond, "1.50s"},
 		{2 * time.Second, "2.00s"},

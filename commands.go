@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/errors"
@@ -31,6 +32,19 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Create telemetry collector if flag is set
 	var collector telemetry.Collector
 	var checkTimer telemetry.Timer
+	var once sync.Once
+
+	// reportTelemetry prints telemetry if enabled (idempotent via sync.Once)
+	reportTelemetry := func() {
+		once.Do(func() {
+			if collector != nil {
+				checkTimer.End()
+				_, _ = fmt.Fprintln(ctx.Stderr)
+				collector.Report(ctx.Stderr)
+			}
+		})
+	}
+
 	if globals.Telemetry {
 		collector = telemetry.NewTimingCollector()
 		runCtx = telemetry.WithCollector(runCtx, collector)
@@ -39,12 +53,8 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		checkTimer = collector.Start(fmt.Sprintf("check %s", filepath.Base(cmd.File.Filename)))
 		runCtx = telemetry.WithRootTimer(runCtx, checkTimer)
 
-		// Defer telemetry report - runs regardless of early returns
-		defer func() {
-			checkTimer.End()
-			_, _ = fmt.Fprintln(ctx.Stderr)
-			collector.Report(ctx.Stderr)
-		}()
+		// Defer telemetry report for success path (error paths call manually before exit)
+		defer reportTelemetry()
 	}
 
 	// Load the input file and recursively resolve all includes
@@ -54,9 +64,15 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		// Format parser errors consistently with ledger errors
 		errFormatter := errors.NewTextFormatter(nil)
 		formatted := errFormatter.Format(err)
-		_, _ = fmt.Fprint(ctx.Stderr, formatted)
+		_, _ = fmt.Fprintln(ctx.Stderr, formatted)
+
+		// Print blank line and error summary before telemetry
 		_, _ = fmt.Fprintln(ctx.Stderr)
-		return fmt.Errorf("parse error")
+		_, _ = fmt.Fprintln(ctx.Stderr, "parse error")
+
+		// Print telemetry before exit
+		reportTelemetry()
+		os.Exit(1)
 	}
 
 	// Create a new ledger and process the AST
@@ -71,10 +87,15 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 			// Format all errors
 			formatted := errFormatter.FormatAll(validationErrors.Errors)
-			_, _ = fmt.Fprint(ctx.Stderr, formatted)
-			_, _ = fmt.Fprintln(ctx.Stderr) // Add final newline
+			_, _ = fmt.Fprintln(ctx.Stderr, formatted)
 
-			return fmt.Errorf("%d validation error(s) found", len(validationErrors.Errors))
+			// Print blank line and error summary before telemetry
+			_, _ = fmt.Fprintln(ctx.Stderr)
+			_, _ = fmt.Fprintf(ctx.Stderr, "%d validation error(s) found\n", len(validationErrors.Errors))
+
+			// Print telemetry before exit
+			reportTelemetry()
+			os.Exit(1)
 		}
 		return err
 	}
