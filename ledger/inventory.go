@@ -225,6 +225,126 @@ func (inv *Inventory) String() string {
 	return buf.String()
 }
 
+// CanReduceLot checks if a reduction is possible without mutating state.
+// This is a read-only version of ReduceLot used for validation.
+func (inv *Inventory) CanReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
+	// Reducing means amount should be negative
+	if amount.GreaterThanOrEqual(decimal.Zero) {
+		return fmt.Errorf("reduce amount must be negative, got %s", amount.String())
+	}
+
+	reduceAmount := amount.Abs()
+
+	// Empty spec {} means use booking method
+	if spec != nil && spec.IsEmpty() {
+		return inv.canReduceWithBooking(commodity, reduceAmount, bookingMethod)
+	}
+
+	// Specific lot spec - find matching lot
+	if spec != nil && spec.Cost != nil {
+		return inv.canReduceSpecificLot(commodity, reduceAmount, spec)
+	}
+
+	// No spec - always succeeds (simple add of negative amount)
+	return nil
+}
+
+// canReduceSpecificLot checks if a specific lot reduction is possible (read-only)
+func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
+	lots := inv.lots[commodity]
+
+	for _, lot := range lots {
+		// BEANCOUNT COMPLIANCE: lotSpecsMatch must check cost, date, and label
+		// Example: {100 USD, 2024-01-01, "batch-1"} must match all three fields
+		if lotSpecsMatch(lot.Spec, spec) {
+			if lot.Amount.LessThan(amount) {
+				return fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
+					spec.String(), lot.Amount.String(), amount.String())
+			}
+			return nil
+		}
+	}
+
+	return fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+}
+
+// canReduceWithBooking checks if booking method reduction is possible (read-only).
+// This simulates the actual FIFO/LIFO booking to verify enough lots exist.
+func (inv *Inventory) canReduceWithBooking(commodity string, amount decimal.Decimal, bookingMethod string) error {
+	lots := inv.lots[commodity]
+
+	if len(lots) == 0 {
+		return fmt.Errorf("no lots available for %s", commodity)
+	}
+
+	// Sort lots according to booking method
+	sortedLots := make([]*lot, len(lots))
+	copy(sortedLots, lots)
+
+	switch bookingMethod {
+	case "FIFO", "":
+		sort.Slice(sortedLots, func(i, j int) bool {
+			// Lots without date come first
+			iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
+			jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
+
+			if !iHasDate && !jHasDate {
+				return i < j // Stable sort for lots without dates
+			}
+			if !iHasDate {
+				return true
+			}
+			if !jHasDate {
+				return false
+			}
+
+			// Both have dates - compare
+			if sortedLots[i].Spec.Date.Time.Equal(sortedLots[j].Spec.Date.Time) { //nolint:staticcheck
+				return i < j // Stable sort for same date
+			}
+			return sortedLots[i].Spec.Date.Time.Before(sortedLots[j].Spec.Date.Time) //nolint:staticcheck
+		})
+	case "LIFO":
+		sort.Slice(sortedLots, func(i, j int) bool {
+			// Reverse of FIFO - lots with dates come first, newest first
+			iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
+			jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
+
+			if !iHasDate && !jHasDate {
+				return i < j // Stable sort for lots without dates
+			}
+			if !iHasDate {
+				return false
+			}
+			if !jHasDate {
+				return true
+			}
+
+			// Both have dates - compare (reversed)
+			if sortedLots[i].Spec.Date.Time.Equal(sortedLots[j].Spec.Date.Time) { //nolint:staticcheck
+				return i < j // Stable sort for same date
+			}
+			return sortedLots[i].Spec.Date.Time.After(sortedLots[j].Spec.Date.Time) //nolint:staticcheck
+		})
+	}
+
+	// Simulate reduction in booking order
+	remaining := amount
+	for _, lot := range sortedLots {
+		if remaining.IsZero() {
+			return nil
+		}
+		if lot.Amount.GreaterThanOrEqual(remaining) {
+			return nil // This lot covers the remaining amount
+		}
+		remaining = remaining.Sub(lot.Amount)
+	}
+
+	// If we get here, we couldn't reduce the full amount
+	return fmt.Errorf("insufficient amount for %s using %s: need %s across %d lots",
+		commodity, bookingMethod, amount.String(), len(lots))
+}
+
 // lotSpecsMatch checks if two lot specs match
 func lotSpecsMatch(a, b *lotSpec) bool {
 	// Both nil

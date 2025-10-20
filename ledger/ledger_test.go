@@ -584,3 +584,101 @@ func mustParseDate(s string) *ast.Date {
 	}
 	return date
 }
+
+// TestAccountLifecycleEdgeCases tests edge cases in account lifecycle:
+// - Closing account with non-zero inventory (should succeed)
+// - Balance assertion on account open date (valid)
+// - Reopening closed account (valid)
+func TestAccountLifecycleEdgeCases(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		check   func(*testing.T, *Ledger)
+	}{
+		{
+			name: "close account with non-zero inventory - should succeed",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 open Equity:Opening
+
+				2020-01-02 * "Deposit"
+				  Assets:Checking    100 USD
+				  Equity:Opening    -100 USD
+
+				2020-01-03 close Assets:Checking
+			`,
+			wantErr: false,
+			check: func(t *testing.T, l *Ledger) {
+				acc, ok := l.GetAccount("Assets:Checking")
+				assert.True(t, ok)
+				assert.True(t, acc.IsClosed())
+				// Should still have balance
+				assert.Equal(t, "100", acc.Inventory.Get("USD").String())
+			},
+		},
+		{
+			name: "balance assertion on account open date - valid",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 balance Assets:Checking 0 USD
+			`,
+			wantErr: false,
+		},
+		{
+			name: "reopen closed account - invalid (duplicate open)",
+			input: `
+				2020-01-01 open Assets:OldAccount
+				2020-01-02 close Assets:OldAccount
+				2020-01-03 open Assets:OldAccount
+			`,
+			wantErr: true, // Beancount does NOT allow reopening accounts - duplicate open directives are errors
+		},
+		{
+			name: "use account after close - should error",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 open Equity:Opening
+				2020-01-02 close Assets:Checking
+
+				2020-01-03 * "Try to use closed account"
+				  Assets:Checking    100 USD
+				  Equity:Opening    -100 USD
+			`,
+			wantErr: true,
+		},
+		{
+			name: "close then reopen then use - invalid (cannot reopen)",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 open Equity:Opening
+				2020-01-02 close Assets:Checking
+				2020-01-03 open Assets:Checking USD
+
+				2020-01-04 * "Use reopened account"
+				  Assets:Checking    100 USD
+				  Equity:Opening    -100 USD
+			`,
+			wantErr: true, // Beancount does NOT allow reopening accounts - duplicate open at line 4 is an error
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ast, err := parser.ParseString(context.Background(), tt.input)
+			assert.NoError(t, err, "parsing should succeed")
+
+			l := New()
+			err = l.Process(context.Background(), ast)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				if tt.check != nil {
+					tt.check(t, l)
+				}
+			}
+		})
+	}
+}

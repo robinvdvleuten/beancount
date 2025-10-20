@@ -17,39 +17,113 @@ import (
 //   - Checks all business rules without side effects
 //   - Uses the validator type with read-only access to ledger state
 //   - Returns all errors found (doesn't short-circuit)
+//   - Produces delta objects describing planned mutations
 //   - Runs with telemetry instrumentation for performance monitoring
 //
 // 2. Mutation Phase (State Changes)
 //   - Only executes if validation passes
-//   - Updates account inventories, balances, and other state
+//   - Applies deltas to update account state
 //   - Can assume all inputs are valid
 //
-// Validation Flow for Transactions:
+// Validation Flow:
 //
+// TRANSACTIONS:
 //   Ledger.processTransaction(txn)
 //     ↓
-//   validator.validateTransaction(ctx, txn)
-//     ├─ validateAccountsOpen()    // Check accounts exist and are open
-//     ├─ validateAmounts()          // Check amounts are parseable
-//     ├─ validateCosts()            // Check cost specifications
-//     ├─ validatePrices()           // Check price specifications
-//     ├─ validateMetadata()         // Check metadata entries
-//     └─ calculateBalance()         // Calculate weights and check balance
+//   validator.validateTransaction(ctx, txn) → ([]error, *TransactionDelta)
+//     ├─ validateAccountsOpen()           // Check accounts exist and are open
+//     ├─ validateAmounts()                // Check amounts are parseable
+//     ├─ validateCosts()                  // Check cost specifications
+//     ├─ validatePrices()                 // Check price specifications
+//     ├─ validateMetadata()               // Check metadata entries
+//     ├─ calculateBalance()               // Calculate weights, check balance
+//     ├─ validateInventoryOperations()    // Check lot operations
+//     └─ validateConstraintCurrencies()   // Check currency restrictions
 //     ↓
-//   Ledger.applyTransaction(txn, balanceResult)
-//     └─ Update account inventories
+//   Ledger.applyTransaction(txn, delta)
+//     └─ Apply inferred amounts/costs, update inventories
+//
+// OPEN DIRECTIVES:
+//   Ledger.processOpen(open)
+//     ↓
+//   validator.validateOpen(ctx, open) → ([]error, *OpenDelta)
+//     ├─ Check account doesn't already exist
+//     └─ Parse account type, copy metadata
+//     ↓
+//   Ledger.applyOpen(delta)
+//     └─ Create account with properties
+//
+// CLOSE DIRECTIVES:
+//   Ledger.processClose(close)
+//     ↓
+//   validator.validateClose(ctx, close) → ([]error, *CloseDelta)
+//     ├─ Check account exists
+//     └─ Check account is not already closed
+//     ↓
+//   Ledger.applyClose(delta)
+//     └─ Set account close date
+//
+// BALANCE ASSERTIONS:
+//   Ledger.processBalance(balance)
+//     ↓
+//   validator.validateBalance(ctx, balance) → []error
+//     ├─ Check account exists and is open
+//     └─ Check amount is parseable
+//     ↓
+//   validator.calculateBalanceDelta(ctx, balance, pad) → (*BalanceDelta, error)
+//     ├─ Validate pad timing (must come before balance)
+//     ├─ Calculate padding adjustments if needed
+//     └─ Check balance matches within tolerance
+//     ↓
+//   Ledger.applyBalance(delta)
+//     └─ Apply padding transaction, remove pad entry
+//
+// PAD DIRECTIVES:
+//   Ledger.processPad(pad)
+//     ↓
+//   validator.validatePad(ctx, pad) → ([]error, *PadDelta)
+//     ├─ Check main account exists and is open
+//     └─ Check pad account exists and is open
+//     ↓
+//   Ledger.applyPad(delta)
+//     └─ Store pad entry for next balance assertion
+//
+// NOTE/DOCUMENT DIRECTIVES:
+//   validator.validateNote(ctx, note) → []error
+//   validator.validateDocument(ctx, doc) → []error
+//     └─ Check account exists and is open
+//     (No mutations needed - validation only)
+//
+// Delta Types:
+//   - TransactionDelta: InferredAmounts, InferredCosts
+//   - OpenDelta: Account properties (name, type, currencies, metadata)
+//   - CloseDelta: Account name, close date
+//   - BalanceDelta: PaddingAdjustments, pad account, removal flag
+//   - PadDelta: Stores pad entry for later use
+//
+// Validation Methods:
+//   Transaction: validateTransaction, validateAccountsOpen, validateAmounts,
+//                validateCosts, validatePrices, validateMetadata, calculateBalance,
+//                validateInventoryOperations, validateConstraintCurrencies
+//   Open:        validateOpen
+//   Close:       validateClose
+//   Balance:     validateBalance, calculateBalanceDelta
+//   Pad:         validatePad
+//   Note:        validateNote
+//   Document:    validateDocument
 //
 // This separation provides several benefits:
 //   - Individual validation rules can be tested in isolation
-//   - Validation can be performed without mutating state
+//   - Validation can be performed without mutating state (dry-run mode)
 //   - Clear separation of concerns (validation vs mutation)
 //   - Better error reporting (all errors found, not just first)
+//   - Delta inspection allows observing planned changes before applying
 //   - Easier to understand and maintain
 //
-// Example usage:
+// Example: Normal usage
 //
-//   v := newValidator(ledger.accounts)
-//   errs, result := v.validateTransaction(ctx, txn)
+//   v := newValidator(ledger.accounts, ledger.toleranceConfig)
+//   errs, delta := v.validateTransaction(ctx, txn)
 //   if len(errs) > 0 {
 //       // Handle validation errors
 //       for _, err := range errs {
@@ -58,7 +132,32 @@ import (
 //       return
 //   }
 //   // Validation passed - safe to mutate state
-//   ledger.applyTransaction(txn, result)
+//   ledger.applyTransaction(txn, delta)
+//
+// Example: Dry-run mode (inspect deltas without applying)
+//
+//   v := newValidator(ledger.accounts, ledger.toleranceConfig)
+//   errs, delta := v.validateTransaction(ctx, txn)
+//   if len(errs) == 0 {
+//       // Inspect planned mutations without applying
+//       log.Printf("Would infer %d amounts", len(delta.InferredAmounts))
+//       log.Printf("Would infer %d costs", len(delta.InferredCosts))
+//       for posting, amount := range delta.InferredAmounts {
+//           log.Printf("  %s: %s %s", posting.Account, amount.Value, amount.Currency)
+//       }
+//       // Don't call applyTransaction - just inspect!
+//   }
+//
+//   // Balance assertions with padding
+//   errs := v.validateBalance(ctx, balance)
+//   if len(errs) == 0 {
+//       delta, err := v.calculateBalanceDelta(ctx, balance, padEntry)
+//       if err == nil && delta.HasMutations() {
+//           log.Printf("Would add padding: %v", delta.PaddingAdjustments)
+//           log.Printf("Pad from account: %s", delta.PadAccountName)
+//           // Don't call applyBalance - just inspect!
+//       }
+//   }
 
 // validator provides transaction validation with read-only access to ledger state.
 // This is a separate type from Ledger to ensure validation cannot mutate state.
@@ -82,14 +181,6 @@ type postingClassification struct {
 	withoutAmounts   []*ast.Posting
 	withEmptyCosts   []*ast.Posting
 	withExplicitCost []*ast.Posting
-}
-
-// balanceResult contains the result of transaction balancing
-type balanceResult struct {
-	isBalanced      bool
-	residuals       map[string]string // currency -> residual amount
-	inferredAmounts map[*ast.Posting]*ast.Amount
-	inferredCosts   map[*ast.Posting]*ast.Amount
 }
 
 // validateAccountsOpen checks all posting accounts are open at transaction date.
@@ -150,6 +241,7 @@ func (v *validator) validateAmounts(ctx context.Context, txn *ast.Transaction) [
 //   - Cost labels are non-empty if present
 //   - Merge costs {*} are flagged as not yet implemented
 //   - Empty costs {} are accepted (for automatic lot selection)
+//   - ParseLotSpec can parse the cost specification
 //
 // Returns a slice of InvalidCostError for any invalid cost specifications.
 // Includes posting index and cost spec string for clear error messages.
@@ -191,6 +283,15 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 				costSpec := fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
 				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
 			}
+		}
+
+		// NEW: Validate ParseLotSpec can parse the cost
+		if _, err := ParseLotSpec(posting.Cost); err != nil {
+			costSpec := "{...}"
+			if posting.Cost.Amount != nil {
+				costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+			}
+			errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
 		}
 
 		// Validate cost date if present
@@ -355,12 +456,14 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 	return pc
 }
 
-// calculateBalance computes weights and determines if transaction balances
-// This is a pure function - no side effects
-func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) (*balanceResult, []error) {
+// calculateBalance computes weights, infers amounts/costs, and checks if transaction balances.
+// Returns delta (mutations), validation (balance state), and errors.
+// This is the core transaction validation logic.
+func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) (*TransactionDelta, *balanceValidation, []error) {
 	collector := telemetry.FromContext(ctx)
 	timer := collector.Start("validation.calculate_balance")
 	defer timer.End()
+
 	var errs []error
 	pc := classifyPostings(txn.Postings)
 
@@ -382,128 +485,159 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 	}
 
 	if len(errs) > 0 {
-		return nil, errs
+		return nil, nil, errs
 	}
 
 	// Balance the weights
 	balance := balanceWeights(allWeights)
 	defer putBalanceMap(balance)
 
-	result := &balanceResult{
-		inferredAmounts: make(map[*ast.Posting]*ast.Amount),
-		inferredCosts:   make(map[*ast.Posting]*ast.Amount),
-		residuals:       make(map[string]string),
+	delta := &TransactionDelta{
+		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
+		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
 	}
 
 	// Infer missing amounts if possible
-	if len(pc.withoutAmounts) > 0 {
-		// Group missing postings by currency (if they have costs, we can infer the currency)
-		// For now, handle the simple case: one missing posting per currency
+	// Can only infer if exactly 1 posting without amount AND exactly 1 currency with residual
+	if len(pc.withoutAmounts) == 1 && len(balance) == 1 {
 		for currency, residual := range balance {
-			// Need to negate the residual to balance
 			needed := residual.Neg()
-
-			// Find if there's exactly one posting without amount that could use this currency
-			// For simplicity, if there's ONE missing posting and ONE unbalanced currency, assign it
-			if len(pc.withoutAmounts) == 1 {
-				// Create the inferred amount
-				result.inferredAmounts[pc.withoutAmounts[0]] = &ast.Amount{
-					Value:    needed.String(),
-					Currency: currency,
-				}
-			} else if len(pc.withoutAmounts) > 1 {
-				// Ambiguous - can't infer
-				result.residuals = map[string]string{currency: residual.String()}
-				result.isBalanced = false
-				return result, nil
+			delta.InferredAmounts[pc.withoutAmounts[0]] = &ast.Amount{
+				Value:    needed.String(),
+				Currency: currency,
 			}
+			// Update balance to reflect the inferred amount
+			balance[currency] = balance[currency].Add(needed)
 		}
+	} else if len(pc.withoutAmounts) > 1 {
+		// Multiple postings without amounts - ambiguous, can't infer
+		residuals := make(map[string]decimal.Decimal)
+		for currency, residual := range balance {
+			residuals[currency] = residual
+		}
+		validation := &balanceValidation{
+			isBalanced: false,
+			residuals:  residuals,
+		}
+		return delta, validation, nil
+	} else if len(pc.withoutAmounts) == 1 && len(balance) > 1 {
+		// One posting without amount but multiple currencies - ambiguous
+		residuals := make(map[string]decimal.Decimal)
+		for currency, residual := range balance {
+			residuals[currency] = residual
+		}
+		validation := &balanceValidation{
+			isBalanced: false,
+			residuals:  residuals,
+		}
+		return delta, validation, nil
 	}
 
 	// Infer costs for empty cost specs {}
-	// Note: Only infer costs for AUGMENTATIONS (positive amounts)
-	// For REDUCTIONS (negative amounts), empty cost spec means "use booking method"
 	if len(pc.withEmptyCosts) > 0 {
-		// For each posting with empty cost spec, infer the cost from the residual
+		// Count positive amount empty costs (augmentations that need cost inference)
+		positiveEmptyCosts := 0
 		for _, posting := range pc.withEmptyCosts {
-			// Parse the commodity amount
 			amount, err := ParseAmount(posting.Amount)
 			if err != nil {
-				continue // Already validated earlier
+				continue
 			}
+			if !amount.IsNegative() {
+				positiveEmptyCosts++
+			}
+		}
 
-			// Only infer cost for augmentations (positive amounts)
-			// For reductions (negative amounts), empty cost spec means "use booking method"
-			if amount.IsNegative() {
-				// This is a reduction - don't infer cost, let booking method handle it
-				// The weight is already 0, which is correct - we'll calculate actual
-				// weight when we reduce lots using FIFO/LIFO
+		// Beancount compliance: Cannot infer costs when multiple postings have empty cost specs
+		// This is ambiguous - which posting gets which portion of the residual?
+		if positiveEmptyCosts > 1 {
+			residuals := make(map[string]decimal.Decimal)
+			for currency, residual := range balance {
+				residuals[currency] = residual
+			}
+			validation := &balanceValidation{
+				isBalanced: false,
+				residuals:  residuals,
+			}
+			return delta, validation, nil
+		}
+
+		for _, posting := range pc.withEmptyCosts {
+			amount, err := ParseAmount(posting.Amount)
+			if err != nil {
 				continue
 			}
 
-			// Look for a residual currency that can be used for the cost
-			// Simple case: if there's one residual currency, use it
+			// Only infer cost for augmentations (positive amounts)
+			if amount.IsNegative() {
+				continue
+			}
+
 			if len(balance) == 1 {
 				for currency, residual := range balance {
-					// Calculate the cost per unit needed to balance
-					// If residual is -5000 USD and amount is 10 HOOL
-					// We need +5000 USD, so cost per unit = 5000 / 10 = 500 USD
 					costPerUnit := residual.Neg().Div(amount)
-
-					// Store the inferred cost
-					result.inferredCosts[posting] = &ast.Amount{
+					delta.InferredCosts[posting] = &ast.Amount{
 						Value:    costPerUnit.String(),
 						Currency: currency,
 					}
 
-					// Add this weight to the balance
 					totalCost := amount.Mul(costPerUnit)
 					balance[currency] = balance[currency].Add(totalCost)
 				}
 			} else if len(balance) > 1 {
 				// Multiple currencies - ambiguous
-				result.residuals = make(map[string]string)
+				residuals := make(map[string]decimal.Decimal)
 				for currency, residual := range balance {
-					result.residuals[currency] = residual.String()
+					residuals[currency] = residual
 				}
-				result.isBalanced = false
-				return result, nil
+				validation := &balanceValidation{
+					isBalanced: false,
+					residuals:  residuals,
+				}
+				return delta, validation, nil
 			}
 		}
 	}
 
 	// Check if balanced (within tolerance) after inference
-	// Collect amounts per currency for tolerance inference
 	amountsByCurrency := make(map[string][]decimal.Decimal)
+
+	// Collect explicit amounts
 	for _, posting := range txn.Postings {
-		if posting.Amount == nil {
-			continue
+		if posting.Amount != nil {
+			amount, err := ParseAmount(posting.Amount)
+			if err != nil {
+				continue
+			}
+			currency := posting.Amount.Currency
+			amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
 		}
-		amount, err := ParseAmount(posting.Amount)
-		if err != nil {
-			continue // Already validated earlier
-		}
-		currency := posting.Amount.Currency
+	}
+
+	// Include inferred amounts for tolerance calculation
+	for _, inferredAmount := range delta.InferredAmounts {
+		amount, _ := ParseAmount(inferredAmount)
+		currency := inferredAmount.Currency
 		amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
 	}
 
 	// Check each currency balance with inferred tolerance
+	residuals := make(map[string]decimal.Decimal)
 	for currency, residual := range balance {
-		// Infer tolerance from the amounts in this transaction
 		amounts := amountsByCurrency[currency]
 		tolerance := InferTolerance(amounts, currency, v.toleranceConfig)
 
-		// If we inferred an amount for this currency, it should now be balanced
-		if len(result.inferredAmounts) == 0 {
-			if residual.Abs().GreaterThan(tolerance) {
-				result.residuals[currency] = residual.String()
-			}
+		// Always check residuals against tolerance (even with inferred amounts)
+		if residual.Abs().GreaterThan(tolerance) {
+			residuals[currency] = residual
 		}
-		// If we did inference, the balance should be zero (we'll verify below)
 	}
 
-	result.isBalanced = len(result.residuals) == 0
-	return result, nil
+	validation := &balanceValidation{
+		isBalanced: len(residuals) == 0,
+		residuals:  residuals,
+	}
+
+	return delta, validation, nil
 }
 
 // validateTransaction runs all validation checks on a transaction.
@@ -524,14 +658,14 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //
 // Returns:
 //   - []error: All validation errors found (empty if validation passed)
-//   - *balanceResult: Balance calculation result (nil if validation failed)
+//   - *TransactionDelta: Mutation plan (nil if validation failed)
 //
 // Performance: ~955ns/op with telemetry instrumentation enabled.
 //
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	errs, result := v.validateTransaction(ctx, txn)
+//	errs, delta := v.validateTransaction(ctx, txn)
 //	if len(errs) > 0 {
 //	    // Validation failed
 //	    fmt.Printf("Found %d validation errors:\n", len(errs))
@@ -540,9 +674,9 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //	    }
 //	    return
 //	}
-//	// Validation passed - result contains balance info and inferred amounts
-//	fmt.Printf("Transaction balanced: %v\n", result.isBalanced)
-func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *balanceResult) {
+//	// Validation passed - delta contains inferred amounts/costs
+//	fmt.Printf("Inferred %d amounts\n", len(delta.InferredAmounts))
+func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *TransactionDelta) {
 	collector := telemetry.FromContext(ctx)
 	timer := collector.Start("validation.transaction")
 	defer timer.End()
@@ -590,18 +724,48 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	}
 
 	// 6. Calculate balance and infer amounts
-	balanceResult, errs := v.calculateBalance(ctx, txn)
+	delta, validation, errs := v.calculateBalance(ctx, txn)
 	if len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 		return allErrors, nil
 	}
 
 	// 7. Check if balanced
-	if !balanceResult.isBalanced {
-		allErrors = append(allErrors, NewTransactionNotBalancedError(txn, balanceResult.residuals))
+	if !validation.isBalanced {
+		// Convert decimal.Decimal residuals to string for error reporting
+		residualStrings := make(map[string]string)
+		for currency, amount := range validation.residuals {
+			residualStrings[currency] = amount.String()
+		}
+		allErrors = append(allErrors, NewTransactionNotBalancedError(txn, residualStrings))
 	}
 
-	return allErrors, balanceResult
+	// If balance check failed, return early (can't validate constraints without valid delta)
+	if len(allErrors) > 0 {
+		return allErrors, nil
+	}
+
+	// 8. Validate constraint currencies (AFTER inference so we can check inferred amounts)
+	constraintsTimer := timer.Child("validation.constraints")
+	if errs := v.validateConstraintCurrencies(ctx, txn, delta); len(errs) > 0 {
+		allErrors = append(allErrors, errs...)
+	}
+	constraintsTimer.End()
+
+	// 9. Validate inventory operations
+	inventoryTimer := timer.Child("validation.inventory")
+	if errs := v.validateInventoryOperations(ctx, txn, delta); len(errs) > 0 {
+		allErrors = append(allErrors, errs...)
+	}
+	inventoryTimer.End()
+
+	// If any post-balance validation failed, return errors
+	if len(allErrors) > 0 {
+		return allErrors, nil
+	}
+
+	// All validation passed
+	return nil, delta
 }
 
 // validateBalance checks if a balance directive is valid.
@@ -758,4 +922,301 @@ func (v *validator) isAccountOpen(account ast.Account, date *ast.Date) bool {
 		return false
 	}
 	return acc.IsOpen(date)
+}
+
+// validateOpen validates an open directive.
+//
+// It validates that:
+//   - Account does not already exist (duplicate open directives are errors)
+//   - Account name is valid
+//   - Copies metadata and constraint currencies to avoid shared AST references
+//
+// Beancount compliance: Reopening a closed account is NOT allowed.
+// Any duplicate open directive is an error, regardless of whether the account
+// was previously closed.
+//
+// Returns validation errors and OpenDelta for the mutations to apply.
+//
+// Example:
+//
+//	v := newValidator(ledger.accounts)
+//	errs, delta := v.validateOpen(ctx, openDirective)
+//	if len(errs) > 0 {
+//	    // Validation failed
+//	}
+func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, *OpenDelta) {
+	var errs []error
+	accountName := string(open.Account)
+
+	// Check if account already exists - duplicate open is always an error
+	if existing, ok := v.accounts[accountName]; ok {
+		errs = append(errs, NewAccountAlreadyOpenError(open, existing.OpenDate))
+		return errs, nil
+	}
+
+	// Copy metadata and constraint currencies to avoid shared references with AST
+	metadataCopy := make([]*ast.Metadata, len(open.Metadata))
+	copy(metadataCopy, open.Metadata)
+
+	constraintCurrenciesCopy := make([]string, len(open.ConstraintCurrencies))
+	copy(constraintCurrenciesCopy, open.ConstraintCurrencies)
+
+	// Build delta with account properties (avoid allocating Inventory during validation)
+	delta := &OpenDelta{
+		AccountName:          accountName,
+		AccountType:          ParseAccountType(open.Account),
+		OpenDate:             open.Date,
+		ConstraintCurrencies: constraintCurrenciesCopy,
+		BookingMethod:        open.BookingMethod,
+		Metadata:             metadataCopy,
+	}
+
+	return errs, delta
+}
+
+// validateClose validates a close directive.
+//
+// It validates that:
+//   - Account exists in the ledger
+//   - Account is not already closed
+//
+// Returns validation errors and CloseDelta for the mutations to apply.
+//
+// Example:
+//
+//	v := newValidator(ledger.accounts)
+//	errs, delta := v.validateClose(ctx, closeDirective)
+//	if len(errs) > 0 {
+//	    // Validation failed
+//	}
+func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]error, *CloseDelta) {
+	var errs []error
+	accountName := string(close.Account)
+
+	// Check if account exists
+	account, ok := v.accounts[accountName]
+	if !ok {
+		errs = append(errs, NewAccountNotClosedError(close))
+		return errs, nil
+	}
+
+	// Check if already closed
+	if account.IsClosed() {
+		errs = append(errs, NewAccountAlreadyClosedError(close, account.CloseDate))
+		return errs, nil
+	}
+
+	delta := &CloseDelta{
+		AccountName: accountName,
+		CloseDate:   close.Date,
+	}
+
+	return errs, delta
+}
+
+// calculateBalanceDelta calculates the balance delta for a balance assertion.
+//
+// It validates that:
+//   - Pad directive (if present) comes chronologically BEFORE the balance assertion
+//   - Account balance matches expected balance (within tolerance)
+//   - Calculates padding adjustments needed
+//
+// Returns BalanceDelta (mutations) and error (validation failure).
+// Errors are returned separately from the delta to keep deltas pure.
+//
+// CRITICAL: Pad timing validation - pad must come BEFORE balance (Beancount compliance).
+//
+// Example:
+//
+//	v := newValidator(ledger.accounts)
+//	delta, err := v.calculateBalanceDelta(ctx, balance, padEntry)
+//	if err != nil {
+//	    // Validation failed
+//	}
+func (v *validator) calculateBalanceDelta(ctx context.Context,
+	balance *ast.Balance,
+	padEntry *ast.Pad) (*BalanceDelta, error) {
+
+	// Basic validation already done by validateBalance()
+
+	expectedAmount, _ := ParseAmount(balance.Amount)
+	currency := balance.Amount.Currency
+	accountName := string(balance.Account)
+	account := v.accounts[accountName]
+
+	actualAmount := account.Inventory.Get(currency)
+
+	delta := &BalanceDelta{
+		AccountName:        accountName,
+		Currency:           currency,
+		ExpectedAmount:     expectedAmount,
+		ActualAmount:       actualAmount,
+		PaddingAdjustments: make(map[string]decimal.Decimal),
+	}
+
+	// Calculate what the amount will be after padding
+	actualAmountAfterPadding := actualAmount
+
+	// Calculate padding if pad directive exists
+	if padEntry != nil {
+		// BEANCOUNT COMPLIANCE: Pad must come chronologically BEFORE balance
+		if !padEntry.Date.Time.Before(balance.Date.Time) { //nolint:staticcheck
+			return nil, fmt.Errorf("pad directive dated %s must come before balance assertion dated %s",
+				padEntry.Date.Format("2006-01-02"), balance.Date.Format("2006-01-02"))
+		}
+
+		difference := expectedAmount.Sub(actualAmount)
+		tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+
+		if difference.Abs().GreaterThan(tolerance) {
+			delta.PaddingAdjustments[currency] = difference
+			delta.PadAccountName = string(padEntry.AccountPad)
+			delta.ShouldRemovePad = true
+
+			// Calculate what actual will be after padding
+			actualAmountAfterPadding = actualAmount.Add(difference)
+		} else {
+			// Difference within tolerance - still remove pad
+			delta.ShouldRemovePad = true
+		}
+	}
+
+	// Check if amounts match within tolerance (after padding)
+	tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+	if !AmountEqual(delta.ExpectedAmount, actualAmountAfterPadding, tolerance) {
+		// Return error separately, not in delta
+		return nil, NewBalanceMismatchError(
+			balance,
+			delta.ExpectedAmount.String(),
+			actualAmountAfterPadding.String(),
+			currency,
+		)
+	}
+
+	return delta, nil
+}
+
+// validateInventoryOperations validates that inventory operations (lot reductions) are possible.
+//
+// It validates that:
+//   - For lot reductions (negative amounts with cost specs), sufficient inventory exists
+//   - Booking method constraints are satisfied
+//   - Both explicit and inferred amounts are checked
+//
+// Returns validation errors for any failed lot reduction validation.
+// Must be called AFTER amount inference to check inferred amounts too.
+//
+// Example:
+//
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateInventoryOperations(ctx, txn, delta)
+//	if len(errs) > 0 {
+//	    // Validation failed
+//	}
+func (v *validator) validateInventoryOperations(ctx context.Context,
+	txn *ast.Transaction,
+	delta *TransactionDelta) []error {
+
+	var errs []error
+
+	for _, posting := range txn.Postings {
+		// Get amount (explicit or inferred)
+		var amountToUse *ast.Amount
+		if posting.Amount != nil {
+			amountToUse = posting.Amount
+		} else if inferredAmount, ok := delta.InferredAmounts[posting]; ok {
+			amountToUse = inferredAmount
+		} else {
+			continue
+		}
+
+		amount, _ := ParseAmount(amountToUse)
+		currency := amountToUse.Currency
+
+		// Check if this is a lot reduction
+		if posting.Cost != nil && amount.IsNegative() {
+			accountName := string(posting.Account)
+			account := v.accounts[accountName]
+
+			lotSpec, err := ParseLotSpec(posting.Cost)
+			if err != nil {
+				// Should already be validated by validateCosts
+				continue
+			}
+
+			bookingMethod := account.BookingMethod
+			if bookingMethod == "" {
+				bookingMethod = "FIFO"
+			}
+
+			// Check if reduction is possible (read-only)
+			if err := account.Inventory.CanReduceLot(currency, amount, lotSpec, bookingMethod); err != nil {
+				errs = append(errs, NewInsufficientInventoryError(txn, posting.Account, err))
+			}
+		}
+	}
+
+	return errs
+}
+
+// validateConstraintCurrencies validates that postings only use currencies allowed by account constraints.
+//
+// It validates that:
+//   - Postings use only currencies in the account's constraint list
+//   - Both explicit and inferred amounts are checked
+//
+// Must be called AFTER amount inference to check inferred amounts too.
+//
+// Returns validation errors for any postings using disallowed currencies.
+//
+// Example:
+//
+//	v := newValidator(ledger.accounts)
+//	errs := v.validateConstraintCurrencies(ctx, txn, delta)
+//	if len(errs) > 0 {
+//	    // Validation failed
+//	}
+func (v *validator) validateConstraintCurrencies(ctx context.Context,
+	txn *ast.Transaction,
+	delta *TransactionDelta) []error {
+
+	var errs []error
+
+	for _, posting := range txn.Postings {
+		accountName := string(posting.Account)
+		account, ok := v.accounts[accountName]
+		if !ok {
+			continue // Will be caught by validateAccountsOpen
+		}
+
+		// Only check if account has constraint currencies
+		if len(account.ConstraintCurrencies) == 0 {
+			continue
+		}
+
+		// Get currency (explicit or inferred)
+		var currency string
+		if posting.Amount != nil {
+			currency = posting.Amount.Currency
+		} else if inferredAmount, ok := delta.InferredAmounts[posting]; ok {
+			currency = inferredAmount.Currency
+		} else {
+			continue
+		}
+
+		// Check if currency is allowed
+		allowed := false
+		for _, c := range account.ConstraintCurrencies {
+			if c == currency {
+				allowed = true
+				break
+			}
+		}
+		if !allowed {
+			errs = append(errs, NewCurrencyConstraintError(
+				txn, posting.Account, currency, account.ConstraintCurrencies))
+		}
+	}
+
+	return errs
 }

@@ -31,6 +31,99 @@ go test -bench=. ./...
 - [ ] Update documentation if APIs changed
 - [ ] Add tests for new functionality
 
+### Validation Logic Separation
+
+**CRITICAL**: ALL validation logic MUST be in the validation phase.
+
+**Parser Phase** - Syntax only, NO validation:
+- ✅ Parse tokens into AST nodes
+- ✅ Report syntax errors (unexpected token, invalid grammar)
+- ❌ NO semantic validation (account exists, date makes sense, amounts balance)
+- ❌ NO cross-directive validation (account opened before used)
+- ❌ NO business logic (tolerance checks, balance assertions)
+
+**Ledger Processing Phase** - Build state, NO validation:
+- ✅ Apply directives in order (open accounts, add transactions)
+- ✅ Compute derived values (inferred amounts, balances)
+- ✅ Build up ledger state (account inventory, balances)
+- ❌ NO validation of whether state is correct
+- ❌ NO error checking (that's validation's job)
+
+**Validation Phase** - ALL validation happens here:
+- ✅ Check accounts are opened before use
+- ✅ Check transactions balance within tolerance
+- ✅ Check balance assertions match computed balances
+- ✅ Check for duplicate accounts, closed accounts used
+- ✅ ALL semantic checks, ALL business logic
+
+**Examples:**
+
+```go
+// ❌ WRONG: Validation in parser
+func (p *Parser) parseTransaction(txn *Transaction) error {
+    // ...
+    if !p.ledger.isAccountOpen(txn.Account) {  // NO! Parser shouldn't know about ledger
+        return errors.New("account not open")
+    }
+    // ...
+}
+
+// ❌ WRONG: Validation during processing
+func (l *Ledger) processTransaction(txn *Transaction) error {
+    if !l.accounts[txn.Account].IsOpen {  // NO! Processing shouldn't validate
+        return errors.New("account not open")
+    }
+    l.accounts[txn.Account].Inventory.Add(txn.Amount)
+}
+
+// ✅ CORRECT: Parser only parses
+func (p *Parser) parseTransaction() (*Transaction, error) {
+    // Just parse syntax - any valid grammar is accepted
+    txn := &Transaction{
+        Date: p.parseDate(),
+        Flag: p.parseFlag(),
+        // ...
+    }
+    return txn, nil
+}
+
+// ✅ CORRECT: Processing only processes
+func (l *Ledger) processTransaction(txn *Transaction) {
+    // Just apply changes - assume validation already passed
+    account := l.accounts[txn.Account]
+    account.Inventory.Add(txn.Amount)
+}
+
+// ✅ CORRECT: Validation only validates
+func (v *Validator) validateTransaction(txn *Transaction) []error {
+    var errs []error
+
+    // Check account exists and is open
+    if !v.isAccountOpen(txn.Account) {
+        errs = append(errs, NewError("account not open", txn))
+    }
+
+    // Check transaction balances
+    if !v.transactionBalances(txn) {
+        errs = append(errs, NewError("transaction doesn't balance", txn))
+    }
+
+    return errs
+}
+```
+
+**Proper flow:**
+1. **Parse** → AST (syntax errors only)
+2. **Process** → Ledger state (assumes valid input)
+3. **Validate** → Errors list (checks everything)
+
+**Why this matters:**
+- Parser stays simple and fast (no ledger state needed)
+- Processing is pure data transformation (no error handling clutter)
+- Validation is centralized and complete (all checks in one place)
+- Easy to skip validation for trusted input (performance)
+- Clear separation of concerns (parser, ledger, validator are independent)
+
 ## Code Formatting
 
 ### Standard Formatting
@@ -470,13 +563,20 @@ func TestFormatCmd(t *testing.T) {
 
 ### Assertion Library
 
-Use `github.com/alecthomas/assert/v2` for assertions:
+**REQUIRED:** All tests MUST use `github.com/alecthomas/assert/v2` for assertions:
 
 ```go
 assert.NoError(t, err)
 assert.Equal(t, expected, actual)
 assert.True(t, condition, "optional message")
+assert.Error(t, err, "expected an error")
+assert.NotEqual(t, nil, value, "expected non-nil value")
 ```
+
+**DO NOT use:**
+- `if err != nil { t.Fatalf(...) }`
+- `if got != want { t.Errorf(...) }`
+- Manual error checking in tests
 
 ### Test Coverage
 

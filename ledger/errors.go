@@ -648,3 +648,102 @@ func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key, 
 		Directive: directive,
 	}
 }
+
+// InsufficientInventoryError is returned when a transaction tries to reduce inventory but lacks enough lots
+type InsufficientInventoryError struct {
+	Date      *ast.Date
+	Payee     string
+	Account   ast.Account
+	Details   error
+	Pos       ast.Position
+	Directive ast.Directive
+}
+
+func (e *InsufficientInventoryError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
+	return fmt.Sprintf("%s: Insufficient inventory (account %s): %v",
+		location, e.Account, e.Details)
+}
+
+func (e *InsufficientInventoryError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+func (e *InsufficientInventoryError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *InsufficientInventoryError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *InsufficientInventoryError) GetDate() *ast.Date {
+	return e.Date
+}
+
+// NewInsufficientInventoryError creates an error for when inventory operations cannot be performed
+func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *InsufficientInventoryError {
+	return &InsufficientInventoryError{
+		Date:      txn.Date,
+		Payee:     txn.Payee,
+		Account:   account,
+		Details:   details,
+		Pos:       txn.Pos,
+		Directive: txn,
+	}
+}
+
+// CurrencyConstraintError is returned when a posting uses a currency not allowed by the account
+type CurrencyConstraintError struct {
+	Date              *ast.Date
+	Payee             string
+	Account           ast.Account
+	Currency          string
+	AllowedCurrencies []string
+	Pos               ast.Position
+	Directive         ast.Directive
+}
+
+func (e *CurrencyConstraintError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.Format("2006-01-02")
+	}
+
+	return fmt.Sprintf("%s: Currency %s not allowed for account %s (allowed: %v)",
+		location, e.Currency, e.Account, e.AllowedCurrencies)
+}
+
+func (e *CurrencyConstraintError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+func (e *CurrencyConstraintError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *CurrencyConstraintError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *CurrencyConstraintError) GetDate() *ast.Date {
+	return e.Date
+}
+
+// NewCurrencyConstraintError creates an error for when a posting violates currency constraints
+func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account,
+	currency string, allowedCurrencies []string) *CurrencyConstraintError {
+	return &CurrencyConstraintError{
+		Date:              txn.Date,
+		Payee:             txn.Payee,
+		Account:           account,
+		Currency:          currency,
+		AllowedCurrencies: allowedCurrencies,
+		Pos:               txn.Pos,
+		Directive:         txn,
+	}
+}
