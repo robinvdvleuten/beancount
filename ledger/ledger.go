@@ -335,10 +335,13 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
 		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
 		hasInferredCost := false
+		hasMergeCost := posting.Cost != nil && posting.Cost.IsMergeCost()
 
 		if hasExplicitCost {
 			costToUse = posting.Cost
 		} else if hasEmptyCost {
+			costToUse = posting.Cost
+		} else if hasMergeCost {
 			costToUse = posting.Cost
 		} else if inferredCost, ok := delta.InferredCosts[posting]; ok {
 			hasInferredCost = true
@@ -346,7 +349,7 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 		}
 
 		// Update inventory
-		if hasExplicitCost || hasEmptyCost || hasInferredCost {
+		if hasExplicitCost || hasEmptyCost || hasInferredCost || hasMergeCost {
 			lotSpec, err := ParseLotSpec(costToUse)
 			if err != nil {
 				// This should never happen after validation - panic to catch bugs

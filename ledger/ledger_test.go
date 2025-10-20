@@ -770,3 +770,44 @@ func TestLedger_MultipleOptions(t *testing.T) {
 		})
 	}
 }
+
+// TestMergeCostBooking tests merge cost {*} functionality end-to-end
+func TestMergeCostBooking(t *testing.T) {
+	input := `
+                2020-01-01 open Assets:Brokerage
+                2020-01-01 open Assets:Cash USD
+                2020-01-01 open Income:CapitalGains
+
+                2020-01-02 * "Buy lot 1"
+                Assets:Brokerage    10 STOCK {100 USD}
+                Assets:Cash        -1000 USD
+
+                2020-01-03 * "Buy lot 2"
+                Assets:Brokerage    10 STOCK {200 USD}
+                Assets:Cash        -2000 USD
+
+                2020-01-04 * "Sell using merge cost - reduces at average cost 150 USD"
+                Assets:Brokerage    -15 STOCK {*}
+                Assets:Cash         2250 USD
+                Income:CapitalGains
+        `
+
+	ast, err := parser.ParseString(context.Background(), input)
+	assert.NoError(t, err, "parsing should succeed")
+
+	l := New()
+	err = l.Process(context.Background(), ast)
+	assert.NoError(t, err)
+
+	// Check final inventory state
+	acc, ok := l.GetAccount("Assets:Brokerage")
+	assert.True(t, ok)
+	lots := acc.Inventory.GetLots("STOCK")
+	// Should have 5 shares left at average cost (150 USD)
+	assert.Equal(t, 1, len(lots))
+	assert.Equal(t, "5", lots[0].Amount.String())
+	// The cost should be the average: (10*100 + 10*200) / 20 = 3000 / 20 = 150
+	assert.True(t, lots[0].Spec != nil)
+	assert.True(t, lots[0].Spec.Cost != nil)
+	assert.Equal(t, "150", lots[0].Spec.Cost.String())
+}

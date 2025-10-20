@@ -271,13 +271,6 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 			continue
 		}
 
-		// Merge cost {*} is not yet implemented
-		if posting.Cost.IsMergeCost() {
-			errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{*}",
-				fmt.Errorf("merge cost {*} not yet implemented")))
-			continue
-		}
-
 		// Validate cost amount if present
 		if posting.Cost.Amount != nil {
 			if _, err := ParseAmount(posting.Cost.Amount); err != nil {

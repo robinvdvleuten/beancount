@@ -68,13 +68,18 @@ func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *
 	// Get absolute value for comparison
 	reduceAmount := amount.Abs()
 
+	// Merge cost {*} - merge all lots to average cost, then reduce
+	if spec != nil && spec.Merge {
+		return inv.reduceWithMerge(commodity, reduceAmount, spec)
+	}
+
 	// Empty spec {} means use booking method
-	if spec != nil && spec.IsEmpty() {
+	if spec != nil && spec.IsEmpty() && !spec.Merge {
 		return inv.reduceWithBooking(commodity, reduceAmount, bookingMethod)
 	}
 
 	// Specific lot spec - find matching lot
-	if spec != nil && spec.Cost != nil {
+	if spec != nil && spec.Cost != nil && !spec.Merge {
 		return inv.reduceSpecificLot(commodity, reduceAmount, spec)
 	}
 
@@ -110,6 +115,60 @@ func (inv *Inventory) reduceSpecificLot(commodity string, amount decimal.Decimal
 	}
 
 	return fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+}
+
+// reduceWithMerge reduces using merge cost {*} - merges all lots to average cost, then reduces
+func (inv *Inventory) reduceWithMerge(commodity string, amount decimal.Decimal, spec *lotSpec) error {
+	lots := inv.lots[commodity]
+
+	if len(lots) == 0 {
+		return fmt.Errorf("no lots available for %s", commodity)
+	}
+
+	// Calculate total units and total cost basis
+	totalUnits := decimal.Zero
+	totalCost := decimal.Zero
+	costCurrency := ""
+
+	for _, lot := range lots {
+		totalUnits = totalUnits.Add(lot.Amount)
+		if lot.Spec != nil && lot.Spec.Cost != nil {
+			lotCost := lot.Spec.Cost.Mul(lot.Amount)
+			totalCost = totalCost.Add(lotCost)
+			if costCurrency == "" {
+				costCurrency = lot.Spec.CostCurrency
+			} else if costCurrency != lot.Spec.CostCurrency {
+				return fmt.Errorf("merge cost {*} not supported for mixed currencies")
+			}
+		}
+	}
+
+	if totalUnits.IsZero() {
+		return fmt.Errorf("no units available for %s", commodity)
+	}
+
+	// Calculate average cost per unit
+	averageCost := totalCost.Div(totalUnits)
+
+	// Check if we have enough total units
+	if totalUnits.LessThan(amount) {
+		return fmt.Errorf("insufficient total amount for %s: have %s, need %s",
+			commodity, totalUnits.String(), amount.String())
+	}
+
+	// Clear all existing lots and create single merged lot
+	delete(inv.lots, commodity)
+	remainingUnits := totalUnits.Sub(amount)
+	if remainingUnits.GreaterThan(decimal.Zero) {
+		// Create new lot with remaining units at average cost
+		mergedSpec := &lotSpec{
+			Cost:         &averageCost,
+			CostCurrency: costCurrency,
+		}
+		inv.AddLot(commodity, remainingUnits, mergedSpec)
+	}
+
+	return nil
 }
 
 // reduceWithBooking reduces using booking method (FIFO, LIFO, etc.)
@@ -235,8 +294,27 @@ func (inv *Inventory) CanReduceLot(commodity string, amount decimal.Decimal, spe
 
 	reduceAmount := amount.Abs()
 
+	// Merge cost {*} - check if total units are sufficient
+	if spec != nil && spec.Merge {
+		lots := inv.lots[commodity]
+		if len(lots) == 0 {
+			return fmt.Errorf("no lots available for %s", commodity)
+		}
+
+		totalUnits := decimal.Zero
+		for _, lot := range lots {
+			totalUnits = totalUnits.Add(lot.Amount)
+		}
+
+		if totalUnits.LessThan(reduceAmount) {
+			return fmt.Errorf("insufficient total amount for %s: have %s, need %s",
+				commodity, totalUnits.String(), reduceAmount.String())
+		}
+		return nil
+	}
+
 	// Empty spec {} means use booking method
-	if spec != nil && spec.IsEmpty() {
+	if spec != nil && spec.IsEmpty() && !spec.Merge {
 		return inv.canReduceWithBooking(commodity, reduceAmount, bookingMethod)
 	}
 

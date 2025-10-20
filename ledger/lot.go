@@ -14,11 +14,12 @@ type lotSpec struct {
 	CostCurrency string           // Currency of the cost
 	Date         *ast.Date        // Optional acquisition date
 	Label        string           // Optional label
+	Merge        bool             // True if this is a merge cost {*} operation
 }
 
 // IsEmpty returns true if this is an empty cost specification {}
 func (ls *lotSpec) IsEmpty() bool {
-	return ls.Cost == nil && ls.Date == nil && ls.Label == ""
+	return ls.Cost == nil && ls.Date == nil && ls.Label == "" && !ls.Merge
 }
 
 // IsMerge returns true if this represents a merge cost {*}
@@ -33,6 +34,11 @@ func (ls *lotSpec) Equal(other *lotSpec) bool {
 		return true
 	}
 	if ls == nil || other == nil {
+		return false
+	}
+
+	// Compare merge flag
+	if ls.Merge != other.Merge {
 		return false
 	}
 
@@ -67,7 +73,15 @@ func (ls *lotSpec) Equal(other *lotSpec) bool {
 
 // String returns a string representation of the lot spec
 func (ls *lotSpec) String() string {
-	if ls == nil || ls.IsEmpty() {
+	if ls == nil {
+		return "{}"
+	}
+
+	if ls.Merge {
+		return "{*}"
+	}
+
+	if ls.IsEmpty() {
 		return "{}"
 	}
 
@@ -132,10 +146,9 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 		return &lotSpec{}, nil
 	}
 
-	// Merge cost {*} - return special marker
-	// This will be handled separately in booking logic
+	// Merge cost {*} - return special marker for merge operations
 	if cost.IsMergeCost() {
-		return nil, fmt.Errorf("merge cost {*} not yet implemented")
+		return &lotSpec{Merge: true}, nil
 	}
 
 	spec := &lotSpec{

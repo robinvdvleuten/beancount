@@ -137,6 +137,37 @@ func TestCanReduceLot(t *testing.T) {
 			wantErr:       true,
 			errContains:   "lot not found",
 		},
+		{
+			name: "reducing with merge cost {*} - merges all lots and reduces",
+			setup: func() *Inventory {
+				inv := NewInventory()
+				cost100 := d("100")
+				cost200 := d("200")
+				inv.AddLot("STOCK", d("5"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
+				inv.AddLot("STOCK", d("5"), &lotSpec{Cost: &cost200, CostCurrency: "USD"})
+				return inv
+			},
+			commodity:     "STOCK",
+			amount:        d("-7"),
+			spec:          &lotSpec{Merge: true},
+			bookingMethod: "",
+			wantErr:       false,
+		},
+		{
+			name: "reducing with merge cost {*} - insufficient total units",
+			setup: func() *Inventory {
+				inv := NewInventory()
+				cost100 := d("100")
+				inv.AddLot("STOCK", d("5"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
+				return inv
+			},
+			commodity:     "STOCK",
+			amount:        d("-10"),
+			spec:          &lotSpec{Merge: true},
+			bookingMethod: "",
+			wantErr:       true,
+			errContains:   "insufficient total amount",
+		},
 	}
 
 	for _, tt := range tests {
