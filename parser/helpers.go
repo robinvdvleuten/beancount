@@ -234,18 +234,18 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 		}
 
 	case LINK:
-	 // Link (with ^ prefix)
-	 link, err := p.parseLink()
-	 if err == nil {
-	  return &ast.MetadataValue{Link: &link}
-	 }
+		// Link (with ^ prefix)
+		link, err := p.parseLink()
+		if err == nil {
+			return &ast.MetadataValue{Link: &link}
+		}
 
 	case ACCOUNT:
-	// Account (colon-separated)
-	account, err := p.parseAccount()
-	if err == nil {
-	return &ast.MetadataValue{Account: &account}
-	}
+		// Account (colon-separated)
+		account, err := p.parseAccount()
+		if err == nil {
+			return &ast.MetadataValue{Account: &account}
+		}
 
 	case NUMBER:
 		// Could be Number or Amount - need LL(2) lookahead

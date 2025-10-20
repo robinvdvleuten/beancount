@@ -742,8 +742,8 @@ func TestValidateMetadata(t *testing.T) {
 				)
 				inv123 := "INV-123"
 				txn.Metadata = []*ast.Metadata{
-				 {Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
-			}
+					{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
+				}
 				return txn
 			}(),
 			wantErrCount: 0,
@@ -760,9 +760,9 @@ func TestValidateMetadata(t *testing.T) {
 				inv123 := "INV-123"
 				inv456 := "INV-456"
 				txn.Metadata = []*ast.Metadata{
-				 {Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
-				{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv456}},
-			}
+					{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
+					{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv456}},
+				}
 				return txn
 			}(),
 			wantErrCount: 1,
@@ -1327,8 +1327,8 @@ func TestValidateOpen(t *testing.T) {
 				}
 				note := "Test account"
 				open.Metadata = []*ast.Metadata{
-				 {Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
-			}
+					{Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
+				}
 				return open
 			}(),
 			wantErrCount:     0,

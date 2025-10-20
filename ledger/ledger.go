@@ -52,7 +52,7 @@ import (
 type Ledger struct {
 	accounts        map[string]*Account
 	errors          []error
-	options         map[string]string
+	options         map[string][]string
 	padEntries      map[string]*ast.Pad // account -> pad directive
 	toleranceConfig *ToleranceConfig
 }
@@ -79,10 +79,38 @@ func New() *Ledger {
 	return &Ledger{
 		accounts:        make(map[string]*Account),
 		errors:          make([]error, 0),
-		options:         make(map[string]string),
+		options:         make(map[string][]string),
 		padEntries:      make(map[string]*ast.Pad),
 		toleranceConfig: NewToleranceConfig(),
 	}
+}
+
+// GetOption returns the first value for the option key, or empty string if not found.
+// For options that can have multiple values (e.g., inferred_tolerance_default),
+// use GetOptions instead.
+//
+// Options that typically have single values:
+//   - title
+//   - render_commas
+//   - booking_method
+//
+// Options that can have multiple values:
+//   - inferred_tolerance_default (per-currency: "USD:0.01", "EUR:0.01")
+//   - operating_currency (multiple currencies: "USD", "EUR")
+func (l *Ledger) GetOption(key string) (string, bool) {
+	values := l.options[key]
+	if len(values) == 0 {
+		return "", false
+	}
+	return values[0], true
+}
+
+// GetOptions returns all values for the option key.
+// Use this for options that can have multiple values like
+// inferred_tolerance_default (per-currency tolerances) or
+// operating_currency (multiple operating currencies).
+func (l *Ledger) GetOptions(key string) []string {
+	return l.options[key]
 }
 
 // Process processes an AST and builds the ledger state
@@ -92,7 +120,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 	// Process options first
 	for _, opt := range tree.Options {
-		l.options[opt.Name] = opt.Value
+		l.options[opt.Name] = append(l.options[opt.Name], opt.Value)
 	}
 
 	// Parse tolerance configuration from options

@@ -60,40 +60,42 @@ func NewToleranceConfig() *ToleranceConfig {
 //   - option "inferred_tolerance_default" "USD:0.003"
 //   - option "tolerance_multiplier" "0.6"
 //   - option "infer_tolerance_from_cost" "TRUE"
-func ParseToleranceConfig(options map[string]string) (*ToleranceConfig, error) {
+func ParseToleranceConfig(options map[string][]string) (*ToleranceConfig, error) {
 	config := NewToleranceConfig()
 
-	// Parse tolerance_multiplier
-	if val, ok := options["tolerance_multiplier"]; ok {
-		multiplier, err := decimal.NewFromString(val)
+	// Parse tolerance_multiplier (use first value if multiple)
+	if vals := options["tolerance_multiplier"]; len(vals) > 0 {
+		multiplier, err := decimal.NewFromString(vals[0])
 		if err != nil {
-			return nil, fmt.Errorf("invalid tolerance_multiplier %q: %w", val, err)
+			return nil, fmt.Errorf("invalid tolerance_multiplier %q: %w", vals[0], err)
 		}
 		config.multiplier = multiplier
 	}
 
-	// Parse inferred_tolerance_default (can appear multiple times in theory, but options map collapses them)
+	// Parse inferred_tolerance_default (can appear multiple times for per-currency tolerances)
 	// Format: "CURRENCY:TOLERANCE" or "*:TOLERANCE"
-	if val, ok := options["inferred_tolerance_default"]; ok {
-		parts := strings.SplitN(val, ":", 2)
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid inferred_tolerance_default format %q, expected CURRENCY:TOLERANCE", val)
+	if vals := options["inferred_tolerance_default"]; len(vals) > 0 {
+		for _, val := range vals {
+			parts := strings.SplitN(val, ":", 2)
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid inferred_tolerance_default format %q, expected CURRENCY:TOLERANCE", val)
+			}
+
+			currency := strings.TrimSpace(parts[0])
+			toleranceStr := strings.TrimSpace(parts[1])
+
+			tolerance, err := decimal.NewFromString(toleranceStr)
+			if err != nil {
+				return nil, fmt.Errorf("invalid tolerance value in %q: %w", val, err)
+			}
+
+			config.defaults[currency] = tolerance
 		}
-
-		currency := strings.TrimSpace(parts[0])
-		toleranceStr := strings.TrimSpace(parts[1])
-
-		tolerance, err := decimal.NewFromString(toleranceStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid tolerance value in %q: %w", val, err)
-		}
-
-		config.defaults[currency] = tolerance
 	}
 
-	// Parse infer_tolerance_from_cost
-	if val, ok := options["infer_tolerance_from_cost"]; ok {
-		config.inferFromCost = strings.ToUpper(val) == "TRUE"
+	// Parse infer_tolerance_from_cost (use first value if multiple)
+	if vals := options["infer_tolerance_from_cost"]; len(vals) > 0 {
+		config.inferFromCost = strings.ToUpper(vals[0]) == "TRUE"
 	}
 
 	return config, nil

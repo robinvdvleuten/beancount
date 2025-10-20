@@ -164,15 +164,15 @@ func (t *Tag) Capture(values []string) error {
 //	budget: 1000.00 USD               ; Amount (number + currency)
 //	active: TRUE                      ; Boolean (uppercase TRUE/FALSE)
 type MetadataValue struct {
-	StringValue   *string
-	Date          *Date
-	Account       *Account
-	Currency      *string
-	Tag           *Tag
-	Link          *Link
-	Number        *string // Stored as string to preserve precision
-	Amount        *Amount
-	Boolean       *bool
+	StringValue *string
+	Date        *Date
+	Account     *Account
+	Currency    *string
+	Tag         *Tag
+	Link        *Link
+	Number      *string // Stored as string to preserve precision
+	Amount      *Amount
+	Boolean     *bool
 }
 
 // Type returns a string representation of the metadata value's type.
