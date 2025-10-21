@@ -133,9 +133,21 @@ func (l *Lexer) scanToken() Token {
 		return Token{COLON, start, l.pos, startLine, startCol}
 	case ch == ',':
 		return Token{COMMA, start, l.pos, startLine, startCol}
+	
+	// { or {{
 	case ch == '{':
+		if l.peek() == '{' {
+			l.advance()
+			return Token{LDBRACE, start, l.pos, startLine, startCol}
+		}
 		return Token{LBRACE, start, l.pos, startLine, startCol}
+	
+	// } or }}
 	case ch == '}':
+		if l.peek() == '}' {
+			l.advance()
+			return Token{RDBRACE, start, l.pos, startLine, startCol}
+		}
 		return Token{RBRACE, start, l.pos, startLine, startCol}
 
 	// @ or @@

@@ -165,7 +165,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	}
 
 	// Optional cost specification
-	if p.check(LBRACE) {
+	if p.check(LBRACE) || p.check(LDBRACE) {
 		cost, err := p.parseCost()
 		if err != nil {
 			return nil, err

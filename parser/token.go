@@ -48,6 +48,8 @@ const (
 	ATAT     // @@
 	LBRACE   // {
 	RBRACE   // }
+	LDBRACE  // {{
+	RDBRACE  // }}
 	MINUS    // - (for negative numbers)
 )
 
@@ -91,6 +93,8 @@ var tokenNames = map[TokenType]string{
 	ATAT:     "@@",
 	LBRACE:   "{",
 	RBRACE:   "}",
+	LDBRACE:  "{{",
+	RDBRACE:  "}}",
 	MINUS:    "-",
 }
 

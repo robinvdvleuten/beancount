@@ -488,6 +488,51 @@ func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex
 	}
 }
 
+// TotalCostError is returned when a total cost specification {{}} is invalid.
+//
+// Total cost syntax allows specifying the total cost for a lot instead of per-unit cost.
+// The per-unit cost is calculated by dividing the total by the quantity.
+//
+// Common causes:
+//   - Total cost with zero quantity
+//   - Total cost without amount
+//   - Total cost without quantity
+//   - Invalid decimal in total cost amount
+//
+// Example error message:
+//
+//	"file.bean:15: Invalid total cost specification: cannot use total cost with zero quantity"
+type TotalCostError struct {
+	Posting   *ast.Posting
+	Directive ast.Directive
+	Pos       ast.Position
+	Message   string
+}
+
+func (e *TotalCostError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	return fmt.Sprintf("%s: Invalid total cost specification: %s", location, e.Message)
+}
+
+func (e *TotalCostError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+func (e *TotalCostError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *TotalCostError) GetAccount() ast.Account {
+	return e.Posting.Account
+}
+
+func (e *TotalCostError) GetDate() *ast.Date {
+	if txn, ok := e.Directive.(*ast.Transaction); ok {
+		return txn.Date
+	}
+	return nil
+}
+
 // InvalidPriceError is returned when a price specification is invalid.
 //
 // Price specifications define the market value of commodities at transaction time,

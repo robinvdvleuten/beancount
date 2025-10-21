@@ -168,3 +168,34 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 
 	return spec, nil
 }
+
+// normalizeLotSpecForPosting converts total cost {{}} to per-unit cost for inventory operations.
+// This is called during applyTransaction to ensure inventory uses correct per-unit costs.
+func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
+	if lotSpec == nil || lotSpec.Cost == nil {
+		return nil
+	}
+
+	// Check if this posting has total cost syntax
+	if posting.Cost != nil && posting.Cost.IsTotal {
+		// Convert total cost to per-unit cost for inventory operations
+		if posting.Amount == nil {
+			return fmt.Errorf("total cost requires a quantity")
+		}
+
+		quantity, err := ParseAmount(posting.Amount)
+		if err != nil {
+			return fmt.Errorf("invalid quantity: %w", err)
+		}
+
+		if quantity.IsZero() {
+			return fmt.Errorf("cannot use total cost with zero quantity")
+		}
+
+		// Calculate per-unit cost: total ÷ quantity
+		perUnitCost := lotSpec.Cost.Div(quantity.Abs())
+		lotSpec.Cost = &perUnitCost
+	}
+
+	return nil
+}

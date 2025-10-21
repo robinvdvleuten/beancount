@@ -45,7 +45,7 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 		return weightSet{}, nil
 
 	} else if hasExplicitCost {
-		// Cost: {X CURR} or {X CURR} @ Y CURR2
+		// Cost: {X CURR} or {X CURR} @ Y CURR2 or {{X CURR}} (total cost)
 		// When there's a cost, ONLY the cost contributes to balance!
 		// The price (if present) is just informational (market value)
 		costAmount, err := ParseAmount(posting.Cost.Amount)
@@ -54,7 +54,15 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 		}
 
 		costCurrency := posting.Cost.Amount.Currency
-		totalCost := amount.Mul(costAmount)
+
+		var totalCost decimal.Decimal
+		if posting.Cost.IsTotal {
+			// Total cost {{X CURR}} - use the amount directly
+			totalCost = costAmount
+		} else {
+			// Per-unit cost {X CURR} - multiply by quantity
+			totalCost = amount.Mul(costAmount)
+		}
 
 		weights = weightSet{
 			{Amount: totalCost, Currency: costCurrency},

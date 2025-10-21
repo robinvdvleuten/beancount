@@ -201,6 +201,11 @@ func (l *Ledger) Errors() []error {
 	return l.errors
 }
 
+// addError adds an error to the ledger's error collection
+func (l *Ledger) addError(err error) {
+	l.errors = append(l.errors, err)
+}
+
 // GetAccount returns an account by name
 func (l *Ledger) GetAccount(name string) (*Account, bool) {
 	acc, ok := l.accounts[name]
@@ -286,6 +291,19 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 
 // processTransaction processes a Transaction directive
 func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
+	// Convert total cost to per-unit cost before validation
+	for _, posting := range txn.Postings {
+		if err := l.normalizePostingCost(posting); err != nil {
+			l.addError(&TotalCostError{
+				Posting:   posting,
+				Directive: txn,
+				Pos:       txn.Pos,
+				Message:   err.Error(),
+			})
+			return
+		}
+	}
+
 	// Create validator with read-only view of current state
 	v := newValidator(l.accounts, l.toleranceConfig)
 
@@ -300,6 +318,49 @@ func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
 
 	// Validation passed - now apply effects
 	l.applyTransaction(txn, delta)
+}
+
+// normalizePostingCost validates total cost {{}} syntax.
+// This must be called before validation to ensure total cost requirements are met.
+// The AST is not modified - conversion to per-unit cost happens during inventory operations.
+func (l *Ledger) normalizePostingCost(posting *ast.Posting) error {
+	if posting.Cost == nil || !posting.Cost.IsTotal {
+		return nil // Nothing to do
+	}
+
+	// Validate: must have amount
+	if posting.Amount == nil {
+		return fmt.Errorf("total cost requires a quantity")
+	}
+
+	// Validate: cost must have amount
+	if posting.Cost.Amount == nil {
+		return fmt.Errorf("total cost requires an amount")
+	}
+
+	// Validate quantity can be parsed
+	_, err := decimal.NewFromString(posting.Amount.Value)
+	if err != nil {
+		return fmt.Errorf("invalid quantity %q: %w", posting.Amount.Value, err)
+	}
+
+	// Validate total cost can be parsed
+	_, err = decimal.NewFromString(posting.Cost.Amount.Value)
+	if err != nil {
+		return fmt.Errorf("invalid total cost %q: %w", posting.Cost.Amount.Value, err)
+	}
+
+	// Validate quantity is not zero
+	quantity, _ := decimal.NewFromString(posting.Amount.Value)
+	if quantity.IsZero() {
+		return fmt.Errorf("cannot use total cost with zero quantity")
+	}
+
+	// Note: We don't modify the AST here. The conversion to per-unit cost
+	// happens in normalizeLotSpecForPosting during inventory operations.
+	// This preserves the original total cost for the formatter to display.
+
+	return nil
 }
 
 // applyTransaction mutates ledger state (inventory updates)
@@ -354,6 +415,13 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 			if err != nil {
 				// This should never happen after validation - panic to catch bugs
 				panic(fmt.Sprintf("BUG: lot spec parsing failed after validation: %v", err))
+			}
+
+			// Convert total cost to per-unit cost for inventory operations
+			err = normalizeLotSpecForPosting(lotSpec, posting)
+			if err != nil {
+				// This should never happen after validation - panic to catch bugs
+				panic(fmt.Sprintf("BUG: lot spec normalization failed after validation: %v", err))
 			}
 
 			if amount.GreaterThan(decimal.Zero) {

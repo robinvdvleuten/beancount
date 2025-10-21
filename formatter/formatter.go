@@ -1131,7 +1131,25 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		return
 	}
 
-	buf.WriteByte('{')
+	// Use {{ }} for total cost, { } for per-unit cost
+	if cost.IsTotal {
+		buf.WriteString("{{")
+	} else {
+		buf.WriteByte('{')
+	}
+
+	// Merge cost {*} always uses single braces (IsTotal should be false)
+	if cost.IsMerge {
+		buf.WriteByte('*')
+		buf.WriteByte('}') // Always single brace for merge
+		return
+	}
+
+	// Empty cost {} always uses single braces (IsTotal should be false)
+	if cost.IsEmpty() {
+		buf.WriteByte('}') // Always single brace for empty
+		return
+	}
 
 	if cost.Amount != nil {
 		buf.WriteString(cost.Amount.Value)
@@ -1150,7 +1168,12 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		buf.WriteByte('"')
 	}
 
-	buf.WriteByte('}')
+	// Close with matching braces
+	if cost.IsTotal {
+		buf.WriteString("}}")
+	} else {
+		buf.WriteByte('}')
+	}
 }
 
 // formatMetadataValue formats a typed metadata value according to Beancount formatting rules.

@@ -21,15 +21,20 @@ type Amount struct {
 // the per-unit cost amount, acquisition date, and/or a label to identify specific lots for
 // capital gains calculations.
 //
+// Total cost syntax {{}} allows specifying the total cost for the entire lot instead of
+// per-unit cost. The per-unit cost is calculated by dividing the total by the quantity.
+//
 // Example cost specifications:
 //
 //	10 HOOL {518.73 USD}              ; Per-unit cost
+//	10 HOOL {{5187.30 USD}}           ; Total cost ($518.73 per unit)
 //	10 HOOL {518.73 USD, 2014-05-01}  ; Cost with acquisition date
 //	-5 HOOL {502.12 USD, "first-lot"} ; Cost with label for lot selection
 //	10 HOOL {}                        ; Any lot (automatic selection)
 //	10 HOOL {*}                       ; Merge/average all lots
 type Cost struct {
 	IsMerge bool
+	IsTotal bool    // True if specified with {{}} (total cost syntax)
 	Amount  *Amount
 	Date    *Date
 	Label   string
@@ -38,7 +43,7 @@ type Cost struct {
 // IsEmpty returns true if this is an empty cost specification {}.
 // Distinguishes between nil (no cost) and empty cost (any lot selection).
 func (c *Cost) IsEmpty() bool {
-	return c != nil && !c.IsMerge && c.Amount == nil && c.Date == nil && c.Label == ""
+	return c != nil && !c.IsMerge && !c.IsTotal && c.Amount == nil && c.Date == nil && c.Label == ""
 }
 
 // IsMergeCost returns true if this is a merge cost specification {*}.

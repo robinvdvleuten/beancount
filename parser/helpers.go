@@ -127,54 +127,86 @@ func (p *Parser) parseExpression() string {
 	return string(p.source[startPos:pos])
 }
 
-// parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] }
+// parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] } or {{ AMOUNT [, DATE] [, LABEL] }}
 func (p *Parser) parseCost() (*ast.Cost, error) {
-	p.consume(LBRACE, "expected '{'")
+	// Check for {{ or {
+	isTotal := false
+	if p.check(LDBRACE) {
+		p.advance() // consume {{
+		isTotal = true
+	} else {
+		p.consume(LBRACE, "expected '{' or '{{'")
+	}
 
-	cost := &ast.Cost{}
+	cost := &ast.Cost{IsTotal: isTotal}
 
-	// Check for merge cost {*}
+	// Check for merge cost {*} (only valid with single braces)
 	if p.match(ASTERISK) {
+		if isTotal {
+			return nil, p.error("merge cost {*} cannot use total cost syntax {{}}")
+		}
 		cost.IsMerge = true
 		p.consume(RBRACE, "expected '}'")
 		return cost, nil
 	}
 
-	// Check for empty cost {}
-	if p.check(RBRACE) {
+	// Determine closing token
+	closingToken := RBRACE
+	if isTotal {
+		closingToken = RDBRACE
+	}
+
+	// Check for empty cost (only valid with single braces)
+	if p.check(closingToken) {
+		if isTotal {
+			return nil, p.error("empty total cost {{}} is not allowed")
+		}
 		p.advance()
 		return cost, nil
 	}
 
-	// Parse amount if present
+	// Parse amount (required for total cost)
 	if p.check(NUMBER) {
 		amt, err := p.parseAmount()
 		if err != nil {
 			return nil, err
 		}
 		cost.Amount = amt
+	} else if isTotal {
+		return nil, p.error("total cost {{}} requires an amount")
 	}
 
-	// Parse optional date
+	// Parse optional date and/or label
 	if p.match(COMMA) {
 		if p.check(DATE) {
+			// Parse date
 			date, err := p.parseDate()
 			if err != nil {
 				return nil, err
 			}
 			cost.Date = date
-		}
-	}
 
-	// Parse optional label
-	if p.match(COMMA) {
-		if p.check(STRING) {
+			// Check for another comma and label
+			if p.match(COMMA) {
+				if p.check(STRING) {
+					labelTok := p.advance()
+					cost.Label = p.unquoteString(labelTok.String(p.source))
+				}
+			}
+		} else if p.check(STRING) {
+			// Parse label directly (no date)
 			labelTok := p.advance()
 			cost.Label = p.unquoteString(labelTok.String(p.source))
 		}
 	}
 
-	p.consume(RBRACE, "expected '}'")
+	// Consume closing brace(s)
+	if isTotal {
+		p.consume(RDBRACE, "expected '}}'")
+	} else {
+		p.consume(RBRACE, "expected '}'")
+	}
+
 	return cost, nil
 }
 
