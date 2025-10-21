@@ -123,13 +123,20 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 	// Read source content for error formatting (needed for parse error context)
 	var sourceContent []byte
+	var absFilename string
 	if cmd.File.Filename == "<stdin>" {
 		sourceContent = cmd.File.Contents
+		absFilename = cmd.File.Filename
 	} else {
 		var err error
 		sourceContent, err = os.ReadFile(cmd.File.Filename)
 		if err != nil {
 			return fmt.Errorf("failed to read file for error context: %w", err)
+		}
+		absFilename, err = filepath.Abs(cmd.File.Filename)
+		if err != nil {
+			// If Abs fails, use the original filename
+			absFilename = cmd.File.Filename
 		}
 	}
 
@@ -139,11 +146,11 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	if cmd.File.Filename == "<stdin>" {
 		// Stdin: contents already read by FileOrStdin.Decode
 		ldr := loader.New(loader.WithFollowIncludes())
-		ast, err = ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
+		ast, err = ldr.LoadBytes(runCtx, absFilename, cmd.File.Contents)
 	} else {
 		// File: use Load which handles includes properly
 		ldr := loader.New(loader.WithFollowIncludes())
-		ast, err = ldr.Load(runCtx, cmd.File.Filename)
+		ast, err = ldr.Load(runCtx, absFilename)
 	}
 	if err != nil {
 		// Format parser errors with source context
@@ -229,11 +236,13 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	var ast *ast.AST
 	var err error
 	var sourceContent []byte
+	var absFilename string
 	if cmd.File.Filename == "<stdin>" {
 		// Stdin: contents already read by FileOrStdin.Decode
 		sourceContent = cmd.File.Contents
+		absFilename = cmd.File.Filename
 		ldr := loader.New()
-		ast, err = ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
+		ast, err = ldr.LoadBytes(runCtx, absFilename, cmd.File.Contents)
 	} else {
 		// File: use Load (though format doesn't follow includes, this is consistent)
 		var readErr error
@@ -241,8 +250,14 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		if readErr != nil {
 			return fmt.Errorf("failed to read file: %w", readErr)
 		}
+		var absErr error
+		absFilename, absErr = filepath.Abs(cmd.File.Filename)
+		if absErr != nil {
+			// If Abs fails, use the original filename
+			absFilename = cmd.File.Filename
+		}
 		ldr := loader.New()
-		ast, err = ldr.Load(runCtx, cmd.File.Filename)
+		ast, err = ldr.Load(runCtx, absFilename)
 	}
 	if err != nil {
 		// Format parser errors with source context
