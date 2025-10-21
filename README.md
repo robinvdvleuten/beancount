@@ -29,6 +29,13 @@ This implementation currently supports:
 
 **Note**: This implementation includes ledger validation with transaction balancing, account management, and inventory tracking. It does not include reporting, queries, or a web interface like the official Python implementation.
 
+## Compatibility
+
+This Go implementation is stricter than the official Python Beancount parser in some areas:
+
+- Arithmetic expressions in amounts must be enclosed in parentheses: `(155.74 + 304.58) USD` instead of `155.74 + 304.58 USD`
+- Amount values must include both a number and currency: `100.00 USD` (not just `100.00`)
+
 ## Installation
 
 ### Packages & Binaries
