@@ -41,7 +41,7 @@ const (
 	DefaultCurrencyColumn = 52
 
 	// DefaultIndentation is the default indentation for postings and metadata
-	DefaultIndentation = 2
+	DefaultIndentation = 4
 
 	// MinimumSpacing is the minimum number of spaces between account/number and currency
 	MinimumSpacing = 2
@@ -216,9 +216,9 @@ func WithPreserveBlanks(preserve bool) Option {
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
-		CurrencyColumn:   0,    // 0 means auto-calculate
-		PreserveComments: true, // Preserve comments by default
-		PreserveBlanks:   true, // Preserve blank lines by default
+		CurrencyColumn:   DefaultCurrencyColumn, // Use default column like bean-format
+		PreserveComments: true,                   // Preserve comments by default
+		PreserveBlanks:   true,                   // Preserve blank lines by default
 	}
 
 	for _, opt := range opts {
@@ -1048,7 +1048,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 
 	buf.WriteByte('\n')
 
-	// Transaction-level metadata (indented with 2 spaces)
+	// Transaction-level metadata (indented with DefaultIndentation spaces)
 	f.formatMetadata(t.Metadata, buf)
 
 	// Format each posting with proper alignment
@@ -1060,7 +1060,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 // formatPosting formats a single posting with proper alignment.
 // Handles both postings with explicit amounts and implied amounts (nil).
 func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	buf.WriteString("  ")
+	buf.WriteString(strings.Repeat(" ", DefaultIndentation))
 
 	// Calculate display width: indentation + flag (if present) + account
 	currentWidth := DefaultIndentation
@@ -1112,8 +1112,9 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 		return
 	}
 
-	// Calculate padding needed using display width
-	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amount.Value)
+	// Calculate padding needed: currency should start at CurrencyColumn
+	// After amount.Value, there's a space, then currency
+	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amount.Value) - 1
 	if padding < MinimumSpacing {
 		padding = MinimumSpacing
 	}
@@ -1231,7 +1232,7 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 	}
 
 	for _, m := range metadata {
-		buf.WriteString("  ")
+		buf.WriteString(strings.Repeat(" ", DefaultIndentation))
 		buf.WriteString(m.Key)
 		buf.WriteString(": ")
 		f.formatMetadataValue(m.Value, buf)

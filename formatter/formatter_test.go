@@ -55,7 +55,7 @@ func TestNew(t *testing.T) {
 	t.Run("DefaultOptions", func(t *testing.T) {
 		f := New()
 		assert.NotEqual(t, nil, f)
-		assert.Equal(t, 0, f.CurrencyColumn)
+		assert.Equal(t, DefaultCurrencyColumn, f.CurrencyColumn)
 	})
 
 	t.Run("WithCurrencyColumn", func(t *testing.T) {
@@ -99,7 +99,7 @@ func TestFormat(t *testing.T) {
 	t.Run("AutoCalculateCurrencyColumn", func(t *testing.T) {
 		source := `
 2021-01-01 * "Test"
-  Assets:Checking  100.00 USD
+    Assets:Checking  100.00 USD
 `
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
@@ -125,7 +125,7 @@ func TestCalculateCurrencyColumn(t *testing.T) {
 	t.Run("SinglePosting", func(t *testing.T) {
 		source := `
 2021-01-01 * "Test"
-  Assets:Checking  100.00 USD
+    Assets:Checking  100.00 USD
 `
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
@@ -133,15 +133,15 @@ func TestCalculateCurrencyColumn(t *testing.T) {
 		f := New()
 		column := f.calculateCurrencyColumn(ast)
 
-		// Width calculation: 2 (indent) + 15 (Assets:Checking) + 2 (spacing) + 6 (100.00) + 2 (buffer) = 27
-		assert.True(t, column >= 27, "Column should be at least 27")
+		// Width calculation: 4 (indent) + 15 (Assets:Checking) + 2 (spacing) + 6 (100.00) + 2 (buffer) = 29
+		assert.True(t, column >= 29, "Column should be at least 29")
 	})
 
 	t.Run("MultiplePostingsWithDifferentLengths", func(t *testing.T) {
 		source := `
 2021-01-01 * "Test"
-  Assets:Checking  100.00 USD
-  Expenses:Food:Restaurant  50.00 USD
+    Assets:Checking  100.00 USD
+    Expenses:Food:Restaurant  50.00 USD
 `
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
@@ -149,14 +149,14 @@ func TestCalculateCurrencyColumn(t *testing.T) {
 		f := New()
 		column := f.calculateCurrencyColumn(ast)
 
-		// Should align to the longest: 2 + 24 (Expenses:Food:Restaurant) + 2 + 5 (50.00) + 2 = 35
-		assert.True(t, column >= 35, "Column should accommodate longest account name")
+		// Should align to the longest: 4 + 24 (Expenses:Food:Restaurant) + 2 + 5 (50.00) + 2 = 37
+		assert.True(t, column >= 37, "Column should accommodate longest account name")
 	})
 
 	t.Run("WithFlaggedPosting", func(t *testing.T) {
 		source := `
 2021-01-01 * "Test"
-  ! Assets:Checking  100.00 USD
+    ! Assets:Checking  100.00 USD
 `
 		ast, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
@@ -164,8 +164,8 @@ func TestCalculateCurrencyColumn(t *testing.T) {
 		f := New()
 		column := f.calculateCurrencyColumn(ast)
 
-		// Width with flag: 2 + 2 (flag+space) + 15 + 2 + 6 + 2 = 29
-		assert.True(t, column >= 29, "Column should account for flag")
+		// Width with flag: 4 + 2 (flag+space) + 15 + 2 + 6 + 2 = 31
+		assert.True(t, column >= 31, "Column should account for flag")
 	})
 
 	t.Run("WithBalanceDirective", func(t *testing.T) {
