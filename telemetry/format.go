@@ -51,15 +51,17 @@ func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool) {
 			durationMs := float64(duration.Nanoseconds()) / 1e6
 			if durationMs > 0 {
 				rate := float64(config.Count) / durationMs
+				// Calculate average time per item
+				avgTimePerItem := duration / time.Duration(config.Count)
+
 				if config.Unit == "transactions" {
 					// For transactions, show count, rate, and average time per transaction
-					avgTimePerTxn := duration / time.Duration(config.Count)
 					timerName = fmt.Sprintf("%s (%d %s, %.1f/ms, %v avg)",
-						config.Name, config.Count, config.Unit, rate, avgTimePerTxn.Round(time.Microsecond))
+						config.Name, config.Count, config.Unit, rate, avgTimePerItem.Round(time.Microsecond))
 				} else {
-					// For other units (directives, etc.), show count and rate
-					timerName = fmt.Sprintf("%s (%d %s, %.1f/ms)",
-						config.Name, config.Count, config.Unit, rate)
+					// For other units (directives, etc.), show count, rate, and average time per item
+					timerName = fmt.Sprintf("%s (%d %s, %.1f/ms, %v avg)",
+						config.Name, config.Count, config.Unit, rate, avgTimePerItem.Round(time.Microsecond))
 				}
 			}
 		}
