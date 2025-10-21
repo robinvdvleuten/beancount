@@ -11,6 +11,11 @@ func (noOpCollector) Start(name string) Timer {
 	return noOpTimer{}
 }
 
+// StartStructured returns a no-op structured timer.
+func (noOpCollector) StartStructured(config TimerConfig) StructuredTimer {
+	return noOpStructuredTimer{}
+}
+
 // Report does nothing.
 func (noOpCollector) Report(w io.Writer) {}
 
@@ -23,4 +28,20 @@ func (noOpTimer) End() {}
 // Child returns a no-op timer.
 func (noOpTimer) Child(name string) Timer {
 	return noOpTimer{}
+}
+
+// noOpStructuredTimer is a structured timer that does nothing.
+type noOpStructuredTimer struct{}
+
+// End does nothing.
+func (noOpStructuredTimer) End() {}
+
+// Child returns a no-op timer.
+func (noOpStructuredTimer) Child(name string) Timer {
+	return noOpTimer{}
+}
+
+// Config returns an empty config.
+func (noOpStructuredTimer) Config() TimerConfig {
+	return TimerConfig{}
 }

@@ -145,7 +145,11 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	}
 
 	// Process directives in order (they're already sorted by date)
-	processTimer := collector.Start(fmt.Sprintf("ledger.processing (%d directives)", len(tree.Directives)))
+	processTimer := collector.StartStructured(telemetry.TimerConfig{
+		Name:  "ledger.processing",
+		Count: len(tree.Directives),
+		Unit:  "directives",
+	})
 
 	// Count transactions and create validation summary timer
 	transactionCount := 0
@@ -157,10 +161,11 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 	var validationTimer telemetry.Timer
 	if transactionCount > 0 {
-		validationTimer = collector.Start(fmt.Sprintf(
-			"validation.transactions (%d total)",
-			transactionCount,
-		))
+		validationTimer = collector.StartStructured(telemetry.TimerConfig{
+			Name:  "validation.transactions",
+			Count: transactionCount,
+			Unit:  "transactions",
+		})
 	}
 
 	for _, directive := range tree.Directives {
@@ -185,7 +190,11 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 	// Insert synthetic padding transactions into AST and process them
 	if len(l.syntheticTransactions) > 0 {
-		insertTimer := collector.Start(fmt.Sprintf("ledger.synthetic_txn_insertion (%d transactions)", len(l.syntheticTransactions)))
+		insertTimer := collector.StartStructured(telemetry.TimerConfig{
+			Name:  "ledger.synthetic_txn_insertion",
+			Count: len(l.syntheticTransactions),
+			Unit:  "transactions",
+		})
 
 		// Add synthetic transactions to AST
 		for _, txn := range l.syntheticTransactions {

@@ -3,8 +3,6 @@ package telemetry
 import (
 	"fmt"
 	"io"
-	"strconv"
-	"strings"
 	"time"
 )
 
@@ -45,32 +43,23 @@ func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool) {
 		extension = "│  "
 	}
 
-	// Special handling for validation.transactions and ledger.processing timers
+	// Use structured config for metrics calculation if available
 	timerName := node.name
-	if strings.HasPrefix(node.name, "validation.transactions (") && strings.HasSuffix(node.name, " total)") {
-		// Parse transaction count from name like "validation.transactions (123 total)"
-		if countStr := strings.TrimPrefix(strings.TrimSuffix(node.name, " total)"), "validation.transactions ("); countStr != "" {
-			if count, err := strconv.Atoi(countStr); err == nil && count > 0 {
-				// Calculate metrics
-				durationMs := float64(duration.Nanoseconds()) / 1e6
-				if durationMs > 0 {
-					txnsPerMs := float64(count) / durationMs
-					avgTimePerTxn := duration / time.Duration(count)
-					timerName = fmt.Sprintf("validation.transactions (%d total, %.1f/ms, %v avg)",
-						count, txnsPerMs, avgTimePerTxn.Round(time.Microsecond))
-				}
-			}
-		}
-	} else if strings.HasPrefix(node.name, "ledger.processing (") && strings.HasSuffix(node.name, " directives)") {
-		// Parse directive count from name like "ledger.processing (123 directives)"
-		if countStr := strings.TrimPrefix(strings.TrimSuffix(node.name, " directives)"), "ledger.processing ("); countStr != "" {
-			if count, err := strconv.Atoi(countStr); err == nil && count > 0 {
-				// Calculate directives per ms
-				durationMs := float64(duration.Nanoseconds()) / 1e6
-				if durationMs > 0 {
-					dirsPerMs := float64(count) / durationMs
-					timerName = fmt.Sprintf("ledger.processing (%d directives, %.1f/ms)",
-						count, dirsPerMs)
+	if node.config != nil {
+		config := *node.config
+		if config.Count > 0 {
+			durationMs := float64(duration.Nanoseconds()) / 1e6
+			if durationMs > 0 {
+				rate := float64(config.Count) / durationMs
+				if config.Unit == "transactions" {
+					// For transactions, show count, rate, and average time per transaction
+					avgTimePerTxn := duration / time.Duration(config.Count)
+					timerName = fmt.Sprintf("%s (%d %s, %.1f/ms, %v avg)",
+						config.Name, config.Count, config.Unit, rate, avgTimePerTxn.Round(time.Microsecond))
+				} else {
+					// For other units (directives, etc.), show count and rate
+					timerName = fmt.Sprintf("%s (%d %s, %.1f/ms)",
+						config.Name, config.Count, config.Unit, rate)
 				}
 			}
 		}

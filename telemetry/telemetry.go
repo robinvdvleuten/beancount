@@ -45,9 +45,20 @@ type Collector interface {
 	// The timer should be ended with End() when the operation completes.
 	Start(name string) Timer
 
+	// StartStructured begins timing an operation with structured configuration
+	// and returns a StructuredTimer for metrics-enhanced formatting.
+	StartStructured(config TimerConfig) StructuredTimer
+
 	// Report outputs the collected telemetry to a writer.
 	// The format is implementation-specific.
 	Report(w io.Writer)
+}
+
+// TimerConfig holds structured data for timers that need metrics calculation.
+type TimerConfig struct {
+	Name  string // Timer name (e.g., "ledger.processing")
+	Count int    // Number of items processed (e.g., directive count)
+	Unit  string // Unit of items (e.g., "directives", "transactions", "total")
 }
 
 // Timer tracks a single operation's timing.
@@ -59,6 +70,12 @@ type Timer interface {
 	// Child creates a nested timer under this timer.
 	// The child timer will appear nested in the output.
 	Child(name string) Timer
+}
+
+// StructuredTimer extends Timer with access to configuration data.
+type StructuredTimer interface {
+	Timer
+	Config() TimerConfig
 }
 
 // WithCollector adds a collector to a context.
