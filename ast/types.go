@@ -34,7 +34,7 @@ type Amount struct {
 //	10 HOOL {*}                       ; Merge/average all lots
 type Cost struct {
 	IsMerge bool
-	IsTotal bool    // True if specified with {{}} (total cost syntax)
+	IsTotal bool // True if specified with {{}} (total cost syntax)
 	Amount  *Amount
 	Date    *Date
 	Label   string

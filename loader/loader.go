@@ -96,7 +96,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 		if err != nil {
 			// Wrap parser errors for consistent formatting
-			return nil, parser.NewParseError(filename, err)
+			return nil, parser.NewParseErrorWithSource(filename, err, data)
 		}
 		return result, nil
 	}
@@ -147,7 +147,7 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 
 	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
 	if err != nil {
-		return nil, parser.NewParseError(filename, err)
+		return nil, parser.NewParseErrorWithSource(filename, err, data)
 	}
 
 	// If following includes is requested but we're parsing from stdin,
@@ -207,7 +207,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		parseTimer.End()
 		loadTimer.End()
 		// Wrap parser errors for consistent formatting
-		return nil, parser.NewParseError(filename, err)
+		return nil, parser.NewParseErrorWithSource(filename, err, data)
 	}
 	parseTimer.End()
 	loadTimer.End()
@@ -292,7 +292,7 @@ func (l *loaderState) loadRecursiveFlat(ctx context.Context, filename string) (*
 	if err != nil {
 		loadTimer.End()
 		// Wrap parser errors for consistent formatting
-		return nil, parser.NewParseError(filename, err)
+		return nil, parser.NewParseErrorWithSource(filename, err, data)
 	}
 
 	// If no includes, end and return

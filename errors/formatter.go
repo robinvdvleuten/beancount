@@ -18,6 +18,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
+	"github.com/robinvdvleuten/beancount/parser"
 )
 
 // Formatter formats errors for output in different formats.
@@ -31,15 +32,30 @@ type Formatter interface {
 
 // TextFormatter formats errors for command-line output in bean-check style.
 type TextFormatter struct {
-	formatter *formatter.Formatter
+	formatter     *formatter.Formatter
+	sourceContent []byte // Optional source content for parse error context
+}
+
+// TextFormatterOption is an option for configuring TextFormatter.
+type TextFormatterOption func(*TextFormatter)
+
+// WithSource sets the source content for parse error context.
+func WithSource(source []byte) TextFormatterOption {
+	return func(tf *TextFormatter) {
+		tf.sourceContent = source
+	}
 }
 
 // NewTextFormatter creates a new text formatter.
-func NewTextFormatter(f *formatter.Formatter) *TextFormatter {
+func NewTextFormatter(f *formatter.Formatter, opts ...TextFormatterOption) *TextFormatter {
 	if f == nil {
 		f = formatter.New()
 	}
-	return &TextFormatter{formatter: f}
+	tf := &TextFormatter{formatter: f}
+	for _, opt := range opts {
+		opt(tf)
+	}
+	return tf
 }
 
 // Format formats a single error in bean-check style.
@@ -53,11 +69,26 @@ func (tf *TextFormatter) Format(err error) string {
 		return tf.formatWithContext(e.GetPosition(), e.Error(), e.GetDirective())
 	}
 
+	// Check if this is a parse error with source context
+	if e, ok := err.(*parser.ParseError); ok {
+		source := tf.sourceContent
+		if source == nil {
+			source = e.SourceRange.Source
+		}
+		if source != nil {
+			return tf.formatWithSourceContext(e.Pos, e.Error(), source)
+		}
+	}
+
 	// Check if this is an error with position only
 	if e, ok := err.(interface {
 		GetPosition() ast.Position
 		Error() string
 	}); ok {
+		// If we have source content, show source context instead of just position
+		if tf.sourceContent != nil {
+			return tf.formatWithSourceContext(e.GetPosition(), e.Error(), tf.sourceContent)
+		}
 		return tf.formatWithPosition(e.GetPosition(), e.Error())
 	}
 
@@ -89,6 +120,54 @@ func (tf *TextFormatter) formatWithPosition(pos ast.Position, message string) st
 	return message
 }
 
+// formatWithSourceContext formats a parse error with original source context.
+// Shows the error message followed by the original source lines around the error position.
+func (tf *TextFormatter) formatWithSourceContext(pos ast.Position, message string, sourceContent []byte) string {
+	var buf bytes.Buffer
+
+	// Write the error message
+	buf.WriteString(message)
+	buf.WriteString("\n\n")
+
+	// Split the source content into lines
+	sourceStr := string(sourceContent)
+	sourceLines := strings.Split(sourceStr, "\n")
+
+	// Determine the range of lines to show (2 lines before and after the error line)
+	startLine := pos.Line - 3 // 0-based indexing, show 2 lines before
+	endLine := pos.Line + 1   // show 1 line after (inclusive)
+
+	// Ensure bounds
+	if startLine < 0 {
+		startLine = 0
+	}
+	if endLine >= len(sourceLines) {
+		endLine = len(sourceLines) - 1
+	}
+
+	// Show the source lines
+	for i := startLine; i <= endLine; i++ {
+		if i >= len(sourceLines) {
+			break
+		}
+		buf.WriteString("   ")
+		buf.WriteString(sourceLines[i])
+		buf.WriteByte('\n')
+
+		// Add caret pointing to error column on the error line
+		if i == pos.Line-1 && pos.Column > 0 { // pos.Line is 1-based, i is 0-based
+			buf.WriteString("   ")
+			// Add spaces up to the error column (adjusting for the 3-space indent)
+			for j := 0; j < pos.Column-1; j++ {
+				buf.WriteByte(' ')
+			}
+			buf.WriteString("^\n")
+		}
+	}
+
+	return buf.String()
+}
+
 // formatWithContext formats an error with directive context (bean-check style).
 func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, directive ast.Directive) string {
 	if directive == nil {
@@ -106,9 +185,9 @@ func (tf *TextFormatter) formatWithContext(pos ast.Position, message string, dir
 	case *ast.Transaction:
 		// Use the formatter to format transactions
 		var txnBuf bytes.Buffer
-		txnFormatter := formatter.New()
+		txnFormatter := formatter.New(formatter.WithIndentation(0))
 		if tf.formatter != nil && tf.formatter.CurrencyColumn > 0 {
-			txnFormatter = formatter.New(formatter.WithCurrencyColumn(tf.formatter.CurrencyColumn))
+			txnFormatter = formatter.New(formatter.WithCurrencyColumn(tf.formatter.CurrencyColumn), formatter.WithIndentation(0))
 		}
 
 		if err := txnFormatter.FormatTransaction(d, &txnBuf); err == nil {

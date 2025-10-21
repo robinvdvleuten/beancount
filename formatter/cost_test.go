@@ -103,8 +103,8 @@ func TestFormatCost(t *testing.T) {
 			expected: "{*}",
 		},
 		{
-			name: "EmptyCost",
-			cost: &ast.Cost{},
+			name:     "EmptyCost",
+			cost:     &ast.Cost{},
 			expected: "{}",
 		},
 	}

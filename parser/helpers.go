@@ -502,7 +502,8 @@ func (p *Parser) expect(typ TokenType, message string) Token {
 
 func (p *Parser) errorAtToken(tok Token, format string, args ...interface{}) error {
 	pos := tokenPosition(tok, p.filename)
-	return newErrorf(pos, format, args...)
+	sourceRange := p.calculateSourceRange(pos)
+	return newErrorfWithSource(pos, sourceRange, format, args...)
 }
 
 func (p *Parser) error(format string, args ...interface{}) error {
@@ -536,5 +537,56 @@ func (p *Parser) errorAtEndOfPrevious(format string, args ...interface{}) error 
 		Line:     prev.Line,
 		Column:   prev.Column + (prev.End - prev.Start),
 	}
-	return newErrorf(pos, format, args...)
+	sourceRange := p.calculateSourceRange(pos)
+	return newErrorfWithSource(pos, sourceRange, format, args...)
+}
+
+// calculateSourceRange determines the byte range in source that contains context lines around the error position.
+// This includes 2 lines before and 2 lines after the error line for context display.
+func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
+	// Split source into lines to find line boundaries
+	sourceStr := string(p.source)
+	lines := strings.Split(sourceStr, "\n")
+
+	// Determine line range to include (2 lines before and after error line)
+	startLine := pos.Line - 3 // 0-based, show 2 lines before
+	endLine := pos.Line + 1   // show 1 line after (inclusive)
+
+	// Ensure bounds
+	if startLine < 0 {
+		startLine = 0
+	}
+	if endLine >= len(lines) {
+		endLine = len(lines) - 1
+	}
+
+	// Calculate byte offsets for the line range
+	startOffset := 0
+	if startLine > 0 {
+		// Sum lengths of all lines before startLine, plus newline characters
+		for i := 0; i < startLine; i++ {
+			startOffset += len(lines[i]) + 1 // +1 for newline
+		}
+	}
+
+	endOffset := startOffset
+	for i := startLine; i <= endLine; i++ {
+		if i < len(lines) {
+			endOffset += len(lines[i])
+			if i < endLine { // Don't add newline after last line
+				endOffset += 1
+			}
+		}
+	}
+
+	// Ensure we don't exceed source bounds
+	if endOffset > len(p.source) {
+		endOffset = len(p.source)
+	}
+
+	return SourceRange{
+		StartOffset: startOffset,
+		EndOffset:   endOffset,
+		Source:      p.source[startOffset:endOffset],
+	}
 }

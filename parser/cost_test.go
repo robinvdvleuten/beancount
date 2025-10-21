@@ -96,8 +96,8 @@ func TestParseCost(t *testing.T) {
 			},
 		},
 		{
-			name:  "EmptyCost",
-			input: "{}",
+			name:     "EmptyCost",
+			input:    "{}",
 			expected: &ast.Cost{},
 		},
 		{

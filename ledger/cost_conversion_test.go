@@ -185,11 +185,11 @@ func TestNormalizePostingCost(t *testing.T) {
 
 func TestNormalizeLotSpecForPosting(t *testing.T) {
 	tests := []struct {
-		name          string
-		lotSpec       *lotSpec
-		posting       *ast.Posting
-		expectError   bool
-		expectedCost  decimal.Decimal
+		name         string
+		lotSpec      *lotSpec
+		posting      *ast.Posting
+		expectError  bool
+		expectedCost decimal.Decimal
 	}{
 		{
 			name: "TotalCostConversion",
@@ -204,7 +204,7 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 					Amount:  &ast.Amount{Value: "1000.00", Currency: "USD"},
 				},
 			},
-			expectError: false,
+			expectError:  false,
 			expectedCost: decimal.RequireFromString("100"), // 1000 / 10 = 100
 		},
 		{
@@ -236,7 +236,7 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 					Amount:  &ast.Amount{Value: "100.00", Currency: "USD"},
 				},
 			},
-			expectError: false,
+			expectError:  false,
 			expectedCost: decimal.RequireFromString("100.00"), // unchanged
 		},
 		{
@@ -252,7 +252,7 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 					Amount:  &ast.Amount{Value: "100.00", Currency: "USD"},
 				},
 			},
-			expectError: false,
+			expectError:  false,
 			expectedCost: decimal.RequireFromString("100.00"), // unchanged
 		},
 	}

@@ -133,7 +133,7 @@ func (l *Lexer) scanToken() Token {
 		return Token{COLON, start, l.pos, startLine, startCol}
 	case ch == ',':
 		return Token{COMMA, start, l.pos, startLine, startCol}
-	
+
 	// { or {{
 	case ch == '{':
 		if l.peek() == '{' {
@@ -141,7 +141,7 @@ func (l *Lexer) scanToken() Token {
 			return Token{LDBRACE, start, l.pos, startLine, startCol}
 		}
 		return Token{LBRACE, start, l.pos, startLine, startCol}
-	
+
 	// } or }}
 	case ch == '}':
 		if l.peek() == '}' {

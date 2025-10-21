@@ -56,11 +56,17 @@ func TestNew(t *testing.T) {
 		f := New()
 		assert.NotEqual(t, nil, f)
 		assert.Equal(t, DefaultCurrencyColumn, f.CurrencyColumn)
+		assert.Equal(t, DefaultIndentation, f.Indentation)
 	})
 
 	t.Run("WithCurrencyColumn", func(t *testing.T) {
 		f := New(WithCurrencyColumn(60))
 		assert.Equal(t, 60, f.CurrencyColumn)
+	})
+
+	t.Run("WithIndentation", func(t *testing.T) {
+		f := New(WithIndentation(6))
+		assert.Equal(t, 6, f.Indentation)
 	})
 }
 

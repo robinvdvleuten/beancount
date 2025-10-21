@@ -169,6 +169,10 @@ type Formatter struct {
 	// Default: true
 	PreserveBlanks bool
 
+	// Indentation is the number of spaces to use for indentation.
+	// Default: DefaultIndentation
+	Indentation int
+
 	// sourceLines holds the original source lines for preserving spacing.
 	// This is set during Format() and cleared after.
 	sourceLines []string
@@ -213,12 +217,20 @@ func WithPreserveBlanks(preserve bool) Option {
 	}
 }
 
+// WithIndentation sets the indentation level for postings and metadata.
+func WithIndentation(indent int) Option {
+	return func(f *Formatter) {
+		f.Indentation = indent
+	}
+}
+
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
 		CurrencyColumn:   DefaultCurrencyColumn, // Use default column like bean-format
-		PreserveComments: true,                   // Preserve comments by default
-		PreserveBlanks:   true,                   // Preserve blank lines by default
+		Indentation:      DefaultIndentation,    // Use default indentation
+		PreserveComments: true,                  // Preserve comments by default
+		PreserveBlanks:   true,                  // Preserve blank lines by default
 	}
 
 	for _, opt := range opts {
@@ -245,7 +257,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			for _, posting := range d.Postings {
 				if posting.Amount != nil {
 					// Calculate prefix width: indentation + flag + account + spacing
-					prefixWidth := DefaultIndentation
+					prefixWidth := f.Indentation
 					if posting.Flag != "" {
 						prefixWidth += 2 // flag + space
 					}
@@ -1048,7 +1060,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 
 	buf.WriteByte('\n')
 
-	// Transaction-level metadata (indented with DefaultIndentation spaces)
+	// Transaction-level metadata (indented with f.Indentation spaces)
 	f.formatMetadata(t.Metadata, buf)
 
 	// Format each posting with proper alignment
@@ -1060,10 +1072,10 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 // formatPosting formats a single posting with proper alignment.
 // Handles both postings with explicit amounts and implied amounts (nil).
 func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	buf.WriteString(strings.Repeat(" ", DefaultIndentation))
+	buf.WriteString(strings.Repeat(" ", f.Indentation))
 
 	// Calculate display width: indentation + flag (if present) + account
-	currentWidth := DefaultIndentation
+	currentWidth := f.Indentation
 
 	// Add flag if present
 	if p.Flag != "" {
@@ -1232,7 +1244,7 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 	}
 
 	for _, m := range metadata {
-		buf.WriteString(strings.Repeat(" ", DefaultIndentation))
+		buf.WriteString(strings.Repeat(" ", f.Indentation))
 		buf.WriteString(m.Key)
 		buf.WriteString(": ")
 		f.formatMetadataValue(m.Value, buf)

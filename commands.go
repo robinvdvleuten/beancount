@@ -121,6 +121,18 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		defer reportTelemetry()
 	}
 
+	// Read source content for error formatting (needed for parse error context)
+	var sourceContent []byte
+	if cmd.File.Filename == "<stdin>" {
+		sourceContent = cmd.File.Contents
+	} else {
+		var err error
+		sourceContent, err = os.ReadFile(cmd.File.Filename)
+		if err != nil {
+			return fmt.Errorf("failed to read file for error context: %w", err)
+		}
+	}
+
 	// Load input: use LoadBytes for stdin, Load for files
 	var ast *ast.AST
 	var err error
@@ -134,8 +146,8 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		ast, err = ldr.Load(runCtx, cmd.File.Filename)
 	}
 	if err != nil {
-		// Format parser errors consistently with ledger errors
-		errFormatter := errors.NewTextFormatter(nil)
+		// Format parser errors with source context
+		errFormatter := errors.NewTextFormatter(nil, errors.WithSource(sourceContent))
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprintln(ctx.Stderr, formatted)
 
@@ -156,7 +168,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		if stdErrors.As(err, &validationErrors) {
 			// Create a formatter for rendering errors
 			f := formatter.New()
-			errFormatter := errors.NewTextFormatter(f)
+			errFormatter := errors.NewTextFormatter(f, errors.WithSource(sourceContent))
 
 			// Format all errors
 			formatted := errFormatter.FormatAll(validationErrors.Errors)
@@ -216,18 +228,25 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Load input: use LoadBytes for stdin, Load for files
 	var ast *ast.AST
 	var err error
+	var sourceContent []byte
 	if cmd.File.Filename == "<stdin>" {
 		// Stdin: contents already read by FileOrStdin.Decode
+		sourceContent = cmd.File.Contents
 		ldr := loader.New()
 		ast, err = ldr.LoadBytes(runCtx, cmd.File.Filename, cmd.File.Contents)
 	} else {
 		// File: use Load (though format doesn't follow includes, this is consistent)
+		var readErr error
+		sourceContent, readErr = os.ReadFile(cmd.File.Filename)
+		if readErr != nil {
+			return fmt.Errorf("failed to read file: %w", readErr)
+		}
 		ldr := loader.New()
 		ast, err = ldr.Load(runCtx, cmd.File.Filename)
 	}
 	if err != nil {
-		// Format parser errors consistently
-		errFormatter := errors.NewTextFormatter(nil)
+		// Format parser errors with source context
+		errFormatter := errors.NewTextFormatter(nil, errors.WithSource(sourceContent))
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
