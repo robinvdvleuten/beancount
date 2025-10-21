@@ -217,7 +217,7 @@ func (p *Parser) parseString() (string, error) {
 		return "", p.errorAtEndOfPrevious("expected string")
 	}
 
-	return p.unquoteString(tok.String(p.source)), nil
+	return p.interner.Intern(p.unquoteString(tok.String(p.source))), nil
 }
 
 // parseIdent parses an IDENT token.

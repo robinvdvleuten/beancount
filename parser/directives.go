@@ -274,6 +274,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		case STRING:
 			p.advance()
 			s := p.unquoteString(tok.String(p.source))
+			s = p.interner.Intern(s)
 			val = &ast.CustomValue{String: &s}
 
 		case IDENT:
