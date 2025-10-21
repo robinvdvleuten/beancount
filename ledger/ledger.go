@@ -146,16 +146,40 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 	// Process directives in order (they're already sorted by date)
 	processTimer := collector.Start(fmt.Sprintf("ledger.processing (%d directives)", len(tree.Directives)))
+
+	// Count transactions and create validation summary timer
+	transactionCount := 0
+	for _, directive := range tree.Directives {
+		if _, ok := directive.(*ast.Transaction); ok {
+			transactionCount++
+		}
+	}
+
+	var validationTimer telemetry.Timer
+	if transactionCount > 0 {
+		validationTimer = collector.Start(fmt.Sprintf(
+			"validation.transactions (%d total)",
+			transactionCount,
+		))
+	}
+
 	for _, directive := range tree.Directives {
 		// Check for cancellation
 		select {
 		case <-ctx.Done():
+			if validationTimer != nil {
+				validationTimer.End()
+			}
 			processTimer.End()
 			return ctx.Err()
 		default:
 		}
 
 		l.processDirective(ctx, directive)
+	}
+
+	if validationTimer != nil {
+		validationTimer.End()
 	}
 	processTimer.End()
 

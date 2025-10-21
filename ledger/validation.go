@@ -6,7 +6,6 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
 
@@ -454,10 +453,6 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 // Returns delta (mutations), validation (balance state), and errors.
 // This is the core transaction validation logic.
 func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) (*TransactionDelta, *balanceValidation, []error) {
-	collector := telemetry.FromContext(ctx)
-	timer := collector.Start("validation.calculate_balance")
-	defer timer.End()
-
 	var errs []error
 	pc := classifyPostings(txn.Postings)
 
@@ -671,46 +666,32 @@ func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) 
 //	// Validation passed - delta contains inferred amounts/costs
 //	fmt.Printf("Inferred %d amounts\n", len(delta.InferredAmounts))
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *TransactionDelta) {
-	collector := telemetry.FromContext(ctx)
-	timer := collector.Start("validation.transaction")
-	defer timer.End()
-
 	var allErrors []error
 
 	// 1. Validate accounts are open
-	accountsTimer := timer.Child("validation.accounts")
 	if errs := v.validateAccountsOpen(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	accountsTimer.End()
 
 	// 2. Validate amounts are parseable
-	amountsTimer := timer.Child("validation.amounts")
 	if errs := v.validateAmounts(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	amountsTimer.End()
 
 	// 3. Validate cost specifications
-	costsTimer := timer.Child("validation.costs")
 	if errs := v.validateCosts(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	costsTimer.End()
 
 	// 4. Validate price specifications
-	pricesTimer := timer.Child("validation.prices")
 	if errs := v.validatePrices(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	pricesTimer.End()
 
 	// 5. Validate metadata
-	metadataTimer := timer.Child("validation.metadata")
 	if errs := v.validateMetadata(ctx, txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	metadataTimer.End()
 
 	// If basic validation failed, don't proceed to balance calculation
 	if len(allErrors) > 0 {
@@ -740,18 +721,14 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	}
 
 	// 8. Validate constraint currencies (AFTER inference so we can check inferred amounts)
-	constraintsTimer := timer.Child("validation.constraints")
 	if errs := v.validateConstraintCurrencies(ctx, txn, delta); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	constraintsTimer.End()
 
 	// 9. Validate inventory operations
-	inventoryTimer := timer.Child("validation.inventory")
 	if errs := v.validateInventoryOperations(ctx, txn, delta); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
-	inventoryTimer.End()
 
 	// If any post-balance validation failed, return errors
 	if len(allErrors) > 0 {

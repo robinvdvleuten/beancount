@@ -3,6 +3,8 @@ package telemetry
 import (
 	"fmt"
 	"io"
+	"strconv"
+	"strings"
 	"time"
 )
 
@@ -43,8 +45,39 @@ func formatNode(w io.Writer, node *timerNode, prefix string, isLast bool) {
 		extension = "│  "
 	}
 
+	// Special handling for validation.transactions and ledger.processing timers
+	timerName := node.name
+	if strings.HasPrefix(node.name, "validation.transactions (") && strings.HasSuffix(node.name, " total)") {
+		// Parse transaction count from name like "validation.transactions (123 total)"
+		if countStr := strings.TrimPrefix(strings.TrimSuffix(node.name, " total)"), "validation.transactions ("); countStr != "" {
+			if count, err := strconv.Atoi(countStr); err == nil && count > 0 {
+				// Calculate metrics
+				durationMs := float64(duration.Nanoseconds()) / 1e6
+				if durationMs > 0 {
+					txnsPerMs := float64(count) / durationMs
+					avgTimePerTxn := duration / time.Duration(count)
+					timerName = fmt.Sprintf("validation.transactions (%d total, %.1f/ms, %v avg)",
+						count, txnsPerMs, avgTimePerTxn.Round(time.Microsecond))
+				}
+			}
+		}
+	} else if strings.HasPrefix(node.name, "ledger.processing (") && strings.HasSuffix(node.name, " directives)") {
+		// Parse directive count from name like "ledger.processing (123 directives)"
+		if countStr := strings.TrimPrefix(strings.TrimSuffix(node.name, " directives)"), "ledger.processing ("); countStr != "" {
+			if count, err := strconv.Atoi(countStr); err == nil && count > 0 {
+				// Calculate directives per ms
+				durationMs := float64(duration.Nanoseconds()) / 1e6
+				if durationMs > 0 {
+					dirsPerMs := float64(count) / durationMs
+					timerName = fmt.Sprintf("ledger.processing (%d directives, %.1f/ms)",
+						count, dirsPerMs)
+				}
+			}
+		}
+	}
+
 	// Format this node
-	_, _ = fmt.Fprintf(w, "%s%s%s: %s\n", prefix, branch, node.name, formatDuration(duration))
+	_, _ = fmt.Fprintf(w, "%s%s%s: %s\n", prefix, branch, timerName, formatDuration(duration))
 
 	// Format children
 	childPrefix := prefix + extension
