@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestNoOpCollector(t *testing.T) {
@@ -22,9 +24,7 @@ func TestNoOpCollector(t *testing.T) {
 	collector.Report(&buf)
 
 	// Should produce no output
-	if buf.Len() != 0 {
-		t.Errorf("NoOp collector should produce no output, got: %s", buf.String())
-	}
+	assert.Equal(t, 0, buf.Len(), "NoOp collector should produce no output")
 }
 
 func TestFromContextReturnsNoOpWhenMissing(t *testing.T) {
@@ -32,14 +32,10 @@ func TestFromContextReturnsNoOpWhenMissing(t *testing.T) {
 	collector := FromContext(ctx)
 
 	// Should return NoOp collector, not nil
-	if collector == nil {
-		t.Fatal("FromContext should never return nil")
-	}
+	assert.True(t, collector != nil, "FromContext should never return nil")
 
 	// Should be a NoOp collector
-	if _, ok := collector.(noOpCollector); !ok {
-		t.Errorf("FromContext should return noOpCollector when none present, got: %T", collector)
-	}
+	assert.True(t, func() bool { _, ok := collector.(noOpCollector); return ok }(), "FromContext should return noOpCollector when none present")
 }
 
 func TestWithCollector(t *testing.T) {
@@ -51,9 +47,7 @@ func TestWithCollector(t *testing.T) {
 	retrieved := FromContext(ctx)
 	// Compare as Collector interface
 	retrievedTiming, ok := retrieved.(*TimingCollector)
-	if !ok || retrievedTiming != collector {
-		t.Error("FromContext should return the same collector that was added")
-	}
+	assert.True(t, ok && retrievedTiming == collector, "FromContext should return the same collector that was added")
 }
 
 func TestTimingCollectorBasic(t *testing.T) {
@@ -69,14 +63,10 @@ func TestTimingCollectorBasic(t *testing.T) {
 	output := buf.String()
 
 	// Should contain operation name
-	if !strings.Contains(output, "Operation") {
-		t.Errorf("Output should contain operation name, got: %s", output)
-	}
+	assert.True(t, strings.Contains(output, "Operation"), "Output should contain operation name")
 
 	// Should contain duration
-	if !strings.Contains(output, "ms") {
-		t.Errorf("Output should contain duration, got: %s", output)
-	}
+	assert.True(t, strings.Contains(output, "ms"), "Output should contain duration")
 }
 
 func TestTimingCollectorHierarchical(t *testing.T) {
@@ -104,20 +94,12 @@ func TestTimingCollectorHierarchical(t *testing.T) {
 	output := buf.String()
 
 	// Should contain all operation names
-	if !strings.Contains(output, "Total") {
-		t.Errorf("Output should contain 'Total', got: %s", output)
-	}
-	if !strings.Contains(output, "Child") {
-		t.Errorf("Output should contain 'Child', got: %s", output)
-	}
-	if !strings.Contains(output, "Child 2") {
-		t.Errorf("Output should contain 'Child 2', got: %s", output)
-	}
+	assert.True(t, strings.Contains(output, "Total"), "Output should contain 'Total'")
+	assert.True(t, strings.Contains(output, "Child"), "Output should contain 'Child'")
+	assert.True(t, strings.Contains(output, "Child 2"), "Output should contain 'Child 2'")
 
 	// Should have tree structure (contains tree characters)
-	if !strings.Contains(output, "├─") && !strings.Contains(output, "└─") {
-		t.Errorf("Output should contain tree structure, got: %s", output)
-	}
+	assert.True(t, strings.Contains(output, "├─") || strings.Contains(output, "└─"), "Output should contain tree structure")
 }
 
 func TestTimingCollectorDeepNesting(t *testing.T) {
@@ -138,9 +120,7 @@ func TestTimingCollectorDeepNesting(t *testing.T) {
 	output := buf.String()
 
 	// Should contain all levels
-	if !strings.Contains(output, "Level 1") || !strings.Contains(output, "Level 2") || !strings.Contains(output, "Level 3") {
-		t.Errorf("Output should contain all levels, got: %s", output)
-	}
+	assert.True(t, strings.Contains(output, "Level 1") && strings.Contains(output, "Level 2") && strings.Contains(output, "Level 3"), "Output should contain all levels")
 
 	// Count indentation levels (each level adds 3 chars: "│  " or "   ")
 	lines := strings.Split(output, "\n")
@@ -149,14 +129,10 @@ func TestTimingCollectorDeepNesting(t *testing.T) {
 		if strings.Contains(line, "Level 3") {
 			foundLevel3 = true
 			// Level 3 should be indented (has prefix before "└─" or "├─")
-			if !strings.Contains(line, "   ") && !strings.Contains(line, "│  ") {
-				t.Errorf("Level 3 should be indented, got: %s", line)
-			}
+			assert.True(t, strings.Contains(line, "   ") || strings.Contains(line, "│  "), "Level 3 should be indented")
 		}
 	}
-	if !foundLevel3 {
-		t.Error("Should find Level 3 in output")
-	}
+	assert.True(t, foundLevel3, "Should find Level 3 in output")
 }
 
 func TestFormatDuration(t *testing.T) {
@@ -189,9 +165,7 @@ func TestFormatDuration(t *testing.T) {
 
 	for _, tt := range tests {
 		got := formatDuration(tt.duration)
-		if got != tt.want {
-			t.Errorf("formatDuration(%v) = %q, want %q", tt.duration, got, tt.want)
-		}
+		assert.Equal(t, tt.want, got, "formatDuration mismatch")
 	}
 }
 
@@ -202,9 +176,7 @@ func TestTimingCollectorEmptyReport(t *testing.T) {
 	collector.Report(&buf)
 
 	// Should produce no output when no timers have been started
-	if buf.Len() != 0 {
-		t.Errorf("Empty collector should produce no output, got: %s", buf.String())
-	}
+	assert.Equal(t, 0, buf.Len(), "Empty collector should produce no output")
 }
 
 func TestWithRootTimerDoesNotOverwriteCollector(t *testing.T) {
@@ -215,9 +187,8 @@ func TestWithRootTimerDoesNotOverwriteCollector(t *testing.T) {
 
 	// Verify collector is retrievable
 	retrieved := FromContext(ctx)
-	if retrievedTiming, ok := retrieved.(*TimingCollector); !ok || retrievedTiming != collector {
-		t.Error("Collector should be retrievable after WithCollector")
-	}
+	retrievedTiming, ok := retrieved.(*TimingCollector)
+	assert.True(t, ok && retrievedTiming == collector, "Collector should be retrievable after WithCollector")
 
 	// Add a root timer to the context
 	rootTimer := collector.Start("root")
@@ -225,15 +196,12 @@ func TestWithRootTimerDoesNotOverwriteCollector(t *testing.T) {
 
 	// Verify collector is STILL retrievable after WithRootTimer
 	retrieved = FromContext(ctx)
-	if retrievedTiming, ok := retrieved.(*TimingCollector); !ok || retrievedTiming != collector {
-		t.Error("Collector should still be retrievable after WithRootTimer")
-	}
+	retrievedTiming, ok = retrieved.(*TimingCollector)
+	assert.True(t, ok && retrievedTiming == collector, "Collector should still be retrievable after WithRootTimer")
 
 	// Verify root timer is also retrievable
 	retrievedTimer := RootTimerFromContext(ctx)
-	if retrievedTimer == nil {
-		t.Error("Root timer should be retrievable")
-	}
+	assert.True(t, retrievedTimer != nil, "Root timer should be retrievable")
 
 	rootTimer.End()
 }
@@ -271,21 +239,11 @@ func TestCollectorStartWithRootTimer(t *testing.T) {
 	output := buf.String()
 
 	// Parser timers should be nested under loader.parse
-	if !strings.Contains(output, "check") {
-		t.Errorf("Output should contain 'check', got: %s", output)
-	}
-	if !strings.Contains(output, "loader.load") {
-		t.Errorf("Output should contain 'loader.load', got: %s", output)
-	}
-	if !strings.Contains(output, "loader.parse") {
-		t.Errorf("Output should contain 'loader.parse', got: %s", output)
-	}
-	if !strings.Contains(output, "parser.lexing") {
-		t.Errorf("Output should contain 'parser.lexing', got: %s", output)
-	}
-	if !strings.Contains(output, "parser.parsing") {
-		t.Errorf("Output should contain 'parser.parsing', got: %s", output)
-	}
+	assert.True(t, strings.Contains(output, "check"), "Output should contain 'check'")
+	assert.True(t, strings.Contains(output, "loader.load"), "Output should contain 'loader.load'")
+	assert.True(t, strings.Contains(output, "loader.parse"), "Output should contain 'loader.parse'")
+	assert.True(t, strings.Contains(output, "parser.lexing"), "Output should contain 'parser.lexing'")
+	assert.True(t, strings.Contains(output, "parser.parsing"), "Output should contain 'parser.parsing'")
 
 	// Verify parser timers appear after loader.parse (indicating they're nested)
 	lines := strings.Split(output, "\n")
@@ -299,15 +257,9 @@ func TestCollectorStartWithRootTimer(t *testing.T) {
 			foundLexing = true
 			// parser.lexing should be indented more than loader.parse
 			// (it has more leading spaces before the tree character)
-			if !strings.Contains(line, "   ") && !strings.Contains(line, "│  ") {
-				t.Errorf("parser.lexing should be indented under loader.parse, got: %s", line)
-			}
+			assert.True(t, strings.Contains(line, "   ") || strings.Contains(line, "│  "), "parser.lexing should be indented under loader.parse")
 		}
 	}
-	if !foundParse {
-		t.Error("Should find loader.parse in output")
-	}
-	if !foundLexing {
-		t.Error("Should find parser.lexing after loader.parse in output")
-	}
+	assert.True(t, foundParse, "Should find loader.parse in output")
+	assert.True(t, foundLexing, "Should find parser.lexing after loader.parse in output")
 }

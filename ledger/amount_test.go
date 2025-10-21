@@ -3,6 +3,7 @@ package ledger
 import (
 	"testing"
 
+	"github.com/alecthomas/assert/v2"
 	"github.com/shopspring/decimal"
 )
 
@@ -96,21 +97,15 @@ func TestInferTolerance(t *testing.T) {
 			amounts := make([]decimal.Decimal, 0, len(tt.amounts))
 			for _, s := range tt.amounts {
 				d, err := decimal.NewFromString(s)
-				if err != nil {
-					t.Fatalf("failed to parse amount %q: %v", s, err)
-				}
+				assert.NoError(t, err, "failed to parse amount %q", s)
 				amounts = append(amounts, d)
 			}
 
 			got := InferTolerance(amounts, tt.currency, tt.config)
 			want, err := decimal.NewFromString(tt.wantTol)
-			if err != nil {
-				t.Fatalf("failed to parse expected tolerance %q: %v", tt.wantTol, err)
-			}
+			assert.NoError(t, err, "failed to parse expected tolerance %q", tt.wantTol)
 
-			if !got.Equal(want) {
-				t.Errorf("InferTolerance() = %s, want %s", got.String(), want.String())
-			}
+			assert.Equal(t, want, got, "InferTolerance() mismatch")
 		})
 	}
 }
@@ -127,15 +122,9 @@ func TestParseToleranceConfig(t *testing.T) {
 			options: map[string][]string{},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.multiplier.Equal(decimal.NewFromFloat(0.5)) {
-					t.Errorf("multiplier = %s, want 0.5", config.multiplier)
-				}
-				if !config.defaults["*"].Equal(decimal.NewFromFloat(0.005)) {
-					t.Errorf("defaults[*] = %s, want 0.005", config.defaults["*"])
-				}
-				if config.inferFromCost {
-					t.Errorf("inferFromCost = true, want false")
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.5), config.multiplier)
+				assert.Equal(t, decimal.NewFromFloat(0.005), config.defaults["*"])
+				assert.False(t, config.inferFromCost)
 			},
 		},
 		{
@@ -145,9 +134,7 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.multiplier.Equal(decimal.NewFromFloat(0.6)) {
-					t.Errorf("multiplier = %s, want 0.6", config.multiplier)
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.6), config.multiplier)
 			},
 		},
 		{
@@ -157,9 +144,7 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.defaults["*"].Equal(decimal.NewFromFloat(0.001)) {
-					t.Errorf("defaults[*] = %s, want 0.001", config.defaults["*"])
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.001), config.defaults["*"])
 			},
 		},
 		{
@@ -169,13 +154,9 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.defaults["USD"].Equal(decimal.NewFromFloat(0.003)) {
-					t.Errorf("defaults[USD] = %s, want 0.003", config.defaults["USD"])
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.003), config.defaults["USD"])
 				// Wildcard should still have default
-				if !config.defaults["*"].Equal(decimal.NewFromFloat(0.005)) {
-					t.Errorf("defaults[*] = %s, want 0.005", config.defaults["*"])
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.005), config.defaults["*"])
 			},
 		},
 		{
@@ -185,9 +166,7 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.inferFromCost {
-					t.Errorf("inferFromCost = false, want true")
-				}
+				assert.True(t, config.inferFromCost)
 			},
 		},
 		{
@@ -197,9 +176,7 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if config.inferFromCost {
-					t.Errorf("inferFromCost = true, want false")
-				}
+				assert.False(t, config.inferFromCost)
 			},
 		},
 		{
@@ -211,15 +188,9 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.multiplier.Equal(decimal.NewFromFloat(0.75)) {
-					t.Errorf("multiplier = %s, want 0.75", config.multiplier)
-				}
-				if !config.defaults["EUR"].Equal(decimal.NewFromFloat(0.002)) {
-					t.Errorf("defaults[EUR] = %s, want 0.002", config.defaults["EUR"])
-				}
-				if !config.inferFromCost {
-					t.Errorf("inferFromCost = false, want true")
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.75), config.multiplier)
+				assert.Equal(t, decimal.NewFromFloat(0.002), config.defaults["EUR"])
+				assert.True(t, config.inferFromCost)
 			},
 		},
 		{
@@ -250,19 +221,11 @@ func TestParseToleranceConfig(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *ToleranceConfig) {
-				if !config.defaults["USD"].Equal(decimal.NewFromFloat(0.01)) {
-					t.Errorf("defaults[USD] = %s, want 0.01", config.defaults["USD"])
-				}
-				if !config.defaults["EUR"].Equal(decimal.NewFromFloat(0.01)) {
-					t.Errorf("defaults[EUR] = %s, want 0.01", config.defaults["EUR"])
-				}
-				if !config.defaults["BTC"].Equal(decimal.NewFromFloat(0.0001)) {
-					t.Errorf("defaults[BTC] = %s, want 0.0001", config.defaults["BTC"])
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.01), config.defaults["USD"])
+				assert.Equal(t, decimal.NewFromFloat(0.01), config.defaults["EUR"])
+				assert.Equal(t, decimal.NewFromFloat(0.0001), config.defaults["BTC"])
 				// Wildcard should still have default
-				if !config.defaults["*"].Equal(decimal.NewFromFloat(0.005)) {
-					t.Errorf("defaults[*] = %s, want 0.005", config.defaults["*"])
-				}
+				assert.Equal(t, decimal.NewFromFloat(0.005), config.defaults["*"])
 			},
 		},
 	}
@@ -272,19 +235,12 @@ func TestParseToleranceConfig(t *testing.T) {
 			config, err := ParseToleranceConfig(tt.options)
 
 			if tt.wantErr {
-				if err == nil {
-					t.Errorf("expected error, got nil")
-				}
+				assert.Error(t, err, "expected error")
 				return
 			}
 
-			if err != nil {
-				t.Fatalf("unexpected error: %v", err)
-			}
-
-			if config == nil {
-				t.Fatal("config is nil")
-			}
+			assert.NoError(t, err, "unexpected error")
+			assert.True(t, config != nil, "config should not be nil")
 
 			if tt.checkConfig != nil {
 				tt.checkConfig(t, config)
@@ -348,13 +304,9 @@ func TestGetDefaultTolerance(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got := tt.config.GetDefaultTolerance(tt.currency)
 			want, err := decimal.NewFromString(tt.want)
-			if err != nil {
-				t.Fatalf("failed to parse expected tolerance %q: %v", tt.want, err)
-			}
+			assert.NoError(t, err, "failed to parse expected tolerance %q", tt.want)
 
-			if !got.Equal(want) {
-				t.Errorf("GetDefaultTolerance() = %s, want %s", got.String(), want.String())
-			}
+			assert.Equal(t, want, got, "GetDefaultTolerance() mismatch")
 		})
 	}
 }
@@ -362,19 +314,8 @@ func TestGetDefaultTolerance(t *testing.T) {
 func TestNewToleranceConfig(t *testing.T) {
 	config := NewToleranceConfig()
 
-	if config == nil {
-		t.Fatal("NewToleranceConfig() returned nil")
-	}
-
-	if !config.multiplier.Equal(decimal.NewFromFloat(0.5)) {
-		t.Errorf("multiplier = %s, want 0.5", config.multiplier)
-	}
-
-	if !config.defaults["*"].Equal(decimal.NewFromFloat(0.005)) {
-		t.Errorf("defaults[*] = %s, want 0.005", config.defaults["*"])
-	}
-
-	if config.inferFromCost {
-		t.Errorf("inferFromCost = true, want false")
-	}
+	assert.True(t, config != nil, "NewToleranceConfig() should not return nil")
+	assert.Equal(t, decimal.NewFromFloat(0.5), config.multiplier)
+	assert.Equal(t, decimal.NewFromFloat(0.005), config.defaults["*"])
+	assert.False(t, config.inferFromCost)
 }

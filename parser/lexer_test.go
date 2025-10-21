@@ -2,6 +2,8 @@ package parser
 
 import (
 	"testing"
+
+	"github.com/alecthomas/assert/v2"
 )
 
 func TestLexerBasicTokens(t *testing.T) {
@@ -57,15 +59,10 @@ func TestLexerBasicTokens(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) != len(tt.want) {
-				t.Fatalf("got %d tokens, want %d", len(tokens), len(tt.want))
-			}
+			assert.Equal(t, len(tt.want), len(tokens), "token count mismatch")
 
 			for i, tok := range tokens {
-				if tok.Type != tt.want[i] {
-					t.Errorf("token %d: got type %s, want %s",
-						i, tok.Type, tt.want[i])
-				}
+				assert.Equal(t, tt.want[i], tok.Type, "token type mismatch")
 			}
 		})
 	}
@@ -89,18 +86,10 @@ func TestLexerNumbers(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
-
-			if tokens[0].Type != NUMBER {
-				t.Errorf("got type %s, want NUMBER", tokens[0].Type)
-			}
-
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
+			assert.Equal(t, NUMBER, tokens[0].Type)
 			got := tokens[0].String(lexer.source)
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
@@ -121,18 +110,10 @@ func TestLexerStrings(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
 			tokens := lexer.ScanAll()
 
-			if len(tokens) < 1 {
-				t.Fatal("expected at least 1 token")
-			}
-
-			if tokens[0].Type != STRING {
-				t.Errorf("got type %s, want STRING", tokens[0].Type)
-			}
-
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
+			assert.Equal(t, STRING, tokens[0].Type)
 			got := tokens[0].String(lexer.source)
-			if got != tt.want {
-				t.Errorf("got %q, want %q", got, tt.want)
-			}
+			assert.Equal(t, tt.want, got)
 		})
 	}
 }
