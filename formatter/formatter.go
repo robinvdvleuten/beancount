@@ -44,6 +44,12 @@ const (
 	// DefaultIndentation is the default indentation for postings and metadata
 	DefaultIndentation = 4
 
+	// DefaultPrefixWidth is the default width for account names when auto-calculating
+	DefaultPrefixWidth = 40
+
+	// DefaultNumWidth is the default width for numeric values when auto-calculating
+	DefaultNumWidth = 10
+
 	// MinimumSpacing is the minimum number of spaces between account/number and currency
 	MinimumSpacing = 2
 
@@ -321,7 +327,7 @@ func (f *Formatter) determineCurrencyColumn(ast *ast.AST) int {
 		if prefixWidth == 0 {
 			prefixWidth = metrics.maxPrefixWidth
 			if prefixWidth == 0 {
-				prefixWidth = 40 // Default prefix width
+				prefixWidth = DefaultPrefixWidth
 			}
 		}
 
@@ -329,7 +335,7 @@ func (f *Formatter) determineCurrencyColumn(ast *ast.AST) int {
 		if numWidth == 0 {
 			numWidth = metrics.maxNumWidth + MinimumSpacing
 			if numWidth == MinimumSpacing {
-				numWidth = 10 // Default number width
+				numWidth = DefaultNumWidth
 			}
 		}
 
