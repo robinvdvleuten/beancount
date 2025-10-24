@@ -102,17 +102,12 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	}
 
 	// Recursive loading with include resolution
-	// Only use root timer-based hierarchy if telemetry is enabled
+	// Use root timer for hierarchy if available, otherwise create flat timers
 	rootTimer := telemetry.RootTimerFromContext(ctx)
 	state := &loaderState{
 		visited:   make(map[string]bool),
 		collector: collector,
 		rootTimer: rootTimer,
-	}
-
-	// If no root timer, fall back to flat hierarchy (for non-check commands or disabled telemetry)
-	if rootTimer == nil {
-		return state.loadRecursiveFlat(ctx, filename)
 	}
 
 	return state.loadRecursive(ctx, filename)
@@ -176,6 +171,8 @@ type loaderState struct {
 }
 
 // loadRecursive recursively loads a file and all its includes.
+// When l.rootTimer is set, creates hierarchical child timers.
+// When l.rootTimer is nil, creates flat root-level timers.
 func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.AST, error) {
 	// Get absolute path for deduplication
 	absPath, err := filepath.Abs(filename)
@@ -190,93 +187,25 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 	}
 	l.visited[absPath] = true
 
-	// ALL files get the same treatment: loader.load -> loader.parse -> parser timers
-	loadTimer := l.rootTimer.Child(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
-	parseTimer := loadTimer.Child("loader.parse")
-
-	// Read and parse the file
-	data, err := os.ReadFile(filename)
-	if err != nil {
-		parseTimer.End()
-		loadTimer.End()
-		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
+	// Create load timer - hierarchical or flat depending on rootTimer presence
+	var loadTimer telemetry.Timer
+	if l.rootTimer != nil {
+		// Hierarchical: create child timer under root
+		loadTimer = l.rootTimer.Child(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
+	} else {
+		// Flat: create root-level timer
+		loadTimer = l.collector.Start(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
 	}
 
-	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
-	if err != nil {
-		parseTimer.End()
-		loadTimer.End()
-		// Wrap parser errors for consistent formatting
-		return nil, parser.NewParseErrorWithSource(filename, err, data)
+	// Create parse timer - always as child of load timer
+	var parseTimer telemetry.Timer
+	if l.rootTimer != nil {
+		// Hierarchical: simple child name
+		parseTimer = loadTimer.Child("loader.parse")
+	} else {
+		// Flat: include filename in child name
+		parseTimer = loadTimer.Child(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 	}
-	parseTimer.End()
-	loadTimer.End()
-
-	// If no includes, return
-	if len(result.Includes) == 0 {
-		result.Includes = nil // Clear includes since we're in follow mode
-		return result, nil
-	}
-
-	// Recursively load all includes and merge
-	baseDir := filepath.Dir(absPath)
-	var includedASTs []*ast.AST
-
-	for _, inc := range result.Includes {
-		// Check for cancellation
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		// Resolve path relative to the including file's directory
-		includePath := inc.Filename
-		if !filepath.IsAbs(includePath) {
-			includePath = filepath.Join(baseDir, includePath)
-		}
-
-		// Recursively load the included file
-		includedAST, err := l.loadRecursive(ctx, includePath)
-		if err != nil {
-			// Don't wrap ParseError - it already contains full path information
-			// Just propagate the error up the include chain
-			return nil, err
-		}
-
-		includedASTs = append(includedASTs, includedAST)
-	}
-
-	// Merge ASTs
-	mergeTimer := l.rootTimer.Child("ast.merging")
-	merged := mergeASTs(result, includedASTs...)
-	mergeTimer.End()
-
-	return merged, nil
-}
-
-// loadRecursiveFlat recursively loads files without a root timer.
-// Used when telemetry is disabled or for non-check commands.
-// Creates root-level load timers for all files (old behavior).
-func (l *loaderState) loadRecursiveFlat(ctx context.Context, filename string) (*ast.AST, error) {
-	// Get absolute path for deduplication
-	absPath, err := filepath.Abs(filename)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
-	}
-
-	// Check if already visited (deduplication - same file included multiple times)
-	if l.visited[absPath] {
-		// Return empty AST - this file was already processed
-		return &ast.AST{}, nil
-	}
-	l.visited[absPath] = true
-
-	// Create load wrapper timer for this file
-	loadTimer := l.collector.Start(fmt.Sprintf("loader.load %s", filepath.Base(filename)))
-
-	// Create parse timer as child of load timer
-	parseTimer := loadTimer.Child(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
 
 	// Read and parse the file
 	data, err := os.ReadFile(filename)
@@ -305,9 +234,15 @@ func (l *loaderState) loadRecursiveFlat(ctx context.Context, filename string) (*
 	// Create merge timer as child of load timer
 	mergeTimer := loadTimer.Child("ast.merging")
 
-	// End load timer before recursive calls - this resets current to nil,
+	// For flat mode, end load timer before recursive calls to reset current to nil,
 	// allowing included files to create root-level timers
-	loadTimer.End()
+	if l.rootTimer == nil {
+		loadTimer.End()
+	} else {
+		// For hierarchical mode, keep load timer active
+		// (it will be ended when we return)
+		defer loadTimer.End()
+	}
 
 	// Recursively load all includes and merge
 	baseDir := filepath.Dir(absPath)
@@ -329,7 +264,7 @@ func (l *loaderState) loadRecursiveFlat(ctx context.Context, filename string) (*
 		}
 
 		// Recursively load the included file
-		includedAST, err := l.loadRecursiveFlat(ctx, includePath)
+		includedAST, err := l.loadRecursive(ctx, includePath)
 		if err != nil {
 			mergeTimer.End()
 			// Don't wrap ParseError - it already contains full path information
