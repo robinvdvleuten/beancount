@@ -270,6 +270,61 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 			continue
 		}
 
+		// Validate total cost {{}} requirements
+		if posting.Cost.IsTotal {
+			if posting.Amount == nil {
+				errs = append(errs, &TotalCostError{
+					Posting:   posting,
+					Directive: txn,
+					Pos:       txn.Pos,
+					Message:   "total cost requires a quantity",
+				})
+				continue
+			}
+
+			if posting.Cost.Amount == nil {
+				errs = append(errs, &TotalCostError{
+					Posting:   posting,
+					Directive: txn,
+					Pos:       txn.Pos,
+					Message:   "total cost requires an amount",
+				})
+				continue
+			}
+
+			quantity, err := decimal.NewFromString(posting.Amount.Value)
+			if err != nil {
+				errs = append(errs, &TotalCostError{
+					Posting:   posting,
+					Directive: txn,
+					Pos:       txn.Pos,
+					Message:   fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err),
+				})
+				continue
+			}
+
+			_, err = decimal.NewFromString(posting.Cost.Amount.Value)
+			if err != nil {
+				errs = append(errs, &TotalCostError{
+					Posting:   posting,
+					Directive: txn,
+					Pos:       txn.Pos,
+					Message:   fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err),
+				})
+				continue
+			}
+
+			if quantity.IsZero() {
+				errs = append(errs, &TotalCostError{
+					Posting:   posting,
+					Directive: txn,
+					Pos:       txn.Pos,
+					Message:   "cannot use total cost with zero quantity",
+				})
+				continue
+			}
+		}
+
 		// Validate cost amount if present
 		if posting.Cost.Amount != nil {
 			if _, err := ParseAmount(posting.Cost.Amount); err != nil {
@@ -278,7 +333,7 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 			}
 		}
 
-		// NEW: Validate ParseLotSpec can parse the cost
+		// Validate ParseLotSpec can parse the cost
 		if _, err := ParseLotSpec(posting.Cost); err != nil {
 			costSpec := "{...}"
 			if posting.Cost.Amount != nil {
@@ -289,8 +344,6 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 
 		// Validate cost date if present
 		if posting.Cost.Date != nil {
-			// Date is already validated by the parser, but we can add additional checks
-			// For now, just ensure it's not a zero date
 			if posting.Cost.Date.IsZero() {
 				costSpec := "{...}"
 				if posting.Cost.Amount != nil {
@@ -303,8 +356,6 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 
 		// Validate cost label if present
 		if posting.Cost.Label != "" {
-			// Labels must be non-empty strings (already guaranteed by parser)
-			// But we can add validation for label format if needed
 			if len(posting.Cost.Label) == 0 {
 				costSpec := "{...}"
 				if posting.Cost.Amount != nil {

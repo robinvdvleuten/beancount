@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -10,7 +11,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestNormalizePostingCost(t *testing.T) {
+func TestValidateTotalCost(t *testing.T) {
 	tests := []struct {
 		name          string
 		posting       *ast.Posting
@@ -28,7 +29,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				},
 			},
 			expectError:   false,
-			expectedValue: "1000.00", // AST unchanged, validation only
+			expectedValue: "1000.00",
 		},
 		{
 			name: "TotalCostFractional",
@@ -41,7 +42,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				},
 			},
 			expectError:   false,
-			expectedValue: "350.00", // AST unchanged, validation only
+			expectedValue: "350.00",
 		},
 		{
 			name: "TotalCostNegativeQuantity",
@@ -54,7 +55,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				},
 			},
 			expectError:   false,
-			expectedValue: "500.00", // AST unchanged, validation only
+			expectedValue: "500.00",
 		},
 		{
 			name: "TotalCostWithDate",
@@ -68,7 +69,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				},
 			},
 			expectError:   false,
-			expectedValue: "500.00", // AST unchanged, validation only
+			expectedValue: "500.00",
 		},
 		{
 			name: "TotalCostWithLabel",
@@ -82,7 +83,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				},
 			},
 			expectError:   false,
-			expectedValue: "800.00", // AST unchanged, validation only
+			expectedValue: "800.00",
 		},
 		{
 			name: "PerUnitCostUnchanged",
@@ -95,7 +96,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				},
 			},
 			expectError:   false,
-			expectedValue: "100.00", // unchanged
+			expectedValue: "100.00",
 		},
 		{
 			name: "NoCostUnchanged",
@@ -105,7 +106,7 @@ func TestNormalizePostingCost(t *testing.T) {
 				Cost:    nil,
 			},
 			expectError:   false,
-			expectedValue: "", // no cost
+			expectedValue: "",
 		},
 		{
 			name: "TotalCostMissingAmount",
@@ -147,15 +148,21 @@ func TestNormalizePostingCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			l := New()
-			err := l.normalizePostingCost(test.posting)
+			txn := &ast.Transaction{
+				Date:      &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+				Narration: "Test transaction",
+				Postings:  []*ast.Posting{test.posting},
+			}
+
+			v := newValidator(make(map[string]*Account), NewToleranceConfig())
+			errs := v.validateCosts(context.Background(), txn)
 
 			if test.expectError {
-				assert.Error(t, err, "Expected error for test: %s", test.name)
+				assert.True(t, len(errs) > 0, "Expected error for test: %s", test.name)
 				return
 			}
 
-			assert.NoError(t, err, "Expected no error for test: %s", test.name)
+			assert.Equal(t, 0, len(errs), "Expected no errors for test: %s", test.name)
 
 			if test.posting.Cost == nil {
 				assert.Equal(t, test.expectedValue, "", "Expected no cost")
@@ -170,7 +177,6 @@ func TestNormalizePostingCost(t *testing.T) {
 			if test.posting.Cost != nil {
 				assert.Equal(t, test.expectedValue, test.posting.Cost.Amount.Value,
 					"Cost amount mismatch for test: %s", test.name)
-				// IsTotal flag should remain unchanged
 				if strings.Contains(test.name, "TotalCost") {
 					assert.True(t, test.posting.Cost.IsTotal,
 						"IsTotal should remain true for total cost postings: %s", test.name)
