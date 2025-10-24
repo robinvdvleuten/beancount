@@ -363,6 +363,19 @@ func (f *Formatter) getOriginalLine(lineNum int) string {
 	return f.sourceLines[lineNum-1]
 }
 
+// tryPreserveOriginalLine attempts to preserve the original source line for a directive.
+// If the original line is available, it writes the trimmed line to buf and returns true.
+// If the original line is not available, it returns false and the caller should reconstruct
+// the directive. This helper reduces duplication across formatting functions.
+func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) bool {
+	if originalLine := f.getOriginalLine(lineNum); originalLine != "" {
+		buf.WriteString(strings.TrimSpace(originalLine))
+		buf.WriteByte('\n')
+		return true
+	}
+	return false
+}
+
 // Comments and blank lines from sourceContent are preserved based on Formatter configuration.
 func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []byte, w io.Writer) error {
 	// Check for cancellation before starting
@@ -689,9 +702,7 @@ func (f *Formatter) formatDirective(d ast.Directive, buf *strings.Builder) {
 // formatOption formats an option directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(opt.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(opt.Pos.Line, buf) {
 		return
 	}
 
@@ -706,9 +717,7 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 // formatInclude formats an include directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(inc.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(inc.Pos.Line, buf) {
 		return
 	}
 
@@ -721,9 +730,7 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 // formatCommodity formats a commodity directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
 		f.formatMetadata(c.Metadata, buf)
 		return
 	}
@@ -739,9 +746,7 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 // formatOpen formats an open directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(o.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(o.Pos.Line, buf) {
 		f.formatMetadata(o.Metadata, buf)
 		return
 	}
@@ -776,9 +781,7 @@ func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 // formatClose formats a close directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
 		f.formatMetadata(c.Metadata, buf)
 		return
 	}
@@ -810,9 +813,7 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 // formatPad formats a pad directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
 		f.formatMetadata(p.Metadata, buf)
 		return
 	}
@@ -830,9 +831,7 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 // formatNote formats a note directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(n.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
 		f.formatMetadata(n.Metadata, buf)
 		return
 	}
@@ -850,9 +849,7 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 // formatDocument formats a document directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(d.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
 		f.formatMetadata(d.Metadata, buf)
 		return
 	}
@@ -886,9 +883,7 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 // formatEvent formats an event directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(e.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
 		f.formatMetadata(e.Metadata, buf)
 		return
 	}
@@ -906,9 +901,7 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 // formatCustom formats a custom directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(c.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
 		f.formatMetadata(c.Metadata, buf)
 		return
 	}
@@ -943,9 +936,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 // formatPlugin formats a plugin directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
 		return
 	}
 
@@ -964,9 +955,7 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 // formatPushtag formats a pushtag directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
 		return
 	}
 
@@ -979,9 +968,7 @@ func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
 // formatPoptag formats a poptag directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
 		return
 	}
 
@@ -994,9 +981,7 @@ func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
 // formatPushmeta formats a pushmeta directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
 		return
 	}
 
@@ -1011,9 +996,7 @@ func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
 // formatPopmeta formats a popmeta directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
-	if originalLine := f.getOriginalLine(p.Pos.Line); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
-		buf.WriteByte('\n')
+	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
 		return
 	}
 
