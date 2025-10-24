@@ -55,7 +55,7 @@ func TestNew(t *testing.T) {
 	t.Run("DefaultOptions", func(t *testing.T) {
 		f := New()
 		assert.NotEqual(t, nil, f)
-		assert.Equal(t, DefaultCurrencyColumn, f.CurrencyColumn)
+		assert.Equal(t, 0, f.CurrencyColumn) // 0 = auto-calculate
 		assert.Equal(t, DefaultIndentation, f.Indentation)
 	})
 

@@ -36,8 +36,9 @@ import (
 )
 
 const (
-	// DefaultCurrencyColumn is the default column position for currency alignment
-	// (matches bean-format behavior)
+	// DefaultCurrencyColumn is the fallback column position when no amounts are found
+	// in the input (e.g., empty file). This is NOT the default behavior - the formatter
+	// auto-calculates the currency column from content by default to match bean-format.
 	DefaultCurrencyColumn = 52
 
 	// DefaultIndentation is the default indentation for postings and metadata
@@ -227,10 +228,10 @@ func WithIndentation(indent int) Option {
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
-		CurrencyColumn:   DefaultCurrencyColumn, // Use default column like bean-format
-		Indentation:      DefaultIndentation,    // Use default indentation
-		PreserveComments: true,                  // Preserve comments by default
-		PreserveBlanks:   true,                  // Preserve blank lines by default
+		CurrencyColumn:   0,                  // Auto-calculate by default (0 = auto)
+		Indentation:      DefaultIndentation, // Use default indentation
+		PreserveComments: true,               // Preserve comments by default
+		PreserveBlanks:   true,               // Preserve blank lines by default
 	}
 
 	for _, opt := range opts {

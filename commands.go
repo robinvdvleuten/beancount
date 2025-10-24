@@ -200,7 +200,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 type FormatCmd struct {
 	File           FileOrStdin `help:"Beancount input filename (use '-' for stdin, or omit for stdin)." arg:"" optional:""`
-	CurrencyColumn int         `help:"Column for currency alignment (overrides prefix-width and num-width if set, auto if 0)." default:"0"`
+	CurrencyColumn int         `help:"Column for currency alignment (auto-calculated from content if 0, overrides prefix-width and num-width if set)." default:"0"`
 	PrefixWidth    int         `help:"Width in characters for account names (auto if 0)." default:"0"`
 	NumWidth       int         `help:"Width for numbers (auto if 0)." default:"0"`
 }
