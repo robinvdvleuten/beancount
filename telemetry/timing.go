@@ -8,6 +8,14 @@ import (
 
 // TimingCollector collects hierarchical timing data.
 // It builds a tree structure of timers that can be reported as a nested view.
+//
+// TimingCollector is safe for concurrent calls to Start() and StartStructured(),
+// allowing multiple goroutines to create independent timer trees. The mutex
+// protects the collector's internal state (roots, current) during timer creation
+// and completion.
+//
+// Individual Timer instances are not safe for concurrent use. See Timer interface
+// documentation for usage constraints.
 type TimingCollector struct {
 	roots   []*timerNode
 	current *timerNode

@@ -40,13 +40,20 @@ const (
 
 // Collector is the main interface for collecting telemetry data.
 // Implementations can collect timings, metrics, or other telemetry data.
+//
+// Collector implementations must be safe for concurrent use. Multiple goroutines
+// can call Start() and StartStructured() simultaneously to create independent
+// timer trees. However, individual Timer instances returned by these methods are
+// not safe for concurrent use (see Timer documentation for details).
 type Collector interface {
 	// Start begins timing an operation and returns a Timer.
 	// The timer should be ended with End() when the operation completes.
+	// This method is safe for concurrent calls.
 	Start(name string) Timer
 
 	// StartStructured begins timing an operation with structured configuration
 	// and returns a StructuredTimer for metrics-enhanced formatting.
+	// This method is safe for concurrent calls.
 	StartStructured(config TimerConfig) StructuredTimer
 
 	// Report outputs the collected telemetry to a writer.
@@ -63,6 +70,44 @@ type TimerConfig struct {
 
 // Timer tracks a single operation's timing.
 // Timers support hierarchical nesting via Child().
+//
+// Timers are not safe for concurrent use. Each goroutine should create its own
+// independent timer tree by calling Collector.Start() or Collector.StartStructured().
+// A timer and all its child timers must be used from a single goroutine. This
+// design matches the typical use case of profiling sequential operations within
+// a single execution path.
+//
+// The Collector itself is safe for concurrent calls to Start() and StartStructured(),
+// allowing multiple goroutines to create independent timer trees simultaneously.
+//
+// Example safe usage:
+//
+//	// Single-threaded sequential profiling (typical use case)
+//	timer := collector.Start("parent operation")
+//	defer timer.End()
+//	childTimer := timer.Child("child operation")
+//	childTimer.End()
+//
+//	// Multiple goroutines with independent timers (safe)
+//	go func() {
+//	    timer := collector.Start("goroutine 1")
+//	    defer timer.End()
+//	}()
+//	go func() {
+//	    timer := collector.Start("goroutine 2")
+//	    defer timer.End()
+//	}()
+//
+// Example unsafe usage (data race):
+//
+//	// ❌ DON'T: Share timer across goroutines
+//	timer := collector.Start("parent")
+//	go func() {
+//	    timer.Child("goroutine 1") // Race condition!
+//	}()
+//	go func() {
+//	    timer.Child("goroutine 2") // Race condition!
+//	}()
 type Timer interface {
 	// End stops the timer and records the duration.
 	End()
@@ -73,6 +118,8 @@ type Timer interface {
 }
 
 // StructuredTimer extends Timer with access to configuration data.
+// Like Timer, StructuredTimer is not safe for concurrent use. See Timer
+// documentation for concurrency constraints and usage examples.
 type StructuredTimer interface {
 	Timer
 	Config() TimerConfig
