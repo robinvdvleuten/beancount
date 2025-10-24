@@ -125,7 +125,7 @@ func TestValidateAccountsOpen(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newValidator(tt.accounts, nil)
-			errs := v.validateAccountsOpen(context.Background(), tt.txn)
+			errs := v.validateAccountsOpen(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 
@@ -191,7 +191,7 @@ func TestValidateAmounts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newValidator(nil, nil) // validateAmounts doesn't need accounts
-			errs := v.validateAmounts(context.Background(), tt.txn)
+			errs := v.validateAmounts(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 		})
@@ -346,7 +346,7 @@ func TestCalculateBalance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newValidator(nil, nil) // calculateBalance doesn't need accounts
-			delta, validation, errs := v.calculateBalance(context.Background(), tt.txn)
+			delta, validation, errs := v.calculateBalance(tt.txn)
 
 			assert.Equal(t, 0, len(errs))
 
@@ -662,7 +662,7 @@ func TestValidateCosts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{accounts: make(map[string]*Account)}
-			errs := v.validateCosts(context.Background(), tt.txn)
+			errs := v.validateCosts(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 		})
@@ -703,7 +703,7 @@ func TestValidatePrices(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{accounts: make(map[string]*Account)}
-			errs := v.validatePrices(context.Background(), tt.txn)
+			errs := v.validatePrices(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 		})
@@ -773,7 +773,7 @@ func TestValidateMetadata(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := &validator{accounts: make(map[string]*Account)}
-			errs := v.validateMetadata(context.Background(), tt.txn)
+			errs := v.validateMetadata(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 
@@ -797,11 +797,10 @@ func BenchmarkValidateCosts(b *testing.B) {
 	)
 
 	v := &validator{accounts: make(map[string]*Account)}
-	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v.validateCosts(ctx, txn)
+		v.validateCosts(txn)
 	}
 }
 
@@ -818,11 +817,10 @@ func BenchmarkValidatePrices(b *testing.B) {
 	)
 
 	v := &validator{accounts: make(map[string]*Account)}
-	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v.validatePrices(ctx, txn)
+		v.validatePrices(txn)
 	}
 }
 
@@ -845,11 +843,10 @@ func BenchmarkValidateMetadata(b *testing.B) {
 	}
 
 	v := &validator{accounts: make(map[string]*Account)}
-	ctx := context.Background()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v.validateMetadata(ctx, txn)
+		v.validateMetadata(txn)
 	}
 }
 
@@ -1582,7 +1579,7 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			}
 
 			v := newValidator(accounts, NewToleranceConfig())
-			delta, err := v.calculateBalanceDelta(context.Background(), balance, tt.padEntry)
+			delta, err := v.calculateBalanceDelta(balance, tt.padEntry)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1761,7 +1758,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 			}
 
 			v := newValidator(accounts, nil)
-			errs := v.validateInventoryOperations(context.Background(), tt.txn, tt.delta)
+			errs := v.validateInventoryOperations(tt.txn, tt.delta)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 
@@ -1888,7 +1885,7 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 			}
 
 			v := newValidator(accounts, nil)
-			errs := v.validateConstraintCurrencies(context.Background(), tt.txn, tt.delta)
+			errs := v.validateConstraintCurrencies(tt.txn, tt.delta)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 		})

@@ -420,7 +420,7 @@ func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Basic validation
-	errs := v.validateBalance(ctx, balance)
+	errs := v.validateBalance(balance)
 	if len(errs) > 0 {
 		l.errors = append(l.errors, errs...)
 		return
@@ -437,7 +437,7 @@ func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
 	}
 
 	// Calculate delta (returns error separately, not in delta)
-	delta, err := v.calculateBalanceDelta(ctx, balance, padEntry)
+	delta, err := v.calculateBalanceDelta(balance, padEntry)
 	if err != nil {
 		l.errors = append(l.errors, err)
 		return
@@ -465,7 +465,7 @@ func (l *Ledger) processPad(ctx context.Context, pad *ast.Pad) {
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validatePad(ctx, pad)
+	errs := v.validatePad(pad)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -485,7 +485,7 @@ func (l *Ledger) processNote(ctx context.Context, note *ast.Note) {
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateNote(ctx, note)
+	errs := v.validateNote(note)
 
 	// Collect validation errors
 	if len(errs) > 0 {
@@ -501,7 +501,7 @@ func (l *Ledger) processDocument(ctx context.Context, doc *ast.Document) {
 	v := newValidator(l.accounts, l.toleranceConfig)
 
 	// Run pure validation
-	errs := v.validateDocument(ctx, doc)
+	errs := v.validateDocument(doc)
 
 	// Collect validation errors
 	if len(errs) > 0 {

@@ -1,7 +1,6 @@
 package ledger
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"time"
@@ -155,7 +154,7 @@ func TestValidateTotalCost(t *testing.T) {
 			}
 
 			v := newValidator(make(map[string]*Account), NewToleranceConfig())
-			errs := v.validateCosts(context.Background(), txn)
+			errs := v.validateCosts(txn)
 
 			if test.expectError {
 				assert.True(t, len(errs) > 0, "Expected error for test: %s", test.name)

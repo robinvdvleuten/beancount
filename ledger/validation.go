@@ -46,7 +46,7 @@ import (
 // OPEN DIRECTIVES:
 //   Ledger.processOpen(open)
 //     ↓
-//   validator.validateOpen(ctx, open) → ([]error, *OpenDelta)
+//   validator.validateOpen(open) → ([]error, *OpenDelta)
 //     ├─ Check account doesn't already exist
 //     └─ Parse account type, copy metadata
 //     ↓
@@ -56,7 +56,7 @@ import (
 // CLOSE DIRECTIVES:
 //   Ledger.processClose(close)
 //     ↓
-//   validator.validateClose(ctx, close) → ([]error, *CloseDelta)
+//   validator.validateClose(close) → ([]error, *CloseDelta)
 //     ├─ Check account exists
 //     └─ Check account is not already closed
 //     ↓
@@ -66,11 +66,11 @@ import (
 // BALANCE ASSERTIONS:
 //   Ledger.processBalance(balance)
 //     ↓
-//   validator.validateBalance(ctx, balance) → []error
+//   validator.validateBalance(balance) → []error
 //     ├─ Check account exists and is open
 //     └─ Check amount is parseable
 //     ↓
-//   validator.calculateBalanceDelta(ctx, balance, pad) → (*BalanceDelta, error)
+//   validator.calculateBalanceDelta(balance, pad) → (*BalanceDelta, error)
 //     ├─ Validate pad timing (must come before balance)
 //     ├─ Calculate padding adjustments if needed
 //     └─ Check balance matches within tolerance
@@ -81,7 +81,7 @@ import (
 // PAD DIRECTIVES:
 //   Ledger.processPad(pad)
 //     ↓
-//   validator.validatePad(ctx, pad) → ([]error, *PadDelta)
+//   validator.validatePad(pad) → ([]error, *PadDelta)
 //     ├─ Check main account exists and is open
 //     └─ Check pad account exists and is open
 //     ↓
@@ -89,8 +89,8 @@ import (
 //     └─ Store pad entry for next balance assertion
 //
 // NOTE/DOCUMENT DIRECTIVES:
-//   validator.validateNote(ctx, note) → []error
-//   validator.validateDocument(ctx, doc) → []error
+//   validator.validateNote(note) → []error
+//   validator.validateDocument(doc) → []error
 //     └─ Check account exists and is open
 //     (No mutations needed - validation only)
 //
@@ -149,9 +149,9 @@ import (
 //   }
 //
 //   // Balance assertions with padding
-//   errs := v.validateBalance(ctx, balance)
+//   errs := v.validateBalance(balance)
 //   if len(errs) == 0 {
-//       delta, err := v.calculateBalanceDelta(ctx, balance, padEntry)
+//       delta, err := v.calculateBalanceDelta(balance, padEntry)
 //       if err == nil && delta.HasMutations() {
 //           log.Printf("Would add padding: %v", delta.PaddingAdjustments)
 //           log.Printf("Pad from account: %s", delta.PadAccountName)
@@ -196,14 +196,14 @@ type postingClassification struct {
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateAccountsOpen(ctx, txn)
+//	errs := v.validateAccountsOpen(txn)
 //	if len(errs) > 0 {
 //	    // txn references closed or non-existent accounts
 //	    for _, err := range errs {
 //	        fmt.Printf("Account error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validateAccountsOpen(ctx context.Context, txn *ast.Transaction) []error {
+func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 	var errs []error
 	for _, posting := range txn.Postings {
 		accountName := string(posting.Account)
@@ -220,7 +220,7 @@ func (v *validator) validateAccountsOpen(ctx context.Context, txn *ast.Transacti
 }
 
 // validateAmounts checks all amounts can be parsed
-func (v *validator) validateAmounts(ctx context.Context, txn *ast.Transaction) []error {
+func (v *validator) validateAmounts(txn *ast.Transaction) []error {
 	var errs []error
 	for _, posting := range txn.Postings {
 		if posting.Amount == nil {
@@ -250,7 +250,7 @@ func (v *validator) validateAmounts(ctx context.Context, txn *ast.Transaction) [
 //
 //	// Valid cost: 10 HOOL {500.00 USD}
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateCosts(ctx, txn)
+//	errs := v.validateCosts(txn)
 //	if len(errs) > 0 {
 //	    // Found invalid cost specifications
 //	    for _, err := range errs {
@@ -258,7 +258,7 @@ func (v *validator) validateAmounts(ctx context.Context, txn *ast.Transaction) [
 //	        // Example: "2024-01-15: Invalid cost specification (Posting #1: Assets:Stock): {abc USD}: invalid decimal"
 //	    }
 //	}
-func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []error {
+func (v *validator) validateCosts(txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
 		if posting.Cost == nil {
@@ -382,7 +382,7 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 //
 //	// Valid price: 100 EUR @ 1.20 USD
 //	v := newValidator(ledger.accounts)
-//	errs := v.validatePrices(ctx, txn)
+//	errs := v.validatePrices(txn)
 //	if len(errs) > 0 {
 //	    // Found invalid price specifications
 //	    for _, err := range errs {
@@ -390,7 +390,7 @@ func (v *validator) validateCosts(ctx context.Context, txn *ast.Transaction) []e
 //	        // Example: "2024-01-15: Invalid price specification (Posting #2: Expenses:Foreign): @ abc USD: invalid decimal"
 //	    }
 //	}
-func (v *validator) validatePrices(ctx context.Context, txn *ast.Transaction) []error {
+func (v *validator) validatePrices(txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
 		if posting.Price == nil {
@@ -428,7 +428,7 @@ func (v *validator) validatePrices(ctx context.Context, txn *ast.Transaction) []
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateMetadata(ctx, txn)
+//	errs := v.validateMetadata(txn)
 //	if len(errs) > 0 {
 //	    // Found invalid or duplicate metadata
 //	    for _, err := range errs {
@@ -437,7 +437,7 @@ func (v *validator) validatePrices(ctx context.Context, txn *ast.Transaction) []
 //	        // Example: "2024-01-15: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
 //	    }
 //	}
-func (v *validator) validateMetadata(ctx context.Context, txn *ast.Transaction) []error {
+func (v *validator) validateMetadata(txn *ast.Transaction) []error {
 	var errs []error
 
 	// Validate transaction-level metadata
@@ -503,7 +503,7 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 // calculateBalance computes weights, infers amounts/costs, and checks if transaction balances.
 // Returns delta (mutations), validation (balance state), and errors.
 // This is the core transaction validation logic.
-func (v *validator) calculateBalance(ctx context.Context, txn *ast.Transaction) (*TransactionDelta, *balanceValidation, []error) {
+func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *balanceValidation, []error) {
 	var errs []error
 	pc := classifyPostings(txn.Postings)
 
@@ -720,27 +720,27 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	var allErrors []error
 
 	// 1. Validate accounts are open
-	if errs := v.validateAccountsOpen(ctx, txn); len(errs) > 0 {
+	if errs := v.validateAccountsOpen(txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
 	// 2. Validate amounts are parseable
-	if errs := v.validateAmounts(ctx, txn); len(errs) > 0 {
+	if errs := v.validateAmounts(txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
 	// 3. Validate cost specifications
-	if errs := v.validateCosts(ctx, txn); len(errs) > 0 {
+	if errs := v.validateCosts(txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
 	// 4. Validate price specifications
-	if errs := v.validatePrices(ctx, txn); len(errs) > 0 {
+	if errs := v.validatePrices(txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
 	// 5. Validate metadata
-	if errs := v.validateMetadata(ctx, txn); len(errs) > 0 {
+	if errs := v.validateMetadata(txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
@@ -750,7 +750,7 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	}
 
 	// 6. Calculate balance and infer amounts
-	delta, validation, errs := v.calculateBalance(ctx, txn)
+	delta, validation, errs := v.calculateBalance(txn)
 	if len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 		return allErrors, nil
@@ -772,12 +772,12 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	}
 
 	// 8. Validate constraint currencies (AFTER inference so we can check inferred amounts)
-	if errs := v.validateConstraintCurrencies(ctx, txn, delta); len(errs) > 0 {
+	if errs := v.validateConstraintCurrencies(txn, delta); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
 	// 9. Validate inventory operations
-	if errs := v.validateInventoryOperations(ctx, txn, delta); len(errs) > 0 {
+	if errs := v.validateInventoryOperations(txn, delta); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
 	}
 
@@ -806,14 +806,14 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 //
 //	// Valid: 2024-01-15 balance Assets:Checking 100.00 USD
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateBalance(ctx, balance)
+//	errs := v.validateBalance(balance)
 //	if len(errs) > 0 {
 //	    // Account doesn't exist or amount is invalid
 //	    for _, err := range errs {
 //	        fmt.Printf("Balance validation error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) []error {
+func (v *validator) validateBalance(balance *ast.Balance) []error {
 	var errs []error
 
 	// 1. Validate account is open
@@ -854,14 +854,14 @@ func (v *validator) validateBalance(ctx context.Context, balance *ast.Balance) [
 //
 //	// Valid: 2024-01-01 pad Assets:Checking Equity:Opening-Balances
 //	v := newValidator(ledger.accounts)
-//	errs := v.validatePad(ctx, pad)
+//	errs := v.validatePad(pad)
 //	if len(errs) > 0 {
 //	    // One or both accounts don't exist or are closed
 //	    for _, err := range errs {
 //	        fmt.Printf("Pad validation error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
+func (v *validator) validatePad(pad *ast.Pad) []error {
 	var errs []error
 
 	// 1. Validate main account is open
@@ -891,14 +891,14 @@ func (v *validator) validatePad(ctx context.Context, pad *ast.Pad) []error {
 //
 //	// Valid: 2024-07-09 note Assets:Checking "Called bank about pending deposit"
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateNote(ctx, note)
+//	errs := v.validateNote(note)
 //	if len(errs) > 0 {
 //	    // Account doesn't exist or is closed
 //	    for _, err := range errs {
 //	        fmt.Printf("Note validation error: %v\n", err)
 //	    }
 //	}
-func (v *validator) validateNote(ctx context.Context, note *ast.Note) []error {
+func (v *validator) validateNote(note *ast.Note) []error {
 	var errs []error
 
 	// 1. Validate account is open
@@ -919,7 +919,7 @@ func (v *validator) validateNote(ctx context.Context, note *ast.Note) []error {
 //
 // Validates that the account exists and is open at the document date.
 // Document directives link external files to accounts for audit trails.
-func (v *validator) validateDocument(ctx context.Context, doc *ast.Document) []error {
+func (v *validator) validateDocument(doc *ast.Document) []error {
 	var errs []error
 
 	// 1. Validate account is open
@@ -1107,14 +1107,11 @@ func createPaddingTransaction(
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	delta, err := v.calculateBalanceDelta(ctx, balance, padEntry)
+//	delta, err := v.calculateBalanceDelta(balance, padEntry)
 //	if err != nil {
 //	    // Validation failed
 //	}
-func (v *validator) calculateBalanceDelta(ctx context.Context,
-	balance *ast.Balance,
-	padEntry *ast.Pad) (*BalanceDelta, error) {
-
+func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad) (*BalanceDelta, error) {
 	// Basic validation already done by validateBalance()
 
 	expectedAmount, _ := ParseAmount(balance.Amount)
@@ -1205,13 +1202,11 @@ func (v *validator) calculateBalanceDelta(ctx context.Context,
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateInventoryOperations(ctx, txn, delta)
+//	errs := v.validateInventoryOperations(txn, delta)
 //	if len(errs) > 0 {
 //	    // Validation failed
 //	}
-func (v *validator) validateInventoryOperations(ctx context.Context,
-	txn *ast.Transaction,
-	delta *TransactionDelta) []error {
+func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *TransactionDelta) []error {
 
 	var errs []error
 
@@ -1268,13 +1263,11 @@ func (v *validator) validateInventoryOperations(ctx context.Context,
 // Example:
 //
 //	v := newValidator(ledger.accounts)
-//	errs := v.validateConstraintCurrencies(ctx, txn, delta)
+//	errs := v.validateConstraintCurrencies(txn, delta)
 //	if len(errs) > 0 {
 //	    // Validation failed
 //	}
-func (v *validator) validateConstraintCurrencies(ctx context.Context,
-	txn *ast.Transaction,
-	delta *TransactionDelta) []error {
+func (v *validator) validateConstraintCurrencies(txn *ast.Transaction, delta *TransactionDelta) []error {
 
 	var errs []error
 
