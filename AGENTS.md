@@ -146,7 +146,6 @@ import (
     "time"
 
     // 2. External dependencies (alphabetically)
-    "github.com/alecthomas/participle/v2"
     "github.com/shopspring/decimal"
 )
 ```
@@ -491,15 +490,7 @@ type Formatter struct {
 
 ### Struct Tags
 
-Keep struct tags on the same line when reasonable:
-
-```go
-type Transaction struct {
-    Date      *Date  `parser:"@Date ('txn' | "`
-    Flag      string `parser:"@('*' | '!' | 'P') )"`
-    Narration string `parser:"@String?"`
-}
-```
+Keep struct tags on the same line when reasonable.
 
 ## Function Organization
 
@@ -962,7 +953,6 @@ loader.load main.beancount: 25ms
 - All directives implement `Directive` interface
 - Basic types: Amount, Cost, Account, Date, Link, Tag, Metadata
 - Import separately from parser: `import "github.com/robinvdvleuten/beancount/ast"`
-- Participle parser tags remain on struct fields in ast package
 
 #### AST Builder Functions
 
@@ -1042,7 +1032,7 @@ formatter.FormatTransaction(txn, os.Stdout)
 
 - Contains only parsing logic (no type definitions)
 - Returns `*ast.AST` from Parse functions
-- Uses `participle` library for grammar parsing
+- Uses custom lexer and recursive descent parser implementation
 - Include comprehensive examples in godoc
 
 ### Formatter Package
