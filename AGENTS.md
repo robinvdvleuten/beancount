@@ -312,6 +312,100 @@ fmt.Errorf("failed to parse amount %q: %w", value, err)
 fmt.Errorf("Error parsing.") // Too vague, capitalized, has period
 ```
 
+### Error Wrapping Strategy
+
+Different error types require different handling strategies. The key distinction is between **I/O errors** (operations on external resources) and **validation errors** (business logic violations).
+
+**I/O Errors - DO wrap with context:**
+
+Wrap errors from I/O operations (file reads, network calls) to provide context breadcrumbs for debugging. This helps trace failures through multiple layers of file operations.
+
+```go
+// ✅ CORRECT: loader/loader.go - wraps I/O errors with file context
+data, err := os.ReadFile(filename)
+if err != nil {
+    return nil, fmt.Errorf("failed to read %s: %w", filename, err)
+}
+
+absPath, err := filepath.Abs(filename)
+if err != nil {
+    return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
+}
+```
+
+**Validation Errors - DON'T wrap (use structured types):**
+
+Validation errors are structured types with position information and directive context. They're collected into a slice for batch reporting, not wrapped into error chains.
+
+```go
+// ✅ CORRECT: ledger/ledger.go - collect validation errors
+func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
+    // Validator (from validation.go) returns errors, ledger collects them
+    errs, delta := v.validateTransaction(txn)
+    if len(errs) > 0 {
+        l.errors = append(l.errors, errs...)  // Collect, don't wrap
+        return
+    }
+    l.applyTransaction(txn, delta)
+}
+
+// Example validation error - already has all context
+type AccountNotOpenError struct {
+    Account   ast.Account
+    Date      *ast.Date
+    Pos       ast.Position
+    Directive ast.Directive  // Full directive for context display
+}
+```
+
+**Parser Errors - Return directly (already structured):**
+
+Parser errors are already fully formed with position information. Wrapping them would add noise without value.
+
+```go
+// ✅ CORRECT: parser/parser.go - return structured errors directly
+if err := p.parseTransaction(); err != nil {
+    return nil, err  // No wrapping - error already has position info
+}
+
+// Parser errors are already structured
+type ParseError struct {
+    Pos     Position
+    Message string
+    Token   Token
+}
+```
+
+**Formatter Errors - Propagate without wrapping:**
+
+Formatter errors (from `io.Writer` operations) don't need wrapping because they occur at the presentation layer with no additional context to add.
+
+```go
+// ✅ CORRECT: formatter/formatter.go - propagate I/O errors
+if _, err := w.Write([]byte(line)); err != nil {
+    return err  // No wrapping - caller has context
+}
+```
+
+**Rationale:**
+
+- **I/O errors benefit from context breadcrumbs** - when a file operation fails deep in a recursive include tree, error wrapping shows the full path: `"failed to load accounts.beancount: failed to read /path/to/file: permission denied"`
+
+- **Validation errors are structured for CLI display** - they contain `Pos` (file/line), `Directive` (full context), and domain-specific fields. The `errors` package formats them with the original directive text for clear output.
+
+- **Avoid double-wrapping** - don't wrap errors that are already structured or already have sufficient context.
+
+**When to wrap:**
+- File operations (read, write, stat, abs path resolution)
+- Network calls
+- External process execution
+- Any operation where the error needs context about which resource failed
+
+**When NOT to wrap:**
+- Validation errors (use custom error types with structured data)
+- Parser errors (already have position and token info)
+- Propagating errors through thin layers with no additional context
+
 ## Variable Declarations
 
 ### Use := for Local Variables
