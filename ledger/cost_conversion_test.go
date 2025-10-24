@@ -280,9 +280,9 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 			}
 
 			assert.NoError(t, err, "Expected no error for test: %s", test.name)
-			if !test.expectedCost.Equal(*test.lotSpec.Cost) {
-				t.Errorf("Cost mismatch for test: %s\nExpected: %s\nActual: %s", test.name, test.expectedCost.String(), test.lotSpec.Cost.String())
-			}
+			assert.True(t, test.expectedCost.Equal(*test.lotSpec.Cost),
+				"Cost mismatch for test: %s\nExpected: %s\nActual: %s",
+				test.name, test.expectedCost.String(), test.lotSpec.Cost.String())
 		})
 	}
 }

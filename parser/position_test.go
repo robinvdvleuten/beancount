@@ -47,16 +47,15 @@ func TestErrorPositioning(t *testing.T) {
 			assert.Error(t, err)
 
 			// Check error is a ParseError with correct line
-			if parseErr, ok := err.(*ParseError); ok {
-				assert.Equal(t, tt.expectedLine, parseErr.Pos.Line,
-					"error should be on line %d, got line %d: %s",
-					tt.expectedLine, parseErr.Pos.Line, parseErr.Error())
-				assert.True(t, strings.Contains(parseErr.Message, tt.expectedMsg),
-					"error message should contain %q, got %q",
-					tt.expectedMsg, parseErr.Message)
-			} else {
-				t.Fatalf("expected *ParseError, got %T: %v", err, err)
-			}
+			parseErr, ok := err.(*ParseError)
+			assert.True(t, ok, "expected *ParseError, got %T: %v", err, err)
+
+			assert.Equal(t, tt.expectedLine, parseErr.Pos.Line,
+				"error should be on line %d, got line %d: %s",
+				tt.expectedLine, parseErr.Pos.Line, parseErr.Error())
+			assert.True(t, strings.Contains(parseErr.Message, tt.expectedMsg),
+				"error message should contain %q, got %q",
+				tt.expectedMsg, parseErr.Message)
 		})
 	}
 }
