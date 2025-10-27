@@ -6,19 +6,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        go: [ ~1.24, ^1 ]
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        go: [~1.24, ^1]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ matrix.go }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+      - run: npm ci --prefix assets
+      - run: npm run --prefix assets build
       - run: go build -v ./...
       - run: go test ./...
 
   dependabot:
-    needs: [ build ]
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write

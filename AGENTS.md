@@ -1143,6 +1143,44 @@ formatter.FormatTransaction(txn, os.Stdout)
 - All validation errors must include `Pos` and `Directive` fields for consistent formatting
 - Implement getter methods: `GetPosition()`, `GetDirective()`, `GetAccount()`, `GetDate()`
 
+### Web Package
+
+- Provides HTTP server for the Beancount web editor
+- REST API for reading/writing Beancount files with real-time validation
+- Uses Go 1.22+ method-based routing patterns
+- File access restricted to ledger directory (prevents path traversal)
+- Symlinks resolved to prevent directory traversal attacks
+
+**IMPORTANT: Local Development Tool**
+
+The web package is designed for **local development use only**:
+- Should ONLY be bound to localhost (127.0.0.1)
+- NO authentication/authorization (assumes trusted local user)
+- NOT intended for production or network deployment
+- Security measures protect against basic attacks but assume single-user local access
+
+**Security Context:**
+- Path validation prevents directory traversal (`../` and absolute paths)
+- Symlink resolution prevents symlink-based attacks
+- File access restricted to ledger file's directory tree
+- These protections guard against accidental misuse, NOT malicious network attackers
+- Do NOT expose to untrusted networks or multiple users
+
+**Example Usage:**
+```go
+server := web.New(8080, "/path/to/main.beancount")
+if err := server.Start(); err != nil {
+    log.Fatal(err)
+}
+// Server now accessible at http://localhost:8080
+```
+
+### Loader Package
+
+- Follow includes recursively when `WithFollowIncludes()` option set
+- Deduplicate included files by absolute path
+- Preserve directive order after merging
+
 ### Errors Package
 
 - Provides formatting infrastructure, not domain errors
@@ -1150,12 +1188,6 @@ formatter.FormatTransaction(txn, os.Stdout)
 - Use `TextFormatter` for CLI output (bean-check style: `filename:line: message` + directive)
 - Use `JSONFormatter` for structured output (APIs, web UIs)
 - All errors with `GetPosition()` and `GetDirective()` methods are formatted with context
-
-### Loader Package
-
-- Follow includes recursively when `WithFollowIncludes()` option set
-- Deduplicate included files by absolute path
-- Preserve directive order after merging
 
 ## Additional Resources
 
