@@ -2,11 +2,23 @@ name: lint
 on: [push, pull_request]
 
 jobs:
-  lint:
+  lint-go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
-          go-version-file: 'go.mod'
+          go-version-file: "go.mod"
       - uses: golangci/golangci-lint-action@v8
+
+  lint-js:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+      - run: npm ci --prefix assets
+      - run: npm run --prefix assets lint

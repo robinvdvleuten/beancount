@@ -16,6 +16,7 @@ import (
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/telemetry"
+	"github.com/robinvdvleuten/beancount/web"
 )
 
 // FileOrStdin is a flag value that accepts either a file path or "-" for stdin.
@@ -37,7 +38,7 @@ import (
 //	// Result: cmd.Input.Filename = "file.txt", cmd.Input.Contents = nil
 type FileOrStdin struct {
 	Filename string
-	Contents []byte // Only populated for stdin, nil for files
+	Contents []byte
 }
 
 // Decode implements kong.MapperValue to customize how the flag value is decoded.
@@ -50,7 +51,6 @@ func (f *FileOrStdin) Decode(ctx *kong.DecodeContext) error {
 	}
 
 	if filename == "-" || filename == "" {
-		// Read from stdin
 		contents, err := io.ReadAll(os.Stdin)
 		if err != nil {
 			return fmt.Errorf("failed to read from stdin: %w", err)
@@ -60,14 +60,64 @@ func (f *FileOrStdin) Decode(ctx *kong.DecodeContext) error {
 		return nil
 	}
 
-	// For files, just validate the file exists but don't read contents yet
 	if _, err := os.Stat(filename); err != nil {
 		return err
 	}
 	f.Filename = filename
-	f.Contents = nil // Will be read by loader
+	f.Contents = nil
 
 	return nil
+}
+
+// EnsureContents ensures that Contents is populated.
+// If Filename is empty (unset), reads from stdin.
+// This handles the case where the argument is optional and not provided.
+func (f *FileOrStdin) EnsureContents() error {
+	if f.Filename == "" {
+		contents, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("failed to read from stdin: %w", err)
+		}
+		f.Filename = "<stdin>"
+		f.Contents = contents
+	}
+	return nil
+}
+
+// GetSourceContent returns the source content for error formatting.
+// For stdin, returns the already-read Contents.
+// For files, reads and returns the file contents.
+func (f *FileOrStdin) GetSourceContent() ([]byte, error) {
+	if f.Filename == "<stdin>" {
+		return f.Contents, nil
+	}
+	return os.ReadFile(f.Filename)
+}
+
+// GetAbsoluteFilename returns the absolute path for the file.
+// For stdin, returns "<stdin>".
+// For files, resolves to absolute path (falls back to original on error).
+func (f *FileOrStdin) GetAbsoluteFilename() string {
+	if f.Filename == "<stdin>" {
+		return f.Filename
+	}
+	absPath, err := filepath.Abs(f.Filename)
+	if err != nil {
+		return f.Filename
+	}
+	return absPath
+}
+
+// LoadAST loads the AST using the appropriate loader method.
+// For stdin, uses LoadBytes with the already-read Contents.
+// For files, uses Load which handles includes properly.
+func (f *FileOrStdin) LoadAST(ctx context.Context, ldr *loader.Loader) (*ast.AST, error) {
+	absFilename := f.GetAbsoluteFilename()
+
+	if f.Filename == "<stdin>" {
+		return ldr.LoadBytes(ctx, absFilename, f.Contents)
+	}
+	return ldr.Load(ctx, absFilename)
 }
 
 // Globals defines global flags available to all commands.
@@ -80,25 +130,16 @@ type CheckCmd struct {
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
-	// If no filename provided, read from stdin
-	if cmd.File.Filename == "" {
-		contents, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("failed to read from stdin: %w", err)
-		}
-		cmd.File.Filename = "<stdin>"
-		cmd.File.Contents = contents
+	if err := cmd.File.EnsureContents(); err != nil {
+		return err
 	}
 
-	// Create context for cancellation support
 	runCtx := context.Background()
 
-	// Create telemetry collector if flag is set
 	var collector telemetry.Collector
 	var checkTimer telemetry.Timer
 	var once sync.Once
 
-	// reportTelemetry prints telemetry if enabled (idempotent via sync.Once)
 	reportTelemetry := func() {
 		once.Do(func() {
 			if collector != nil {
@@ -113,86 +154,50 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		collector = telemetry.NewTimingCollector()
 		runCtx = telemetry.WithCollector(runCtx, collector)
 
-		// Create root check timer
 		checkTimer = collector.Start(fmt.Sprintf("check %s", filepath.Base(cmd.File.Filename)))
 		runCtx = telemetry.WithRootTimer(runCtx, checkTimer)
 
-		// Defer telemetry report for success path (error paths call manually before exit)
 		defer reportTelemetry()
 	}
 
-	// Read source content for error formatting (needed for parse error context)
-	var sourceContent []byte
-	var absFilename string
-	if cmd.File.Filename == "<stdin>" {
-		sourceContent = cmd.File.Contents
-		absFilename = cmd.File.Filename
-	} else {
-		var err error
-		sourceContent, err = os.ReadFile(cmd.File.Filename)
-		if err != nil {
-			return fmt.Errorf("failed to read file for error context: %w", err)
-		}
-		absFilename, err = filepath.Abs(cmd.File.Filename)
-		if err != nil {
-			// If Abs fails, use the original filename
-			absFilename = cmd.File.Filename
-		}
+	sourceContent, err := cmd.File.GetSourceContent()
+	if err != nil {
+		return fmt.Errorf("failed to read file for error context: %w", err)
 	}
 
-	// Load input: use LoadBytes for stdin, Load for files
-	var ast *ast.AST
-	var err error
-	if cmd.File.Filename == "<stdin>" {
-		// Stdin: contents already read by FileOrStdin.Decode
-		ldr := loader.New(loader.WithFollowIncludes())
-		ast, err = ldr.LoadBytes(runCtx, absFilename, cmd.File.Contents)
-	} else {
-		// File: use Load which handles includes properly
-		ldr := loader.New(loader.WithFollowIncludes())
-		ast, err = ldr.Load(runCtx, absFilename)
-	}
+	ldr := loader.New(loader.WithFollowIncludes())
+	ast, err := cmd.File.LoadAST(runCtx, ldr)
 	if err != nil {
-		// Format parser errors with source context
 		errFormatter := errors.NewTextFormatter(nil, errors.WithSource(sourceContent))
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprintln(ctx.Stderr, formatted)
 
-		// Print blank line and error summary before telemetry
 		_, _ = fmt.Fprintln(ctx.Stderr)
 		_, _ = fmt.Fprintln(ctx.Stderr, "parse error")
 
-		// Print telemetry before exit
 		reportTelemetry()
 		os.Exit(1)
 	}
 
-	// Create a new ledger and process the AST
 	l := ledger.New()
 	if err := l.Process(runCtx, ast); err != nil {
-		// Print all validation errors
 		var validationErrors *ledger.ValidationErrors
 		if stdErrors.As(err, &validationErrors) {
-			// Create a formatter for rendering errors
 			f := formatter.New()
 			errFormatter := errors.NewTextFormatter(f, errors.WithSource(sourceContent))
 
-			// Format all errors
 			formatted := errFormatter.FormatAll(validationErrors.Errors)
 			_, _ = fmt.Fprintln(ctx.Stderr, formatted)
 
-			// Print blank line and error summary before telemetry
 			_, _ = fmt.Fprintln(ctx.Stderr)
 			_, _ = fmt.Fprintf(ctx.Stderr, "%d validation error(s) found\n", len(validationErrors.Errors))
 
-			// Print telemetry before exit
 			reportTelemetry()
 			os.Exit(1)
 		}
 		return err
 	}
 
-	// Success
 	_, _ = fmt.Fprintln(ctx.Stdout, "✓ Check passed")
 
 	return nil
@@ -206,61 +211,31 @@ type FormatCmd struct {
 }
 
 func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
-	// If no filename provided, read from stdin
-	if cmd.File.Filename == "" {
-		contents, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("failed to read from stdin: %w", err)
-		}
-		cmd.File.Filename = "<stdin>"
-		cmd.File.Contents = contents
+	if err := cmd.File.EnsureContents(); err != nil {
+		return err
 	}
 
-	// Create context for cancellation support
 	runCtx := context.Background()
 
-	// Create telemetry collector if flag is set
 	var collector telemetry.Collector
 	if globals.Telemetry {
 		collector = telemetry.NewTimingCollector()
 		runCtx = telemetry.WithCollector(runCtx, collector)
 
-		// Defer telemetry report - runs regardless of early returns
 		defer func() {
 			_, _ = fmt.Fprintln(ctx.Stderr)
 			collector.Report(ctx.Stderr)
 		}()
 	}
 
-	// Load input: use LoadBytes for stdin, Load for files
-	var ast *ast.AST
-	var err error
-	var sourceContent []byte
-	var absFilename string
-	if cmd.File.Filename == "<stdin>" {
-		// Stdin: contents already read by FileOrStdin.Decode
-		sourceContent = cmd.File.Contents
-		absFilename = cmd.File.Filename
-		ldr := loader.New()
-		ast, err = ldr.LoadBytes(runCtx, absFilename, cmd.File.Contents)
-	} else {
-		// File: use Load (though format doesn't follow includes, this is consistent)
-		var readErr error
-		sourceContent, readErr = os.ReadFile(cmd.File.Filename)
-		if readErr != nil {
-			return fmt.Errorf("failed to read file: %w", readErr)
-		}
-		var absErr error
-		absFilename, absErr = filepath.Abs(cmd.File.Filename)
-		if absErr != nil {
-			// If Abs fails, use the original filename
-			absFilename = cmd.File.Filename
-		}
-		ldr := loader.New()
-		ast, err = ldr.Load(runCtx, absFilename)
-	}
+	sourceContent, err := cmd.File.GetSourceContent()
 	if err != nil {
-		// Format parser errors with source context
+		return fmt.Errorf("failed to read file: %w", err)
+	}
+
+	ldr := loader.New()
+	ast, err := cmd.File.LoadAST(runCtx, ldr)
+	if err != nil {
 		errFormatter := errors.NewTextFormatter(nil, errors.WithSource(sourceContent))
 		formatted := errFormatter.Format(err)
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
@@ -268,7 +243,6 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return fmt.Errorf("parse error")
 	}
 
-	// Create formatter with options
 	var opts []formatter.Option
 	if cmd.CurrencyColumn > 0 {
 		opts = append(opts, formatter.WithCurrencyColumn(cmd.CurrencyColumn))
@@ -281,29 +255,50 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 	f := formatter.New(opts...)
 
-	// Format and output to stdout
-	var contents []byte
-	if cmd.File.Filename == "<stdin>" {
-		// Contents already read for stdin
-		contents = cmd.File.Contents
-	} else {
-		// Read file contents for formatter (needs original source for comment preservation)
-		var err error
-		contents, err = os.ReadFile(cmd.File.Filename)
-		if err != nil {
-			return fmt.Errorf("failed to read file: %w", err)
-		}
-	}
-	if err := f.Format(runCtx, ast, contents, os.Stdout); err != nil {
+	if err := f.Format(runCtx, ast, sourceContent, os.Stdout); err != nil {
 		return err
 	}
 
 	return nil
 }
 
+type WebCmd struct {
+	File FileOrStdin `help:"Beancount ledger file to serve." arg:"" optional:""`
+	Port int         `help:"Port to listen on." default:"8080"`
+}
+
+func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
+	runCtx := context.Background()
+
+	if globals.Telemetry {
+		collector := telemetry.NewTimingCollector()
+		runCtx = telemetry.WithCollector(runCtx, collector)
+
+		defer func() {
+			_, _ = fmt.Fprintln(ctx.Stderr)
+			collector.Report(ctx.Stderr)
+		}()
+	}
+
+	var ledgerFile string
+	if cmd.File.Filename != "" {
+		ledgerFile = cmd.File.GetAbsoluteFilename()
+	}
+
+	server := web.NewWithVersion(cmd.Port, ledgerFile, Version, CommitSHA)
+
+	_, _ = fmt.Fprintf(ctx.Stdout, "Starting server on %s:%d\n", server.Host, cmd.Port)
+	if ledgerFile != "" {
+		_, _ = fmt.Fprintf(ctx.Stdout, "Serving ledger: %s\n", ledgerFile)
+	}
+
+	return server.Start(runCtx)
+}
+
 type Commands struct {
-	Globals // Embed globals to make --telemetry available at root level
+	Globals
 
 	Check  CheckCmd  `cmd:"" help:"Parse, check and realize a beancount input file."`
 	Format FormatCmd `cmd:"" help:"Format a beancount file to align numbers and currencies."`
+	Web    WebCmd    `cmd:"" help:"Start a web server."`
 }
