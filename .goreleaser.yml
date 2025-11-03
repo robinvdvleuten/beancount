@@ -3,6 +3,7 @@ version: 2
 before:
   hooks:
     - go mod tidy
+    - npm install --prefix assets
     - npm run --prefix assets build
 
 builds:
