@@ -16,7 +16,6 @@ jobs:
           node-version: 24
           cache: npm
           cache-dependency-path: assets/package-lock.json
-      - run: npm --prefix assets ci
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: latest
