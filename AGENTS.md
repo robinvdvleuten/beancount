@@ -124,6 +124,76 @@ func (v *Validator) validateTransaction(txn *Transaction) []error {
 - Easy to skip validation for trusted input (performance)
 - Clear separation of concerns (parser, ledger, validator are independent)
 
+
+## Documentation Lookup with Context7
+
+### When to Use Context7
+
+**ALWAYS use the Context7 MCP server** when you need:
+- Code generation using external libraries
+- Setup or configuration steps for tools/frameworks
+- Library or API documentation
+- Best practices for using third-party packages
+- Up-to-date documentation for dependencies
+
+### Context7 Usage Pattern
+
+1. **Resolve library ID first** (unless user provides explicit ID in `/org/project` format):
+   ```
+   context7_resolve_library_id(libraryName: "shopspring/decimal")
+   ```
+
+2. **Get documentation** using the resolved ID:
+   ```
+   context7_get_library_docs(
+     context7CompatibleLibraryID: "/shopspring/decimal",
+     topic: "precision"  // optional: focus on specific topic
+   )
+   ```
+
+### When to Use Context7 Automatically
+
+You should **proactively use Context7** without being asked when:
+- Implementing features with external libraries (e.g., "add decimal precision handling")
+- User asks "how do I..." questions about third-party tools
+- Setting up integrations or new dependencies
+- Writing code that uses unfamiliar APIs
+- Need current documentation (library docs may have changed)
+
+### Examples
+
+**Example 1: Working with decimal precision**
+```
+User: "How do I round decimal amounts to 2 decimal places?"
+Assistant: [Uses context7_resolve_library_id("shopspring/decimal") then context7_get_library_docs(topic: "rounding")]
+```
+
+**Example 2: CLI argument parsing**
+```
+User: "Add a new --tolerance flag to the check command"
+Assistant: [Uses context7_resolve_library_id("alecthomas/kong") then context7_get_library_docs(topic: "flags")]
+```
+
+**Example 3: Unicode width calculations**
+```
+User: "Why is the formatting off for Chinese characters?"
+Assistant: [Uses context7_resolve_library_id("mattn/go-runewidth") then context7_get_library_docs(topic: "width calculation")]
+```
+
+**Example 4: Vite integration for web assets**
+```
+User: "The web assets aren't loading in development mode"
+Assistant: [Uses context7_resolve_library_id("olivere/vite") then context7_get_library_docs(topic: "development mode")]
+```
+
+### Rules
+
+- **DO** use Context7 for third-party library documentation (shopspring/decimal, alecthomas/kong, etc.)
+- **DO** resolve library ID before getting docs (unless user provides `/org/project` format)
+- **DO NOT** use Context7 for Go standard library documentation (use official Go docs)
+- **DO NOT** use Context7 for project-specific code (use codebase search tools)
+- **DO** specify `topic` parameter when you know what aspect of the library is needed
+
 ## Code Formatting
 
 ### Standard Formatting
