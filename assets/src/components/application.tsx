@@ -1,103 +1,15 @@
 import * as React from "react";
-import CodeMirror, { type EditorView } from "@uiw/react-codemirror";
-import { createTheme } from "@uiw/codemirror-themes";
-import {
-  type Diagnostic,
-  linter as linterExt,
-  lintGutter,
-} from "@codemirror/lint";
 import {
   ArrowDownTrayIcon,
   DocumentCurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
-
-interface ErrorPosition {
-  filename: string;
-  line: number;
-  column: number;
-}
-
-interface ErrorJSON {
-  type: string;
-  message: string;
-  position?: ErrorPosition;
-  details?: Record<string, any>;
-}
+import Editor, { type EditorError } from "./editor";
 
 interface SourceResponse {
   filepath: string;
   source: string;
-  errors: ErrorJSON[] | null;
+  errors: EditorError[] | null;
 }
-
-function errorsToDiagnostics(
-  errors: ErrorJSON[] | null,
-  view: EditorView,
-): Diagnostic[] {
-  if (!errors || errors.length === 0) {
-    return [];
-  }
-
-  return errors.map((error) => {
-    const messageParts = error.message.split(": ");
-    const cleanMessage =
-      messageParts.length >= 2
-        ? messageParts.slice(1).join(": ")
-        : error.message;
-
-    if (!error.position) {
-      return {
-        from: 0,
-        to: 1,
-        severity: "error" as const,
-        message: cleanMessage,
-        source: error.type,
-      };
-    }
-
-    try {
-      const line = view.state.doc.line(error.position.line);
-      const from = line.from + Math.max(0, error.position.column - 1);
-      const to = line.to;
-
-      return {
-        from,
-        to,
-        severity: "error" as const,
-        message: cleanMessage,
-        source: error.type,
-      };
-    } catch (e) {
-      return {
-        from: 0,
-        to: 1,
-        severity: "error" as const,
-        message: cleanMessage,
-        source: error.type,
-      };
-    }
-  });
-}
-
-const theme = createTheme({
-  theme: "light",
-  settings: {
-    background: "var(--color-base-100)",
-    foreground: "var(	--color-base-content)",
-    caret: "var(	--color-base-content)",
-    selection:
-      "color-mix(in oklab, var(--color-primary) 5%, var(--color-base-100))",
-    selectionMatch:
-      "color-mix(in oklab, var(--color-primary) 5%, var(--color-base-100))",
-    lineHighlight:
-      "color-mix(in oklab, var(--color-primary) 10%, var(--color-base-100))",
-    gutterBackground: "var(--color-base-100)",
-    gutterForeground:
-      "color-mix(in oklab, var(--color-base-content) 50%, transparent)",
-    gutterActiveForeground: "var(	--color-base-content)",
-  },
-  styles: [],
-});
 
 interface ApplicationProps {
   meta: { version: string; commitSHA: string };
@@ -106,11 +18,7 @@ interface ApplicationProps {
 const Application: React.FC<ApplicationProps> = ({ meta }) => {
   const [filepath, setFilepath] = React.useState<string | null>(null);
   const [source, setSource] = React.useState<string>();
-  const [errors, setErrors] = React.useState<ErrorJSON[] | null>(null);
-
-  const linter = React.useMemo(() => {
-    return linterExt((view) => errorsToDiagnostics(errors, view));
-  }, [errors]);
+  const [errors, setErrors] = React.useState<EditorError[] | null>(null);
 
   const handleValueChange = React.useCallback((value: string) => {
     setSource(value);
@@ -188,13 +96,7 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
       </header>
 
       <div className="flex-1 overflow-auto">
-        <CodeMirror
-          value={source}
-          theme={theme}
-          extensions={[linter, lintGutter()]}
-          onChange={handleValueChange}
-          height="100%"
-        />
+        <Editor value={source} errors={errors} onChange={handleValueChange} />
       </div>
 
       <footer className="flex items-center justify-between border-t border-base-300 px-6 py-2">
