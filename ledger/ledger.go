@@ -286,8 +286,8 @@ func (l *Ledger) processOpen(ctx context.Context, open *ast.Open) {
 func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta) {
 	// Build account from delta (avoid allocating during validation)
 	account := &Account{
-		Name:                 open.Account,
-		Type:                 delta.AccountType,
+		Name:                 delta.Account,
+		Type:                 delta.Account.Type(),
 		OpenDate:             delta.OpenDate,
 		ConstraintCurrencies: delta.ConstraintCurrencies,
 		BookingMethod:        delta.BookingMethod,
@@ -295,7 +295,7 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta) {
 		Inventory:            NewInventory(), // Create inventory only at mutation time
 	}
 
-	l.accounts[delta.AccountName] = account
+	l.accounts[string(delta.Account)] = account
 }
 
 // processClose processes a Close directive with validation

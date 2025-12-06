@@ -985,8 +985,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 
 	// Build delta with account properties (avoid allocating Inventory during validation)
 	delta := &OpenDelta{
-		AccountName:          accountName,
-		AccountType:          ParseAccountType(open.Account),
+		Account:              open.Account,
 		OpenDate:             open.Date,
 		ConstraintCurrencies: constraintCurrenciesCopy,
 		BookingMethod:        open.BookingMethod,

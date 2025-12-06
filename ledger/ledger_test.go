@@ -26,7 +26,7 @@ func TestLedger_ProcessOpen(t *testing.T) {
 				acc, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok, "account should exist")
 				assert.Equal(t, "Assets:Checking", string(acc.Name))
-				assert.Equal(t, AccountTypeAssets, acc.Type)
+				assert.Equal(t, ast.AccountTypeAssets, acc.Type)
 				assert.False(t, acc.IsClosed())
 			},
 		},
@@ -549,27 +549,6 @@ func TestAccount_IsOpen(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			checkDate := mustParseDate(tt.checkDate)
 			got := tt.account.IsOpen(checkDate)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestParseAccountType(t *testing.T) {
-	tests := []struct {
-		account ast.Account
-		want    AccountType
-	}{
-		{"Assets:Checking", AccountTypeAssets},
-		{"Liabilities:CreditCard", AccountTypeLiabilities},
-		{"Equity:Opening-Balances", AccountTypeEquity},
-		{"Income:Salary", AccountTypeIncome},
-		{"Expenses:Rent", AccountTypeExpenses},
-		{"Invalid:Account", AccountTypeUnknown},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.account), func(t *testing.T) {
-			got := ParseAccountType(tt.account)
 			assert.Equal(t, tt.want, got)
 		})
 	}

@@ -91,6 +91,60 @@ func (a *Account) Capture(values []string) error {
 	return nil
 }
 
+// AccountType represents the category of a Beancount account.
+// The five account types follow double-entry bookkeeping principles.
+type AccountType int
+
+const (
+	AccountTypeAssets AccountType = iota + 1 // Start at 1, no Unknown
+	AccountTypeLiabilities
+	AccountTypeEquity
+	AccountTypeIncome
+	AccountTypeExpenses
+)
+
+// String returns the string representation of the account type.
+// Panics if the account type is invalid (indicates a bug).
+func (t AccountType) String() string {
+	switch t {
+	case AccountTypeAssets:
+		return "Assets"
+	case AccountTypeLiabilities:
+		return "Liabilities"
+	case AccountTypeEquity:
+		return "Equity"
+	case AccountTypeIncome:
+		return "Income"
+	case AccountTypeExpenses:
+		return "Expenses"
+	default:
+		panic(fmt.Sprintf("invalid account type: %d", t))
+	}
+}
+
+// Type returns the account type based on the first segment.
+// Panics if the account has an invalid type prefix (indicates validation was bypassed).
+func (a Account) Type() AccountType {
+	idx := strings.IndexByte(string(a), ':')
+	if idx == -1 {
+		panic(fmt.Sprintf("invalid account %q: missing type prefix", a))
+	}
+	switch string(a)[:idx] {
+	case "Assets":
+		return AccountTypeAssets
+	case "Liabilities":
+		return AccountTypeLiabilities
+	case "Equity":
+		return AccountTypeEquity
+	case "Income":
+		return AccountTypeIncome
+	case "Expenses":
+		return AccountTypeExpenses
+	default:
+		panic(fmt.Sprintf("invalid account type prefix %q in account %q", string(a)[:idx], a))
+	}
+}
+
 // accountSegmentRegex validates account segments (after first).
 // Must start with uppercase Unicode letter, digit, or any non-ASCII Unicode character.
 // Can contain Unicode letters, digits, and hyphens.

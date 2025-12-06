@@ -61,8 +61,7 @@ func (d *TransactionDelta) HasMutations() bool {
 // OpenDelta describes changes from opening an account.
 // Stores account properties directly to avoid unnecessary allocations.
 type OpenDelta struct {
-	AccountName          string
-	AccountType          AccountType
+	Account              ast.Account
 	OpenDate             *ast.Date
 	ConstraintCurrencies []string
 	BookingMethod        string
