@@ -260,7 +260,7 @@ Feel free to open an issue to get feedback on your idea before spending too much
 
 ## License
 
-Copyright (c) 2025 Robin van der Vleuten
+Copyright (c) Robin van der Vleuten
 
 Licensed under the GNU General Public License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
