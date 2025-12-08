@@ -1,0 +1,43 @@
+name: release-please
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+    steps:
+      - uses: googleapis/release-please-action@v4
+        id: release
+        with:
+          release-type: go
+
+  goreleaser:
+    needs: [release-please]
+    runs-on: ubuntu-latest
+    if: ${{ needs.release-please.outputs.release_created }}
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: latest
+          args: release --clean
+        env:
+          HOMEBREW_TOKEN: ${{ secrets.HOMEBREW_TOKEN }}
