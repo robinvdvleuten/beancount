@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.0](https://github.com/robinvdvleuten/beancount/compare/v0.5.0...v0.6.0) (2025-12-08)
+
+
+### Features
+
+* make codemirror aware of beancount syntax ([#79](https://github.com/robinvdvleuten/beancount/issues/79)) ([d7298fc](https://github.com/robinvdvleuten/beancount/commit/d7298fc69d830e81bab92df2b1e3e6a7162b2cbb))
+* **web:** add account autocomplete with match-sorter ([90bdb2c](https://github.com/robinvdvleuten/beancount/commit/90bdb2cbd1df48af44ca4a52d432012bdb69f95e))
+* **web:** add GET /api/accounts endpoint ([0a6ce4f](https://github.com/robinvdvleuten/beancount/commit/0a6ce4fb723ab60392bdb6778d395e7717bb8d4f))
+
 ## [0.5.0](https://github.com/robinvdvleuten/beancount/compare/v0.4.0...v0.5.0) (2025-11-03)
 
 ### Features
