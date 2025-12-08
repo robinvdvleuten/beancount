@@ -58,15 +58,17 @@ func (s *Server) Start(ctx context.Context) error {
 	timer := collector.Start(fmt.Sprintf("web.start %s:%d", s.Host, s.Port))
 	defer timer.End()
 
-	// Load initial ledger
-	if s.ledgerFile != "" {
-		loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.ledgerFile)))
-		if err := s.reloadLedger(ctx); err != nil {
-			loadTimer.End()
-			return fmt.Errorf("failed to load ledger: %w", err)
-		}
-		loadTimer.End()
+	// Require ledger file
+	if s.ledgerFile == "" {
+		return fmt.Errorf("ledger file is required")
 	}
+
+	loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.ledgerFile)))
+	if err := s.reloadLedger(ctx); err != nil {
+		loadTimer.End()
+		return fmt.Errorf("failed to load ledger: %w", err)
+	}
+	loadTimer.End()
 
 	setupTimer := timer.Child("web.setup_router")
 	mux, err := s.setupRouter()

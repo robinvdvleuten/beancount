@@ -100,7 +100,7 @@ func (s *Server) resolveFilepath(r *http.Request) (string, error) {
 func (s *Server) buildResponse(filename string, source []byte) *SourceResponse {
 	errorsJSON := []beancountErrors.ErrorJSON{}
 
-	if s.ledger != nil && len(s.ledger.Errors()) > 0 {
+	if len(s.ledger.Errors()) > 0 {
 		jsonFormatter := beancountErrors.NewJSONFormatter()
 		errorsJSON = jsonFormatter.FormatAllToSlice(s.ledger.Errors())
 	}

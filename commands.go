@@ -263,8 +263,8 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 }
 
 type WebCmd struct {
-	File FileOrStdin `help:"Beancount ledger file to serve." arg:"" optional:""`
-	Port int         `help:"Port to listen on." default:"8080"`
+	File string `help:"Beancount ledger file to serve." arg:""`
+	Port int    `help:"Port to listen on." default:"8080"`
 }
 
 func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
@@ -280,17 +280,15 @@ func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
 		}()
 	}
 
-	var ledgerFile string
-	if cmd.File.Filename != "" {
-		ledgerFile = cmd.File.GetAbsoluteFilename()
+	ledgerFile, err := filepath.Abs(cmd.File)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path: %w", err)
 	}
 
 	server := web.NewWithVersion(cmd.Port, ledgerFile, Version, CommitSHA)
 
 	_, _ = fmt.Fprintf(ctx.Stdout, "Starting server on %s:%d\n", server.Host, cmd.Port)
-	if ledgerFile != "" {
-		_, _ = fmt.Fprintf(ctx.Stdout, "Serving ledger: %s\n", ledgerFile)
-	}
+	_, _ = fmt.Fprintf(ctx.Stdout, "Serving ledger: %s\n", ledgerFile)
 
 	return server.Start(runCtx)
 }

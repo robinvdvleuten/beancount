@@ -22,21 +22,14 @@ func (s *Server) handleGetAccounts(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	var accounts []AccountInfo
+	// Pre-allocate slice with capacity hint
+	accounts := make([]AccountInfo, 0, len(s.ledger.Accounts()))
 
-	if s.ledger != nil {
-		// Pre-allocate slice with capacity hint
-		accounts = make([]AccountInfo, 0, len(s.ledger.Accounts()))
-
-		for name, account := range s.ledger.Accounts() {
-			accounts = append(accounts, AccountInfo{
-				Name: name,
-				Type: account.Type.String(),
-			})
-		}
-	} else {
-		// Ensure empty array (not null) when no ledger
-		accounts = []AccountInfo{}
+	for name, account := range s.ledger.Accounts() {
+		accounts = append(accounts, AccountInfo{
+			Name: name,
+			Type: account.Type.String(),
+		})
 	}
 
 	// Sort alphabetically using standard library

@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ledger"
 )
 
 func TestAPISource(t *testing.T) {
@@ -286,15 +287,17 @@ func TestAPIAccounts(t *testing.T) {
 		assert.Equal(t, "Liabilities", response.Accounts[2].Type)
 	})
 
-	t.Run("EmptyArrayWhenNoLedger", func(t *testing.T) {
-		serverNoLedger := New(8080, "")
-		muxNoLedger, err := serverNoLedger.setupRouter()
+	t.Run("EmptyArrayWhenNoFile", func(t *testing.T) {
+		serverNoFile := New(8080, "")
+		// Manually initialize empty ledger for testing (since we're not calling Start())
+		serverNoFile.ledger = ledger.New()
+		muxNoFile, err := serverNoFile.setupRouter()
 		assert.NoError(t, err)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
 		rec := httptest.NewRecorder()
 
-		muxNoLedger.ServeHTTP(rec, req)
+		muxNoFile.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
