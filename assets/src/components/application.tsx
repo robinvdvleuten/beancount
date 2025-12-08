@@ -5,6 +5,11 @@ import {
 } from "@heroicons/react/24/outline";
 import Editor, { type EditorError } from "./editor";
 
+interface AccountInfo {
+  name: string;
+  type: string;
+}
+
 interface SourceResponse {
   filepath: string;
   source: string;
@@ -19,9 +24,25 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
   const [filepath, setFilepath] = React.useState<string | null>(null);
   const [source, setSource] = React.useState<string>();
   const [errors, setErrors] = React.useState<EditorError[] | null>(null);
+  const [accounts, setAccounts] = React.useState<AccountInfo[]>([]);
 
   const handleValueChange = React.useCallback((value: string) => {
     setSource(value);
+  }, []);
+
+  const fetchAccounts = React.useCallback(async () => {
+    try {
+      const response = await fetch("/api/accounts");
+      if (!response.ok) {
+        throw new Error(`Failed to fetch accounts: ${response.statusText}`);
+      }
+      const data = await response.json();
+      // Keep full objects with type information
+      setAccounts(data.accounts);
+    } catch (error) {
+      console.error("Failed to fetch accounts:", error);
+      setAccounts([]);
+    }
   }, []);
 
   const handleSaveClick = React.useCallback(async () => {
@@ -44,7 +65,10 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
     setFilepath(result.filepath);
     setSource(result.source);
     setErrors(result.errors);
-  }, [source]);
+
+    // Reload accounts to pick up new accounts from the saved file
+    await fetchAccounts();
+  }, [source, fetchAccounts]);
 
   React.useEffect(() => {
     async function fetchSource() {
@@ -68,11 +92,12 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
 
     let ignore = false;
     fetchSource();
+    fetchAccounts();
 
     return () => {
       ignore = true;
     };
-  }, []);
+  }, [fetchAccounts]);
 
   return (
     <div className="flex h-screen flex-col">
@@ -96,7 +121,7 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
       </header>
 
       <div className="flex-1 overflow-auto">
-        <Editor value={source} errors={errors} onChange={handleValueChange} />
+        <Editor value={source} errors={errors} accounts={accounts} onChange={handleValueChange} />
       </div>
 
       <footer className="flex items-center justify-between border-t border-base-300 px-6 py-2">

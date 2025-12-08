@@ -9,6 +9,8 @@ import {
 } from "@codemirror/language";
 import { tags as t } from "@lezer/highlight";
 import { type Diagnostic, linter as linterExt, lintGutter } from "@codemirror/lint";
+import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
+import { matchSorter } from "match-sorter";
 import { parser } from "lezer-beancount";
 
 const beancountLanguage = LRLanguage.define({ parser });
@@ -127,6 +129,45 @@ const highlightStyle = HighlightStyle.define([
   },
 ]);
 
+interface AccountInfo {
+  name: string;
+  type: string;
+}
+
+// Autocomplete function for account names using match-sorter for intelligent ranking
+const createAccountCompletion = (accounts: AccountInfo[]) => {
+  return autocompletion({
+    override: [
+      (context: CompletionContext) => {
+        const word = context.matchBefore(/[\w:-]+/);
+
+        // Only show completions when user is typing
+        if (!word || (word.from === word.to && !context.explicit)) {
+          return null;
+        }
+
+        // Use match-sorter with keys option to sort by account name
+        const matchedAccounts = matchSorter(accounts, word.text, {
+          keys: ["name"],
+          threshold: matchSorter.rankings.CONTAINS,
+        });
+
+        const options = matchedAccounts.map((account) => ({
+          label: account.name,
+          type: "variable",
+          detail: account.type,  // Show account type as detail
+          apply: account.name,
+        }));
+
+        return {
+          from: word.from,
+          options,
+        };
+      },
+    ],
+  });
+};
+
 export interface EditorError {
   type: string;
   message: string;
@@ -140,6 +181,7 @@ export interface EditorError {
 interface EditorProps {
   value?: string;
   errors?: EditorError[] | null;
+  accounts: AccountInfo[];
   onChange?: (value: string) => void;
 }
 
@@ -187,16 +229,26 @@ function errorsToDiagnostics(errors: EditorError[] | null, view: EditorView): Di
   });
 }
 
-const Editor: React.FC<EditorProps> = ({ value, errors, onChange }) => {
+const Editor: React.FC<EditorProps> = ({ value, errors, accounts, onChange }) => {
   const linter = React.useMemo(() => {
     return linterExt((view) => errorsToDiagnostics(errors ?? null, view));
   }, [errors]);
+
+  const accountCompletion = React.useMemo(() => {
+    return createAccountCompletion(accounts);
+  }, [accounts]);
 
   return (
     <CodeMirror
       value={value}
       theme={editorTheme}
-      extensions={[beancount(), syntaxHighlighting(highlightStyle), linter, lintGutter()]}
+      extensions={[
+        beancount(),
+        syntaxHighlighting(highlightStyle),
+        linter,
+        lintGutter(),
+        accountCompletion,
+      ]}
       onChange={onChange}
       height="100%"
     />
