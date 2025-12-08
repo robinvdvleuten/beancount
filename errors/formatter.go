@@ -273,12 +273,18 @@ func (jf *JSONFormatter) Format(err error) string {
 
 // FormatAll formats multiple errors as a JSON array.
 func (jf *JSONFormatter) FormatAll(errs []error) string {
-	var jsonErrors []ErrorJSON
-	for _, err := range errs {
-		jsonErrors = append(jsonErrors, jf.toJSON(err))
-	}
+	jsonErrors := jf.FormatAllToSlice(errs)
 	data, _ := json.MarshalIndent(jsonErrors, "", "  ")
 	return string(data)
+}
+
+// FormatAllToSlice returns errors as a slice of ErrorJSON structs.
+func (jf *JSONFormatter) FormatAllToSlice(errs []error) []ErrorJSON {
+	result := make([]ErrorJSON, 0, len(errs))
+	for _, err := range errs {
+		result = append(result, jf.toJSON(err))
+	}
+	return result
 }
 
 // toJSON converts an error to ErrorJSON.

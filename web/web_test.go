@@ -1,6 +1,7 @@
 package web
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -23,6 +24,8 @@ func TestAPISource(t *testing.T) {
 	_ = tmpFile.Close()
 
 	server := New(8080, tmpFile.Name())
+	err = server.reloadLedger(context.Background())
+	assert.NoError(t, err)
 	mux, err := server.setupRouter()
 	assert.NoError(t, err)
 

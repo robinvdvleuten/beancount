@@ -17,7 +17,11 @@ import (
 	"html/template"
 	"io/fs"
 	"net/http"
+	"path/filepath"
+	"sync"
 
+	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -25,11 +29,14 @@ import (
 var indexTemplate string
 
 type Server struct {
-	Port       int
-	LedgerFile string
-	Host       string
-	Version    string
-	CommitSHA  string
+	Port      int
+	Host      string
+	Version   string
+	CommitSHA string
+
+	mu         sync.RWMutex
+	ledger     *ledger.Ledger
+	ledgerFile string
 }
 
 func New(port int, ledgerFile string) *Server {
@@ -39,10 +46,10 @@ func New(port int, ledgerFile string) *Server {
 func NewWithVersion(port int, ledgerFile, version, commitSHA string) *Server {
 	return &Server{
 		Port:       port,
-		LedgerFile: ledgerFile,
 		Host:       "127.0.0.1",
 		Version:    version,
 		CommitSHA:  commitSHA,
+		ledgerFile: ledgerFile,
 	}
 }
 
@@ -50,6 +57,16 @@ func (s *Server) Start(ctx context.Context) error {
 	collector := telemetry.FromContext(ctx)
 	timer := collector.Start(fmt.Sprintf("web.start %s:%d", s.Host, s.Port))
 	defer timer.End()
+
+	// Load initial ledger
+	if s.ledgerFile != "" {
+		loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.ledgerFile)))
+		if err := s.reloadLedger(ctx); err != nil {
+			loadTimer.End()
+			return fmt.Errorf("failed to load ledger: %w", err)
+		}
+		loadTimer.End()
+	}
 
 	setupTimer := timer.Child("web.setup_router")
 	mux, err := s.setupRouter()
@@ -115,4 +132,24 @@ func (s *Server) makeIndexHandler(distFS fs.FS) http.HandlerFunc {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
 	}
+}
+
+// reloadLedger loads or reloads the ledger from disk.
+// Caller must NOT hold the mutex - this method acquires it internally.
+func (s *Server) reloadLedger(ctx context.Context) error {
+	ldr := loader.New(loader.WithFollowIncludes())
+
+	ast, err := ldr.Load(ctx, s.ledgerFile)
+	if err != nil {
+		return err // I/O or parse error
+	}
+
+	l := ledger.New()
+	_ = l.Process(ctx, ast) // Validation errors in l.Errors()
+
+	s.mu.Lock()
+	s.ledger = l
+	s.mu.Unlock()
+
+	return nil
 }

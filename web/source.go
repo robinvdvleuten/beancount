@@ -1,18 +1,24 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	beancountErrors "github.com/robinvdvleuten/beancount/errors"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
 )
+
+// writeJSONResponse writes a JSON response to the http.ResponseWriter.
+// If encoding fails, it writes an error response.
+func writeJSONResponse(w http.ResponseWriter, data interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
+	}
+}
 
 type SourceResponse struct {
 	Filepath string                      `json:"filepath"`
@@ -25,10 +31,10 @@ type SourceResponse struct {
 // The resolved path is validated to ensure it's within the allowed directory.
 func (s *Server) resolveFilepathFromString(path string) (string, error) {
 	if path == "" {
-		if s.LedgerFile == "" {
+		if s.ledgerFile == "" {
 			return "", fmt.Errorf("no filepath provided and no default ledger file configured")
 		}
-		return s.LedgerFile, nil
+		return s.ledgerFile, nil
 	}
 
 	absPath, err := filepath.Abs(path)
@@ -48,11 +54,11 @@ func (s *Server) resolveFilepathFromString(path string) (string, error) {
 // configured, only files within its directory tree are allowed. This prevents
 // both relative path traversal (../) and symlink-based directory traversal attacks.
 func (s *Server) validateFilepath(path string) error {
-	if s.LedgerFile == "" {
+	if s.ledgerFile == "" {
 		return nil
 	}
 
-	allowedDir := filepath.Dir(s.LedgerFile)
+	allowedDir := filepath.Dir(s.ledgerFile)
 
 	absAllowedDir, err := filepath.EvalSymlinks(allowedDir)
 	if err != nil {
@@ -74,7 +80,7 @@ func (s *Server) validateFilepath(path string) error {
 		return fmt.Errorf("access denied: cannot determine relative path")
 	}
 
-	if len(relPath) >= 2 && relPath[:2] == ".." {
+	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("access denied: filepath outside allowed directory")
 	}
 
@@ -89,42 +95,21 @@ func (s *Server) resolveFilepath(r *http.Request) (string, error) {
 	return s.resolveFilepathFromString(filename)
 }
 
-// validateAndBuildResponse parses and validates the beancount source,
-// returning a response with the source content and any validation errors.
-// Validation includes parsing, account opening checks, and balance assertions.
-func (s *Server) validateAndBuildResponse(ctx context.Context, filename string, source []byte) (*SourceResponse, error) {
-	var errorList []error
+// buildResponse creates a SourceResponse from the current ledger state.
+// Must be called with s.mu held for reading.
+func (s *Server) buildResponse(filename string, source []byte) *SourceResponse {
+	errorsJSON := []beancountErrors.ErrorJSON{}
 
-	ldr := loader.New(loader.WithFollowIncludes())
-	ast, err := ldr.LoadBytes(ctx, filename, source)
-	if err != nil {
-		errorList = append(errorList, err)
-	}
-
-	if ast != nil {
-		l := ledger.New()
-		if err := l.Process(ctx, ast); err != nil {
-			var validationErrors *ledger.ValidationErrors
-			if errors.As(err, &validationErrors) {
-				errorList = append(errorList, validationErrors.Errors...)
-			}
-		}
-	}
-
-	jsonFormatter := beancountErrors.NewJSONFormatter()
-	var errorsJSON []beancountErrors.ErrorJSON
-	if len(errorList) > 0 {
-		jsonStr := jsonFormatter.FormatAll(errorList)
-		if err := json.Unmarshal([]byte(jsonStr), &errorsJSON); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal errors: %w", err)
-		}
+	if s.ledger != nil && len(s.ledger.Errors()) > 0 {
+		jsonFormatter := beancountErrors.NewJSONFormatter()
+		errorsJSON = jsonFormatter.FormatAllToSlice(s.ledger.Errors())
 	}
 
 	return &SourceResponse{
 		Filepath: filename,
 		Source:   string(source),
 		Errors:   errorsJSON,
-	}, nil
+	}
 }
 
 // handleGetSource handles GET requests to /api/source.
@@ -146,17 +131,12 @@ func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := s.validateAndBuildResponse(r.Context(), filename, content)
-	if err != nil {
-		http.Error(w, "Failed to validate source", http.StatusInternalServerError)
-		return
-	}
+	// Read lock for accessing ledger state
+	s.mu.RLock()
+	response := s.buildResponse(filename, content)
+	s.mu.RUnlock()
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	writeJSONResponse(w, response)
 }
 
 // handlePutSource handles PUT requests to /api/source.
@@ -178,20 +158,22 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Write file first (outside lock)
 	if err := os.WriteFile(filename, []byte(request.Source), 0600); err != nil {
 		http.Error(w, "Failed to write file", http.StatusInternalServerError)
 		return
 	}
 
-	response, err := s.validateAndBuildResponse(r.Context(), filename, []byte(request.Source))
-	if err != nil {
-		http.Error(w, "Failed to validate source", http.StatusInternalServerError)
+	// Reload ledger after save
+	if err := s.reloadLedger(r.Context()); err != nil {
+		http.Error(w, "Failed to reload ledger", http.StatusInternalServerError)
 		return
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(response); err != nil {
-		http.Error(w, "Failed to encode response", http.StatusInternalServerError)
-		return
-	}
+	// Build response from reloaded state
+	s.mu.RLock()
+	response := s.buildResponse(filename, []byte(request.Source))
+	s.mu.RUnlock()
+
+	writeJSONResponse(w, response)
 }
