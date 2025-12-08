@@ -1,5 +1,5 @@
 import * as React from "react";
-import CodeMirror, { type EditorView } from "@uiw/react-codemirror";
+import CodeMirror, { type EditorView as CodeMirrorEditorView } from "@uiw/react-codemirror";
 import { createTheme } from "@uiw/codemirror-themes";
 import {
   LRLanguage,
@@ -7,6 +7,7 @@ import {
   syntaxHighlighting,
   HighlightStyle,
 } from "@codemirror/language";
+import { EditorView } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 import { type Diagnostic, linter as linterExt, lintGutter } from "@codemirror/lint";
 import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
@@ -30,6 +31,45 @@ const editorTheme = createTheme({
     gutterActiveForeground: "color-mix(in oklab, var(--color-base-content) 50%, transparent)",
   },
   styles: [],
+});
+
+const tooltipTheme = EditorView.theme({
+  ".cm-tooltip": {
+    backgroundColor: "var(--color-base-100)",
+    color: "var(--color-base-content)",
+    border: "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
+    boxShadow: "0 12px 40px color-mix(in oklab, var(--color-base-content) 10%, transparent)",
+  },
+  ".cm-tooltip-autocomplete": {
+    padding: 0,
+  },
+  ".cm-tooltip-autocomplete ul": {
+    backgroundColor: "var(--color-base-100)",
+    color: "var(--color-base-content)",
+  },
+  ".cm-tooltip-autocomplete li": {
+    padding: "0.35rem 0.75rem",
+    color: "color-mix(in oklab, var(--color-base-content) 80%, transparent)",
+  },
+  ".cm-tooltip-autocomplete li[aria-selected]": {
+    backgroundColor: "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
+    color: "var(--color-base-content)",
+  },
+  ".cm-completionMatchedText": {
+    color: "color-mix(in oklab, var(--color-base-content) 60%, transparent)",
+  },
+  ".cm-tooltip-lint": {
+    backgroundColor: "var(--color-base-100)",
+    color: "var(--color-base-content)",
+    border: "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
+    boxShadow: "0 12px 40px color-mix(in oklab, var(--color-base-content) 10%, transparent)",
+  },
+  ".cm-diagnostic": {
+    borderLeft: "4px solid color-mix(in oklab, var(--color-base-content) 10%, transparent)",
+  },
+  ".cm-diagnostic-error": {
+    borderLeftColor: "color-mix(in oklab, var(--color-error, #f31260) 65%, transparent)",
+  },
 });
 
 const highlightStyle = HighlightStyle.define([
@@ -185,7 +225,7 @@ interface EditorProps {
   onChange?: (value: string) => void;
 }
 
-function errorsToDiagnostics(errors: EditorError[] | null, view: EditorView): Diagnostic[] {
+function errorsToDiagnostics(errors: EditorError[] | null, view: CodeMirrorEditorView): Diagnostic[] {
   if (!errors || errors.length === 0) {
     return [];
   }
@@ -245,6 +285,7 @@ const Editor: React.FC<EditorProps> = ({ value, errors, accounts, onChange }) =>
       extensions={[
         beancount(),
         syntaxHighlighting(highlightStyle),
+        tooltipTheme,
         linter,
         lintGutter(),
         accountCompletion,
