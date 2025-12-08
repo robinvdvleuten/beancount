@@ -86,6 +86,7 @@ func (s *Server) setupRouter() (*http.ServeMux, error) {
 	// API routes
 	mux.HandleFunc("GET /api/source", s.handleGetSource)
 	mux.HandleFunc("PUT /api/source", s.handlePutSource)
+	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 
 	// Get the appropriate dist filesystem for the build mode
 	distFS, err := s.getDistFS()

@@ -238,3 +238,94 @@ func TestAPISource(t *testing.T) {
 		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
 	})
 }
+
+func TestAPIAccounts(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "test-*.beancount")
+	assert.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
+	testContent := `2024-01-01 open Assets:Checking
+2024-01-01 open Expenses:Food
+2024-01-01 open Liabilities:CreditCard
+2024-01-02 * "Test transaction"
+  Assets:Checking  100 USD
+  Expenses:Food   -100 USD`
+	_, err = tmpFile.WriteString(testContent)
+	assert.NoError(t, err)
+	_ = tmpFile.Close()
+
+	server := New(8080, tmpFile.Name())
+	err = server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	t.Run("ReturnsSortedAccounts", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
+
+		var response AccountsResponse
+		err := json.NewDecoder(rec.Body).Decode(&response)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 3, len(response.Accounts))
+
+		// Verify accounts are sorted alphabetically
+		assert.Equal(t, "Assets:Checking", response.Accounts[0].Name)
+		assert.Equal(t, "Assets", response.Accounts[0].Type)
+
+		assert.Equal(t, "Expenses:Food", response.Accounts[1].Name)
+		assert.Equal(t, "Expenses", response.Accounts[1].Type)
+
+		assert.Equal(t, "Liabilities:CreditCard", response.Accounts[2].Name)
+		assert.Equal(t, "Liabilities", response.Accounts[2].Type)
+	})
+
+	t.Run("EmptyArrayWhenNoLedger", func(t *testing.T) {
+		serverNoLedger := New(8080, "")
+		muxNoLedger, err := serverNoLedger.setupRouter()
+		assert.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+		rec := httptest.NewRecorder()
+
+		muxNoLedger.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var response AccountsResponse
+		err = json.NewDecoder(rec.Body).Decode(&response)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 0, len(response.Accounts))
+		assert.NotEqual(t, nil, response.Accounts) // Should be empty array, not nil
+	})
+
+	t.Run("ValidJSONStructure", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var response map[string]interface{}
+		err := json.NewDecoder(rec.Body).Decode(&response)
+		assert.NoError(t, err)
+
+		accounts, ok := response["accounts"].([]interface{})
+		assert.True(t, ok, "accounts should be an array")
+		assert.True(t, len(accounts) > 0)
+
+		firstAccount := accounts[0].(map[string]interface{})
+		_, hasName := firstAccount["name"]
+		_, hasType := firstAccount["type"]
+		assert.True(t, hasName, "account should have 'name' field")
+		assert.True(t, hasType, "account should have 'type' field")
+	})
+}
