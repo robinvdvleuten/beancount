@@ -1,5 +1,10 @@
 name: build
-on: [push, pull_request]
+
+on: 
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   build:
@@ -16,7 +21,7 @@ jobs:
           go-version: ${{ matrix.go }}
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: lts/*
           cache: npm
           cache-dependency-path: assets/package-lock.json
       - run: npm ci --prefix assets

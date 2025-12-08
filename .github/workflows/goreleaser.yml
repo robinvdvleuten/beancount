@@ -1,5 +1,10 @@
 name: goreleaser
-on: [push, pull_request]
+
+on: 
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
 
 jobs:
   goreleaser:
@@ -13,7 +18,7 @@ jobs:
           go-version-file: "go.mod"
       - uses: actions/setup-node@v6
         with:
-          node-version: 24
+          node-version: lts/*
           cache: npm
           cache-dependency-path: assets/package-lock.json
       - uses: goreleaser/goreleaser-action@v6
