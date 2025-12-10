@@ -3,12 +3,8 @@ import {
   ArrowDownTrayIcon,
   DocumentCurrencyDollarIcon,
 } from "@heroicons/react/24/outline";
-import Editor, { type EditorError } from "./editor";
-
-interface AccountInfo {
-  name: string;
-  type: string;
-}
+import type { AccountInfo, EditorError } from "../types";
+import Editor from "./editor";
 
 interface SourceResponse {
   filepath: string;
