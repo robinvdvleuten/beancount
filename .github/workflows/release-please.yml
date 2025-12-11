@@ -1,4 +1,4 @@
-name: release-please
+name: Release Please
 
 on:
   push:
@@ -29,7 +29,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-go@v6
         with:
-          go-version-file: "go.mod"
+          go-version-file: go.mod
       - uses: actions/setup-node@v6
         with:
           node-version: lts/*
