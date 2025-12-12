@@ -43,3 +43,25 @@ jobs:
         with:
           name: beancount
           path: beancount
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/download-artifact@v4
+        with:
+          name: beancount
+          path: .
+      - run: chmod +x ./beancount
+      - uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+      - run: npm ci
+        working-directory: assets  
+      - run: npx playwright install --with-deps
+        working-directory: assets
+      - run: npm test
+        working-directory: assets
