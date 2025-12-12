@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	beancountErrors "github.com/robinvdvleuten/beancount/errors"
 )
 
 // writeJSONResponse writes a JSON response to the http.ResponseWriter.
@@ -21,9 +19,9 @@ func writeJSONResponse(w http.ResponseWriter, data interface{}) {
 }
 
 type SourceResponse struct {
-	Filepath string                      `json:"filepath"`
-	Source   string                      `json:"source"`
-	Errors   []beancountErrors.ErrorJSON `json:"errors"`
+	Filepath string  `json:"filepath"`
+	Source   string  `json:"source"`
+	Errors   []error `json:"errors"`
 }
 
 // resolveFilepathFromString resolves a filepath string to an absolute path.
@@ -98,17 +96,10 @@ func (s *Server) resolveFilepath(r *http.Request) (string, error) {
 // buildResponse creates a SourceResponse from the current ledger state.
 // Must be called with s.mu held for reading.
 func (s *Server) buildResponse(filename string, source []byte) *SourceResponse {
-	errorsJSON := []beancountErrors.ErrorJSON{}
-
-	if len(s.ledger.Errors()) > 0 {
-		jsonFormatter := beancountErrors.NewJSONFormatter()
-		errorsJSON = jsonFormatter.FormatAllToSlice(s.ledger.Errors())
-	}
-
 	return &SourceResponse{
 		Filepath: filename,
 		Source:   string(source),
-		Errors:   errorsJSON,
+		Errors:   s.ledger.Errors(),
 	}
 }
 

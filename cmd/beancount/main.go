@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/alecthomas/kong"
+	"github.com/robinvdvleuten/beancount/cli"
 )
 
 var (
@@ -15,21 +16,25 @@ var (
 	// against. It's set via ldflags when building.
 	CommitSHA = ""
 
-	cli struct {
+	cliStruct struct {
 		Version kong.VersionFlag `help:"Show version information"`
-		Commands
+		cli.Commands
 	}
 )
 
 func main() {
-	ctx := kong.Parse(&cli,
+	// Set version information in cli package
+	cli.Version = Version
+	cli.CommitSHA = CommitSHA
+
+	ctx := kong.Parse(&cliStruct,
 		kong.Vars{
 			"version": buildVersion(),
 		},
 		kong.Name("beancount"),
 		kong.Description("A beancount file parser and formatter."),
 		kong.UsageOnError(),
-		kong.Bind(&cli.Globals),
+		kong.Bind(&cliStruct.Globals),
 	)
 
 	err := ctx.Run()

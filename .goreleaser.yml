@@ -7,7 +7,8 @@ before:
     - npm run --prefix assets build
 
 builds:
-  - env:
+  - main: ./cmd/beancount
+    env:
       - CGO_ENABLED=0
     flags:
       - -trimpath
