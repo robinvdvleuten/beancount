@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.6.0](https://github.com/robinvdvleuten/beancount/compare/v0.5.0...v0.6.0) (2025-12-12)
+
+
+### Features
+
+* make codemirror aware of beancount syntax ([#79](https://github.com/robinvdvleuten/beancount/issues/79)) ([d7298fc](https://github.com/robinvdvleuten/beancount/commit/d7298fc69d830e81bab92df2b1e3e6a7162b2cbb))
+* make codemirror popover colors consistent with overall theme ([6adaeb3](https://github.com/robinvdvleuten/beancount/commit/6adaeb36886e7eb4513f178074c0b19baf930174))
+* **web:** add account autocomplete with match-sorter ([90bdb2c](https://github.com/robinvdvleuten/beancount/commit/90bdb2cbd1df48af44ca4a52d432012bdb69f95e))
+* **web:** add context-aware account autocomplete ([16e567e](https://github.com/robinvdvleuten/beancount/commit/16e567ea9cb32d6d922a31451a6f7566849acaf0))
+* **web:** add GET /api/accounts endpoint ([0a6ce4f](https://github.com/robinvdvleuten/beancount/commit/0a6ce4fb723ab60392bdb6778d395e7717bb8d4f))
+
 ## [0.5.0](https://github.com/robinvdvleuten/beancount/compare/v0.4.0...v0.5.0) (2025-11-03)
 
 ### Features
