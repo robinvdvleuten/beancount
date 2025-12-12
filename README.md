@@ -5,7 +5,7 @@
 A fast, lightweight [Beancount](https://beancount.github.io/) parser and formatter written in Go.
 
 [![Latest Release](https://img.shields.io/github/release/robinvdvleuten/beancount.svg?style=flat-square)](https://github.com/robinvdvleuten/beancount/releases)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/robinvdvleuten/beancount/build.yml?style=flat-square&branch=main)](https://github.com/robinvdvleuten/beancount/actions?query=workflow%3Abuild)
+[![CI Status](https://img.shields.io/github/actions/workflow/status/robinvdvleuten/beancount/ci.yml?style=flat-square&branch=main)](https://github.com/robinvdvleuten/beancount/actions?query=workflow%3Aci)
 [![GPL-2.0 license](https://img.shields.io/github/license/robinvdvleuten/beancount.svg?style=flat-square)](https://github.com/robinvdvleuten/beancount/blob/main/COPYING)
 [![PkgGoDev](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://pkg.go.dev/github.com/robinvdvleuten/beancount)
 [![Go ReportCard](https://goreportcard.com/badge/github.com/robinvdvleuten/beancount?style=flat-square)](https://goreportcard.com/report/robinvdvleuten/beancount)
