@@ -1,0 +1,8 @@
+fail_on_severity: critical
+allow_licenses:
+  - BSD-2-Clause
+  - BSD-3-Clause
+  - GPL-2.0-only
+  - ISC
+  - LGPL-2.1-only
+  - MIT
