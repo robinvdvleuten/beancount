@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -44,6 +45,16 @@ func (e *AccountNotOpenError) GetDate() *ast.Date {
 	return e.Date
 }
 
+func (e *AccountNotOpenError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "AccountNotOpenError",
+		"message":  e.Error(),
+		"position": e.Pos,
+		"account":  string(e.Account),
+		"date":     e.Date.Format("2006-01-02"),
+	})
+}
+
 // AccountAlreadyOpenError is returned when trying to open an account that's already open
 type AccountAlreadyOpenError struct {
 	Account    ast.Account
@@ -77,6 +88,17 @@ func (e *AccountAlreadyOpenError) GetAccount() ast.Account {
 
 func (e *AccountAlreadyOpenError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":        "AccountAlreadyOpenError",
+		"message":     e.Error(),
+		"position":    e.Pos,
+		"account":     string(e.Account),
+		"date":        e.Date.Format("2006-01-02"),
+		"opened_date": e.OpenedDate.Format("2006-01-02"),
+	})
 }
 
 // AccountAlreadyClosedError is returned when trying to use or close an account that's already closed
@@ -114,6 +136,17 @@ func (e *AccountAlreadyClosedError) GetDate() *ast.Date {
 	return e.Date
 }
 
+func (e *AccountAlreadyClosedError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":        "AccountAlreadyClosedError",
+		"message":     e.Error(),
+		"position":    e.Pos,
+		"account":     string(e.Account),
+		"date":        e.Date.Format("2006-01-02"),
+		"closed_date": e.ClosedDate.Format("2006-01-02"),
+	})
+}
+
 // AccountNotClosedError is returned when trying to close an account that was never opened
 type AccountNotClosedError struct {
 	Account   ast.Account
@@ -146,6 +179,16 @@ func (e *AccountNotClosedError) GetAccount() ast.Account {
 
 func (e *AccountNotClosedError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "AccountNotClosedError",
+		"message":  e.Error(),
+		"position": e.Pos,
+		"account":  string(e.Account),
+		"date":     e.Date.Format("2006-01-02"),
+	})
 }
 
 // TransactionNotBalancedError is returned when a transaction doesn't balance
@@ -212,6 +255,17 @@ func (e *TransactionNotBalancedError) GetDate() *ast.Date {
 	return e.Date
 }
 
+func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":      "TransactionNotBalancedError",
+		"message":   e.Error(),
+		"position":  e.Pos,
+		"date":      e.Date.Format("2006-01-02"),
+		"narration": e.Narration,
+		"residuals": e.Residuals,
+	})
+}
+
 // InvalidAmountError is returned when an amount cannot be parsed
 type InvalidAmountError struct {
 	Date       *ast.Date
@@ -246,6 +300,17 @@ func (e *InvalidAmountError) GetAccount() ast.Account {
 
 func (e *InvalidAmountError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *InvalidAmountError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "InvalidAmountError",
+		"message":  e.Error(),
+		"position": e.Pos,
+		"account":  string(e.Account),
+		"date":     e.Date.Format("2006-01-02"),
+		"value":    e.Value,
+	})
 }
 
 // BalanceMismatchError is returned when a balance assertion fails
@@ -285,6 +350,18 @@ func (e *BalanceMismatchError) GetAccount() ast.Account {
 
 func (e *BalanceMismatchError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "BalanceMismatchError",
+		"message":  e.Error(),
+		"position": e.Pos,
+		"account":  string(e.Account),
+		"date":     e.Date.Format("2006-01-02"),
+		"expected": e.Expected,
+		"actual":   e.Actual,
+	})
 }
 
 // Constructor functions for ledger errors.
@@ -475,6 +552,18 @@ func (e *InvalidCostError) GetDate() *ast.Date {
 	return e.Date
 }
 
+func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":          "InvalidCostError",
+		"message":       e.Error(),
+		"position":      e.Pos,
+		"account":       string(e.Account),
+		"date":          e.Date.Format("2006-01-02"),
+		"cost_spec":     e.CostSpec,
+		"posting_index": e.PostingIndex,
+	})
+}
+
 // NewInvalidCostError creates an error for when a cost specification is invalid
 func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *InvalidCostError {
 	return &InvalidCostError{
@@ -533,6 +622,21 @@ func (e *TotalCostError) GetDate() *ast.Date {
 	return nil
 }
 
+func (e *TotalCostError) MarshalJSON() ([]byte, error) {
+	data := map[string]interface{}{
+		"type":     "TotalCostError",
+		"message":  e.Error(),
+		"position": e.Pos,
+	}
+	if date := e.GetDate(); date != nil {
+		data["date"] = date.Format("2006-01-02")
+	}
+	if e.Posting != nil {
+		data["account"] = string(e.Posting.Account)
+	}
+	return json.Marshal(data)
+}
+
 // InvalidPriceError is returned when a price specification is invalid.
 //
 // Price specifications define the market value of commodities at transaction time,
@@ -584,6 +688,18 @@ func (e *InvalidPriceError) GetAccount() ast.Account {
 
 func (e *InvalidPriceError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":          "InvalidPriceError",
+		"message":       e.Error(),
+		"position":      e.Pos,
+		"account":       string(e.Account),
+		"date":          e.Date.Format("2006-01-02"),
+		"price_spec":    e.PriceSpec,
+		"posting_index": e.PostingIndex,
+	})
 }
 
 // NewInvalidPriceError creates an error for when a price specification is invalid
@@ -656,6 +772,21 @@ func (e *InvalidMetadataError) GetAccount() ast.Account {
 
 func (e *InvalidMetadataError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *InvalidMetadataError) MarshalJSON() ([]byte, error) {
+	data := map[string]interface{}{
+		"type":     "InvalidMetadataError",
+		"message":  e.Error(),
+		"position": e.Pos,
+		"account":  string(e.Account),
+		"key":      e.Key,
+		"reason":   e.Reason,
+	}
+	if e.Date != nil {
+		data["date"] = e.Date.Format("2006-01-02")
+	}
+	return json.Marshal(data)
 }
 
 // NewInvalidMetadataError creates an error for when metadata is invalid
@@ -735,6 +866,17 @@ func (e *InsufficientInventoryError) GetDate() *ast.Date {
 	return e.Date
 }
 
+func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "InsufficientInventoryError",
+		"message":  e.Error(),
+		"position": e.Pos,
+		"account":  string(e.Account),
+		"date":     e.Date.Format("2006-01-02"),
+		"payee":    e.Payee,
+	})
+}
+
 // NewInsufficientInventoryError creates an error for when inventory operations cannot be performed
 func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *InsufficientInventoryError {
 	return &InsufficientInventoryError{
@@ -782,6 +924,18 @@ func (e *CurrencyConstraintError) GetAccount() ast.Account {
 
 func (e *CurrencyConstraintError) GetDate() *ast.Date {
 	return e.Date
+}
+
+func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":               "CurrencyConstraintError",
+		"message":            e.Error(),
+		"position":           e.Pos,
+		"account":            string(e.Account),
+		"date":               e.Date.Format("2006-01-02"),
+		"currency":           e.Currency,
+		"allowed_currencies": e.AllowedCurrencies,
+	})
 }
 
 // NewCurrencyConstraintError creates an error for when a posting violates currency constraints
@@ -832,6 +986,16 @@ func (e *UnusedPadWarning) GetAccount() ast.Account {
 
 func (e *UnusedPadWarning) GetDate() *ast.Date {
 	return e.Pad.Date
+}
+
+func (e *UnusedPadWarning) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "UnusedPadWarning",
+		"message":  e.Error(),
+		"position": e.Pad.Pos,
+		"account":  e.Account,
+		"date":     e.Pad.Date.Format("2006-01-02"),
+	})
 }
 
 // NewUnusedPadWarning creates a warning for an unused pad directive

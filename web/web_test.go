@@ -99,11 +99,11 @@ func TestAPISource(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var response SourceResponse
+		var response map[string]interface{}
 		err = json.NewDecoder(rec.Body).Decode(&response)
 		assert.NoError(t, err)
-		assert.Equal(t, updatedContent, response.Source)
-		assert.Equal(t, tmpFile.Name(), response.Filepath)
+		assert.Equal(t, updatedContent, response["source"].(string))
+		assert.Equal(t, tmpFile.Name(), response["filepath"].(string))
 
 		content, err := os.ReadFile(tmpFile.Name())
 		assert.NoError(t, err)

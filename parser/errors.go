@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -26,6 +27,14 @@ func (e *ParseError) Error() string {
 
 func (e *ParseError) GetPosition() ast.Position {
 	return e.Pos
+}
+
+func (e *ParseError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"type":     "ParseError",
+		"message":  e.Error(),
+		"position": e.Pos,
+	})
 }
 
 // newErrorfWithSource creates a new parse error with formatted message and source range.
