@@ -4,5 +4,6 @@ allow_licenses:
   - BSD-3-Clause
   - GPL-2.0-only
   - ISC
+  - LicenseRef-scancode-google-patent-license-golang
   - LGPL-2.1-only
   - MIT
