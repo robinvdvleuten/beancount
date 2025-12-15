@@ -83,8 +83,10 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
-	// Parse transaction-level metadata
-	txn.Metadata = p.parseMetadata()
+	// Parse transaction-level metadata (only if on new line and properly indented)
+	if !p.isAtEnd() && p.peek().Line > txn.Pos.Line && p.peek().Column > 1 {
+		txn.Metadata = p.parseMetadata()
+	}
 
 	// Parse postings (indented lines)
 	postings, err := p.parsePostings()

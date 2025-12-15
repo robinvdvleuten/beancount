@@ -257,6 +257,14 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		return nil, err
 	}
 
+	// Check that next token is properly separated from date (whitespace required)
+	if !p.isAtEnd() {
+		nextTok := p.peek()
+		if nextTok.Line == dateTok.Line && nextTok.Column == dateTok.Column+dateTok.Len() {
+			return nil, p.errorAtToken(nextTok, "whitespace required between date and directive")
+		}
+	}
+
 	// LL(1) lookahead - deterministic dispatch
 	switch p.peek().Type {
 	case TXN, ASTERISK, EXCLAIM:

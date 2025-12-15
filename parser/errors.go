@@ -61,6 +61,15 @@ func NewParseError(filename string, err error) *ParseError {
 	}
 }
 
+// StringLiteralError represents an error in string literal parsing.
+type StringLiteralError struct {
+	Message string
+}
+
+func (e *StringLiteralError) Error() string {
+	return e.Message
+}
+
 // NewParseErrorWithSource wraps an existing parse error with filename context and source range.
 // This is used by the loader to wrap errors from parser with file information and context.
 func NewParseErrorWithSource(filename string, err error, source []byte) *ParseError {

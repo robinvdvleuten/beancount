@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -190,13 +191,21 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 			if p.match(COMMA) {
 				if p.check(STRING) {
 					labelTok := p.advance()
-					cost.Label = p.unquoteString(labelTok.String(p.source))
+					label, err := p.unquoteString(labelTok.String(p.source))
+					if err != nil {
+						return nil, p.errorAtToken(labelTok, "invalid string literal: %v", err)
+					}
+					cost.Label = label
 				}
 			}
 		} else if p.check(STRING) {
 			// Parse label directly (no date)
 			labelTok := p.advance()
-			cost.Label = p.unquoteString(labelTok.String(p.source))
+			label, err := p.unquoteString(labelTok.String(p.source))
+			if err != nil {
+				return nil, p.errorAtToken(labelTok, "invalid string literal: %v", err)
+			}
+			cost.Label = label
 		}
 	}
 
@@ -217,7 +226,12 @@ func (p *Parser) parseString() (string, error) {
 		return "", p.errorAtEndOfPrevious("expected string")
 	}
 
-	return p.interner.Intern(p.unquoteString(tok.String(p.source))), nil
+	unquoted, err := p.unquoteString(tok.String(p.source))
+	if err != nil {
+		return "", p.errorAtToken(tok, "invalid string literal: %v", err)
+	}
+
+	return p.interner.Intern(unquoted), nil
 }
 
 // parseIdent parses an IDENT token.
@@ -271,9 +285,10 @@ func (p *Parser) parseMetadata() []*ast.Metadata {
 		keyTok := p.peek()
 
 		// Check if this could be a metadata key
-		// Must be IDENT or a keyword, followed by COLON
+		// Must be IDENT or a keyword, followed by COLON immediately (no whitespace)
 		isMetadataKey := (keyTok.Type == IDENT || p.isKeyword(keyTok.Type)) &&
-			p.peekAhead(1).Type == COLON
+			p.peekAhead(1).Type == COLON &&
+			keyTok.Column+keyTok.Len() == p.peekAhead(1).Column
 
 		if !isMetadataKey {
 			break
@@ -382,8 +397,13 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 
 	// Fallback: read rest of line as string
 	value := p.parseRestOfLine()
-	value = p.unquoteString(value)
-	return &ast.MetadataValue{StringValue: &value}
+	unquoted, err := p.unquoteString(value)
+	if err != nil {
+		// For fallback metadata, if unquoting fails, keep original value
+		// This maintains compatibility with existing behavior
+		return &ast.MetadataValue{StringValue: &value}
+	}
+	return &ast.MetadataValue{StringValue: &unquoted}
 }
 
 // isKeyword returns true if the token type is a keyword.
@@ -411,12 +431,65 @@ func (p *Parser) parseRestOfLine() string {
 	return strings.TrimSpace(strings.Join(parts, " "))
 }
 
-// unquoteString removes surrounding quotes from a string.
-func (p *Parser) unquoteString(s string) string {
-	if len(s) >= 2 && s[0] == '"' && s[len(s)-1] == '"' {
-		return s[1 : len(s)-1]
+// unquoteString removes surrounding quotes from a string and processes escape sequences.
+// It handles \", \\, \n, \t, \r escape sequences according to Beancount string rules.
+// Returns an error for invalid escape sequences or malformed strings.
+func (p *Parser) unquoteString(s string) (string, error) {
+	// Fast path: check if string has quotes and potential escapes
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return s, &StringLiteralError{
+			Message: "string must be enclosed in double quotes",
+		}
 	}
-	return s
+
+	inner := s[1 : len(s)-1]
+
+	// Fast path: no escape sequences, return as-is
+	if !strings.Contains(inner, "\\") {
+		return inner, nil
+	}
+
+	var buf strings.Builder
+	buf.Grow(len(inner))
+
+	i := 0
+	for i < len(inner) {
+		if inner[i] == '\\' {
+			if i+1 >= len(inner) {
+				return "", &StringLiteralError{
+					Message: "escape sequence at end of string",
+				}
+			}
+
+			// Process escape sequence
+			switch inner[i+1] {
+			case '"':
+				buf.WriteByte('"')
+				i += 2
+			case '\\':
+				buf.WriteByte('\\')
+				i += 2
+			case 'n':
+				buf.WriteByte('\n')
+				i += 2
+			case 't':
+				buf.WriteByte('\t')
+				i += 2
+			case 'r':
+				buf.WriteByte('\r')
+				i += 2
+			default:
+				return "", &StringLiteralError{
+					Message: fmt.Sprintf("invalid escape sequence '\\%c'", inner[i+1]),
+				}
+			}
+		} else {
+			buf.WriteByte(inner[i])
+			i++
+		}
+	}
+
+	return buf.String(), nil
 }
 
 // skipLine skips all tokens on the current line.

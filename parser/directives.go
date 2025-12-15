@@ -273,8 +273,11 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		switch tok.Type {
 		case STRING:
 			p.advance()
-			s := p.unquoteString(tok.String(p.source))
-			s = p.interner.Intern(s)
+			unquoted, err := p.unquoteString(tok.String(p.source))
+			if err != nil {
+				return nil, p.errorAtToken(tok, "invalid string literal: %v", err)
+			}
+			s := p.interner.Intern(unquoted)
 			val = &ast.CustomValue{String: &s}
 
 		case IDENT:
