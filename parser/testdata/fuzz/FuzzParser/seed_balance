@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-08-09 balance Assets:Checking 100.00 USD")

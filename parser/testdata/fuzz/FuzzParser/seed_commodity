@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-01-01 commodity USD\n  name: \"US Dollar\"\n  asset-class: \"cash\"")

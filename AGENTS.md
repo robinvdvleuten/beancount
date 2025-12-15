@@ -739,6 +739,28 @@ assert.NotEqual(t, nil, value, "expected non-nil value")
 - Focus on critical paths and error cases
 - Don't test trivial getters/setters
 
+### Fuzz Testing
+
+```bash
+# Quick fuzz check before committing
+go test -fuzz=FuzzParser -fuzztime=30s ./parser
+go test -fuzz=FuzzLexer -fuzztime=30s ./parser
+go test -fuzz=FuzzFormatterRoundTrip -fuzztime=30s ./formatter
+
+# Deep fuzzing (run before releases)
+go test -fuzz=FuzzParser -fuzztime=10m ./parser
+
+# Run fuzz corpus as regression tests
+go test ./...
+```
+
+**Fuzz Test Guidelines:**
+- All fuzz tests MUST use `defer recover()` to catch panics
+- Parser/Lexer MUST never panic on any input
+- Formatter tests round-trip property: Parse → Format → Parse
+- Seed corpus: `<package>/testdata/fuzz/<FuzzName>/` (per-package directories)
+- CI runs each fuzzer for 30 seconds
+
 ## Performance Considerations
 
 ### Memory Pooling
