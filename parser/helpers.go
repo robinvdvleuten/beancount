@@ -470,14 +470,38 @@ func (p *Parser) unquoteString(s string) (string, error) {
 				buf.WriteByte('\\')
 				i += 2
 			case 'n':
-				buf.WriteByte('\n')
-				i += 2
+				// Only process as newline if not preceded by backslash
+				if i == 0 || inner[i-1] != '\\' {
+					buf.WriteByte('\n')
+					i += 2
+				} else {
+					// This is actually \n where \ escaped backslash
+					buf.WriteByte('\\')
+					buf.WriteByte('n')
+					i += 2
+				}
 			case 't':
-				buf.WriteByte('\t')
-				i += 2
+				// Only process as tab if not preceded by backslash
+				if i == 0 || inner[i-1] != '\\' {
+					buf.WriteByte('\t')
+					i += 2
+				} else {
+					// This is actually \t where \ escaped backslash
+					buf.WriteByte('\\')
+					buf.WriteByte('t')
+					i += 2
+				}
 			case 'r':
-				buf.WriteByte('\r')
-				i += 2
+				// Only process as carriage return if not preceded by backslash
+				if i == 0 || inner[i-1] != '\\' {
+					buf.WriteByte('\r')
+					i += 2
+				} else {
+					// This is actually \r where \ escaped backslash
+					buf.WriteByte('\\')
+					buf.WriteByte('r')
+					i += 2
+				}
 			default:
 				return "", &StringLiteralError{
 					Message: fmt.Sprintf("invalid escape sequence '\\%c'", inner[i+1]),

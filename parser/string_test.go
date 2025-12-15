@@ -159,6 +159,43 @@ func TestUnquoteString(t *testing.T) {
 			input:    `"\n\t\n"`,
 			expected: "\n\t\n",
 		},
+
+		// Escaped backslash followed by escape chars should be literal
+		{
+			name:     "escaped backslash followed by n",
+			input:    `"\\n"`,
+			expected: "\\n",
+		},
+		{
+			name:     "escaped backslash followed by t",
+			input:    `"\\t"`,
+			expected: "\\t",
+		},
+		{
+			name:     "escaped backslash followed by r",
+			input:    `"\\r"`,
+			expected: "\\r",
+		},
+		{
+			name:     "multiple escaped backslashes with escape chars",
+			input:    `"\\\\n\\t"`,
+			expected: "\\\\n\\t",
+		},
+		{
+			name:     "mixed escaped and literal escapes",
+			input:    `"\\n\n\\t\t"`,
+			expected: "\\n\n\\t\t",
+		},
+		{
+			name:     "escaped backslash then n should be literal backslash and n",
+			input:    `"\\\n"`, // This is: \\ followed by \n (escaped backslash, then backslash-n)
+			expected: "\\\\n",  // Should be: literal \ followed by literal \ and n
+		},
+		{
+			name:     "double escaped backslash with n",
+			input:    `"\\\\n"`, // \\\\ followed by n
+			expected: "\\\\n",   // two literal backslashes followed by n
+		},
 	}
 
 	p := &Parser{}
