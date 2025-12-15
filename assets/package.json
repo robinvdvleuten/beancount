@@ -19,7 +19,7 @@
     "daisyui": "^5.5.8",
     "json-from-script": "^3.1.0",
     "lezer-beancount": "^1.1.0",
-    "match-sorter": "^6.3.4",
+    "match-sorter": "^8.2.0",
     "react": "^19",
     "react-dom": "^19",
     "tailwindcss": "^4.1.16"
