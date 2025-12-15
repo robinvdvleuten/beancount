@@ -5,8 +5,7 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   dependabot:
@@ -15,6 +14,9 @@ jobs:
       github.actor == 'dependabot[bot]'
       && github.event.pull_request.draft == false
       && github.event.pull_request.state == 'open'
+    permissions:
+      contents: write
+      pull-requests: write
     steps:
       - id: metadata
         uses: dependabot/fetch-metadata@08eff52bf64351f401fb50d4972fa95b9f2c2d1b # v2.4.0
