@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2024-01-01 * \"日本\" \"東京\"\n  Expenses:Food  1000 JPY\n  Assets:Cash")

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2024-01-01 * \"Coffee ☕\" \"Breakfast 🥐\"\n  Expenses:Food  5.00 USD\n  Assets:Cash")

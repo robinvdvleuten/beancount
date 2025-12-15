@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("plugin \"beancount.plugins.check_average_cost\" \"{\\\"threshold\\\": 0.01}\"")
