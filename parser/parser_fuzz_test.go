@@ -57,6 +57,9 @@ func FuzzParser(f *testing.F) {
 
 		// Custom directive
 		"2014-07-09 custom \"budget\" Expenses:Food \"monthly\" 500.00 USD",
+
+		// Regression test for position tracking bug
+		"0000-01-01\nopen Assets:0",
 	}
 
 	for _, seed := range seeds {

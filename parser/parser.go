@@ -248,10 +248,8 @@ func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 // parseDirective dispatches to specific directive parsers based on the keyword.
 // All directives start with a DATE token.
 func (p *Parser) parseDirective() (ast.Directive, error) {
-	// Capture position before parsing date
+	// Parse date first (no position capture yet)
 	dateTok := p.peek()
-	pos := tokenPosition(dateTok, p.filename)
-
 	date, err := p.parseDate()
 	if err != nil {
 		return nil, err
@@ -265,8 +263,12 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		}
 	}
 
+	// Capture position from directive keyword token
+	directiveTok := p.peek()
+	pos := tokenPosition(directiveTok, p.filename)
+
 	// LL(1) lookahead - deterministic dispatch
-	switch p.peek().Type {
+	switch directiveTok.Type {
 	case TXN, ASTERISK, EXCLAIM:
 		return p.parseTransaction(pos, date)
 	case BALANCE:

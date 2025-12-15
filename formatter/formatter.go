@@ -369,6 +369,25 @@ func (f *Formatter) getOriginalLine(lineNum int) string {
 	return f.sourceLines[lineNum-1]
 }
 
+// canPreserveDirectiveLine checks if a directive line can be preserved.
+// For date-prefixed directives, only allows preservation if the line contains the date.
+// This prevents preserving incomplete directives that span multiple lines.
+func (f *Formatter) canPreserveDirectiveLine(lineNum int, date *ast.Date) bool {
+	if date == nil {
+		return true // Non-date-prefixed directives can always be preserved
+	}
+
+	originalLine := f.getOriginalLine(lineNum)
+	if originalLine == "" {
+		return false
+	}
+
+	// Check if the line starts with the date (ignoring leading whitespace)
+	dateStr := date.Format("2006-01-02")
+	trimmedLine := strings.TrimSpace(originalLine)
+	return strings.HasPrefix(trimmedLine, dateStr)
+}
+
 // tryPreserveOriginalLine attempts to preserve the original source line for a directive.
 // If the original line is available, it writes the trimmed line to buf and returns true.
 // If the original line is not available, it returns false and the caller should reconstruct
@@ -736,9 +755,13 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 // formatCommodity formats a commodity directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
-		f.formatMetadata(c.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
+		if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+			f.formatMetadata(c.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -752,9 +775,13 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 // formatOpen formats an open directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(o.Pos.Line, buf) {
-		f.formatMetadata(o.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(o.Pos.Line, o.Date) {
+		if f.tryPreserveOriginalLine(o.Pos.Line, buf) {
+			f.formatMetadata(o.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -787,9 +814,13 @@ func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 // formatClose formats a close directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
-		f.formatMetadata(c.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
+		if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+			f.formatMetadata(c.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -819,9 +850,13 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 // formatPad formats a pad directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
-		f.formatMetadata(p.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(p.Pos.Line, p.Date) {
+		if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+			f.formatMetadata(p.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -837,9 +872,13 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 // formatNote formats a note directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
-		f.formatMetadata(n.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(n.Pos.Line, n.Date) {
+		if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
+			f.formatMetadata(n.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -855,9 +894,13 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 // formatDocument formats a document directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
-		f.formatMetadata(d.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(d.Pos.Line, d.Date) {
+		if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
+			f.formatMetadata(d.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -889,9 +932,13 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 // formatEvent formats an event directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
-		f.formatMetadata(e.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(e.Pos.Line, e.Date) {
+		if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
+			f.formatMetadata(e.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
@@ -907,9 +954,13 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 // formatCustom formats a custom directive.
 // Preserves original spacing by using the source line.
 func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
-		f.formatMetadata(c.Metadata, buf)
-		return
+	// For date-prefixed directives, only preserve original line if it contains the date.
+	// This handles multi-line directives where date and directive are on separate lines.
+	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
+		if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+			f.formatMetadata(c.Metadata, buf)
+			return
+		}
 	}
 
 	// Fallback to reconstructing if original line not available
