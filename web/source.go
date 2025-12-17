@@ -47,6 +47,14 @@ func (s *Server) resolveFilepathFromString(path string) (string, error) {
 	return absPath, nil
 }
 
+// isPathWithin checks if the resolved path is within the allowed directory.
+// Both paths must already be resolved to their canonical form (via filepath.EvalSymlinks).
+// This prevents directory traversal attacks.
+func isPathWithin(allowedDir, resolvedPath string) bool {
+	rel, err := filepath.Rel(allowedDir, resolvedPath)
+	return err == nil && !strings.HasPrefix(rel, "..")
+}
+
 // validateFilepath ensures the path is within the allowed directory by resolving
 // all symlinks and checking the canonical path. If a default ledger file is
 // configured, only files within its directory tree are allowed. This prevents
@@ -73,12 +81,7 @@ func (s *Server) validateFilepath(path string) error {
 		resolvedPath = filepath.Join(resolvedParent, filepath.Base(path))
 	}
 
-	relPath, err := filepath.Rel(absAllowedDir, resolvedPath)
-	if err != nil {
-		return fmt.Errorf("access denied: cannot determine relative path")
-	}
-
-	if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+	if !isPathWithin(absAllowedDir, resolvedPath) {
 		return fmt.Errorf("access denied: filepath outside allowed directory")
 	}
 
