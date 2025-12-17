@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-05-05 * \"Exchange\" Assets:USD -100 USD @ 0.85 EUR\n  Assets:EUR 85 EUR")

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-05-05 event \"location\" \"New York\"")

@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-05-05 document Assets:Checking \"/path/to/statement.pdf\"")

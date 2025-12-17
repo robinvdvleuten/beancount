@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-13-32 * \"Invalid date\" Assets:Cash 100 USD")

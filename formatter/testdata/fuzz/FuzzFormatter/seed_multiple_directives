@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-01-01 open Assets:Checking USD\n2014-01-01 * \"Deposit\" Assets:Checking 1000 USD\n  Income:Salary\n2014-01-31 balance Assets:Checking 1000 USD")

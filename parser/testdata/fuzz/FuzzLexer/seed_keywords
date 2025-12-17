@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("txn balance open close pad note document price event custom")

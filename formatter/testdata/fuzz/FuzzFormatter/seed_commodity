@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-06-01 commodity GOOG")

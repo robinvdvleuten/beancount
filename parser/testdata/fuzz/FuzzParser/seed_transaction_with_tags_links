@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-05-05 * #trip #vacation ^invoice-001 \"Flight ticket\" Assets:Cash -500 USD\n  Expenses:Travel")

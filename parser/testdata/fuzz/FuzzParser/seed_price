@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-06-15 price GOOG 100.00 USD")
