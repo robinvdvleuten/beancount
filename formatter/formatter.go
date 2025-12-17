@@ -403,16 +403,7 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	formatTimer.End()
 
 	// Build a set of lines that have multiple items (can't preserve those lines safely)
-	f.linesWithMultipleItems = make(map[int]bool)
-	lineCounts := make(map[int]int)
-	for _, item := range items {
-		lineCounts[item.line]++
-	}
-	for line, count := range lineCounts {
-		if count > 1 {
-			f.linesWithMultipleItems[line] = true
-		}
-	}
+	f.linesWithMultipleItems = ast.LinesWithMultipleItems(tree)
 
 	// Format all items in order
 	directiveTimer := collector.Start("formatter.directive_formatting")

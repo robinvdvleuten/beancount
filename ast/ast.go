@@ -217,6 +217,63 @@ func ApplyPushPopDirectives(ast *AST) error {
 	return nil
 }
 
+// LinesWithMultipleItems returns a set of line numbers (1-indexed) that contain
+// multiple AST items (directives, options, includes, comments, blank lines, etc.).
+// This is useful for tools that need to preserve or reconstruct source lines safely.
+//
+// Lines with multiple items cannot be safely preserved verbatim during formatting
+// because they may contain partial content from multiple semantic items.
+//
+// Example:
+//
+//	2024-01-01 open Assets:Checking  ; Comment on same line
+//	^--- This line has both an Open directive and a Comment
+func LinesWithMultipleItems(tree *AST) map[int]bool {
+	lineCounts := make(map[int]int)
+
+	// Count items on each line
+	for _, opt := range tree.Options {
+		lineCounts[opt.Position().Line]++
+	}
+	for _, inc := range tree.Includes {
+		lineCounts[inc.Position().Line]++
+	}
+	for _, plugin := range tree.Plugins {
+		lineCounts[plugin.Position().Line]++
+	}
+	for _, tag := range tree.Pushtags {
+		lineCounts[tag.Position().Line]++
+	}
+	for _, tag := range tree.Poptags {
+		lineCounts[tag.Position().Line]++
+	}
+	for _, meta := range tree.Pushmetas {
+		lineCounts[meta.Position().Line]++
+	}
+	for _, meta := range tree.Popmetas {
+		lineCounts[meta.Position().Line]++
+	}
+	for _, dir := range tree.Directives {
+		lineCounts[dir.Position().Line]++
+	}
+	for _, comment := range tree.Comments {
+		lineCounts[comment.Position().Line]++
+	}
+	for _, blank := range tree.BlankLines {
+		lineCounts[blank.Position().Line]++
+	}
+
+	// Build set of lines with multiple items
+	result := make(map[int]bool)
+	for line, count := range lineCounts {
+		if count > 1 {
+			result[line] = true
+		}
+	}
+
+	return result
+}
+
 // isSorted checks if directives are already sorted by date.
 func isSorted(d Directives) bool {
 	for i := 1; i < len(d); i++ {
