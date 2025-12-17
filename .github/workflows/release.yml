@@ -18,6 +18,7 @@ jobs:
     steps:
       - uses: actions/checkout@8e8c483db84b4bee98b60c0593521ed34d9990e8 # v6.0.1
         with:
+          ref: ${{ github.head_ref }}
           fetch-depth: 0
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
@@ -27,18 +28,22 @@ jobs:
           node-version: lts/*
           cache: npm
           cache-dependency-path: assets/package-lock.json
-      - uses: TriPSs/conventional-changelog-action@84dadaf2c367cb52af02737cd9c7e888807219e7 # v5
+      - uses: orhun/git-cliff-action@ef60b862f2e01ab6828319499038bb850bcc8d23 # main
         id: changelog
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          output-file: CHANGELOG.md
-          skip-git-pull: "true"
-          skip-on-empty: "false"
+          args: --bump --no-exec --github-repo ${{ github.repository }}
+        env:
+          OUTPUT: CHANGELOG.md
+      - uses: stefanzweifel/git-auto-commit-action@28e16e81777b558cc906c8750092100bbb34c5e3 # v7.0.0
+        with:
+          file_pattern: CHANGELOG.md'
+          commit_message: "chore(release): prepare for ${{ steps.changelog.outputs.version }}"
+          tag_name: ${{ steps.changelog.outputs.version }}
       - uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2.5.0
         with:
-          tag_name: ${{ steps.changelog.outputs.tag }}
-          release_name: ${{ steps.changelog.outputs.tag }}
-          body: ${{ steps.changelog.outputs.clean_changelog }}
+          tag_name: ${{ steps.changelog.outputs.version }}
+          release_name: ${{ steps.changelog.outputs.version }}
+          body: ${{ steps.changelog.outputs.content }}
 
   publish:
     runs-on: ubuntu-latest
