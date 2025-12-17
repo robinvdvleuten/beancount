@@ -103,6 +103,10 @@ func (w *withMetadata) AddMetadata(m ...*Metadata) {
 	w.Metadata = append(w.Metadata, m...)
 }
 
+func (w *withMetadata) HasMetadata() bool {
+	return len(w.Metadata) > 0
+}
+
 // Directive is the interface implemented by all Beancount directive types.
 type Directive interface {
 	WithMetadata
