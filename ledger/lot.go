@@ -92,7 +92,7 @@ func (ls *lotSpec) String() string {
 	}
 
 	if ls.Date != nil {
-		parts = append(parts, ls.Date.Format("2006-01-02"))
+		parts = append(parts, ls.Date.String())
 	}
 
 	if ls.Label != "" {

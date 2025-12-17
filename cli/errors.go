@@ -145,34 +145,34 @@ func (r *ErrorRenderer) renderWithContext(pos ast.Position, message string, dire
 	case *ast.Balance:
 		var line string
 		if d.Amount != nil {
-			line = fmt.Sprintf("%s balance %s  %s %s", d.Date.Format("2006-01-02"), d.Account, d.Amount.Value, d.Amount.Currency)
+			line = fmt.Sprintf("%s balance %s  %s %s", d.Date.String(), d.Account, d.Amount.Value, d.Amount.Currency)
 		} else {
-			line = fmt.Sprintf("%s balance %s", d.Date.Format("2006-01-02"), d.Account)
+			line = fmt.Sprintf("%s balance %s", d.Date.String(), d.Account)
 		}
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')
 
 	case *ast.Pad:
-		line := fmt.Sprintf("%s pad %s %s", d.Date.Format("2006-01-02"), d.Account, d.AccountPad)
+		line := fmt.Sprintf("%s pad %s %s", d.Date.String(), d.Account, d.AccountPad)
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')
 
 	case *ast.Note:
-		line := fmt.Sprintf("%s note %s %q", d.Date.Format("2006-01-02"), d.Account, d.Description)
+		line := fmt.Sprintf("%s note %s %q", d.Date.String(), d.Account, d.Description)
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')
 
 	case *ast.Document:
-		line := fmt.Sprintf("%s document %s %q", d.Date.Format("2006-01-02"), d.Account, d.PathToDocument)
+		line := fmt.Sprintf("%s document %s %q", d.Date.String(), d.Account, d.PathToDocument)
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')
 
 	case *ast.Open:
-		line := fmt.Sprintf("%s open %s", d.Date.Format("2006-01-02"), d.Account)
+		line := fmt.Sprintf("%s open %s", d.Date.String(), d.Account)
 		if len(d.ConstraintCurrencies) > 0 {
 			line += fmt.Sprintf(" %s", strings.Join(d.ConstraintCurrencies, ", "))
 		}
@@ -184,7 +184,7 @@ func (r *ErrorRenderer) renderWithContext(pos ast.Position, message string, dire
 		buf.WriteByte('\n')
 
 	case *ast.Close:
-		line := fmt.Sprintf("%s close %s", d.Date.Format("2006-01-02"), d.Account)
+		line := fmt.Sprintf("%s close %s", d.Date.String(), d.Account)
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')

@@ -327,7 +327,7 @@ func (f *Formatter) canPreserveDirectiveLine(lineNum int, date *ast.Date) bool {
 	}
 
 	// Check if the line starts with the date (ignoring leading whitespace)
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	trimmedLine := strings.TrimSpace(originalLine)
 	return strings.HasPrefix(trimmedLine, dateStr)
 }
@@ -633,7 +633,7 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(c.Date.Format("2006-01-02"))
+	buf.WriteString(c.Date.String())
 	buf.WriteString(" commodity ")
 	buf.WriteString(c.Currency)
 	buf.WriteByte('\n')
@@ -652,7 +652,7 @@ func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(o.Date.Format("2006-01-02"))
+	buf.WriteString(o.Date.String())
 	buf.WriteString(" open ")
 	buf.WriteString(string(o.Account))
 
@@ -688,7 +688,7 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(c.Date.Format("2006-01-02"))
+	buf.WriteString(c.Date.String())
 	buf.WriteString(" close ")
 	buf.WriteString(string(c.Account))
 	buf.WriteByte('\n')
@@ -697,7 +697,7 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 
 // formatBalance formats a balance directive.
 func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
-	buf.WriteString(b.Date.Format("2006-01-02"))
+	buf.WriteString(b.Date.String())
 	buf.WriteString(" balance ")
 	buf.WriteString(string(b.Account))
 
@@ -722,7 +722,7 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(p.Date.Format("2006-01-02"))
+	buf.WriteString(p.Date.String())
 	buf.WriteString(" pad ")
 	buf.WriteString(string(p.Account))
 	buf.WriteByte(' ')
@@ -743,7 +743,7 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(n.Date.Format("2006-01-02"))
+	buf.WriteString(n.Date.String())
 	buf.WriteString(" note ")
 	buf.WriteString(string(n.Account))
 	buf.WriteByte(' ')
@@ -764,7 +764,7 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(d.Date.Format("2006-01-02"))
+	buf.WriteString(d.Date.String())
 	buf.WriteString(" document ")
 	buf.WriteString(string(d.Account))
 	buf.WriteByte(' ')
@@ -775,7 +775,7 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 
 // formatPrice formats a price directive.
 func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
-	buf.WriteString(p.Date.Format("2006-01-02"))
+	buf.WriteString(p.Date.String())
 	buf.WriteString(" price ")
 	buf.WriteString(p.Commodity)
 
@@ -800,7 +800,7 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(e.Date.Format("2006-01-02"))
+	buf.WriteString(e.Date.String())
 	buf.WriteString(" event ")
 	f.formatStringWithMetadata(e.Name, e.NameEscapes, buf)
 	buf.WriteByte(' ')
@@ -821,7 +821,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 		}
 	}
 
-	buf.WriteString(c.Date.Format("2006-01-02"))
+	buf.WriteString(c.Date.String())
 	buf.WriteString(" custom ")
 	f.formatStringWithMetadata(c.Type, c.TypeEscapes, buf)
 
@@ -912,7 +912,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 		return
 	}
 
-	buf.WriteString(t.Date.Format("2006-01-02"))
+	buf.WriteString(t.Date.String())
 	buf.WriteByte(' ')
 	buf.WriteString(t.Flag)
 
@@ -1073,7 +1073,7 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 
 	if cost.Date != nil {
 		buf.WriteString(", ")
-		buf.WriteString(cost.Date.Format("2006-01-02"))
+		buf.WriteString(cost.Date.String())
 	}
 
 	if cost.Label != "" {
@@ -1099,7 +1099,7 @@ func (f *Formatter) formatMetadataValue(value *ast.MetadataValue, buf *strings.B
 	case value.StringValue != nil:
 		f.formatStringWithMetadata(*value.StringValue, value.StringEscapes, buf)
 	case value.Date != nil:
-		buf.WriteString(value.Date.Format("2006-01-02"))
+		buf.WriteString(value.Date.String())
 	case value.Account != nil:
 		buf.WriteString(string(*value.Account))
 	case value.Currency != nil:

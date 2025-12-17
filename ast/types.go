@@ -224,6 +224,16 @@ func (d *Date) IsZero() bool {
 	return d.Time.IsZero()
 }
 
+// String returns the date formatted as an ISO 8601 date string (YYYY-MM-DD).
+// This is the canonical string representation used throughout Beancount for
+// human-readable output in error messages, formatted files, and logs.
+func (d *Date) String() string {
+	if d == nil || d.IsZero() {
+		return ""
+	}
+	return d.Format("2006-01-02")
+}
+
 // Link represents a reference link starting with ^, used to connect related transactions
 // together. Links can be used to group transactions that are part of the same event,
 // such as a purchase and its associated payment, or multiple legs of a complex transaction.
@@ -317,7 +327,7 @@ func (m *MetadataValue) String() string {
 	case m.StringValue != nil:
 		return *m.StringValue
 	case m.Date != nil:
-		return m.Date.Format("2006-01-02")
+		return m.Date.String()
 	case m.Account != nil:
 		return string(*m.Account)
 	case m.Currency != nil:

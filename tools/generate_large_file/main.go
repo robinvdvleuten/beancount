@@ -179,7 +179,7 @@ func writeHeader() {
 }
 
 func generateSimpleTransaction(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	payee := payees[rand.Intn(len(payees))]
 	narration := narrations[rand.Intn(len(narrations))]
 	amount := randAmount(10, 500)
@@ -196,7 +196,7 @@ func generateSimpleTransaction(date time.Time) string {
 }
 
 func generateTransactionWithMetadata(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	payee := payees[rand.Intn(len(payees))]
 	narration := narrations[rand.Intn(len(narrations))]
 	amount := randAmount(50, 1000)
@@ -215,7 +215,7 @@ func generateTransactionWithMetadata(date time.Time) string {
 }
 
 func generateInvestmentTransaction(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	stock := stocks[rand.Intn(len(stocks))]
 	shares := rand.Intn(50) + 1
 	pricePerShare := randAmount(50, 500)
@@ -231,7 +231,7 @@ func generateInvestmentTransaction(date time.Time) string {
 }
 
 func generateMultiCurrencyTransaction(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	amount1 := randAmount(100, 2000)
 	currency1 := currencies[0]
 	currency2 := currencies[rand.Intn(len(currencies))]
@@ -246,7 +246,7 @@ func generateMultiCurrencyTransaction(date time.Time) string {
 }
 
 func generateComplexTransaction(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	payee := payees[rand.Intn(len(payees))]
 	narration := narrations[rand.Intn(len(narrations))]
 
@@ -273,7 +273,7 @@ func generateComplexTransaction(date time.Time) string {
 }
 
 func generateBalanceAssertion(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	account := accounts[rand.Intn(len(accounts))]
 	balance := randAmount(1000, 50000)
 
@@ -281,7 +281,7 @@ func generateBalanceAssertion(date time.Time) string {
 }
 
 func generatePriceDirective(date time.Time) string {
-	dateStr := date.Format("2006-01-02")
+	dateStr := date.String()
 	stock := stocks[rand.Intn(len(stocks))]
 	price := randAmount(50, 500)
 

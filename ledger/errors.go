@@ -23,7 +23,7 @@ func (e *AccountNotOpenError) Error() string {
 	// Format: filename:line: message
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Invalid reference to unknown account '%s'", location, e.Account)
@@ -51,7 +51,7 @@ func (e *AccountNotOpenError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.Pos,
 		"account":  string(e.Account),
-		"date":     e.Date.Format("2006-01-02"),
+		"date":     e.Date.String(),
 	})
 }
 
@@ -67,11 +67,11 @@ type AccountAlreadyOpenError struct {
 func (e *AccountAlreadyOpenError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Account %s is already open (opened on %s)",
-		location, e.Account, e.OpenedDate.Format("2006-01-02"))
+		location, e.Account, e.OpenedDate.String())
 }
 
 func (e *AccountAlreadyOpenError) GetPosition() ast.Position {
@@ -96,8 +96,8 @@ func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
 		"message":     e.Error(),
 		"position":    e.Pos,
 		"account":     string(e.Account),
-		"date":        e.Date.Format("2006-01-02"),
-		"opened_date": e.OpenedDate.Format("2006-01-02"),
+		"date":        e.Date.String(),
+		"opened_date": e.OpenedDate.String(),
 	})
 }
 
@@ -113,11 +113,11 @@ type AccountAlreadyClosedError struct {
 func (e *AccountAlreadyClosedError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Account %s is already closed (closed on %s)",
-		location, e.Account, e.ClosedDate.Format("2006-01-02"))
+		location, e.Account, e.ClosedDate.String())
 }
 
 func (e *AccountAlreadyClosedError) GetPosition() ast.Position {
@@ -142,8 +142,8 @@ func (e *AccountAlreadyClosedError) MarshalJSON() ([]byte, error) {
 		"message":     e.Error(),
 		"position":    e.Pos,
 		"account":     string(e.Account),
-		"date":        e.Date.Format("2006-01-02"),
-		"closed_date": e.ClosedDate.Format("2006-01-02"),
+		"date":        e.Date.String(),
+		"closed_date": e.ClosedDate.String(),
 	})
 }
 
@@ -158,7 +158,7 @@ type AccountNotClosedError struct {
 func (e *AccountNotClosedError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Cannot close account %s that was never opened",
@@ -187,7 +187,7 @@ func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.Pos,
 		"account":  string(e.Account),
-		"date":     e.Date.Format("2006-01-02"),
+		"date":     e.Date.String(),
 	})
 }
 
@@ -208,7 +208,7 @@ func (e *TransactionNotBalancedError) Error() string {
 	// Format: filename:line: message (residual)
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Transaction does not balance: %s", location, residualStr)
@@ -260,7 +260,7 @@ func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
 		"type":      "TransactionNotBalancedError",
 		"message":   e.Error(),
 		"position":  e.Pos,
-		"date":      e.Date.Format("2006-01-02"),
+		"date":      e.Date.String(),
 		"narration": e.Narration,
 		"residuals": e.Residuals,
 	})
@@ -279,7 +279,7 @@ type InvalidAmountError struct {
 func (e *InvalidAmountError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Invalid amount %q for account %s: %v",
@@ -308,7 +308,7 @@ func (e *InvalidAmountError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.Pos,
 		"account":  string(e.Account),
-		"date":     e.Date.Format("2006-01-02"),
+		"date":     e.Date.String(),
 		"value":    e.Value,
 	})
 }
@@ -327,7 +327,7 @@ type BalanceMismatchError struct {
 func (e *BalanceMismatchError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
@@ -358,7 +358,7 @@ func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.Pos,
 		"account":  string(e.Account),
-		"date":     e.Date.Format("2006-01-02"),
+		"date":     e.Date.String(),
 		"expected": e.Expected,
 		"actual":   e.Actual,
 	})
@@ -524,7 +524,7 @@ type InvalidCostError struct {
 func (e *InvalidCostError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	postingInfo := ""
@@ -558,7 +558,7 @@ func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
 		"message":       e.Error(),
 		"position":      e.Pos,
 		"account":       string(e.Account),
-		"date":          e.Date.Format("2006-01-02"),
+		"date":          e.Date.String(),
 		"cost_spec":     e.CostSpec,
 		"posting_index": e.PostingIndex,
 	})
@@ -629,7 +629,7 @@ func (e *TotalCostError) MarshalJSON() ([]byte, error) {
 		"position": e.Pos,
 	}
 	if date := e.GetDate(); date != nil {
-		data["date"] = date.Format("2006-01-02")
+		data["date"] = date.String()
 	}
 	if e.Posting != nil {
 		data["account"] = string(e.Posting.Account)
@@ -662,7 +662,7 @@ type InvalidPriceError struct {
 func (e *InvalidPriceError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	postingInfo := ""
@@ -696,7 +696,7 @@ func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
 		"message":       e.Error(),
 		"position":      e.Pos,
 		"account":       string(e.Account),
-		"date":          e.Date.Format("2006-01-02"),
+		"date":          e.Date.String(),
 		"price_spec":    e.PriceSpec,
 		"posting_index": e.PostingIndex,
 	})
@@ -741,7 +741,7 @@ type InvalidMetadataError struct {
 func (e *InvalidMetadataError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" && e.Date != nil {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	accountInfo := ""
@@ -784,7 +784,7 @@ func (e *InvalidMetadataError) MarshalJSON() ([]byte, error) {
 		"reason":   e.Reason,
 	}
 	if e.Date != nil {
-		data["date"] = e.Date.Format("2006-01-02")
+		data["date"] = e.Date.String()
 	}
 	return json.Marshal(data)
 }
@@ -843,7 +843,7 @@ type InsufficientInventoryError struct {
 func (e *InsufficientInventoryError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Insufficient inventory (account %s): %v",
@@ -872,7 +872,7 @@ func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.Pos,
 		"account":  string(e.Account),
-		"date":     e.Date.Format("2006-01-02"),
+		"date":     e.Date.String(),
 		"payee":    e.Payee,
 	})
 }
@@ -903,7 +903,7 @@ type CurrencyConstraintError struct {
 func (e *CurrencyConstraintError) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
 	if e.Pos.Filename == "" {
-		location = e.Date.Format("2006-01-02")
+		location = e.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Currency %s not allowed for account %s (allowed: %v)",
@@ -932,7 +932,7 @@ func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
 		"message":            e.Error(),
 		"position":           e.Pos,
 		"account":            string(e.Account),
-		"date":               e.Date.Format("2006-01-02"),
+		"date":               e.Date.String(),
 		"currency":           e.Currency,
 		"allowed_currencies": e.AllowedCurrencies,
 	})
@@ -961,12 +961,12 @@ type UnusedPadWarning struct {
 func (e *UnusedPadWarning) Error() string {
 	location := fmt.Sprintf("%s:%d", e.Pad.Pos.Filename, e.Pad.Pos.Line)
 	if e.Pad.Pos.Filename == "" {
-		location = e.Pad.Date.Format("2006-01-02")
+		location = e.Pad.Date.String()
 	}
 
 	return fmt.Sprintf("%s: Unused Pad entry\n\n   %s pad %s %s",
 		location,
-		e.Pad.Date.Format("2006-01-02"),
+		e.Pad.Date.String(),
 		e.Pad.Account,
 		e.Pad.AccountPad,
 	)
@@ -994,7 +994,7 @@ func (e *UnusedPadWarning) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.Pad.Pos,
 		"account":  e.Account,
-		"date":     e.Pad.Date.Format("2006-01-02"),
+		"date":     e.Pad.Date.String(),
 	})
 }
 

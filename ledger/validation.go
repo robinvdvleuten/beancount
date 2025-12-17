@@ -1193,7 +1193,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 		// BEANCOUNT COMPLIANCE: Pad must come chronologically BEFORE balance
 		if !padEntry.Date.Time.Before(balance.Date.Time) { //nolint:staticcheck
 			return nil, fmt.Errorf("pad directive dated %s must come before balance assertion dated %s",
-				padEntry.Date.Format("2006-01-02"), balance.Date.Format("2006-01-02"))
+				padEntry.Date.String(), balance.Date.String())
 		}
 
 		difference := expectedAmount.Sub(actualAmount)

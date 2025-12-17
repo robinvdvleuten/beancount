@@ -197,7 +197,7 @@ func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
 
 	// Transaction date should be pad date (2020-01-05), not balance date (2020-02-15)
 	txn := paddingTxns[0]
-	assert.Equal(t, "2020-01-05", txn.Date.Format("2006-01-02"))
+	assert.Equal(t, "2020-01-05", txn.Date.String())
 }
 
 // Helper function to find padding transactions in AST
