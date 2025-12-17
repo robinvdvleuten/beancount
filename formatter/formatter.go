@@ -55,13 +55,15 @@ const (
 
 	// DateWidth is the width of a formatted date (YYYY-MM-DD)
 	DateWidth = 10
-
-	// BalanceKeywordWidth is the width of the "balance" keyword (7 chars) + space
-	BalanceKeywordWidth = 8
-
-	// PriceKeywordWidth is the width of the "price" keyword (5 chars) + space
-	PriceKeywordWidth = 6
 )
+
+// directiveKeywordWidth calculates the display width of a directive's keyword plus trailing space.
+// Uses runewidth for Unicode-safe width calculation, though current directive keywords are ASCII.
+//
+// Example: balance directive → "balance" → 8 (7 chars + 1 space)
+func directiveKeywordWidth(d ast.Directive) int {
+	return runewidth.StringWidth(d.Directive()) + 1
+}
 
 // Formatter handles formatting of Beancount files with proper alignment and spacing.
 // It aligns currencies, numbers, and account names according to configurable column widths,
@@ -227,7 +229,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 		case *ast.Balance:
 			if d.Amount != nil {
 				// Calculate width: date + "balance" + account + spacing + number
-				width := DateWidth + 1 + BalanceKeywordWidth + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
+				width := DateWidth + 1 + directiveKeywordWidth(d) + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
 				numWidth := runewidth.StringWidth(d.Amount.Value)
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
@@ -237,7 +239,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 		case *ast.Price:
 			if d.Amount != nil {
 				// Calculate width: date + "price" + commodity + spacing + number
-				width := DateWidth + 1 + PriceKeywordWidth + runewidth.StringWidth(d.Commodity) + MinimumSpacing
+				width := DateWidth + 1 + directiveKeywordWidth(d) + runewidth.StringWidth(d.Commodity) + MinimumSpacing
 				numWidth := runewidth.StringWidth(d.Amount.Value)
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
@@ -693,7 +695,7 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 	buf.WriteString(string(b.Account))
 
 	if b.Amount != nil {
-		currentWidth := DateWidth + 1 + BalanceKeywordWidth + runewidth.StringWidth(string(b.Account))
+		currentWidth := DateWidth + 1 + directiveKeywordWidth(b) + runewidth.StringWidth(string(b.Account))
 		f.formatAmountAligned(b.Amount, currentWidth, buf)
 	}
 
@@ -771,7 +773,7 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 	buf.WriteString(p.Commodity)
 
 	if p.Amount != nil {
-		currentWidth := DateWidth + 1 + PriceKeywordWidth + runewidth.StringWidth(p.Commodity)
+		currentWidth := DateWidth + 1 + directiveKeywordWidth(p) + runewidth.StringWidth(p.Commodity)
 		f.formatAmountAligned(p.Amount, currentWidth, buf)
 	}
 
