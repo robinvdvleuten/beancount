@@ -114,7 +114,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 // parseOption parses: option "key" "value"
 func (p *Parser) parseOption() (*ast.Option, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(OPTION, "expected 'option'")
 
 	name, _, err := p.parseString()
@@ -128,7 +128,7 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 	}
 
 	return &ast.Option{
-		Pos:   tokenPosition(tok, p.filename),
+		Pos:   pos,
 		Name:  name,
 		Value: value,
 	}, nil
@@ -136,7 +136,7 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 
 // parseInclude parses: include "filename"
 func (p *Parser) parseInclude() (*ast.Include, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(INCLUDE, "expected 'include'")
 
 	filename, _, err := p.parseString()
@@ -145,14 +145,14 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 	}
 
 	return &ast.Include{
-		Pos:      tokenPosition(tok, p.filename),
+		Pos:      pos,
 		Filename: filename,
 	}, nil
 }
 
 // parsePlugin parses: plugin "name" ["config"]
 func (p *Parser) parsePlugin() (*ast.Plugin, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(PLUGIN, "expected 'plugin'")
 
 	name, _, err := p.parseString()
@@ -161,7 +161,7 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 	}
 
 	plugin := &ast.Plugin{
-		Pos:  tokenPosition(tok, p.filename),
+		Pos:  pos,
 		Name: name,
 	}
 
@@ -179,7 +179,7 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 
 // parsePushtag parses: pushtag #tag
 func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(PUSHTAG, "expected 'pushtag'")
 
 	tag, err := p.parseTag()
@@ -188,14 +188,14 @@ func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
 	}
 
 	return &ast.Pushtag{
-		Pos: tokenPosition(tok, p.filename),
+		Pos: pos,
 		Tag: tag,
 	}, nil
 }
 
 // parsePoptag parses: poptag #tag
 func (p *Parser) parsePoptag() (*ast.Poptag, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(POPTAG, "expected 'poptag'")
 
 	tag, err := p.parseTag()
@@ -204,14 +204,14 @@ func (p *Parser) parsePoptag() (*ast.Poptag, error) {
 	}
 
 	return &ast.Poptag{
-		Pos: tokenPosition(tok, p.filename),
+		Pos: pos,
 		Tag: tag,
 	}, nil
 }
 
 // parsePushmeta parses: pushmeta key: value
 func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(PUSHMETA, "expected 'pushmeta'")
 
 	key, err := p.parseIdent()
@@ -222,7 +222,7 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 	p.consume(COLON, "expected ':'")
 
 	return &ast.Pushmeta{
-		Pos:   tokenPosition(tok, p.filename),
+		Pos:   pos,
 		Key:   key,
 		Value: p.parseRestOfLine(),
 	}, nil
@@ -230,7 +230,7 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 
 // parsePopmeta parses: popmeta key:
 func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
-	tok := p.peek()
+	pos := p.tokenPositionFromPeek()
 	p.consume(POPMETA, "expected 'popmeta'")
 
 	key, err := p.parseIdent()
@@ -241,7 +241,7 @@ func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 	p.consume(COLON, "expected ':'")
 
 	return &ast.Popmeta{
-		Pos: tokenPosition(tok, p.filename),
+		Pos: pos,
 		Key: key,
 	}, nil
 }
@@ -266,7 +266,7 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 
 	// Capture position from directive keyword token
 	directiveTok := p.peek()
-	pos := tokenPosition(directiveTok, p.filename)
+	pos := p.tokenPositionFromPeek()
 
 	// LL(1) lookahead - dispatch via registry
 	switch directiveTok.Type {

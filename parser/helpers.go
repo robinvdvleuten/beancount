@@ -639,22 +639,40 @@ func tokenPosition(tok Token, filename string) ast.Position {
 	}
 }
 
-// errorAtEndOfPrevious creates an error positioned at the end of the previous token.
-// This is used when a required token is missing in a sequence, so the error points
-// to where the token was expected (after the last valid token) rather than at the
-// next token's position (which might be on a different line).
-func (p *Parser) errorAtEndOfPrevious(format string, args ...interface{}) error {
+// tokenPositionFromPeek extracts position from the current token.
+func (p *Parser) tokenPositionFromPeek() ast.Position {
+	return tokenPosition(p.peek(), p.filename)
+}
+
+// tokenPositionFromPrevious extracts position from the previous token.
+// Used internally for position handling in error reporting.
+// nolint: unused
+func (p *Parser) tokenPositionFromPrevious() ast.Position {
+	return tokenPosition(p.previous(), p.filename)
+}
+
+// positionAtEndOfPrevious returns a position at the end of the previous token.
+// This is used to point at where a missing token was expected.
+func (p *Parser) positionAtEndOfPrevious() ast.Position {
 	if p.pos == 0 {
-		// Fallback: use current token position if no previous token
-		return p.errorAtToken(p.peek(), format, args...)
+		// Fallback to current token if no previous
+		return p.tokenPositionFromPeek()
 	}
 	prev := p.previous()
-	pos := ast.Position{
+	return ast.Position{
 		Filename: p.filename,
 		Offset:   prev.End,
 		Line:     prev.Line,
 		Column:   prev.Column + (prev.End - prev.Start),
 	}
+}
+
+// errorAtEndOfPrevious creates an error positioned at the end of the previous token.
+// This is used when a required token is missing in a sequence, so the error points
+// to where the token was expected (after the last valid token) rather than at the
+// next token's position (which might be on a different line).
+func (p *Parser) errorAtEndOfPrevious(format string, args ...interface{}) error {
+	pos := p.positionAtEndOfPrevious()
 	sourceRange := p.calculateSourceRange(pos)
 	return newErrorfWithSource(pos, sourceRange, format, args...)
 }
