@@ -352,16 +352,15 @@ func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) b
 	return false
 }
 
-// hasInlineMetadata checks if a line contains inline metadata after a quoted string.
-// This detects malformed cases like '0000-01-01 note Assets:Bank""a:' where metadata
-// appears on the same line as the directive without proper separation.
-func (f *Formatter) hasInlineMetadata(line string) bool {
-	lastQuote := strings.LastIndex(line, "\"")
-	if lastQuote == -1 {
-		return false
+// hasAnyInlineMetadata returns true if any of the metadata entries are marked as inline.
+// This allows the formatter to detect inline metadata from the AST rather than parsing source text.
+func hasAnyInlineMetadata(metadata []*ast.Metadata) bool {
+	for _, m := range metadata {
+		if m.Inline {
+			return true
+		}
 	}
-	afterQuote := strings.TrimSpace(line[lastQuote+1:])
-	return strings.Contains(afterQuote, ":")
+	return false
 }
 
 // Format formats the given AST and writes the output to the writer.
@@ -607,11 +606,11 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 		return
 	}
 
-	buf.WriteString("option \"")
-	buf.WriteString(f.escapeString(opt.Name))
-	buf.WriteString("\" \"")
-	buf.WriteString(f.escapeString(opt.Value))
-	buf.WriteString("\"\n")
+	buf.WriteString("option ")
+	f.formatStringWithMetadata(opt.Name, opt.NameEscapes, buf)
+	buf.WriteByte(' ')
+	f.formatStringWithMetadata(opt.Value, opt.ValueEscapes, buf)
+	buf.WriteByte('\n')
 }
 
 // formatInclude formats an include directive.
@@ -620,9 +619,9 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 		return
 	}
 
-	buf.WriteString("include \"")
-	buf.WriteString(f.escapeString(inc.Filename))
-	buf.WriteString("\"\n")
+	buf.WriteString("include ")
+	f.formatStringWithMetadata(inc.Filename, inc.FilenameEscapes, buf)
+	buf.WriteByte('\n')
 }
 
 // formatCommodity formats a commodity directive.
@@ -734,14 +733,12 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 
 // formatNote formats a note directive.
 func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(n.Pos.Line, n.Date) {
+	if f.canPreserveDirectiveLine(n.Pos.Line, n.Date) && !hasAnyInlineMetadata(n.Metadata) {
 		originalLine := f.getOriginalLine(n.Pos.Line)
 		if strings.Contains(originalLine, string(n.Account)) && strings.Contains(originalLine, "\"") {
-			if !f.hasInlineMetadata(originalLine) {
-				if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
-					f.formatMetadata(n.Metadata, buf)
-					return
-				}
+			if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
+				f.formatMetadata(n.Metadata, buf)
+				return
 			}
 		}
 	}
@@ -749,22 +746,20 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 	buf.WriteString(n.Date.Format("2006-01-02"))
 	buf.WriteString(" note ")
 	buf.WriteString(string(n.Account))
-	buf.WriteString(" \"")
-	buf.WriteString(f.escapeString(n.Description))
-	buf.WriteString("\"\n")
+	buf.WriteByte(' ')
+	f.formatStringWithMetadata(n.Description, n.DescriptionEscapes, buf)
+	buf.WriteByte('\n')
 	f.formatMetadata(n.Metadata, buf)
 }
 
 // formatDocument formats a document directive.
 func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(d.Pos.Line, d.Date) {
+	if f.canPreserveDirectiveLine(d.Pos.Line, d.Date) && !hasAnyInlineMetadata(d.Metadata) {
 		originalLine := f.getOriginalLine(d.Pos.Line)
 		if strings.Contains(originalLine, string(d.Account)) && strings.Contains(originalLine, "\"") {
-			if !f.hasInlineMetadata(originalLine) {
-				if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
-					f.formatMetadata(d.Metadata, buf)
-					return
-				}
+			if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
+				f.formatMetadata(d.Metadata, buf)
+				return
 			}
 		}
 	}
@@ -772,9 +767,9 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	buf.WriteString(d.Date.Format("2006-01-02"))
 	buf.WriteString(" document ")
 	buf.WriteString(string(d.Account))
-	buf.WriteString(" \"")
-	buf.WriteString(f.escapeString(d.PathToDocument))
-	buf.WriteString("\"\n")
+	buf.WriteByte(' ')
+	f.formatStringWithMetadata(d.PathToDocument, d.PathEscapes, buf)
+	buf.WriteByte('\n')
 	f.formatMetadata(d.Metadata, buf)
 }
 
@@ -795,7 +790,7 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 
 // formatEvent formats an event directive.
 func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(e.Pos.Line, e.Date) {
+	if f.canPreserveDirectiveLine(e.Pos.Line, e.Date) && !hasAnyInlineMetadata(e.Metadata) {
 		originalLine := f.getOriginalLine(e.Pos.Line)
 		if strings.Count(originalLine, "\"") >= 4 {
 			if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
@@ -806,17 +801,17 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 	}
 
 	buf.WriteString(e.Date.Format("2006-01-02"))
-	buf.WriteString(" event \"")
-	buf.WriteString(f.escapeString(e.Name))
-	buf.WriteString("\" \"")
-	buf.WriteString(f.escapeString(e.Value))
-	buf.WriteString("\"\n")
+	buf.WriteString(" event ")
+	f.formatStringWithMetadata(e.Name, e.NameEscapes, buf)
+	buf.WriteByte(' ')
+	f.formatStringWithMetadata(e.Value, e.ValueEscapes, buf)
+	buf.WriteByte('\n')
 	f.formatMetadata(e.Metadata, buf)
 }
 
 // formatCustom formats a custom directive.
 func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
+	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) && !hasAnyInlineMetadata(c.Metadata) {
 		originalLine := f.getOriginalLine(c.Pos.Line)
 		if strings.Contains(originalLine, "\"") {
 			if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
@@ -827,9 +822,8 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 	}
 
 	buf.WriteString(c.Date.Format("2006-01-02"))
-	buf.WriteString(" custom \"")
-	buf.WriteString(f.escapeString(c.Type))
-	buf.WriteByte('"')
+	buf.WriteString(" custom ")
+	f.formatStringWithMetadata(c.Type, c.TypeEscapes, buf)
 
 	for _, val := range c.Values {
 		buf.WriteByte(' ')
@@ -857,13 +851,11 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 		return
 	}
 
-	buf.WriteString("plugin \"")
-	buf.WriteString(f.escapeString(p.Name))
-	buf.WriteByte('"')
+	buf.WriteString("plugin ")
+	f.formatStringWithMetadata(p.Name, p.NameEscapes, buf)
 	if p.Config != "" {
-		buf.WriteString(" \"")
-		buf.WriteString(f.escapeString(p.Config))
-		buf.WriteByte('"')
+		buf.WriteByte(' ')
+		f.formatStringWithMetadata(p.Config, p.ConfigEscapes, buf)
 	}
 	buf.WriteByte('\n')
 }
@@ -925,15 +917,13 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 	buf.WriteString(t.Flag)
 
 	if t.Payee != "" {
-		buf.WriteString(" \"")
-		buf.WriteString(f.escapeString(t.Payee))
-		buf.WriteByte('"')
+		buf.WriteByte(' ')
+		f.formatStringWithMetadata(t.Payee, t.PayeeEscapes, buf)
 	}
 
 	if t.Narration != "" {
-		buf.WriteString(" \"")
-		buf.WriteString(f.escapeString(t.Narration))
-		buf.WriteByte('"')
+		buf.WriteByte(' ')
+		f.formatStringWithMetadata(t.Narration, t.NarrationEscapes, buf)
 	}
 
 	for _, link := range t.Links {
@@ -1107,9 +1097,7 @@ func (f *Formatter) formatMetadataValue(value *ast.MetadataValue, buf *strings.B
 
 	switch {
 	case value.StringValue != nil:
-		buf.WriteByte('"')
-		buf.WriteString(f.escapeString(*value.StringValue))
-		buf.WriteByte('"')
+		f.formatStringWithMetadata(*value.StringValue, value.StringEscapes, buf)
 	case value.Date != nil:
 		buf.WriteString(value.Date.Format("2006-01-02"))
 	case value.Account != nil:

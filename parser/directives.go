@@ -25,7 +25,7 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 		Account: account,
 		Amount:  amount,
 	}
-	bal.Metadata = p.parseMetadata()
+	bal.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return bal, nil
 }
@@ -73,7 +73,7 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 		open.BookingMethod = method
 	}
 
-	open.Metadata = p.parseMetadata()
+	open.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return open, nil
 }
@@ -92,7 +92,7 @@ func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error
 		Date:    date,
 		Account: account,
 	}
-	close.Metadata = p.parseMetadata()
+	close.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return close, nil
 }
@@ -111,7 +111,7 @@ func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodit
 		Date:     date,
 		Currency: currency,
 	}
-	commodity.Metadata = p.parseMetadata()
+	commodity.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return commodity, nil
 }
@@ -136,7 +136,7 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 		Account:    account,
 		AccountPad: accountPad,
 	}
-	pad.Metadata = p.parseMetadata()
+	pad.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return pad, nil
 }
@@ -162,7 +162,7 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 		Description:        description,
 		DescriptionEscapes: descMeta,
 	}
-	note.Metadata = p.parseMetadata()
+	note.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return note, nil
 }
@@ -188,7 +188,7 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		PathToDocument: path,
 		PathEscapes:    pathMeta,
 	}
-	doc.Metadata = p.parseMetadata()
+	doc.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return doc, nil
 }
@@ -213,7 +213,7 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 		Commodity: commodity,
 		Amount:    amount,
 	}
-	price.Metadata = p.parseMetadata()
+	price.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return price, nil
 }
@@ -240,7 +240,7 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 		Value:        value,
 		ValueEscapes: valueMeta,
 	}
-	event.Metadata = p.parseMetadata()
+	event.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return event, nil
 }
@@ -332,7 +332,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		custom.Values = append(custom.Values, val)
 	}
 
-	custom.Metadata = p.parseMetadata()
+	custom.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return custom, nil
 }

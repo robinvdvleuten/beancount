@@ -380,10 +380,9 @@ func (p *Parser) parseLink() (ast.Link, error) {
 	return link, nil
 }
 
-// parseMetadata parses metadata entries (key: value pairs).
-// Metadata is indented on lines following a directive or posting.
-// Metadata keys can be identifiers OR keywords (e.g., "price:", "export:", etc.)
-func (p *Parser) parseMetadata() []*ast.Metadata {
+// parseMetadataFromLine parses metadata entries with tracking of whether they are inline.
+// If ownerLine > 0, metadata on that same line will be marked as Inline=true.
+func (p *Parser) parseMetadataFromLine(ownerLine int) []*ast.Metadata {
 	var metadata []*ast.Metadata
 
 	// Metadata lines are key: value where key can be IDENT or any keyword
@@ -406,9 +405,13 @@ func (p *Parser) parseMetadata() []*ast.Metadata {
 		// Parse the metadata value based on token type
 		value := p.parseMetadataValue()
 
+		// Determine if this metadata is inline (on the same line as owner)
+		inline := ownerLine > 0 && keyTok.Line == ownerLine
+
 		metadata = append(metadata, &ast.Metadata{
-			Key:   keyTok.String(p.source),
-			Value: value,
+			Key:    keyTok.String(p.source),
+			Value:  value,
+			Inline: inline,
 		})
 	}
 
@@ -424,9 +427,9 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 	switch tok.Type {
 	case STRING:
 		// String (quoted) - most specific
-		str, _, err := p.parseString()
+		str, strMeta, err := p.parseString()
 		if err == nil {
-			return &ast.MetadataValue{StringValue: &str}
+			return &ast.MetadataValue{StringValue: &str, StringEscapes: strMeta}
 		}
 
 	case DATE:

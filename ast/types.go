@@ -29,6 +29,20 @@ type StringMetadata struct {
 	OriginalValue string
 }
 
+// QuotedContent returns the string content with quotes (suitable for output).
+// If metadata is nil or OriginalValue is empty, returns the value with quotes applied.
+func (m *StringMetadata) QuotedContent() string {
+	if m != nil && m.OriginalValue != "" {
+		return m.OriginalValue
+	}
+	return ""
+}
+
+// HasOriginal returns true if the original quoted value is available.
+func (m *StringMetadata) HasOriginal() bool {
+	return m != nil && m.OriginalValue != ""
+}
+
 // Amount represents a numerical value with its associated currency or commodity symbol.
 // The value is stored as a string to preserve the exact decimal representation from
 // the input, avoiding floating-point precision issues.
@@ -253,15 +267,16 @@ func (t *Tag) Capture(values []string) error {
 //	budget: 1000.00 USD               ; Amount (number + currency)
 //	active: TRUE                      ; Boolean (uppercase TRUE/FALSE)
 type MetadataValue struct {
-	StringValue *string
-	Date        *Date
-	Account     *Account
-	Currency    *string
-	Tag         *Tag
-	Link        *Link
-	Number      *string // Stored as string to preserve precision
-	Amount      *Amount
-	Boolean     *bool
+	StringValue   *string
+	StringEscapes *StringMetadata // Escape metadata for StringValue
+	Date          *Date
+	Account       *Account
+	Currency      *string
+	Tag           *Tag
+	Link          *Link
+	Number        *string // Stored as string to preserve precision
+	Amount        *Amount
+	Boolean       *bool
 }
 
 // Type returns a string representation of the metadata value's type.
@@ -344,4 +359,8 @@ func (m *MetadataValue) String() string {
 type Metadata struct {
 	Key   string
 	Value *MetadataValue
+
+	// Inline is true if the metadata appeared on the same line as its owner
+	// (directive or posting), rather than on a separate indented line.
+	Inline bool
 }

@@ -2,6 +2,8 @@ package formatter
 
 import (
 	"strings"
+
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 // StringEscapeStyle controls how strings are escaped in formatter output.
@@ -31,6 +33,19 @@ func (f *Formatter) escapeString(s string) string {
 		return escapeCStyle(s) // Fallback to C-style
 	default:
 		return escapeCStyle(s)
+	}
+}
+
+// formatStringWithMetadata formats a string using StringMetadata when available.
+// If the escape style is EscapeStyleOriginal and metadata is available, uses the
+// original quoted content. Otherwise falls back to escaping the logical value.
+func (f *Formatter) formatStringWithMetadata(value string, meta *ast.StringMetadata, buf *strings.Builder) {
+	if f.StringEscapeStyle == EscapeStyleOriginal && meta.HasOriginal() {
+		buf.WriteString(meta.QuotedContent())
+	} else {
+		buf.WriteByte('"')
+		buf.WriteString(f.escapeString(value))
+		buf.WriteByte('"')
 	}
 }
 
