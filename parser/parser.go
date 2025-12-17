@@ -39,8 +39,10 @@ func (p *Parser) Parse() (*ast.AST, error) {
 	tree := &ast.AST{}
 
 	for !p.isAtEnd() {
-		// Dispatch based on token type
-		switch p.peek().Type {
+		tokType := p.peek().Type
+
+		// Dispatch by token type
+		switch tokType {
 		case OPTION:
 			opt, err := p.parseOption()
 			if err != nil {
@@ -91,7 +93,6 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			tree.Popmetas = append(tree.Popmetas, popmeta)
 
 		case DATE:
-			// Date-prefixed directives
 			directive, err := p.parseDirective()
 			if err != nil {
 				return nil, err
@@ -267,7 +268,7 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 	directiveTok := p.peek()
 	pos := tokenPosition(directiveTok, p.filename)
 
-	// LL(1) lookahead - deterministic dispatch
+	// LL(1) lookahead - dispatch via registry
 	switch directiveTok.Type {
 	case TXN, ASTERISK, EXCLAIM:
 		return p.parseTransaction(pos, date)

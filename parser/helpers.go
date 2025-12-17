@@ -300,39 +300,25 @@ func (p *Parser) processEscapeSequences(inner string) (string, error) {
 			case '\\':
 				buf.WriteByte('\\')
 				i += 2
-			case 'n':
-				// Only process as newline if not preceded by backslash
-				if i == 0 || inner[i-1] != '\\' {
-					buf.WriteByte('\n')
-					i += 2
+			case 'n', 't', 'r':
+				// Process escape sequence unless preceded by another backslash
+				isEscaped := i > 0 && inner[i-1] == '\\'
+				if !isEscaped {
+					// Convert to actual control character
+					switch inner[i+1] {
+					case 'n':
+						buf.WriteByte('\n')
+					case 't':
+						buf.WriteByte('\t')
+					case 'r':
+						buf.WriteByte('\r')
+					}
 				} else {
-					// This is actually \n where \ escaped backslash
+					// This is an escaped backslash followed by the char
 					buf.WriteByte('\\')
-					buf.WriteByte('n')
-					i += 2
+					buf.WriteByte(inner[i+1])
 				}
-			case 't':
-				// Only process as tab if not preceded by backslash
-				if i == 0 || inner[i-1] != '\\' {
-					buf.WriteByte('\t')
-					i += 2
-				} else {
-					// This is actually \t where \ escaped backslash
-					buf.WriteByte('\\')
-					buf.WriteByte('t')
-					i += 2
-				}
-			case 'r':
-				// Only process as carriage return if not preceded by backslash
-				if i == 0 || inner[i-1] != '\\' {
-					buf.WriteByte('\r')
-					i += 2
-				} else {
-					// This is actually \r where \ escaped backslash
-					buf.WriteByte('\\')
-					buf.WriteByte('r')
-					i += 2
-				}
+				i += 2
 			default:
 				return "", &StringLiteralError{
 					Message: fmt.Sprintf("invalid escape sequence '\\%c'", inner[i+1]),
