@@ -414,8 +414,8 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Store source lines for preserving original spacing
 	f.sourceLines = strings.Split(string(sourceContent), "\n")
 	defer func() {
-		f.sourceLines = nil                // Clear after formatting
-		f.linesWithMultipleItems = nil     // Clear after formatting
+		f.sourceLines = nil            // Clear after formatting
+		f.linesWithMultipleItems = nil // Clear after formatting
 	}()
 
 	// Extract comments and blank lines if preservation is enabled
@@ -1214,9 +1214,58 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	f.formatMetadata(p.Metadata, buf)
 }
 
+// isValidNumericValue checks if a value looks like a valid numeric amount.
+// Valid amounts start with optional sign (+/-), followed by digits and optional decimal point.
+// This helps detect malformed amount syntax that shouldn't be aligned.
+func isValidNumericValue(value string) bool {
+	if value == "" {
+		return false
+	}
+
+	i := 0
+	// Optional sign
+	if value[0] == '+' || value[0] == '-' {
+		i = 1
+	}
+
+	// Must have at least one digit
+	if i >= len(value) {
+		return false
+	}
+
+	// Check remaining characters are digits or decimal points
+	hasDigit := false
+	for i < len(value) {
+		c := value[i]
+		if c >= '0' && c <= '9' {
+			hasDigit = true
+		} else if c == '.' || c == ',' {
+			// Allow decimal separators (comma for some locales)
+		} else {
+			// Any other character (parenthesis, quote, etc.) makes it invalid
+			return false
+		}
+		i++
+	}
+
+	return hasDigit
+}
+
 // formatAmountAligned formats an amount with proper alignment to the currency column.
+// For malformed amounts (e.g., containing special characters), uses minimal spacing instead
+// of alignment to avoid breaking the output.
 func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, buf *strings.Builder) {
 	if amount == nil {
+		return
+	}
+
+	// Check if value is a valid numeric amount
+	// If not, use minimal spacing instead of alignment to preserve malformed syntax
+	if !isValidNumericValue(amount.Value) {
+		buf.WriteString(strings.Repeat(" ", MinimumSpacing))
+		buf.WriteString(amount.Value)
+		buf.WriteByte(' ')
+		buf.WriteString(amount.Currency)
 		return
 	}
 
