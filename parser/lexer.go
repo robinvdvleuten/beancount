@@ -94,7 +94,7 @@ func (l *Lexer) scanToken() Token {
 	switch {
 	// Check for dates first: YYYY-MM-DD (starts with digit)
 	// This must come before number scanning
-	case ch >= '0' && ch <= '9':
+	case isDigit(ch):
 		// Peek ahead to check if this looks like a date
 		if l.isDatePattern(start) {
 			return l.scanDate(start, startLine, startCol)
@@ -117,11 +117,11 @@ func (l *Lexer) scanToken() Token {
 
 	// Accounts (start with capital) or identifiers
 	// Also check for non-ASCII bytes that might be Unicode uppercase or other letters
-	case ch >= 'A' && ch <= 'Z' || ch >= 0x80:
+	case isUppercaseLetter(ch) || isUTF8Byte(ch):
 		return l.scanAccountOrIdent(start, startLine, startCol)
 
 	// Keywords or identifiers (start with lowercase)
-	case ch >= 'a' && ch <= 'z':
+	case isLowercaseLetter(ch):
 		return l.scanKeywordOrIdent(start, startLine, startCol)
 
 	// Single-character tokens
@@ -172,16 +172,11 @@ func (l *Lexer) isDatePattern(start int) bool {
 
 	// Check pattern: digit{4}-digit{2}-digit{2}
 	src := l.source[start:]
-	return src[0] >= '0' && src[0] <= '9' &&
-		src[1] >= '0' && src[1] <= '9' &&
-		src[2] >= '0' && src[2] <= '9' &&
-		src[3] >= '0' && src[3] <= '9' &&
+	return isDigit(src[0]) && isDigit(src[1]) && isDigit(src[2]) && isDigit(src[3]) &&
 		src[4] == '-' &&
-		src[5] >= '0' && src[5] <= '9' &&
-		src[6] >= '0' && src[6] <= '9' &&
+		isDigit(src[5]) && isDigit(src[6]) &&
 		src[7] == '-' &&
-		src[8] >= '0' && src[8] <= '9' &&
-		src[9] >= '0' && src[9] <= '9'
+		isDigit(src[8]) && isDigit(src[9])
 }
 
 // scanDate scans a date: YYYY-MM-DD
@@ -199,16 +194,16 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 	// Optional sign already consumed if present
 
 	// Scan integer part
-	for l.pos < len(l.source) && l.source[l.pos] >= '0' && l.source[l.pos] <= '9' {
+	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
 		l.advance()
 	}
 
 	// Scan optional decimal part
 	if l.pos < len(l.source) && l.source[l.pos] == '.' {
 		// Look ahead to ensure next char is digit
-		if l.pos+1 < len(l.source) && l.source[l.pos+1] >= '0' && l.source[l.pos+1] <= '9' {
+		if l.pos+1 < len(l.source) && isDigit(l.source[l.pos+1]) {
 			l.advance() // consume '.'
-			for l.pos < len(l.source) && l.source[l.pos] >= '0' && l.source[l.pos] <= '9' {
+			for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
 				l.advance()
 			}
 		}
@@ -248,12 +243,7 @@ func (l *Lexer) scanString(start, line, col int) Token {
 func (l *Lexer) scanTag(start, line, col int) Token {
 	// # already consumed
 
-	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-		if (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') &&
-			(ch < '0' || ch > '9') && ch != '_' && ch != '-' {
-			break
-		}
+	for l.pos < len(l.source) && isValidInTag(l.source[l.pos]) {
 		l.advance()
 	}
 
@@ -264,12 +254,7 @@ func (l *Lexer) scanTag(start, line, col int) Token {
 func (l *Lexer) scanLink(start, line, col int) Token {
 	// ^ already consumed
 
-	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-		if (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') &&
-			(ch < '0' || ch > '9') && ch != '_' && ch != '-' {
-			break
-		}
+	for l.pos < len(l.source) && isValidInTag(l.source[l.pos]) {
 		l.advance()
 	}
 
@@ -283,21 +268,8 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 	// First character (capital letter or Unicode) already consumed
 	hasColon := false
 
-	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-
-		// Accept: letters (ASCII or UTF-8), digits, colons, hyphens
-		// UTF-8 continuation bytes (0x80-0xBF) and start bytes (0xC0-0xFF) are accepted
-		isASCIILetter := (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
-		isDigit := ch >= '0' && ch <= '9'
-		isUTF8 := ch >= 0x80 // UTF-8 multi-byte character
-		isSpecial := ch == ':' || ch == '-'
-
-		if !isASCIILetter && !isDigit && !isUTF8 && !isSpecial {
-			break
-		}
-
-		if ch == ':' {
+	for l.pos < len(l.source) && isValidInAccountOrIdent(l.source[l.pos]) {
+		if l.source[l.pos] == ':' {
 			hasColon = true
 		}
 		l.advance()
@@ -314,12 +286,7 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 	// First character already consumed
 
-	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-		if (ch < 'a' || ch > 'z') && (ch < 'A' || ch > 'Z') &&
-			(ch < '0' || ch > '9') && ch != '_' && ch != '-' {
-			break
-		}
+	for l.pos < len(l.source) && isValidInIdentifier(l.source[l.pos]) {
 		l.advance()
 	}
 
@@ -420,8 +387,7 @@ func (l *Lexer) peekIsDigit() bool {
 	if l.pos >= len(l.source) {
 		return false
 	}
-	ch := l.source[l.pos]
-	return ch >= '0' && ch <= '9'
+	return isDigit(l.source[l.pos])
 }
 
 func (l *Lexer) advance() byte {
@@ -437,4 +403,38 @@ func (l *Lexer) advance() byte {
 		l.column++
 	}
 	return ch
+}
+
+// Character classification helpers
+
+func isDigit(ch byte) bool {
+	return ch >= '0' && ch <= '9'
+}
+
+func isLetter(ch byte) bool {
+	return (ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')
+}
+
+func isUppercaseLetter(ch byte) bool {
+	return ch >= 'A' && ch <= 'Z'
+}
+
+func isLowercaseLetter(ch byte) bool {
+	return ch >= 'a' && ch <= 'z'
+}
+
+func isUTF8Byte(ch byte) bool {
+	return ch >= 0x80
+}
+
+func isValidInTag(ch byte) bool {
+	return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '-'
+}
+
+func isValidInIdentifier(ch byte) bool {
+	return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '-'
+}
+
+func isValidInAccountOrIdent(ch byte) bool {
+	return isLetter(ch) || isDigit(ch) || isUTF8Byte(ch) || ch == ':' || ch == '-'
 }
