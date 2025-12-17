@@ -7,6 +7,8 @@ const (
 	// Special tokens
 	EOF TokenType = iota
 	ILLEGAL
+	COMMENT // ; comment text
+	NEWLINE // blank line (whitespace only)
 
 	// Keywords - directive types
 	TXN       // txn
@@ -56,6 +58,8 @@ const (
 var tokenNames = map[TokenType]string{
 	EOF:     "EOF",
 	ILLEGAL: "ILLEGAL",
+	COMMENT: "COMMENT",
+	NEWLINE: "NEWLINE",
 
 	TXN:       "txn",
 	BALANCE:   "balance",

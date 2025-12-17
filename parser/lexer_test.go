@@ -231,14 +231,16 @@ func TestLexerComments(t *testing.T) {
 	lexer := NewLexer([]byte(input), "test")
 	tokens := lexer.ScanAll()
 
-	// Should have: DATE, OPEN, ACCOUNT, EOF
-	// Comments should be skipped
-	expectedTypes := []TokenType{DATE, OPEN, ACCOUNT, EOF}
+	// Should have: COMMENT, DATE, OPEN, ACCOUNT, COMMENT, EOF
+	// Comments are now emitted as tokens
+	// Note: trailing newline at EOF does not generate a NEWLINE token
+	// (only internal blank lines generate NEWLINE tokens)
+	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, COMMENT, EOF}
 
-	assert.Equal(t, len(expectedTypes), len(tokens), "comments should be skipped")
+	assert.Equal(t, len(expectedTypes), len(tokens), "comments should be emitted as tokens")
 
 	for i, tok := range tokens {
-		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch (got %v)", i, tok.Type)
 	}
 }
 
@@ -261,6 +263,7 @@ func TestLexerTransaction(t *testing.T) {
 		IDENT,    // USD
 		ACCOUNT,  // Assets:Cash
 		EOF,
+		// Note: trailing newline at EOF does not generate a NEWLINE token
 	}
 
 	assert.Equal(t, len(expectedTypes), len(tokens))
@@ -325,7 +328,7 @@ Assets:Bank:Checking
 	lexer := NewLexer([]byte(input), "test")
 	tokens := lexer.ScanAll()
 
-	// Should have 3 ACCOUNT tokens + EOF
+	// Should have 3 ACCOUNT tokens + EOF (trailing newline at EOF doesn't generate NEWLINE)
 	assert.Equal(t, 4, len(tokens))
 
 	// All three should be the same account

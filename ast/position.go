@@ -10,6 +10,11 @@ type Position struct {
 	Column   int // Column number (1-indexed)
 }
 
+// Positioned is implemented by all AST nodes that have a source position.
+type Positioned interface {
+	Position() Position
+}
+
 // String returns a human-readable representation of the position.
 func (p Position) String() string {
 	if p.Filename != "" {

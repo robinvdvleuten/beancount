@@ -43,6 +43,14 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 		// Dispatch by token type
 		switch tokType {
+		case COMMENT:
+			comment := p.parseComment()
+			tree.Comments = append(tree.Comments, comment)
+
+		case NEWLINE:
+			blankLine := p.parseBlankLine()
+			tree.BlankLines = append(tree.BlankLines, blankLine)
+
 		case OPTION:
 			opt, err := p.parseOption()
 			if err != nil {
@@ -110,6 +118,42 @@ func (p *Parser) Parse() (*ast.AST, error) {
 	}
 
 	return tree, nil
+}
+
+// parseComment parses a comment token into a Comment AST node.
+func (p *Parser) parseComment() *ast.Comment {
+	tok := p.advance()
+	content := tok.String(p.source)
+
+	// Determine comment type by checking if next token is a NEWLINE
+	commentType := ast.StandaloneComment
+	if !p.isAtEnd() && p.peek().Type == NEWLINE {
+		commentType = ast.SectionComment
+	}
+
+	return &ast.Comment{
+		Pos: ast.Position{
+			Filename: p.filename,
+			Offset:   tok.Start,
+			Line:     tok.Line,
+			Column:   tok.Column,
+		},
+		Content: content,
+		Type:    commentType,
+	}
+}
+
+// parseBlankLine parses a newline token into a BlankLine AST node.
+func (p *Parser) parseBlankLine() *ast.BlankLine {
+	tok := p.advance()
+	return &ast.BlankLine{
+		Pos: ast.Position{
+			Filename: p.filename,
+			Offset:   tok.Start,
+			Line:     tok.Line,
+			Column:   tok.Column,
+		},
+	}
 }
 
 // parseOption parses: option "key" "value"
@@ -256,7 +300,16 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		return nil, err
 	}
 
+	// Skip any NEWLINE tokens between date and directive keyword
+	// This allows multi-line directive syntax where date is on one line
+	// and directive keyword is on the next
+	for !p.isAtEnd() && p.peek().Type == NEWLINE {
+		p.advance()
+	}
+
 	// Check that next token is properly separated from date (whitespace required)
+	// This check runs after NEWLINE skipping to ensure we're checking the actual
+	// directive keyword token, not a trailing NEWLINE from the date line
 	if !p.isAtEnd() {
 		nextTok := p.peek()
 		if nextTok.Line == dateTok.Line && nextTok.Column == dateTok.Column+dateTok.Len() {

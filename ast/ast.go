@@ -58,32 +58,7 @@ func compareDirectives(a, b Directive) int {
 
 // getDirectiveLine extracts the line number from a directive for stable sorting.
 func getDirectiveLine(d Directive) int {
-	switch v := d.(type) {
-	case *Transaction:
-		return v.Pos.Line
-	case *Open:
-		return v.Pos.Line
-	case *Close:
-		return v.Pos.Line
-	case *Balance:
-		return v.Pos.Line
-	case *Pad:
-		return v.Pos.Line
-	case *Note:
-		return v.Pos.Line
-	case *Document:
-		return v.Pos.Line
-	case *Commodity:
-		return v.Pos.Line
-	case *Price:
-		return v.Pos.Line
-	case *Event:
-		return v.Pos.Line
-	case *Custom:
-		return v.Pos.Line
-	default:
-		return 0
-	}
+	return d.Position().Line
 }
 
 // directiveTypePriority returns the processing priority for a directive type.
@@ -110,6 +85,8 @@ type AST struct {
 	Poptags    []*Poptag
 	Pushmetas  []*Pushmeta
 	Popmetas   []*Popmeta
+	Comments   []*Comment
+	BlankLines []*BlankLine
 }
 
 // WithMetadata is an interface for AST nodes that can have metadata attached.
@@ -129,6 +106,7 @@ func (w *withMetadata) AddMetadata(m ...*Metadata) {
 // Directive is the interface implemented by all Beancount directive types.
 type Directive interface {
 	WithMetadata
+	Positioned
 
 	date() *Date
 	Directive() string
@@ -144,36 +122,6 @@ type positionedItem struct {
 	popmeta   *Popmeta
 }
 
-// getDirectivePos extracts the position from any directive type.
-func getDirectivePos(d Directive) Position {
-	switch v := d.(type) {
-	case *Commodity:
-		return v.Pos
-	case *Open:
-		return v.Pos
-	case *Close:
-		return v.Pos
-	case *Balance:
-		return v.Pos
-	case *Pad:
-		return v.Pos
-	case *Note:
-		return v.Pos
-	case *Document:
-		return v.Pos
-	case *Price:
-		return v.Pos
-	case *Event:
-		return v.Pos
-	case *Custom:
-		return v.Pos
-	case *Transaction:
-		return v.Pos
-	default:
-		return Position{}
-	}
-}
-
 // ApplyPushPopDirectives applies pushtag/poptag and pushmeta/popmeta directives
 // to transactions and other directives in file order (before date sorting).
 func ApplyPushPopDirectives(ast *AST) error {
@@ -182,7 +130,7 @@ func ApplyPushPopDirectives(ast *AST) error {
 
 	for i := range ast.Directives {
 		items = append(items, positionedItem{
-			pos:       getDirectivePos(ast.Directives[i]),
+			pos:       ast.Directives[i].Position(),
 			directive: ast.Directives[i],
 		})
 	}

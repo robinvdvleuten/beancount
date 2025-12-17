@@ -15,6 +15,8 @@ type Option struct {
 	Value string
 }
 
+func (o *Option) Position() Position { return o.Pos }
+
 // Include imports and processes directives from another Beancount file, allowing you
 // to split your ledger across multiple files for better organization. The path can be
 // absolute or relative to the file containing the include directive. Common practice is
@@ -30,6 +32,8 @@ type Include struct {
 	Filename string
 }
 
+func (i *Include) Position() Position { return i.Pos }
+
 // Plugin loads a processing plugin that can transform or validate the ledger data.
 // Plugins are Python modules that run after parsing and can add new directives, check
 // for errors, or modify existing entries. An optional configuration string can be passed
@@ -44,6 +48,8 @@ type Plugin struct {
 	Name   string
 	Config string
 }
+
+func (p *Plugin) Position() Position { return p.Pos }
 
 // Pushtag pushes a tag onto the tag stack, causing all subsequent transactions in the
 // file to automatically receive this tag until a corresponding poptag is encountered.
@@ -62,6 +68,8 @@ type Pushtag struct {
 	Tag Tag
 }
 
+func (p *Pushtag) Position() Position { return p.Pos }
+
 // Poptag removes a tag from the tag stack, ending the automatic application of that tag
 // to subsequent transactions. It must match a previously pushed tag. Transactions appearing
 // after the poptag will no longer automatically receive the specified tag.
@@ -73,6 +81,8 @@ type Poptag struct {
 	Pos Position
 	Tag Tag
 }
+
+func (p *Poptag) Position() Position { return p.Pos }
 
 // Pushmeta pushes a metadata key-value pair onto the metadata stack, causing all
 // subsequent directives in the file to automatically receive this metadata entry until
@@ -92,6 +102,8 @@ type Pushmeta struct {
 	Value string
 }
 
+func (p *Pushmeta) Position() Position { return p.Pos }
+
 // Popmeta removes a metadata key from the metadata stack, ending the automatic application
 // of that metadata to subsequent directives. It must match a previously pushed metadata key.
 // Directives appearing after the popmeta will no longer automatically receive the specified
@@ -105,8 +117,4 @@ type Popmeta struct {
 	Key string
 }
 
-// Node is a constraint for AST nodes that have a Pos field.
-// This includes all non-directive top-level elements (options, includes, plugins, push/pop directives).
-type Node interface {
-	*Option | *Include | *Plugin | *Pushtag | *Poptag | *Pushmeta | *Popmeta
-}
+func (p *Popmeta) Position() Position { return p.Pos }

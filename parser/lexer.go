@@ -54,20 +54,12 @@ func (l *Lexer) Interner() *Interner {
 // This is a single-pass scanner with no backtracking.
 func (l *Lexer) ScanAll() []Token {
 	for l.pos < len(l.source) {
-		l.skipWhitespace()
-
-		if l.pos >= len(l.source) {
+		tok := l.scanNextToken()
+		// scanNextToken returns EOF when it hits the end, but we may still be in the loop
+		// if there are trailing newlines being tracked
+		if tok.Type == EOF {
 			break
 		}
-
-		// Skip comments
-		if l.peek() == ';' {
-			l.skipComment()
-			continue
-		}
-
-		// Scan next token
-		tok := l.scanToken()
 		l.tokens = append(l.tokens, tok)
 	}
 
@@ -81,6 +73,58 @@ func (l *Lexer) ScanAll() []Token {
 	})
 
 	return l.tokens
+}
+
+// scanNextToken scans the next token including comments and blank lines.
+func (l *Lexer) scanNextToken() Token {
+	// Track blank lines (lines with only whitespace)
+	blankLineStart := -1
+	blankLine := 0
+	blankCol := 0
+
+	for l.pos < len(l.source) {
+		ch := l.source[l.pos]
+
+		if ch == '\n' {
+			// If we've been tracking a blank line, emit it
+			if blankLineStart >= 0 {
+				tok := Token{NEWLINE, blankLineStart, l.pos, blankLine, blankCol}
+				l.pos++
+				l.line++
+				l.column = 1
+				return tok
+			}
+			// Start tracking a potential blank line
+			blankLineStart = l.pos
+			blankLine = l.line
+			blankCol = l.column
+			l.pos++
+			l.line++
+			l.column = 1
+			continue
+		}
+
+		if ch == ' ' || ch == '\t' || ch == '\r' {
+			// Continue tracking blank line or just skip whitespace
+			l.pos++
+			l.column++
+			continue
+		}
+
+		// Non-whitespace character - we're about to return a token,
+		// so no need to reset blankLineStart
+
+		// Comments
+		if ch == ';' {
+			return l.scanComment()
+		}
+
+		// Regular token
+		return l.scanToken()
+	}
+
+	// End of file - return EOF placeholder (will be replaced by actual EOF in ScanAll)
+	return Token{EOF, l.pos, l.pos, l.line, l.column}
 }
 
 // scanToken scans the next token from the current position.
@@ -342,36 +386,21 @@ func (l *Lexer) keywordType(word []byte) TokenType {
 	}
 }
 
-// skipWhitespace skips whitespace and updates line/column tracking.
-func (l *Lexer) skipWhitespace() {
-	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-		if ch != ' ' && ch != '\t' && ch != '\n' && ch != '\r' {
-			break
-		}
-		if ch == '\n' {
-			l.line++
-			l.column = 1
-			l.pos++
-		} else {
-			l.column++
-			l.pos++
-		}
-	}
-}
+// scanComment scans a comment line (;...) and returns a COMMENT token
+func (l *Lexer) scanComment() Token {
+	start := l.pos
+	startLine := l.line
+	startCol := l.column
 
-// skipComment skips a comment line (;...)
-func (l *Lexer) skipComment() {
-	// Skip to end of line
+	// Advance past the semicolon
+	l.advance()
+
+	// Scan to end of line
 	for l.pos < len(l.source) && l.source[l.pos] != '\n' {
-		l.pos++
+		l.advance()
 	}
-	// Skip the newline itself
-	if l.pos < len(l.source) && l.source[l.pos] == '\n' {
-		l.pos++
-		l.line++
-		l.column = 1
-	}
+
+	return Token{COMMENT, start, l.pos, startLine, startCol}
 }
 
 // Helper methods
