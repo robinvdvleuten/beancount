@@ -46,6 +46,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	// Parse payee and/or narration
 	// If one string: it's the narration
 	// If two strings: first is payee, second is narration
+	hasNarration := false
 	if p.check(STRING) {
 		first, firstMeta, err := p.parseString()
 		if err != nil {
@@ -62,11 +63,17 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 			txn.PayeeEscapes = firstMeta
 			txn.Narration = second
 			txn.NarrationEscapes = secondMeta
+			hasNarration = true
 		} else {
 			// One string: just narration
 			txn.Narration = first
 			txn.NarrationEscapes = firstMeta
+			hasNarration = true
 		}
+	}
+
+	if !hasNarration {
+		return nil, p.error("expected transaction payee or narration string")
 	}
 
 	// Parse tags and links (can be intermixed)
@@ -92,7 +99,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	}
 
 	// Parse postings (indented lines)
-	postings, err := p.parsePostings()
+	postings, err := p.parsePostings(txn.Pos.Line)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +110,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 
 // parsePostings parses all postings for a transaction.
 // Postings are indented lines following the transaction header.
-func (p *Parser) parsePostings() ([]*ast.Posting, error) {
+func (p *Parser) parsePostings(headerLine int) ([]*ast.Posting, error) {
 	postings := make([]*ast.Posting, 0, 4)
 
 	// Postings must be indented (column > 1)
@@ -111,6 +118,10 @@ func (p *Parser) parsePostings() ([]*ast.Posting, error) {
 	// is indented, and looks like it could start a posting
 	for !p.isAtEnd() {
 		tok := p.peek()
+
+		if tok.Line == headerLine && (tok.Type == ASTERISK || tok.Type == EXCLAIM || tok.Type == ACCOUNT) {
+			return nil, p.errorAtToken(tok, "postings must start on a new line")
+		}
 
 		// Postings must be indented (not at column 1)
 		// This distinguishes them from org-mode headers like "* Credit-Cards"

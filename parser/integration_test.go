@@ -92,3 +92,11 @@ func TestParseWithMetadata(t *testing.T) {
 
 	t.Logf("Successfully parsed with metadata!")
 }
+
+func TestParseTransactionRequiresNarration(t *testing.T) {
+	input := `0001-01-01 !Assets:0 Income:0`
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected transaction payee or narration string")
+}
