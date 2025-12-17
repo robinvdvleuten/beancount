@@ -283,7 +283,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 			if err != nil {
 				return nil, p.errorAtToken(tok, "invalid string literal: %v", err)
 			}
-			s := p.interner.Intern(unquoted)
+			s := p.internString(unquoted)
 			val = &ast.CustomValue{String: &s}
 
 		case IDENT:
@@ -312,7 +312,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 			// Check if followed by currency
 			if p.check(IDENT) {
 				currTok := p.advance()
-				currency := p.interner.InternBytes(currTok.Bytes(p.source))
+				currency := p.internCurrency(currTok)
 				amt := &ast.Amount{
 					Value:    numStr,
 					Currency: currency,

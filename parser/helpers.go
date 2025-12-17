@@ -35,7 +35,7 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	}
 
 	// Intern account name for memory efficiency
-	accountStr := p.interner.InternBytes(tok.Bytes(p.source))
+	accountStr := p.internIdent(tok)
 
 	var account ast.Account
 	if err := account.Capture([]string{accountStr}); err != nil {
@@ -78,7 +78,7 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	}
 
 	// Intern currency code (USD, EUR, etc.)
-	currency := p.interner.InternBytes(currTok.Bytes(p.source))
+	currency := p.internCurrency(currTok)
 
 	return &ast.Amount{
 		Value:    value,
@@ -233,7 +233,7 @@ func (p *Parser) parseString() (string, *ast.StringMetadata, error) {
 		return "", nil, p.errorAtToken(tok, "invalid string literal: %v", err)
 	}
 
-	return p.interner.Intern(unquoted), metadata, nil
+	return p.internString(unquoted), metadata, nil
 }
 
 // unquoteStringWithMetadata unquotes a string and tracks escape sequence information.
@@ -614,6 +614,28 @@ func (p *Parser) consume(typ TokenType, message string) Token {
 
 func (p *Parser) expect(typ TokenType, message string) Token {
 	return p.consume(typ, message)
+}
+
+// String interning helpers - deduplicate repeated strings for memory efficiency
+
+// internCurrency interns a currency identifier from a token.
+// Currency codes like USD, EUR, GBP are frequently repeated in large files,
+// so interning saves memory by maintaining a single copy per unique value.
+func (p *Parser) internCurrency(tok Token) string {
+	return p.interner.InternBytes(tok.Bytes(p.source))
+}
+
+// internString interns a string value.
+// Used for interning strings that appear multiple times in the file
+// (e.g., payees, narrations, account names).
+func (p *Parser) internString(s string) string {
+	return p.interner.Intern(s)
+}
+
+// internIdent interns an identifier from a token.
+// Used for identifiers that may be repeated (e.g., options, metadata keys).
+func (p *Parser) internIdent(tok Token) string {
+	return p.interner.InternBytes(tok.Bytes(p.source))
 }
 
 // Error helpers
