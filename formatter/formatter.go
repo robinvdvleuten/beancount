@@ -392,6 +392,18 @@ func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) b
 	return false
 }
 
+// hasInlineMetadata checks if a line contains inline metadata after a quoted string.
+// This detects malformed cases like '0000-01-01 note Assets:Bank""a:' where metadata
+// appears on the same line as the directive without proper separation.
+func (f *Formatter) hasInlineMetadata(line string) bool {
+	lastQuote := strings.LastIndex(line, "\"")
+	if lastQuote == -1 {
+		return false
+	}
+	afterQuote := strings.TrimSpace(line[lastQuote+1:])
+	return strings.Contains(afterQuote, ":")
+}
+
 // Comments and blank lines from sourceContent are preserved based on Formatter configuration.
 func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []byte, w io.Writer) error {
 	// Check for cancellation before starting
@@ -909,9 +921,13 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 		originalLine := f.getOriginalLine(n.Pos.Line)
 		// Only preserve if the original line contains both the account and description (or at least a quote)
 		if strings.Contains(originalLine, string(n.Account)) && strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
-				f.formatMetadata(n.Metadata, buf)
-				return
+			// Check for inline metadata after the description's closing quote.
+			// If found, use fallback reconstruction to avoid duplicating metadata.
+			if !f.hasInlineMetadata(originalLine) {
+				if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
+					f.formatMetadata(n.Metadata, buf)
+					return
+				}
 			}
 		}
 	}
@@ -935,9 +951,13 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 		originalLine := f.getOriginalLine(d.Pos.Line)
 		// Only preserve if the original line contains both the account and path (or at least a quote)
 		if strings.Contains(originalLine, string(d.Account)) && strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
-				f.formatMetadata(d.Metadata, buf)
-				return
+			// Check for inline metadata after the path's closing quote.
+			// If found, use fallback reconstruction to avoid duplicating metadata.
+			if !f.hasInlineMetadata(originalLine) {
+				if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
+					f.formatMetadata(d.Metadata, buf)
+					return
+				}
 			}
 		}
 	}
