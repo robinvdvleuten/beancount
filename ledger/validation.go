@@ -174,6 +174,21 @@ func newValidator(accounts map[string]*Account, toleranceConfig *ToleranceConfig
 	}
 }
 
+// validateDateRange checks if a date is within the valid Beancount range (1-9999).
+// Follows official Beancount behavior which rejects year 0 and year >= 10000.
+func validateDateRange(date *ast.Date) error {
+	if date == nil {
+		return nil
+	}
+
+	year := date.Year()
+	if year < 1 || year > 9999 {
+		return fmt.Errorf("ValueError: year %d is out of range", year)
+	}
+
+	return nil
+}
+
 // postingClassification groups postings by their characteristics
 // This makes the processing logic clearer and prevents misclassification
 type postingClassification struct {
@@ -719,6 +734,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *TransactionDelta) {
 	var allErrors []error
 
+	// 0. Validate transaction date is in valid range
+	if err := validateDateRange(txn.Date); err != nil {
+		allErrors = append(allErrors, err)
+		return allErrors, nil
+	}
+
 	// 1. Validate accounts are open
 	if errs := v.validateAccountsOpen(txn); len(errs) > 0 {
 		allErrors = append(allErrors, errs...)
@@ -816,6 +837,12 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 func (v *validator) validateBalance(balance *ast.Balance) []error {
 	var errs []error
 
+	// 0. Validate balance date is in valid range
+	if err := validateDateRange(balance.Date); err != nil {
+		errs = append(errs, err)
+		return errs
+	}
+
 	// 1. Validate account is open
 	accountName := string(balance.Account)
 	acc, exists := v.accounts[accountName]
@@ -864,6 +891,12 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 func (v *validator) validatePad(pad *ast.Pad) []error {
 	var errs []error
 
+	// 0. Validate pad date is in valid range
+	if err := validateDateRange(pad.Date); err != nil {
+		errs = append(errs, err)
+		return errs
+	}
+
 	// 1. Validate main account is open
 	if !v.isAccountOpen(pad.Account, pad.Date) {
 		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.Account))
@@ -901,6 +934,12 @@ func (v *validator) validatePad(pad *ast.Pad) []error {
 func (v *validator) validateNote(note *ast.Note) []error {
 	var errs []error
 
+	// 0. Validate note date is in valid range
+	if err := validateDateRange(note.Date); err != nil {
+		errs = append(errs, err)
+		return errs
+	}
+
 	// 1. Validate account is open
 	if !v.isAccountOpen(note.Account, note.Date) {
 		errs = append(errs, NewAccountNotOpenErrorFromNote(note))
@@ -921,6 +960,12 @@ func (v *validator) validateNote(note *ast.Note) []error {
 // Document directives link external files to accounts for audit trails.
 func (v *validator) validateDocument(doc *ast.Document) []error {
 	var errs []error
+
+	// 0. Validate document date is in valid range
+	if err := validateDateRange(doc.Date); err != nil {
+		errs = append(errs, err)
+		return errs
+	}
 
 	// 1. Validate account is open
 	if !v.isAccountOpen(doc.Account, doc.Date) {
@@ -970,6 +1015,12 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	var errs []error
 	accountName := string(open.Account)
 
+	// 0. Validate open date is in valid range
+	if err := validateDateRange(open.Date); err != nil {
+		errs = append(errs, err)
+		return errs, nil
+	}
+
 	// Check if account already exists - duplicate open is always an error
 	if existing, ok := v.accounts[accountName]; ok {
 		errs = append(errs, NewAccountAlreadyOpenError(open, existing.OpenDate))
@@ -1013,6 +1064,12 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]error, *CloseDelta) {
 	var errs []error
 	accountName := string(close.Account)
+
+	// 0. Validate close date is in valid range
+	if err := validateDateRange(close.Date); err != nil {
+		errs = append(errs, err)
+		return errs, nil
+	}
 
 	// Check if account exists
 	account, ok := v.accounts[accountName]
