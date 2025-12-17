@@ -293,6 +293,64 @@ Document complex private functions too:
 func (f *Formatter) calculateWidthMetrics(ast *parser.AST) widthMetrics {
 ```
 
+## Beancount Compliance
+
+**ALWAYS use official beancount CLI tools** (`bean-check`, `bean-format`, `bean-doctor`, `bean-query`) to validate our implementation against the canonical reference. This ensures compliance with official beancount behavior.
+
+**Available tools:**
+- `bean-format` - Format and normalize beancount files (reference for formatter behavior)
+- `bean-check` - Parse and validate beancount files (reference for validation)
+- `bean-doctor` - Diagnose issues with beancount files
+- `bean-query` - Query beancount ledger data
+
+**When to use each tool:**
+
+**Formatter validation:**
+```bash
+# Compare our formatter output against official bean-format
+echo 'option
+""""' | bean-format /dev/stdin > /tmp/official.beancount
+
+# Run our formatter and compare
+beancount format input.beancount > /tmp/our.beancount
+diff /tmp/official.beancount /tmp/our.beancount
+```
+
+**Parser/validation reference:**
+```bash
+# Test parser behavior and error messages
+echo 'invalid syntax' | bean-check /dev/stdin
+
+# Use as reference for what errors our parser should produce
+bean-check problematic.beancount
+```
+
+**Round-trip testing with reference tool:**
+```bash
+# Verify that official tool can parse our formatted output
+beancount format input.beancount | bean-check /dev/stdin
+
+# If this succeeds but our round-trip fails, we have a bug
+# If this fails, the input itself is invalid (not a formatter bug)
+```
+
+**When investigating format/parse discrepancies:**
+1. Create minimal test case
+2. Run official tool: `bean-format input.beancount`
+3. Compare output with our formatter
+4. If different, check AGENTS.md section on validation logic separation - are we doing validation in parser/formatter instead of validator?
+5. Run `bean-check` on both outputs to verify both are valid
+6. Add as fuzz test seed case if it reveals a bug
+
+**Fuzz test case promotion:**
+When the fuzzer finds an "interesting" case that fails:
+1. Extract the test case bytes
+2. Create a file: `echo 'bytes' > /tmp/test.beancount`
+3. Run: `bean-format /tmp/test.beancount` to see official behavior
+4. If official tool succeeds, check if our formatter should too
+5. If official tool fails, the input is invalid and our round-trip test is too strict
+6. Promote to seed case if it reveals a real compliance issue
+
 ## String Building
 
 ### Use strings.Builder for Performance

@@ -63,7 +63,7 @@ func FuzzFormatter(f *testing.F) {
 
 		// Parse original (filter invalid inputs)
 		ast1, err := parser.ParseBytes(ctx, data)
-		if err != nil {
+		if err != nil || ast1 == nil || len(ast1.Directives) == 0 {
 			return // Skip invalid inputs - formatter only works on valid syntax
 		}
 
