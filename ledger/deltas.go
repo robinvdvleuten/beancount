@@ -73,6 +73,11 @@ func (d *OpenDelta) HasMutations() bool {
 	return true // Opening always creates/modifies account
 }
 
+// HasMetadata returns true if the delta has metadata
+func (d *OpenDelta) HasMetadata() bool {
+	return len(d.Metadata) > 0
+}
+
 // CloseDelta describes changes from closing an account
 type CloseDelta struct {
 	AccountName string

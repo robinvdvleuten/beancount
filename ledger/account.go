@@ -38,3 +38,8 @@ func (a *Account) IsOpen(date *ast.Date) bool {
 func (a *Account) IsClosed() bool {
 	return a.CloseDate != nil
 }
+
+// HasMetadata returns true if the account has metadata
+func (a *Account) HasMetadata() bool {
+	return len(a.Metadata) > 0
+}

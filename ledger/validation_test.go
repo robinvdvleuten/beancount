@@ -1354,7 +1354,7 @@ func TestValidateOpen(t *testing.T) {
 
 			if tt.wantErrCount == 0 && delta != nil {
 				if tt.wantMetadataCopy {
-					assert.NotEqual(t, 0, len(delta.Metadata))
+					assert.True(t, delta.HasMetadata(), "expected metadata on delta")
 				}
 
 				if tt.wantConstraintLen > 0 {
@@ -1362,7 +1362,7 @@ func TestValidateOpen(t *testing.T) {
 				}
 
 				// Verify no shared references
-				if len(tt.open.Metadata) > 0 && len(delta.Metadata) > 0 {
+				if tt.open.HasMetadata() && delta.HasMetadata() {
 					// Check that the slices don't point to the same backing array by checking addresses
 					// Using %p format to get pointer addresses as strings
 					openPtr := fmt.Sprintf("%p", &tt.open.Metadata[0])

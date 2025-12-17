@@ -456,7 +456,7 @@ func (v *validator) validateMetadata(txn *ast.Transaction) []error {
 	var errs []error
 
 	// Validate transaction-level metadata
-	if len(txn.Metadata) > 0 {
+	if txn.HasMetadata() {
 		seen := make(map[string]bool)
 		for _, meta := range txn.Metadata {
 			// Check for duplicate keys
@@ -475,7 +475,7 @@ func (v *validator) validateMetadata(txn *ast.Transaction) []error {
 
 	// Validate posting-level metadata
 	for _, posting := range txn.Postings {
-		if len(posting.Metadata) > 0 {
+		if posting.HasMetadata() {
 			seen := make(map[string]bool)
 			for _, meta := range posting.Metadata {
 				// Check for duplicate keys
