@@ -47,22 +47,25 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	// If one string: it's the narration
 	// If two strings: first is payee, second is narration
 	if p.check(STRING) {
-		first, err := p.parseString()
+		first, firstMeta, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
 
 		if p.check(STRING) {
 			// Two strings: payee and narration
-			second, err := p.parseString()
+			second, secondMeta, err := p.parseString()
 			if err != nil {
 				return nil, err
 			}
 			txn.Payee = first
+			txn.PayeeEscapes = firstMeta
 			txn.Narration = second
+			txn.NarrationEscapes = secondMeta
 		} else {
 			// One string: just narration
 			txn.Narration = first
+			txn.NarrationEscapes = firstMeta
 		}
 	}
 

@@ -17,13 +17,15 @@ package ast
 //	  Assets:US:BofA:Checking                  -100.00 USD
 //	  Assets:US:BofA:Savings                    100.00 USD
 type Transaction struct {
-	Pos       Position
-	Date      *Date
-	Flag      string
-	Payee     string
-	Narration string
-	Links     []Link
-	Tags      []Tag
+	Pos              Position
+	Date             *Date
+	Flag             string
+	Payee            string
+	PayeeEscapes     *StringMetadata
+	Narration        string
+	NarrationEscapes *StringMetadata
+	Links            []Link
+	Tags             []Tag
 
 	withMetadata
 

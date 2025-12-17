@@ -123,10 +123,11 @@ func (p *Pad) Directive() string { return "pad" }
 //
 //	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
 type Note struct {
-	Pos         Position
-	Date        *Date
-	Account     Account
-	Description string
+	Pos                Position
+	Date               *Date
+	Account            Account
+	Description        string
+	DescriptionEscapes *StringMetadata
 
 	withMetadata
 }
@@ -150,6 +151,7 @@ type Document struct {
 	Date           *Date
 	Account        Account
 	PathToDocument string
+	PathEscapes    *StringMetadata
 
 	withMetadata
 }
@@ -192,10 +194,12 @@ func (p *Price) Directive() string { return "price" }
 //	2014-07-09 event "location" "New York, USA"
 //	2014-09-01 event "employer" "Hooli Inc."
 type Event struct {
-	Pos   Position
-	Date  *Date
-	Name  string
-	Value string
+	Pos          Position
+	Date         *Date
+	Name         string
+	NameEscapes  *StringMetadata
+	Value        string
+	ValueEscapes *StringMetadata
 
 	withMetadata
 }
@@ -215,10 +219,11 @@ func (e *Event) Directive() string { return "event" }
 //	2014-07-09 custom "budget" "..." TRUE 45.30 USD
 //	2015-01-01 custom "forecast" 100.00 USD FALSE "monthly"
 type Custom struct {
-	Pos    Position
-	Date   *Date
-	Type   string
-	Values []*CustomValue
+	Pos         Position
+	Date        *Date
+	Type        string
+	TypeEscapes *StringMetadata
+	Values      []*CustomValue
 
 	withMetadata
 }

@@ -220,18 +220,138 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 }
 
 // parseString parses a STRING token and unquotes it.
-func (p *Parser) parseString() (string, error) {
+// Returns the unquoted string and its metadata for round-trip formatting.
+func (p *Parser) parseString() (string, *ast.StringMetadata, error) {
 	tok := p.expect(STRING, "expected string")
 	if tok.Type == ILLEGAL {
-		return "", p.errorAtEndOfPrevious("expected string")
+		return "", nil, p.errorAtEndOfPrevious("expected string")
 	}
 
-	unquoted, err := p.unquoteString(tok.String(p.source))
+	rawValue := tok.String(p.source)
+	unquoted, metadata, err := p.unquoteStringWithMetadata(rawValue)
 	if err != nil {
-		return "", p.errorAtToken(tok, "invalid string literal: %v", err)
+		return "", nil, p.errorAtToken(tok, "invalid string literal: %v", err)
 	}
 
-	return p.interner.Intern(unquoted), nil
+	return p.interner.Intern(unquoted), metadata, nil
+}
+
+// unquoteStringWithMetadata unquotes a string and tracks escape sequence information.
+// Returns the unquoted string, metadata about escapes, and any error.
+func (p *Parser) unquoteStringWithMetadata(s string) (string, *ast.StringMetadata, error) {
+	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
+		return s, &ast.StringMetadata{
+				EscapeType:    ast.EscapeTypeUnknown,
+				OriginalValue: s,
+			}, &StringLiteralError{
+				Message: "string must be enclosed in double quotes",
+			}
+	}
+
+	inner := s[1 : len(s)-1]
+
+	// Fast path: no escape sequences, return as-is
+	if !containsEscapeSequences(inner) {
+		return inner, &ast.StringMetadata{
+			EscapeType:    ast.EscapeTypeNone,
+			OriginalValue: s,
+		}, nil
+	}
+
+	// Slow path: process escape sequences
+	unquoted, err := p.processEscapeSequences(inner)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return unquoted, &ast.StringMetadata{
+		EscapeType:    ast.EscapeTypeCStyle,
+		OriginalValue: s,
+	}, nil
+}
+
+// containsEscapeSequences checks if a string contains any backslash that needs processing.
+// This includes both valid escape sequences and invalid ones (which will error during processing).
+func containsEscapeSequences(s string) bool {
+	return strings.IndexByte(s, '\\') >= 0
+}
+
+// processEscapeSequences processes escape sequences in a string's inner content.
+// This is the core of the unquoting logic, extracted for reuse.
+// Note: This implementation matches the original behavior where we check if
+// a backslash is preceded by another backslash to determine escape behavior.
+func (p *Parser) processEscapeSequences(inner string) (string, error) {
+	var buf strings.Builder
+	buf.Grow(len(inner))
+
+	i := 0
+	for i < len(inner) {
+		if inner[i] == '\\' {
+			if i+1 >= len(inner) {
+				return "", &StringLiteralError{
+					Message: "escape sequence at end of string",
+				}
+			}
+
+			switch inner[i+1] {
+			case '"':
+				buf.WriteByte('"')
+				i += 2
+			case '\\':
+				buf.WriteByte('\\')
+				i += 2
+			case 'n':
+				// Only process as newline if not preceded by backslash
+				if i == 0 || inner[i-1] != '\\' {
+					buf.WriteByte('\n')
+					i += 2
+				} else {
+					// This is actually \n where \ escaped backslash
+					buf.WriteByte('\\')
+					buf.WriteByte('n')
+					i += 2
+				}
+			case 't':
+				// Only process as tab if not preceded by backslash
+				if i == 0 || inner[i-1] != '\\' {
+					buf.WriteByte('\t')
+					i += 2
+				} else {
+					// This is actually \t where \ escaped backslash
+					buf.WriteByte('\\')
+					buf.WriteByte('t')
+					i += 2
+				}
+			case 'r':
+				// Only process as carriage return if not preceded by backslash
+				if i == 0 || inner[i-1] != '\\' {
+					buf.WriteByte('\r')
+					i += 2
+				} else {
+					// This is actually \r where \ escaped backslash
+					buf.WriteByte('\\')
+					buf.WriteByte('r')
+					i += 2
+				}
+			default:
+				return "", &StringLiteralError{
+					Message: fmt.Sprintf("invalid escape sequence '\\%c'", inner[i+1]),
+				}
+			}
+		} else {
+			buf.WriteByte(inner[i])
+			i++
+		}
+	}
+
+	return buf.String(), nil
+}
+
+// unquoteString is the old public API kept for backwards compatibility in tests.
+// It unquotes a string without tracking metadata.
+func (p *Parser) unquoteString(s string) (string, error) {
+	unquoted, _, err := p.unquoteStringWithMetadata(s)
+	return unquoted, err
 }
 
 // parseIdent parses an IDENT token.
@@ -318,7 +438,7 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 	switch tok.Type {
 	case STRING:
 		// String (quoted) - most specific
-		str, err := p.parseString()
+		str, _, err := p.parseString()
 		if err == nil {
 			return &ast.MetadataValue{StringValue: &str}
 		}
@@ -429,91 +549,6 @@ func (p *Parser) parseRestOfLine() string {
 	}
 
 	return strings.TrimSpace(strings.Join(parts, " "))
-}
-
-// unquoteString removes surrounding quotes from a string and processes escape sequences.
-// It handles \", \\, \n, \t, \r escape sequences according to Beancount string rules.
-// Returns an error for invalid escape sequences or malformed strings.
-func (p *Parser) unquoteString(s string) (string, error) {
-	// Fast path: check if string has quotes and potential escapes
-	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
-		return s, &StringLiteralError{
-			Message: "string must be enclosed in double quotes",
-		}
-	}
-
-	inner := s[1 : len(s)-1]
-
-	// Fast path: no escape sequences, return as-is
-	if !strings.Contains(inner, "\\") {
-		return inner, nil
-	}
-
-	var buf strings.Builder
-	buf.Grow(len(inner))
-
-	i := 0
-	for i < len(inner) {
-		if inner[i] == '\\' {
-			if i+1 >= len(inner) {
-				return "", &StringLiteralError{
-					Message: "escape sequence at end of string",
-				}
-			}
-
-			// Process escape sequence
-			switch inner[i+1] {
-			case '"':
-				buf.WriteByte('"')
-				i += 2
-			case '\\':
-				buf.WriteByte('\\')
-				i += 2
-			case 'n':
-				// Only process as newline if not preceded by backslash
-				if i == 0 || inner[i-1] != '\\' {
-					buf.WriteByte('\n')
-					i += 2
-				} else {
-					// This is actually \n where \ escaped backslash
-					buf.WriteByte('\\')
-					buf.WriteByte('n')
-					i += 2
-				}
-			case 't':
-				// Only process as tab if not preceded by backslash
-				if i == 0 || inner[i-1] != '\\' {
-					buf.WriteByte('\t')
-					i += 2
-				} else {
-					// This is actually \t where \ escaped backslash
-					buf.WriteByte('\\')
-					buf.WriteByte('t')
-					i += 2
-				}
-			case 'r':
-				// Only process as carriage return if not preceded by backslash
-				if i == 0 || inner[i-1] != '\\' {
-					buf.WriteByte('\r')
-					i += 2
-				} else {
-					// This is actually \r where \ escaped backslash
-					buf.WriteByte('\\')
-					buf.WriteByte('r')
-					i += 2
-				}
-			default:
-				return "", &StringLiteralError{
-					Message: fmt.Sprintf("invalid escape sequence '\\%c'", inner[i+1]),
-				}
-			}
-		} else {
-			buf.WriteByte(inner[i])
-			i++
-		}
-	}
-
-	return buf.String(), nil
 }
 
 // skipLine skips all tokens on the current line.

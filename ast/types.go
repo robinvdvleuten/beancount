@@ -7,6 +7,28 @@ import (
 	"time"
 )
 
+// EscapeType indicates how escape sequences were handled in the original string.
+type EscapeType int
+
+const (
+	// EscapeTypeUnknown means we don't know the original escape style (parsed before tracking was added).
+	EscapeTypeUnknown EscapeType = iota
+	// EscapeTypeNone means the string had no escape sequences (or we want to output without escapes).
+	EscapeTypeNone
+	// EscapeTypeCStyle means the string used C-style escapes (\n, \t, \", \\, \r).
+	EscapeTypeCStyle
+)
+
+// StringMetadata tracks how a string was escaped in the original source.
+// This allows the formatter to round-trip formatted output exactly.
+type StringMetadata struct {
+	// EscapeType indicates which escape sequences were present.
+	EscapeType EscapeType
+	// OriginalValue is the raw token text including quotes and escape sequences (e.g., "hello\\nworld").
+	// Used to reconstruct original formatting when requested.
+	OriginalValue string
+}
+
 // Amount represents a numerical value with its associated currency or commodity symbol.
 // The value is stored as a string to preserve the exact decimal representation from
 // the input, avoiding floating-point precision issues.

@@ -66,7 +66,7 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 
 	// Optional booking method
 	if p.check(STRING) {
-		method, err := p.parseString()
+		method, _, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
@@ -150,16 +150,17 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 		return nil, err
 	}
 
-	description, err := p.parseString()
+	description, descMeta, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	note := &ast.Note{
-		Pos:         pos,
-		Date:        date,
-		Account:     account,
-		Description: description,
+		Pos:                pos,
+		Date:               date,
+		Account:            account,
+		Description:        description,
+		DescriptionEscapes: descMeta,
 	}
 	note.Metadata = p.parseMetadata()
 
@@ -175,7 +176,7 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		return nil, err
 	}
 
-	path, err := p.parseString()
+	path, pathMeta, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
@@ -185,6 +186,7 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		Date:           date,
 		Account:        account,
 		PathToDocument: path,
+		PathEscapes:    pathMeta,
 	}
 	doc.Metadata = p.parseMetadata()
 
@@ -220,21 +222,23 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error) {
 	p.consume(EVENT, "expected 'event'")
 
-	name, err := p.parseString()
+	name, nameMeta, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
-	value, err := p.parseString()
+	value, valueMeta, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	event := &ast.Event{
-		Pos:   pos,
-		Date:  date,
-		Name:  name,
-		Value: value,
+		Pos:          pos,
+		Date:         date,
+		Name:         name,
+		NameEscapes:  nameMeta,
+		Value:        value,
+		ValueEscapes: valueMeta,
 	}
 	event.Metadata = p.parseMetadata()
 
@@ -246,16 +250,17 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, error) {
 	p.consume(CUSTOM, "expected 'custom'")
 
-	customType, err := p.parseString()
+	customType, typeMeta, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	custom := &ast.Custom{
-		Pos:    pos,
-		Date:   date,
-		Type:   customType,
-		Values: make([]*ast.CustomValue, 0, 4),
+		Pos:         pos,
+		Date:        date,
+		Type:        customType,
+		TypeEscapes: typeMeta,
+		Values:      make([]*ast.CustomValue, 0, 4),
 	}
 
 	// Parse custom values until we hit metadata or end of line
@@ -273,7 +278,8 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		switch tok.Type {
 		case STRING:
 			p.advance()
-			unquoted, err := p.unquoteString(tok.String(p.source))
+			rawValue := tok.String(p.source)
+			unquoted, _, err := p.unquoteStringWithMetadata(rawValue)
 			if err != nil {
 				return nil, p.errorAtToken(tok, "invalid string literal: %v", err)
 			}

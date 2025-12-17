@@ -104,40 +104,6 @@ type DirectiveWithComments struct {
 	InlineComment  string        // Comment at the end of the directive line (empty if none)
 }
 
-// escapeString escapes special characters in strings for Beancount format.
-// It escapes double quotes and backslashes.
-func escapeString(s string) string {
-	// Quick check if escaping is needed
-	needsEscape := false
-	for _, c := range s {
-		if c == '"' || c == '\\' {
-			needsEscape = true
-			break
-		}
-	}
-
-	if !needsEscape {
-		return s
-	}
-
-	// Use strings.Builder for efficient escaping
-	var buf strings.Builder
-	buf.Grow(len(s) + 10) // Add some extra capacity for escape sequences
-
-	for _, c := range s {
-		switch c {
-		case '"':
-			buf.WriteString(`\"`)
-		case '\\':
-			buf.WriteString(`\\`)
-		default:
-			buf.WriteRune(c)
-		}
-	}
-
-	return buf.String()
-}
-
 // Formatter handles formatting of Beancount files with proper alignment and spacing.
 // It aligns currencies, numbers, and account names according to configurable column widths,
 // and can preserve comments and blank lines from the original source.
@@ -180,9 +146,19 @@ type Formatter struct {
 	// Default: DefaultIndentation
 	Indentation int
 
+	// StringEscapeStyle controls how strings are escaped in the output.
+	// Default: EscapeStyleCStyle
+	StringEscapeStyle StringEscapeStyle
+
 	// sourceLines holds the original source lines for preserving spacing.
 	// This is set during Format() and cleared after.
 	sourceLines []string
+
+	// linesWithMultipleItems tracks which lines have multiple directives/items.
+	// Lines with multiple items should not have their original content preserved
+	// as it may contain content from multiple directives.
+	// This is set during Format() and cleared after.
+	linesWithMultipleItems map[int]bool
 }
 
 // Option is a functional option for configuring a Formatter.
@@ -231,13 +207,21 @@ func WithIndentation(indent int) Option {
 	}
 }
 
+// WithStringEscapeStyle sets the escape style for string formatting.
+func WithStringEscapeStyle(style StringEscapeStyle) Option {
+	return func(f *Formatter) {
+		f.StringEscapeStyle = style
+	}
+}
+
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
-		CurrencyColumn:   0,                  // Auto-calculate by default (0 = auto)
-		Indentation:      DefaultIndentation, // Use default indentation
-		PreserveComments: true,               // Preserve comments by default
-		PreserveBlanks:   true,               // Preserve blank lines by default
+		CurrencyColumn:    0,                  // Auto-calculate by default (0 = auto)
+		Indentation:       DefaultIndentation, // Use default indentation
+		PreserveComments:  true,               // Preserve comments by default
+		PreserveBlanks:    true,               // Preserve blank lines by default
+		StringEscapeStyle: EscapeStyleCStyle,  // Use C-style escapes by default
 	}
 
 	for _, opt := range opts {
@@ -389,10 +373,17 @@ func (f *Formatter) canPreserveDirectiveLine(lineNum int, date *ast.Date) bool {
 }
 
 // tryPreserveOriginalLine attempts to preserve the original source line for a directive.
-// If the original line is available, it writes the trimmed line to buf and returns true.
-// If the original line is not available, it returns false and the caller should reconstruct
-// the directive. This helper reduces duplication across formatting functions.
+// If the original line is available and doesn't contain multiple items, it writes the trimmed line
+// to buf and returns true. If the original line is not available or contains multiple items,
+// it returns false and the caller should reconstruct the directive. This helper reduces
+// duplication across formatting functions.
 func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) bool {
+	// Don't preserve lines that have multiple items (directives/options/etc)
+	// as they may contain partial content from multiple directives
+	if f.linesWithMultipleItems != nil && f.linesWithMultipleItems[lineNum] {
+		return false
+	}
+
 	if originalLine := f.getOriginalLine(lineNum); originalLine != "" {
 		buf.WriteString(strings.TrimSpace(originalLine))
 		buf.WriteByte('\n')
@@ -402,7 +393,7 @@ func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) b
 }
 
 // Comments and blank lines from sourceContent are preserved based on Formatter configuration.
-func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []byte, w io.Writer) error {
+func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []byte, w io.Writer) error {
 	// Check for cancellation before starting
 	select {
 	case <-ctx.Done():
@@ -416,13 +407,16 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	// Determine the currency column based on the configuration
 	widthTimer := collector.Start("formatter.width_calculation")
 	if f.CurrencyColumn == 0 {
-		f.CurrencyColumn = f.determineCurrencyColumn(ast)
+		f.CurrencyColumn = f.determineCurrencyColumn(tree)
 	}
 	widthTimer.End()
 
 	// Store source lines for preserving original spacing
 	f.sourceLines = strings.Split(string(sourceContent), "\n")
-	defer func() { f.sourceLines = nil }() // Clear after formatting
+	defer func() {
+		f.sourceLines = nil                // Clear after formatting
+		f.linesWithMultipleItems = nil     // Clear after formatting
+	}()
 
 	// Extract comments and blank lines if preservation is enabled
 	commentTimer := collector.Start("formatter.comment_extraction")
@@ -447,58 +441,58 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 	var buf strings.Builder
 
 	// Estimate initial capacity to reduce allocations
-	estimatedSize := (len(ast.Options) + len(ast.Includes) + len(ast.Directives)) * 100
+	estimatedSize := (len(tree.Options) + len(tree.Includes) + len(tree.Directives)) * 100
 	buf.Grow(estimatedSize)
 
 	// Collect all items (options, includes, plugins, push/pop directives, directives) with their positions
-	totalItems := len(ast.Options) + len(ast.Includes) + len(ast.Plugins) +
-		len(ast.Pushtags) + len(ast.Poptags) + len(ast.Pushmetas) + len(ast.Popmetas) +
-		len(ast.Directives)
+	totalItems := len(tree.Options) + len(tree.Includes) + len(tree.Plugins) +
+		len(tree.Pushtags) + len(tree.Poptags) + len(tree.Pushmetas) + len(tree.Popmetas) +
+		len(tree.Directives)
 	items := make([]astItem, 0, totalItems)
 
-	for _, opt := range ast.Options {
+	for _, opt := range tree.Options {
 		if opt != nil {
 			items = append(items, astItem{pos: opt.Pos.Line, option: opt})
 		}
 	}
 
-	for _, inc := range ast.Includes {
+	for _, inc := range tree.Includes {
 		if inc != nil {
 			items = append(items, astItem{pos: inc.Pos.Line, include: inc})
 		}
 	}
 
-	for _, plugin := range ast.Plugins {
+	for _, plugin := range tree.Plugins {
 		if plugin != nil {
 			items = append(items, astItem{pos: plugin.Pos.Line, plugin: plugin})
 		}
 	}
 
-	for _, pushtag := range ast.Pushtags {
+	for _, pushtag := range tree.Pushtags {
 		if pushtag != nil {
 			items = append(items, astItem{pos: pushtag.Pos.Line, pushtag: pushtag})
 		}
 	}
 
-	for _, poptag := range ast.Poptags {
+	for _, poptag := range tree.Poptags {
 		if poptag != nil {
 			items = append(items, astItem{pos: poptag.Pos.Line, poptag: poptag})
 		}
 	}
 
-	for _, pushmeta := range ast.Pushmetas {
+	for _, pushmeta := range tree.Pushmetas {
 		if pushmeta != nil {
 			items = append(items, astItem{pos: pushmeta.Pos.Line, pushmeta: pushmeta})
 		}
 	}
 
-	for _, popmeta := range ast.Popmetas {
+	for _, popmeta := range tree.Popmetas {
 		if popmeta != nil {
 			items = append(items, astItem{pos: popmeta.Pos.Line, popmeta: popmeta})
 		}
 	}
 
-	for _, directive := range ast.Directives {
+	for _, directive := range tree.Directives {
 		if directive != nil {
 			pos := getDirectivePos(directive)
 			items = append(items, astItem{pos: pos, directive: directive})
@@ -510,12 +504,37 @@ func (f *Formatter) Format(ctx context.Context, ast *ast.AST, sourceContent []by
 		return cmp.Compare(a.pos, b.pos)
 	})
 
+	// Build a set of lines that have multiple items (can't preserve those lines safely)
+	linesWithMultipleItems := make(map[int]bool)
+	lineCounts := make(map[int]int)
+	for _, item := range items {
+		lineCounts[item.pos]++
+	}
+	for line, count := range lineCounts {
+		if count > 1 {
+			linesWithMultipleItems[line] = true
+		}
+	}
+	f.linesWithMultipleItems = linesWithMultipleItems
+
 	// Track the last line we've processed
 	lastLine := 0
 
 	// Format all items in order
 	formatTimer := collector.Start("formatter.directive_formatting")
 	for _, item := range items {
+		// Skip invalid transactions (with fewer than 2 postings) - they don't output anything,
+		// so we also skip their preceding content to maintain idempotency
+		if item.directive != nil && item.directive.Directive() == "transaction" {
+			// Check if it's a transaction by checking the directive type method
+			switch d := item.directive.(type) {
+			case *ast.Transaction:
+				if len(d.Postings) < 2 {
+					continue
+				}
+			}
+		}
+
 		if lineContentMap != nil {
 			f.outputPrecedingContent(item.pos, lastLine, lineContentMap, &buf)
 			lastLine = item.pos
@@ -733,9 +752,9 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 
 	// Fallback to reconstructing if original line not available
 	buf.WriteString("option \"")
-	buf.WriteString(escapeString(opt.Name))
+	buf.WriteString(f.escapeString(opt.Name))
 	buf.WriteString("\" \"")
-	buf.WriteString(escapeString(opt.Value))
+	buf.WriteString(f.escapeString(opt.Value))
 	buf.WriteString("\"\n")
 }
 
@@ -748,7 +767,7 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 
 	// Fallback to reconstructing if original line not available
 	buf.WriteString("include \"")
-	buf.WriteString(escapeString(inc.Filename))
+	buf.WriteString(f.escapeString(inc.Filename))
 	buf.WriteString("\"\n")
 }
 
@@ -778,9 +797,13 @@ func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(o.Pos.Line, o.Date) {
-		if f.tryPreserveOriginalLine(o.Pos.Line, buf) {
-			f.formatMetadata(o.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(o.Pos.Line)
+		// Only preserve if the original line contains the required account field
+		if strings.Contains(originalLine, string(o.Account)) {
+			if f.tryPreserveOriginalLine(o.Pos.Line, buf) {
+				f.formatMetadata(o.Metadata, buf)
+				return
+			}
 		}
 	}
 
@@ -817,9 +840,13 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
-		if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
-			f.formatMetadata(c.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(c.Pos.Line)
+		// Only preserve if the original line contains the required account field
+		if strings.Contains(originalLine, string(c.Account)) {
+			if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+				f.formatMetadata(c.Metadata, buf)
+				return
+			}
 		}
 	}
 
@@ -853,9 +880,13 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(p.Pos.Line, p.Date) {
-		if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
-			f.formatMetadata(p.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(p.Pos.Line)
+		// Only preserve if the original line contains both required account fields
+		if strings.Contains(originalLine, string(p.Account)) && strings.Contains(originalLine, string(p.AccountPad)) {
+			if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+				f.formatMetadata(p.Metadata, buf)
+				return
+			}
 		}
 	}
 
@@ -875,9 +906,13 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(n.Pos.Line, n.Date) {
-		if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
-			f.formatMetadata(n.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(n.Pos.Line)
+		// Only preserve if the original line contains both the account and description (or at least a quote)
+		if strings.Contains(originalLine, string(n.Account)) && strings.Contains(originalLine, "\"") {
+			if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
+				f.formatMetadata(n.Metadata, buf)
+				return
+			}
 		}
 	}
 
@@ -886,7 +921,7 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 	buf.WriteString(" note ")
 	buf.WriteString(string(n.Account))
 	buf.WriteString(" \"")
-	buf.WriteString(escapeString(n.Description))
+	buf.WriteString(f.escapeString(n.Description))
 	buf.WriteString("\"\n")
 	f.formatMetadata(n.Metadata, buf)
 }
@@ -897,9 +932,13 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(d.Pos.Line, d.Date) {
-		if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
-			f.formatMetadata(d.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(d.Pos.Line)
+		// Only preserve if the original line contains both the account and path (or at least a quote)
+		if strings.Contains(originalLine, string(d.Account)) && strings.Contains(originalLine, "\"") {
+			if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
+				f.formatMetadata(d.Metadata, buf)
+				return
+			}
 		}
 	}
 
@@ -908,7 +947,7 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	buf.WriteString(" document ")
 	buf.WriteString(string(d.Account))
 	buf.WriteString(" \"")
-	buf.WriteString(escapeString(d.PathToDocument))
+	buf.WriteString(f.escapeString(d.PathToDocument))
 	buf.WriteString("\"\n")
 	f.formatMetadata(d.Metadata, buf)
 }
@@ -935,18 +974,23 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(e.Pos.Line, e.Date) {
-		if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
-			f.formatMetadata(e.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(e.Pos.Line)
+		// Event requires two quoted strings. Only preserve if both are on the same line.
+		// We check by looking for at least 4 quotes (open and close for each string)
+		if strings.Count(originalLine, "\"") >= 4 {
+			if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
+				f.formatMetadata(e.Metadata, buf)
+				return
+			}
 		}
 	}
 
 	// Fallback to reconstructing if original line not available
 	buf.WriteString(e.Date.Format("2006-01-02"))
 	buf.WriteString(" event \"")
-	buf.WriteString(escapeString(e.Name))
+	buf.WriteString(f.escapeString(e.Name))
 	buf.WriteString("\" \"")
-	buf.WriteString(escapeString(e.Value))
+	buf.WriteString(f.escapeString(e.Value))
 	buf.WriteString("\"\n")
 	f.formatMetadata(e.Metadata, buf)
 }
@@ -957,16 +1001,20 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 	// For date-prefixed directives, only preserve original line if it contains the date.
 	// This handles multi-line directives where date and directive are on separate lines.
 	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
-		if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
-			f.formatMetadata(c.Metadata, buf)
-			return
+		originalLine := f.getOriginalLine(c.Pos.Line)
+		// Only preserve if the original line contains a quoted string (custom type)
+		if strings.Contains(originalLine, "\"") {
+			if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+				f.formatMetadata(c.Metadata, buf)
+				return
+			}
 		}
 	}
 
 	// Fallback to reconstructing if original line not available
 	buf.WriteString(c.Date.Format("2006-01-02"))
 	buf.WriteString(" custom \"")
-	buf.WriteString(escapeString(c.Type))
+	buf.WriteString(f.escapeString(c.Type))
 	buf.WriteByte('"')
 
 	// Format custom values
@@ -974,7 +1022,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 		buf.WriteByte(' ')
 		if val.String != nil {
 			buf.WriteByte('"')
-			buf.WriteString(escapeString(*val.String))
+			buf.WriteString(f.escapeString(*val.String))
 			buf.WriteByte('"')
 		} else if val.BooleanValue != nil {
 			buf.WriteString(*val.BooleanValue)
@@ -999,11 +1047,11 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 
 	// Fallback to reconstructing if original line not available
 	buf.WriteString("plugin \"")
-	buf.WriteString(escapeString(p.Name))
+	buf.WriteString(f.escapeString(p.Name))
 	buf.WriteByte('"')
 	if p.Config != "" {
 		buf.WriteString(" \"")
-		buf.WriteString(escapeString(p.Config))
+		buf.WriteString(f.escapeString(p.Config))
 		buf.WriteByte('"')
 	}
 	buf.WriteByte('\n')
@@ -1068,6 +1116,13 @@ func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
 // Note: Strings are re-quoted as the parser unquotes them during parsing.
 // The parser's lexer doesn't support escaped quotes within strings.
 func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) {
+	// Transactions must have at least 2 postings per Beancount spec (double-entry bookkeeping)
+	// If a transaction has fewer than 2 postings, it's invalid and we skip formatting it.
+	// This can happen with fuzz-generated invalid input.
+	if len(t.Postings) < 2 {
+		return
+	}
+
 	// First line: date, flag, payee (optional), narration, tags, links
 	buf.WriteString(t.Date.Format("2006-01-02"))
 	buf.WriteByte(' ')
@@ -1076,14 +1131,14 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 	// Add payee if present (always quoted)
 	if t.Payee != "" {
 		buf.WriteString(" \"")
-		buf.WriteString(escapeString(t.Payee))
+		buf.WriteString(f.escapeString(t.Payee))
 		buf.WriteByte('"')
 	}
 
 	// Add narration if present (always quoted)
 	if t.Narration != "" {
 		buf.WriteString(" \"")
-		buf.WriteString(escapeString(t.Narration))
+		buf.WriteString(f.escapeString(t.Narration))
 		buf.WriteByte('"')
 	}
 
@@ -1218,7 +1273,7 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 
 	if cost.Label != "" {
 		buf.WriteString(", \"")
-		buf.WriteString(escapeString(cost.Label))
+		buf.WriteString(f.escapeString(cost.Label))
 		buf.WriteByte('"')
 	}
 
@@ -1241,7 +1296,7 @@ func (f *Formatter) formatMetadataValue(value *ast.MetadataValue, buf *strings.B
 	case value.StringValue != nil:
 		// Strings are quoted and escaped
 		buf.WriteByte('"')
-		buf.WriteString(escapeString(*value.StringValue))
+		buf.WriteString(f.escapeString(*value.StringValue))
 		buf.WriteByte('"')
 	case value.Date != nil:
 		// Dates are unquoted ISO format

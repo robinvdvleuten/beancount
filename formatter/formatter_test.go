@@ -45,7 +45,8 @@ func TestEscapeString(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			result := escapeString(test.input)
+			f := New(WithStringEscapeStyle(EscapeStyleCStyle))
+			result := f.escapeString(test.input)
 			assert.Equal(t, test.expected, result)
 		})
 	}

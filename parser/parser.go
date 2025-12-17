@@ -116,12 +116,12 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 	tok := p.peek()
 	p.consume(OPTION, "expected 'option'")
 
-	name, err := p.parseString()
+	name, _, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
-	value, err := p.parseString()
+	value, _, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +138,7 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 	tok := p.peek()
 	p.consume(INCLUDE, "expected 'include'")
 
-	filename, err := p.parseString()
+	filename, _, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
@@ -154,7 +154,7 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 	tok := p.peek()
 	p.consume(PLUGIN, "expected 'plugin'")
 
-	name, err := p.parseString()
+	name, _, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
@@ -166,7 +166,7 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 
 	// Optional config string
 	if p.check(STRING) {
-		config, err := p.parseString()
+		config, _, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
