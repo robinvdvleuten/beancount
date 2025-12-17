@@ -134,6 +134,10 @@ func (p *Parser) parsePostings(headerLine int) ([]*ast.Posting, error) {
 		// - Account name
 		// If we see anything else, it's not a posting
 		if tok.Type != ASTERISK && tok.Type != EXCLAIM && tok.Type != ACCOUNT {
+			if tok.Type == COMMENT {
+				p.advance() // consume comment and continue
+				continue
+			}
 			break
 		}
 
