@@ -178,11 +178,11 @@ func WithStringEscapeStyle(style StringEscapeStyle) Option {
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
 	f := &Formatter{
-		CurrencyColumn:    0,                  // Auto-calculate by default (0 = auto)
-		Indentation:       DefaultIndentation, // Use default indentation
-		PreserveComments:  true,               // Preserve comments by default
-		PreserveBlanks:    true,               // Preserve blank lines by default
-		StringEscapeStyle: EscapeStyleCStyle,  // Use C-style escapes by default
+		CurrencyColumn:    0,                   // Auto-calculate by default (0 = auto)
+		Indentation:       DefaultIndentation,  // Use default indentation
+		PreserveComments:  true,                // Preserve comments by default
+		PreserveBlanks:    true,                // Preserve blank lines by default
+		StringEscapeStyle: EscapeStyleOriginal, // Preserve original escape style by default
 	}
 
 	for _, opt := range opts {

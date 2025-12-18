@@ -238,6 +238,8 @@ func (p *Parser) parseString() (string, *ast.StringMetadata, error) {
 
 // unquoteStringWithMetadata unquotes a string and tracks escape sequence information.
 // Returns the unquoted string, metadata about escapes, and any error.
+// The metadata stores only formatting-related information (EscapeType, OriginalValue, HasLiteralNewlines).
+// The returned unquoted string is the canonical logical value to use throughout the AST.
 func (p *Parser) unquoteStringWithMetadata(s string) (string, *ast.StringMetadata, error) {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
 		return s, &ast.StringMetadata{
@@ -250,11 +252,15 @@ func (p *Parser) unquoteStringWithMetadata(s string) (string, *ast.StringMetadat
 
 	inner := s[1 : len(s)-1]
 
+	// Check for literal newlines in the original string
+	hasLiteralNewlines := strings.IndexByte(inner, '\n') >= 0
+
 	// Fast path: no escape sequences, return as-is
 	if !containsEscapeSequences(inner) {
 		return inner, &ast.StringMetadata{
-			EscapeType:    ast.EscapeTypeNone,
-			OriginalValue: s,
+			EscapeType:         ast.EscapeTypeNone,
+			OriginalValue:      s,
+			HasLiteralNewlines: hasLiteralNewlines,
 		}, nil
 	}
 
@@ -265,8 +271,9 @@ func (p *Parser) unquoteStringWithMetadata(s string) (string, *ast.StringMetadat
 	}
 
 	return unquoted, &ast.StringMetadata{
-		EscapeType:    ast.EscapeTypeCStyle,
-		OriginalValue: s,
+		EscapeType:         ast.EscapeTypeCStyle,
+		OriginalValue:      s,
+		HasLiteralNewlines: hasLiteralNewlines,
 	}, nil
 }
 

@@ -20,13 +20,18 @@ const (
 )
 
 // StringMetadata tracks how a string was escaped in the original source.
-// This allows the formatter to round-trip formatted output exactly.
+// This allows the formatter to round-trip formatted output with original escape styles.
+// It stores only formatting-related information; the logical unquoted value is kept
+// on the AST node fields (e.g., Option.Value, Include.Filename) as the single source of truth.
 type StringMetadata struct {
 	// EscapeType indicates which escape sequences were present.
 	EscapeType EscapeType
 	// OriginalValue is the raw token text including quotes and escape sequences (e.g., "hello\\nworld").
 	// Used to reconstruct original formatting when requested.
 	OriginalValue string
+	// HasLiteralNewlines is true if the original string contained actual newline characters
+	// (not escaped \n sequences). This allows preserving multi-line strings during formatting.
+	HasLiteralNewlines bool
 }
 
 // QuotedContent returns the string content with quotes (suitable for output).

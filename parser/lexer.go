@@ -257,18 +257,16 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 }
 
 // scanString scans a quoted string: "..."
+// Strings can span multiple lines in Beancount, with escape sequences handled for
+// special characters like \n, \t, \\, and \".
 func (l *Lexer) scanString(start, line, col int) Token {
 	// Opening quote already consumed
 
-	// Scan until closing quote or end of line
+	// Scan until closing quote or end of source
 	for l.pos < len(l.source) {
 		ch := l.source[l.pos]
 		if ch == '"' {
 			l.advance() // consume closing quote
-			break
-		}
-		if ch == '\n' {
-			// String shouldn't span lines in Beancount
 			break
 		}
 		// Handle escape sequences

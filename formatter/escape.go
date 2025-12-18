@@ -37,16 +37,34 @@ func (f *Formatter) escapeString(s string) string {
 }
 
 // formatStringWithMetadata formats a string using StringMetadata when available.
-// If the escape style is EscapeStyleOriginal and metadata is available, uses the
-// original quoted content. Otherwise falls back to escaping the logical value.
+// It preserves the original escape style when EscapeStyleOriginal is set:
+// - If the original had literal newlines, preserves them without escaping
+// - If the original had C-style escapes, uses the original quoted content
+// Otherwise falls back to escaping the logical value per the configured style.
 func (f *Formatter) formatStringWithMetadata(value string, meta *ast.StringMetadata, buf *strings.Builder) {
-	if f.StringEscapeStyle == EscapeStyleOriginal && meta.HasOriginal() {
+	// EscapeStyleOriginal: preserve the original escape style
+	if f.StringEscapeStyle == EscapeStyleOriginal && meta != nil && meta.HasOriginal() {
+		// If the original string had literal newlines, preserve them without escaping
+		if meta.HasLiteralNewlines {
+			buf.WriteString(meta.QuotedContent())
+			return
+		}
+		// Otherwise use the original quoted content (which has C-style escapes)
 		buf.WriteString(meta.QuotedContent())
-	} else {
-		buf.WriteByte('"')
-		buf.WriteString(f.escapeString(value))
-		buf.WriteByte('"')
+		return
 	}
+
+	// EscapeStyleNone: output without escaping (may produce multi-line strings)
+	if f.StringEscapeStyle == EscapeStyleNone && meta != nil && meta.HasLiteralNewlines {
+		// Use the original quoted content to preserve literal newlines
+		buf.WriteString(meta.QuotedContent())
+		return
+	}
+
+	// Fallback: escape the logical value per the configured style
+	buf.WriteByte('"')
+	buf.WriteString(f.escapeString(value))
+	buf.WriteByte('"')
 }
 
 // escapeCStyle escapes special characters using C-style escape sequences.
