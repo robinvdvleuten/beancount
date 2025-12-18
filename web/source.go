@@ -11,7 +11,7 @@ import (
 
 // writeJSONResponse writes a JSON response to the http.ResponseWriter.
 // If encoding fails, it writes an error response.
-func writeJSONResponse(w http.ResponseWriter, data interface{}) {
+func writeJSONResponse(w http.ResponseWriter, data any) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(data); err != nil {
 		http.Error(w, "Failed to encode response", http.StatusInternalServerError)

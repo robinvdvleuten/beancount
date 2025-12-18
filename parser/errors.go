@@ -30,7 +30,7 @@ func (e *ParseError) GetPosition() ast.Position {
 }
 
 func (e *ParseError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "ParseError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -38,7 +38,7 @@ func (e *ParseError) MarshalJSON() ([]byte, error) {
 }
 
 // newErrorfWithSource creates a new parse error with formatted message and source range.
-func newErrorfWithSource(pos ast.Position, sourceRange SourceRange, format string, args ...interface{}) *ParseError {
+func newErrorfWithSource(pos ast.Position, sourceRange SourceRange, format string, args ...any) *ParseError {
 	return &ParseError{
 		Pos:         pos,
 		Message:     fmt.Sprintf(format, args...),

@@ -41,7 +41,7 @@ func printError(w io.Writer, message string) {
 	)
 }
 
-func printInfof(w io.Writer, format string, args ...interface{}) {
+func printInfof(w io.Writer, format string, args ...any) {
 	formatted := fmt.Sprintf(format, args...)
 	_, _ = fmt.Fprintf(w, "%s %s\n",
 		infoStyle.Render(infoSymbol),

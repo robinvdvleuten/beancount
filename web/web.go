@@ -125,7 +125,7 @@ func (s *Server) makeIndexHandler(distFS fs.FS) http.HandlerFunc {
 			return
 		}
 
-		data := map[string]interface{}{
+		data := map[string]any{
 			"Vite":      viteFragment,
 			"Version":   s.Version,
 			"CommitSHA": s.CommitSHA,

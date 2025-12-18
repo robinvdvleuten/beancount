@@ -46,7 +46,7 @@ func (e *AccountNotOpenError) GetDate() *ast.Date {
 }
 
 func (e *AccountNotOpenError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "AccountNotOpenError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -91,7 +91,7 @@ func (e *AccountAlreadyOpenError) GetDate() *ast.Date {
 }
 
 func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":        "AccountAlreadyOpenError",
 		"message":     e.Error(),
 		"position":    e.Pos,
@@ -137,7 +137,7 @@ func (e *AccountAlreadyClosedError) GetDate() *ast.Date {
 }
 
 func (e *AccountAlreadyClosedError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":        "AccountAlreadyClosedError",
 		"message":     e.Error(),
 		"position":    e.Pos,
@@ -182,7 +182,7 @@ func (e *AccountNotClosedError) GetDate() *ast.Date {
 }
 
 func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "AccountNotClosedError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -256,7 +256,7 @@ func (e *TransactionNotBalancedError) GetDate() *ast.Date {
 }
 
 func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":      "TransactionNotBalancedError",
 		"message":   e.Error(),
 		"position":  e.Pos,
@@ -303,7 +303,7 @@ func (e *InvalidAmountError) GetDate() *ast.Date {
 }
 
 func (e *InvalidAmountError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "InvalidAmountError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -353,7 +353,7 @@ func (e *BalanceMismatchError) GetDate() *ast.Date {
 }
 
 func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "BalanceMismatchError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -553,7 +553,7 @@ func (e *InvalidCostError) GetDate() *ast.Date {
 }
 
 func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":          "InvalidCostError",
 		"message":       e.Error(),
 		"position":      e.Pos,
@@ -623,7 +623,7 @@ func (e *TotalCostError) GetDate() *ast.Date {
 }
 
 func (e *TotalCostError) MarshalJSON() ([]byte, error) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":     "TotalCostError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -691,7 +691,7 @@ func (e *InvalidPriceError) GetDate() *ast.Date {
 }
 
 func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":          "InvalidPriceError",
 		"message":       e.Error(),
 		"position":      e.Pos,
@@ -775,7 +775,7 @@ func (e *InvalidMetadataError) GetDate() *ast.Date {
 }
 
 func (e *InvalidMetadataError) MarshalJSON() ([]byte, error) {
-	data := map[string]interface{}{
+	data := map[string]any{
 		"type":     "InvalidMetadataError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -867,7 +867,7 @@ func (e *InsufficientInventoryError) GetDate() *ast.Date {
 }
 
 func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "InsufficientInventoryError",
 		"message":  e.Error(),
 		"position": e.Pos,
@@ -927,7 +927,7 @@ func (e *CurrencyConstraintError) GetDate() *ast.Date {
 }
 
 func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":               "CurrencyConstraintError",
 		"message":            e.Error(),
 		"position":           e.Pos,
@@ -989,7 +989,7 @@ func (e *UnusedPadWarning) GetDate() *ast.Date {
 }
 
 func (e *UnusedPadWarning) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
+	return json.Marshal(map[string]any{
 		"type":     "UnusedPadWarning",
 		"message":  e.Error(),
 		"position": e.Pad.Pos,

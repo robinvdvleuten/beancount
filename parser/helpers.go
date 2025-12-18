@@ -634,13 +634,13 @@ func (p *Parser) internIdent(tok Token) string {
 
 // Error helpers
 
-func (p *Parser) errorAtToken(tok Token, format string, args ...interface{}) error {
+func (p *Parser) errorAtToken(tok Token, format string, args ...any) error {
 	pos := tokenPosition(tok, p.filename)
 	sourceRange := p.calculateSourceRange(pos)
 	return newErrorfWithSource(pos, sourceRange, format, args...)
 }
 
-func (p *Parser) error(format string, args ...interface{}) error {
+func (p *Parser) error(format string, args ...any) error {
 	tok := p.peek()
 	return p.errorAtToken(tok, format, args...)
 }
@@ -687,7 +687,7 @@ func (p *Parser) positionAtEndOfPrevious() ast.Position {
 // This is used when a required token is missing in a sequence, so the error points
 // to where the token was expected (after the last valid token) rather than at the
 // next token's position (which might be on a different line).
-func (p *Parser) errorAtEndOfPrevious(format string, args ...interface{}) error {
+func (p *Parser) errorAtEndOfPrevious(format string, args ...any) error {
 	pos := p.positionAtEndOfPrevious()
 	sourceRange := p.calculateSourceRange(pos)
 	return newErrorfWithSource(pos, sourceRange, format, args...)

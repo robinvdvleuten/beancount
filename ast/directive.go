@@ -257,8 +257,8 @@ type CustomValue struct {
 	Number       *string
 }
 
-// GetValue returns the actual value stored in this CustomValue as an interface{}.
-func (cv *CustomValue) GetValue() interface{} {
+// GetValue returns the actual value stored in this CustomValue.
+func (cv *CustomValue) GetValue() any {
 	switch {
 	case cv.String != nil:
 		return *cv.String

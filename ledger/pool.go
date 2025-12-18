@@ -11,7 +11,7 @@ import (
 var (
 	// balanceMapPool provides pooled maps for BalanceWeights calculations
 	balanceMapPool = sync.Pool{
-		New: func() interface{} {
+		New: func() any {
 			return make(map[string]decimal.Decimal, 4) // typical transaction has 2-4 currencies
 		},
 	}
