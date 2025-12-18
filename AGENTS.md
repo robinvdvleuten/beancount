@@ -77,6 +77,46 @@ beancount format input.beancount | bean-check /dev/stdin
 
 ## Key Patterns
 
+### Lexer Token Consumption
+
+All content-bearing tokens (everything except NEWLINE which represents blank lines) consume their trailing newline if present. This ensures clear semantics:
+
+- **COMMENT tokens** include their trailing newline in token bounds (and are stripped in parseComment)
+- **Content tokens** (DATE, ACCOUNT, NUMBER, IDENT, etc.) consume their trailing newline  
+- **NEWLINE tokens** represent only actual blank lines, never content
+
+This prevents ambiguity: after scanToken() returns, the position is past the newline, and only scanNextToken() can emit NEWLINE tokens for blank lines.
+
+```go
+// Lexer: all content tokens consume trailing newline
+func (l *Lexer) scanToken() Token {
+    tok := l.scanSomeToken()
+    // Consume trailing newline - content tokens own their line
+    if l.pos < len(l.source) && l.source[l.pos] == '\n' {
+        l.advance()
+    }
+    return tok
+}
+
+// Lexer: comments also consume their newline
+func (l *Lexer) scanComment() Token {
+    // ... scan to end of line ...
+    if l.pos < len(l.source) && l.source[l.pos] == '\n' {
+        l.advance()
+    }
+    return Token{COMMENT, start, l.pos, ...}
+}
+
+// Parser: strip newline from comment token to keep Content semantic
+func (p *Parser) parseComment() *ast.Comment {
+    content := tok.String(p.source)
+    content = strings.TrimSuffix(content, "\n")  // Lexer includes it, we don't store it
+    return &ast.Comment{Content: content, ...}
+}
+```
+
+**Why this matters**: Without consistent ownership, NEWLINE tokens become ambiguous (blank line or line terminator?), causing idempotency issues in formatters when handling consecutive blank lines and comments.
+
 ### State as Receiver
 
 For validators/processors, store state on struct and use methods instead of passing state through parameters:

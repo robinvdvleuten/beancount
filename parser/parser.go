@@ -3,6 +3,7 @@ package parser
 import (
 	"context"
 	"io"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -124,6 +125,10 @@ func (p *Parser) Parse() (*ast.AST, error) {
 func (p *Parser) parseComment() *ast.Comment {
 	tok := p.advance()
 	content := tok.String(p.source)
+
+	// Lexer includes the trailing newline in comment tokens.
+	// Strip it to keep Comment.Content semantic (comment text without line terminator).
+	content = strings.TrimSuffix(content, "\n")
 
 	// Determine comment type by checking if next token is a NEWLINE
 	commentType := ast.StandaloneComment

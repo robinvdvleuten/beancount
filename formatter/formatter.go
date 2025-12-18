@@ -571,7 +571,11 @@ func (f *Formatter) formatItem(item astItem, buf *strings.Builder) {
 // formatComment formats a comment from the AST.
 func (f *Formatter) formatComment(c *ast.Comment, buf *strings.Builder) {
 	buf.WriteString(c.Content)
-	buf.WriteByte('\n')
+	// Lexer includes the newline in the comment token, but only if it existed
+	// If we're at EOF, there may not be a newline
+	if !strings.HasSuffix(c.Content, "\n") {
+		buf.WriteByte('\n')
+	}
 }
 
 // FormatTransaction formats a single transaction and writes the output to the writer.

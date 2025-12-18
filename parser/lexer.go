@@ -148,50 +148,56 @@ func (l *Lexer) validateUTF8() error {
 }
 
 // scanNextToken scans the next token including comments and blank lines.
+// A blank line is one that contains only whitespace (spaces, tabs, carriage returns).
+// Each blank line should generate exactly one NEWLINE token.
 func (l *Lexer) scanNextToken() Token {
-	// Track blank lines (lines with only whitespace)
-	blankLineStart := -1
-	blankLine := 0
-	blankCol := 0
+	// Track whether current line has non-whitespace content
+	lineHasContent := false
+	blankLineStartPos := -1
+	blankLineStartLine := 0
+	blankLineStartCol := 0
 
 	for l.pos < len(l.source) {
 		ch := l.source[l.pos]
 
 		if ch == '\n' {
-			// If we've been tracking a blank line, emit it
-			if blankLineStart >= 0 {
-				tok := Token{NEWLINE, blankLineStart, l.pos, blankLine, blankCol}
+			// Newline ends the current line
+			if !lineHasContent {
+				// Current line was blank (only whitespace or empty)
+				// Record this newline as marking a blank line
+				if blankLineStartPos < 0 {
+					blankLineStartPos = l.pos
+					blankLineStartLine = l.line
+					blankLineStartCol = l.column
+				}
+				// Emit a NEWLINE token for this blank line
+				tok := Token{NEWLINE, blankLineStartPos, l.pos, blankLineStartLine, blankLineStartCol}
 				l.pos++
 				l.line++
 				l.column = 1
 				return tok
 			}
-			// Start tracking a potential blank line
-			blankLineStart = l.pos
-			blankLine = l.line
-			blankCol = l.column
+			// Line had content - just advance past the newline
 			l.pos++
 			l.line++
 			l.column = 1
+			lineHasContent = false
 			continue
 		}
 
 		if ch == ' ' || ch == '\t' || ch == '\r' {
-			// Continue tracking blank line or just skip whitespace
+			// Whitespace doesn't count as content
 			l.pos++
 			l.column++
 			continue
 		}
 
-		// Non-whitespace character - we're about to return a token,
-		// so no need to reset blankLineStart
-
-		// Comments
+		// Non-whitespace character - emit token (comment or regular)
 		if ch == ';' {
 			return l.scanComment()
 		}
 
-		// Regular token
+		// Regular token (returns and consumes trailing newline)
 		return l.scanToken()
 	}
 
@@ -200,6 +206,10 @@ func (l *Lexer) scanNextToken() Token {
 }
 
 // scanToken scans the next token from the current position.
+// All content-bearing tokens consume their trailing newline (if present),
+// ensuring NEWLINE tokens represent only blank lines. This maintains
+// consistent semantics: content tokens own their line, COMMENT tokens own
+// their line, and only NEWLINE represents a blank line.
 func (l *Lexer) scanToken() Token {
 	start := l.pos
 	startLine := l.line
@@ -207,76 +217,89 @@ func (l *Lexer) scanToken() Token {
 
 	ch := l.advance()
 
+	var tok Token
+
 	switch {
 	// Check for dates first: YYYY-MM-DD (starts with digit)
 	// This must come before number scanning
 	case isDigit(ch):
 		// Peek ahead to check if this looks like a date
 		if l.isDatePattern(start) {
-			return l.scanDate(start, startLine, startCol)
+			tok = l.scanDate(start, startLine, startCol)
+		} else {
+			tok = l.scanNumber(start, startLine, startCol)
 		}
-		return l.scanNumber(start, startLine, startCol)
 	case ch == '-' && l.peekIsDigit():
-		return l.scanNumber(start, startLine, startCol)
+		tok = l.scanNumber(start, startLine, startCol)
 
 	// Strings: "..."
 	case ch == '"':
-		return l.scanString(start, startLine, startCol)
+		tok = l.scanString(start, startLine, startCol)
 
 	// Tags: #tag
 	case ch == '#':
-		return l.scanTag(start, startLine, startCol)
+		tok = l.scanTag(start, startLine, startCol)
 
 	// Links: ^link
 	case ch == '^':
-		return l.scanLink(start, startLine, startCol)
+		tok = l.scanLink(start, startLine, startCol)
 
 	// Accounts (start with capital) or identifiers
 	// Also check for non-ASCII bytes that might be Unicode uppercase or other letters
 	case isUppercaseLetter(ch) || isUTF8Byte(ch):
-		return l.scanAccountOrIdent(start, startLine, startCol)
+		tok = l.scanAccountOrIdent(start, startLine, startCol)
 
 	// Keywords or identifiers (start with lowercase)
 	case isLowercaseLetter(ch):
-		return l.scanKeywordOrIdent(start, startLine, startCol)
+		tok = l.scanKeywordOrIdent(start, startLine, startCol)
 
 	// Single-character tokens
 	case ch == '*':
-		return Token{ASTERISK, start, l.pos, startLine, startCol}
+		tok = Token{ASTERISK, start, l.pos, startLine, startCol}
 	case ch == '!':
-		return Token{EXCLAIM, start, l.pos, startLine, startCol}
+		tok = Token{EXCLAIM, start, l.pos, startLine, startCol}
 	case ch == ':':
-		return Token{COLON, start, l.pos, startLine, startCol}
+		tok = Token{COLON, start, l.pos, startLine, startCol}
 	case ch == ',':
-		return Token{COMMA, start, l.pos, startLine, startCol}
+		tok = Token{COMMA, start, l.pos, startLine, startCol}
 
 	// { or {{
 	case ch == '{':
 		if l.peek() == '{' {
 			l.advance()
-			return Token{LDBRACE, start, l.pos, startLine, startCol}
+			tok = Token{LDBRACE, start, l.pos, startLine, startCol}
+		} else {
+			tok = Token{LBRACE, start, l.pos, startLine, startCol}
 		}
-		return Token{LBRACE, start, l.pos, startLine, startCol}
 
 	// } or }}
 	case ch == '}':
 		if l.peek() == '}' {
 			l.advance()
-			return Token{RDBRACE, start, l.pos, startLine, startCol}
+			tok = Token{RDBRACE, start, l.pos, startLine, startCol}
+		} else {
+			tok = Token{RBRACE, start, l.pos, startLine, startCol}
 		}
-		return Token{RBRACE, start, l.pos, startLine, startCol}
 
 	// @ or @@
 	case ch == '@':
 		if l.peek() == '@' {
 			l.advance()
-			return Token{ATAT, start, l.pos, startLine, startCol}
+			tok = Token{ATAT, start, l.pos, startLine, startCol}
+		} else {
+			tok = Token{AT, start, l.pos, startLine, startCol}
 		}
-		return Token{AT, start, l.pos, startLine, startCol}
 
 	default:
-		return Token{ILLEGAL, start, l.pos, startLine, startCol}
+		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 	}
+
+	// Consume trailing newline if present, as this content token owns its line
+	if l.pos < len(l.source) && l.source[l.pos] == '\n' {
+		l.advance()
+	}
+
+	return tok
 }
 
 // isDatePattern checks if the position starts a date pattern YYYY-MM-DD
@@ -471,6 +494,11 @@ func (l *Lexer) scanComment() Token {
 
 	// Scan to end of line
 	for l.pos < len(l.source) && l.source[l.pos] != '\n' {
+		l.advance()
+	}
+
+	// Consume the newline if present, as it's part of the comment's line
+	if l.pos < len(l.source) && l.source[l.pos] == '\n' {
 		l.advance()
 	}
 
