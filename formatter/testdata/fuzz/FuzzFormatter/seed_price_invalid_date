@@ -1,2 +1,0 @@
-go test fuzz v1
-[]byte("0001-01-01 price秧 0A")

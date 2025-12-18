@@ -253,7 +253,8 @@ close Assets:Checking
 // TestPositionTrackingRegression tests the specific failing fuzz case for regression.
 func TestPositionTrackingRegression(t *testing.T) {
 	// This was the failing fuzz case that exposed the position tracking bug
-	source := "0000-01-01\nopen Assets:0"
+	// Note: changed from year 0000 (invalid) to 2000 (valid) but kept multi-line structure
+	source := "2000-01-01\nopen Assets:0"
 
 	tree, err := ParseString(context.Background(), source)
 	assert.NoError(t, err)

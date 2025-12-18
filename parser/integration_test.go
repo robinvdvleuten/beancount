@@ -77,7 +77,7 @@ func TestParseWithMetadata(t *testing.T) {
 }
 
 func TestParseTransactionRequiresNarration(t *testing.T) {
-	input := `0001-01-01 !Assets:0 Income:0`
+	input := `2000-01-01 !Assets:0 Income:0`
 
 	_, err := ParseString(context.Background(), input)
 	assert.Error(t, err)

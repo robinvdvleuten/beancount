@@ -670,7 +670,9 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 
 // formatOpen formats an open directive.
 func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(o.Pos.Line, o.Date) {
+	// Only try to preserve the line if it contains the complete directive
+	// (no constraint currencies or booking method on separate lines)
+	if f.canPreserveDirectiveLine(o.Pos.Line, o.Date) && len(o.ConstraintCurrencies) == 0 && o.BookingMethod == "" {
 		originalLine := f.getOriginalLine(o.Pos.Line)
 		if strings.Contains(originalLine, string(o.Account)) {
 			if f.tryPreserveOriginalLine(o.Pos.Line, buf) {

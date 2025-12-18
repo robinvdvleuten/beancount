@@ -383,6 +383,11 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) []*ast.Metadata {
 		// Parse the metadata value based on token type
 		value := p.parseMetadataValue()
 
+		// Skip metadata entries with no value (incomplete metadata like "key:")
+		if value == nil {
+			break
+		}
+
 		// Determine if this metadata is inline (on the same line as owner)
 		inline := ownerLine > 0 && keyTok.Line == ownerLine
 
@@ -484,6 +489,11 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 
 	// Fallback: read rest of line as string
 	value := p.parseRestOfLine()
+	if value == "" {
+		// Empty metadata values are invalid (e.g., "key:" with no value)
+		// Reject this rather than creating a malformed entry
+		return nil
+	}
 	unquoted, err := p.unquoteString(value)
 	if err != nil {
 		// For fallback metadata, if unquoting fails, keep original value
