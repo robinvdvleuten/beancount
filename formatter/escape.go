@@ -38,10 +38,12 @@ func (f *Formatter) escapeString(s string) string {
 
 // formatRawString formats a RawString to the buffer.
 // If the RawString has a raw token and EscapeStyleOriginal is set, uses the raw token directly.
+// However, skips raw tokens that contain literal newlines, as these break idempotency
+// (raw tokens can't be round-tripped through parsing).
 // Otherwise, quotes and escapes the logical value.
 func (f *Formatter) formatRawString(s ast.RawString, buf *strings.Builder) {
-	// EscapeStyleOriginal: use raw token if available
-	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() {
+	// EscapeStyleOriginal: use raw token if available and safe
+	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() && !strings.Contains(s.Raw, "\n") {
 		buf.WriteString(s.Raw)
 		return
 	}
