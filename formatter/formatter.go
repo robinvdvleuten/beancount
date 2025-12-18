@@ -994,6 +994,16 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 		}
 	}
 
+	// Append inline metadata (on same line as posting)
+	for _, m := range p.Metadata {
+		if m.Inline {
+			buf.WriteString("  ")
+			buf.WriteString(m.Key)
+			buf.WriteString(": ")
+			f.formatMetadataValue(m.Value, buf)
+		}
+	}
+
 	// Append inline comment if present
 	if p.GetComment() != nil {
 		buf.WriteByte(' ')
@@ -1002,7 +1012,16 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 
 	buf.WriteByte('\n')
 
-	f.formatMetadata(p.Metadata, buf)
+	// Format block metadata (on separate lines)
+	for _, m := range p.Metadata {
+		if !m.Inline {
+			buf.WriteString(strings.Repeat(" ", f.Indentation))
+			buf.WriteString(m.Key)
+			buf.WriteString(": ")
+			f.formatMetadataValue(m.Value, buf)
+			buf.WriteByte('\n')
+		}
+	}
 }
 
 // isValidNumericValue checks if a value looks like a valid numeric amount.
