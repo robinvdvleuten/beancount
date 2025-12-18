@@ -27,6 +27,7 @@ import (
 	"cmp"
 	"context"
 	"io"
+	"reflect"
 	"slices"
 	"strings"
 
@@ -190,6 +191,36 @@ func New(opts ...Option) *Formatter {
 	}
 
 	return f
+}
+
+// isValidDirective returns true if a directive is valid to format.
+// Checks:
+// - Transactions must have at least 2 postings
+// - Date-based directives must have valid dates (not empty string representation)
+func isValidDirective(d ast.Directive) bool {
+	// Check transaction postings
+	if txn, ok := d.(*ast.Transaction); ok {
+		return len(txn.Postings) >= 2
+	}
+
+	// Check dated directives for valid dates
+	val := reflect.ValueOf(d)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	dateField := val.FieldByName("Date")
+	if !dateField.IsValid() {
+		return true // Not a dated directive, so it's valid
+	}
+
+	// Get the Date pointer and check its string representation
+	datePtr, ok := dateField.Interface().(*ast.Date)
+	if !ok || datePtr == nil {
+		return false
+	}
+
+	return datePtr.String() != ""
 }
 
 // widthMetrics holds calculated width information for formatting.
@@ -410,13 +441,9 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Format all items in order
 	directiveTimer := collector.Start("formatter.directive_formatting")
 	for _, item := range items {
-		// Skip invalid transactions (with fewer than 2 postings)
-		if item.directive != nil {
-			if txn, ok := item.directive.(*ast.Transaction); ok {
-				if len(txn.Postings) < 2 {
-					continue
-				}
-			}
+		// Skip invalid directives (transactions with < 2 postings, or directives with invalid dates)
+		if item.directive != nil && !isValidDirective(item.directive) {
+			continue
 		}
 
 		f.formatItem(item, &buf)
