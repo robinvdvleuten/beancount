@@ -423,9 +423,9 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	}
 	directiveTimer.End()
 
-	// Trim trailing whitespace to avoid orphaned blank lines
-	// This happens when directives are skipped, leaving trailing blank lines
-	output := strings.TrimRight(buf.String(), "\n")
+	// Normalize output: trim leading/trailing blank lines to ensure idempotency
+	// This happens when directives are skipped or blank lines appear at edges
+	output := strings.Trim(buf.String(), "\n")
 	if output != "" {
 		output += "\n"
 	}
