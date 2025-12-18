@@ -346,13 +346,20 @@ func TestCalculateBalance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newValidator(nil, nil) // calculateBalance doesn't need accounts
-			delta, validation, errs := v.calculateBalance(tt.txn)
+			_, validation, errs := v.calculateBalance(tt.txn)
 
 			assert.Equal(t, 0, len(errs))
 
 			assert.Equal(t, tt.wantBalanced, validation.isBalanced)
 
-			assert.Equal(t, tt.wantInferred, len(delta.InferredAmounts))
+			// Count inferred amounts by checking posting.Inferred flag
+			inferredCount := 0
+			for _, posting := range tt.txn.Postings {
+				if posting.Inferred {
+					inferredCount++
+				}
+			}
+			assert.Equal(t, tt.wantInferred, inferredCount)
 
 			// Check residuals if specified
 			for currency, expected := range tt.wantResiduals {
@@ -1631,10 +1638,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-				InferredCosts:   make(map[*ast.Posting]*ast.Amount),
-			},
+			delta:        &TransactionDelta{},
 			wantErrCount: 0,
 		},
 		{
@@ -1654,10 +1658,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-				InferredCosts:   make(map[*ast.Posting]*ast.Amount),
-			},
+			delta:        &TransactionDelta{},
 			wantErrCount: 1,
 			wantErrType:  "*ledger.InsufficientInventoryError",
 		},
@@ -1678,10 +1679,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-				InferredCosts:   make(map[*ast.Posting]*ast.Amount),
-			},
+			delta:        &TransactionDelta{},
 			wantErrCount: 1,
 		},
 		{
@@ -1697,10 +1695,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: map[*ast.Posting]*ast.Amount{},
-				InferredCosts:   make(map[*ast.Posting]*ast.Amount),
-			},
+			delta:        &TransactionDelta{},
 			wantErrCount: 0, // No amount, so no reduction check
 		},
 		{
@@ -1720,10 +1715,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-				InferredCosts:   make(map[*ast.Posting]*ast.Amount),
-			},
+			delta:        &TransactionDelta{},
 			wantErrCount: 0,
 		},
 	}
@@ -1748,15 +1740,6 @@ func TestValidateInventoryOperations(t *testing.T) {
 				},
 			}
 
-			// Link delta to transaction postings
-			if len(tt.delta.InferredAmounts) > 0 {
-				for _, posting := range tt.txn.Postings {
-					if posting.Amount == nil {
-						tt.delta.InferredAmounts[posting] = ast.NewAmount("-10", "HOOL")
-					}
-				}
-			}
-
 			v := newValidator(accounts, nil)
 			errs := v.validateInventoryOperations(tt.txn, tt.delta)
 
@@ -1779,9 +1762,10 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 	tests := []struct {
 		name         string
 		constraints  []string
-		txn          *ast.Transaction
-		delta        *TransactionDelta
-		wantErrCount int
+		txn            *ast.Transaction
+		setupInferred  bool // whether to simulate inferred amounts
+		inferCurrency  string
+		wantErrCount   int
 	}{
 		{
 			name:        "no constraint (passes)",
@@ -1792,9 +1776,6 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 					ast.NewPosting(expenses, ast.WithAmount("-100", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-			},
 			wantErrCount: 0,
 		},
 		{
@@ -1806,9 +1787,6 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 					ast.NewPosting(expenses, ast.WithAmount("-100", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-			},
 			wantErrCount: 0,
 		},
 		{
@@ -1820,37 +1798,32 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 					ast.NewPosting(expenses, ast.WithAmount("-100", "GBP")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-			},
 			wantErrCount: 1,
 		},
 		{
-			name:        "allowed currency inferred amount (passes)",
-			constraints: []string{"USD", "EUR"},
+			name:          "allowed currency inferred amount (passes)",
+			constraints:   []string{"USD", "EUR"},
+			setupInferred: true,
+			inferCurrency: "USD",
 			txn: ast.NewTransaction(date, "Test",
 				ast.WithPostings(
 					ast.NewPosting(checking),
 					ast.NewPosting(expenses, ast.WithAmount("-100", "USD")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: map[*ast.Posting]*ast.Amount{},
-			},
 			wantErrCount: 0,
 		},
 		{
-			name:        "disallowed currency inferred amount (error)",
-			constraints: []string{"USD", "EUR"},
+			name:          "disallowed currency inferred amount (error)",
+			constraints:   []string{"USD", "EUR"},
+			setupInferred: true,
+			inferCurrency: "GBP",
 			txn: ast.NewTransaction(date, "Test",
 				ast.WithPostings(
 					ast.NewPosting(checking),
 					ast.NewPosting(expenses, ast.WithAmount("-100", "GBP")),
 				),
 			),
-			delta: &TransactionDelta{
-				InferredAmounts: map[*ast.Posting]*ast.Amount{},
-			},
 			wantErrCount: 1,
 		},
 	}
@@ -1871,21 +1844,19 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 				},
 			}
 
-			// Setup inferred amounts for testing
-			for _, posting := range tt.txn.Postings {
-				if posting.Amount == nil {
-					// Infer opposite currency from other posting
-					for _, p := range tt.txn.Postings {
-						if p.Amount != nil {
-							tt.delta.InferredAmounts[posting] = ast.NewAmount("100", p.Amount.Currency)
-							break
-						}
+			// Setup inferred amounts directly on postings
+			if tt.setupInferred {
+				for _, posting := range tt.txn.Postings {
+					if posting.Amount == nil {
+						posting.Amount = ast.NewAmount("100", tt.inferCurrency)
+						posting.Inferred = true
 					}
 				}
 			}
 
 			v := newValidator(accounts, nil)
-			errs := v.validateConstraintCurrencies(tt.txn, tt.delta)
+			delta := &TransactionDelta{}
+			errs := v.validateConstraintCurrencies(tt.txn, delta)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 		})

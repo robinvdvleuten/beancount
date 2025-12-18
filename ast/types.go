@@ -74,11 +74,12 @@ type Amount struct {
 //	10 HOOL {}                        ; Any lot (automatic selection)
 //	10 HOOL {*}                       ; Merge/average all lots
 type Cost struct {
-	IsMerge bool
-	IsTotal bool // True if specified with {{}} (total cost syntax)
-	Amount  *Amount
-	Date    *Date
-	Label   string
+	IsMerge  bool
+	IsTotal  bool // True if specified with {{}} (total cost syntax)
+	Inferred bool // True if Amount was inferred by the ledger (not parsed)
+	Amount   *Amount
+	Date     *Date
+	Label    string
 }
 
 // IsEmpty returns true if this is an empty cost specification {}.

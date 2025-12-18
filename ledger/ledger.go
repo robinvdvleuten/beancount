@@ -339,13 +339,8 @@ func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
 // Only called after validation passes. Panics on bugs (invariant violations).
 func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta) {
 	for _, posting := range txn.Postings {
-		// Get amount (explicit or inferred)
-		var amountToUse *ast.Amount
-		if posting.Amount != nil {
-			amountToUse = posting.Amount
-		} else if inferredAmount, ok := delta.InferredAmounts[posting]; ok {
-			amountToUse = inferredAmount
-		} else {
+		// Amount is always set after inference (either explicit or inferred)
+		if posting.Amount == nil {
 			continue
 		}
 
@@ -356,29 +351,22 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 			panic(fmt.Sprintf("BUG: account %s not found after validation", accountName))
 		}
 
-		amount, err := ParseAmount(amountToUse)
+		amount, err := ParseAmount(posting.Amount)
 		if err != nil {
 			// This should never happen after validation - panic to catch bugs
 			panic(fmt.Sprintf("BUG: amount parsing failed after validation: %v", err))
 		}
-		currency := amountToUse.Currency
+		currency := posting.Amount.Currency
 
-		// Determine cost
+		// Determine cost - inferred costs are now stored directly on posting.Cost
 		var costToUse *ast.Cost
-		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
+		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost() && !posting.Cost.Inferred
 		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
-		hasInferredCost := false
+		hasInferredCost := posting.Cost != nil && posting.Cost.Inferred
 		hasMergeCost := posting.Cost != nil && posting.Cost.IsMergeCost()
 
-		if hasExplicitCost {
+		if hasExplicitCost || hasEmptyCost || hasMergeCost || hasInferredCost {
 			costToUse = posting.Cost
-		} else if hasEmptyCost {
-			costToUse = posting.Cost
-		} else if hasMergeCost {
-			costToUse = posting.Cost
-		} else if inferredCost, ok := delta.InferredCosts[posting]; ok {
-			hasInferredCost = true
-			costToUse = &ast.Cost{Amount: inferredCost}
 		}
 
 		// Update inventory

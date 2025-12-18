@@ -39,9 +39,10 @@ type LotOperation struct {
 
 // TransactionDelta describes mutations from a transaction.
 // This is a pure data structure describing WHAT TO CHANGE, not validation results.
+//
+// Note: Inferred amounts and costs are now stored directly on the AST nodes
+// (Posting.Inferred and Cost.Inferred flags) rather than in separate maps.
 type TransactionDelta struct {
-	InferredAmounts map[*ast.Posting]*ast.Amount
-	InferredCosts   map[*ast.Posting]*ast.Amount
 	// NOTE: LotOps is reserved for future enhancement - not populated in this implementation
 	// LotOps []LotOperation  // Pre-calculated, validated inventory operations
 }
@@ -53,9 +54,11 @@ type balanceValidation struct {
 	residuals  map[string]decimal.Decimal
 }
 
-// HasMutations returns true if delta requires state changes
+// HasMutations returns true if delta requires state changes.
+// Since inferred amounts/costs are now stored directly on AST nodes,
+// this always returns false for TransactionDelta.
 func (d *TransactionDelta) HasMutations() bool {
-	return len(d.InferredAmounts) > 0 || len(d.InferredCosts) > 0
+	return false
 }
 
 // OpenDelta describes changes from opening an account.

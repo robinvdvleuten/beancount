@@ -60,6 +60,7 @@ type Posting struct {
 	PriceMarker string // Matches @ price marker (grammar only, always empty)
 	PriceTotal  bool   // Captures presence of second @ for total price
 	Price       *Amount
+	Inferred    bool   // True if Amount was inferred by the ledger (not parsed)
 
 	withComment
 	withMetadata

@@ -139,11 +139,11 @@ import (
 //   v := newValidator(ledger.accounts, ledger.toleranceConfig)
 //   errs, delta := v.validateTransaction(ctx, txn)
 //   if len(errs) == 0 {
-//       // Inspect planned mutations without applying
-//       log.Printf("Would infer %d amounts", len(delta.InferredAmounts))
-//       log.Printf("Would infer %d costs", len(delta.InferredCosts))
-//       for posting, amount := range delta.InferredAmounts {
-//           log.Printf("  %s: %s %s", posting.Account, amount.Value, amount.Currency)
+//       // Inferred amounts/costs are stored directly on postings
+//       for _, posting := range txn.Postings {
+//           if posting.Inferred {
+//               log.Printf("  %s: %s %s (inferred)", posting.Account, posting.Amount.Value, posting.Amount.Currency)
+//           }
 //       }
 //       // Don't call applyTransaction - just inspect!
 //   }
@@ -547,20 +547,20 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	balance := balanceWeights(allWeights)
 	defer putBalanceMap(balance)
 
-	delta := &TransactionDelta{
-		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
-	}
+	delta := &TransactionDelta{}
 
 	// Infer missing amounts if possible
 	// Can only infer if exactly 1 posting without amount AND exactly 1 currency with residual
 	if len(pc.withoutAmounts) == 1 && len(balance) == 1 {
+		posting := pc.withoutAmounts[0]
 		for currency, residual := range balance {
 			needed := residual.Neg()
-			delta.InferredAmounts[pc.withoutAmounts[0]] = &ast.Amount{
+			// Set amount directly on posting and mark as inferred
+			posting.Amount = &ast.Amount{
 				Value:    needed.String(),
 				Currency: currency,
 			}
+			posting.Inferred = true
 			// Update balance to reflect the inferred amount
 			balance[currency] = balance[currency].Add(needed)
 		}
@@ -630,10 +630,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			if len(balance) == 1 {
 				for currency, residual := range balance {
 					costPerUnit := residual.Neg().Div(amount)
-					delta.InferredCosts[posting] = &ast.Amount{
+					// Set cost amount directly on the posting's Cost struct and mark as inferred
+					posting.Cost.Amount = &ast.Amount{
 						Value:    costPerUnit.String(),
 						Currency: currency,
 					}
+					posting.Cost.Inferred = true
 
 					totalCost := amount.Mul(costPerUnit)
 					balance[currency] = balance[currency].Add(totalCost)
@@ -669,10 +671,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	}
 
 	// Include inferred amounts for tolerance calculation
-	for _, inferredAmount := range delta.InferredAmounts {
-		amount, _ := ParseAmount(inferredAmount)
-		currency := inferredAmount.Currency
-		amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
+	for _, posting := range txn.Postings {
+		if posting.Inferred && posting.Amount != nil {
+			amount, _ := ParseAmount(posting.Amount)
+			currency := posting.Amount.Currency
+			amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
+		}
 	}
 
 	// Check each currency balance with inferred tolerance
@@ -729,8 +733,8 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 //	    }
 //	    return
 //	}
-//	// Validation passed - delta contains inferred amounts/costs
-//	fmt.Printf("Inferred %d amounts\n", len(delta.InferredAmounts))
+//	// Validation passed - inferred amounts/costs are stored on postings directly
+//	// Check posting.Inferred and posting.Cost.Inferred for inferred values
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction) ([]error, *TransactionDelta) {
 	var allErrors []error
 
@@ -1267,18 +1271,13 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 	var errs []error
 
 	for _, posting := range txn.Postings {
-		// Get amount (explicit or inferred)
-		var amountToUse *ast.Amount
-		if posting.Amount != nil {
-			amountToUse = posting.Amount
-		} else if inferredAmount, ok := delta.InferredAmounts[posting]; ok {
-			amountToUse = inferredAmount
-		} else {
+		// Skip postings without amounts (should not happen after inference)
+		if posting.Amount == nil {
 			continue
 		}
 
-		amount, _ := ParseAmount(amountToUse)
-		currency := amountToUse.Currency
+		amount, _ := ParseAmount(posting.Amount)
+		currency := posting.Amount.Currency
 
 		// Check if this is a lot reduction
 		if posting.Cost != nil && amount.IsNegative() {
@@ -1339,15 +1338,11 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction, delta *Tr
 			continue
 		}
 
-		// Get currency (explicit or inferred)
-		var currency string
-		if posting.Amount != nil {
-			currency = posting.Amount.Currency
-		} else if inferredAmount, ok := delta.InferredAmounts[posting]; ok {
-			currency = inferredAmount.Currency
-		} else {
+		// Get currency (amount is always set after inference)
+		if posting.Amount == nil {
 			continue
 		}
+		currency := posting.Amount.Currency
 
 		// Check if currency is allowed
 		allowed := false
