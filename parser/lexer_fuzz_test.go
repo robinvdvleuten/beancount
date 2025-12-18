@@ -73,7 +73,12 @@ func FuzzLexer(f *testing.F) {
 		}()
 
 		lexer := NewLexer(data, "fuzz-test")
-		tokens := lexer.ScanAll()
+		tokens, err := lexer.ScanAll()
+
+		// Invalid UTF-8 is an acceptable error - just return without further checks
+		if err != nil {
+			return
+		}
 
 		// Validate invariants
 		if tokens == nil {

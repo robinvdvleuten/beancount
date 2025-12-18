@@ -389,8 +389,12 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	// Lex
 	lexTimer := collector.Start("parser.lexing")
 	lexer := NewLexer(data, filename)
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
 	lexTimer.End()
+
+	if err != nil {
+		return nil, err
+	}
 
 	// Parse
 	parseTimer := collector.Start("parser.parsing")

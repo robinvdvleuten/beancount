@@ -10,7 +10,22 @@ package parser
 
 import (
 	"bytes"
+	"fmt"
+	"unicode/utf8"
 )
+
+// InvalidUTF8Error is returned when the lexer encounters invalid UTF-8 sequences or
+// non-ASCII control characters in the input.
+type InvalidUTF8Error struct {
+	Filename string // Filename for error reporting
+	Line     int    // Line number (1-indexed)
+	Column   int    // Column number (1-indexed)
+	Byte     byte   // The invalid byte
+}
+
+func (e *InvalidUTF8Error) Error() string {
+	return fmt.Sprintf("%s:%d: Invalid token: '\\x%02x'", e.Filename, e.Line, e.Byte)
+}
 
 // Lexer tokenizes Beancount source code.
 type Lexer struct {
@@ -52,7 +67,13 @@ func (l *Lexer) Interner() *Interner {
 
 // ScanAll lexes the entire source file and returns all tokens.
 // This is a single-pass scanner with no backtracking.
-func (l *Lexer) ScanAll() []Token {
+// Returns nil and an InvalidUTF8Error if the source contains invalid UTF-8.
+func (l *Lexer) ScanAll() ([]Token, error) {
+	// Validate UTF-8 upfront
+	if err := l.validateUTF8(); err != nil {
+		return nil, err
+	}
+
 	for l.pos < len(l.source) {
 		tok := l.scanNextToken()
 		// scanNextToken returns EOF when it hits the end, but we may still be in the loop
@@ -72,7 +93,58 @@ func (l *Lexer) ScanAll() []Token {
 		Column: l.column,
 	})
 
-	return l.tokens
+	return l.tokens, nil
+}
+
+// validateUTF8 validates that the source contains valid UTF-8 and no invalid control characters.
+// Invalid control characters are bytes < 0x20 (except tab \t, newline \n, and carriage return \r)
+// and bytes >= 0x80 that are not part of valid multi-byte UTF-8 sequences.
+func (l *Lexer) validateUTF8() error {
+	line := 1
+	col := 1
+
+	for i := 0; i < len(l.source); i++ {
+		ch := l.source[i]
+
+		// Allow: tab (0x09), newline (0x0a), carriage return (0x0d)
+		// Reject: other control characters (0x00-0x08, 0x0b-0x0c, 0x0e-0x1f)
+		if ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r' {
+			return &InvalidUTF8Error{
+				Filename: l.filename,
+				Line:     line,
+				Column:   col,
+				Byte:     ch,
+			}
+		}
+
+		// Check for invalid UTF-8 at 0x80 and above
+		if ch >= 0x80 {
+			r, size := utf8.DecodeRune(l.source[i:])
+			if r == utf8.RuneError {
+				return &InvalidUTF8Error{
+					Filename: l.filename,
+					Line:     line,
+					Column:   col,
+					Byte:     ch,
+				}
+			}
+			// Skip the remaining bytes of this rune
+			for j := 1; j < size; j++ {
+				i++
+				col++
+			}
+		}
+
+		// Update line/column tracking
+		if ch == '\n' {
+			line++
+			col = 1
+		} else {
+			col++
+		}
+	}
+
+	return nil
 }
 
 // scanNextToken scans the next token including comments and blank lines.

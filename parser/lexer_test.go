@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -57,7 +58,8 @@ func TestLexerBasicTokens(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.Equal(t, len(tt.want), len(tokens), "token count mismatch")
 
@@ -84,7 +86,8 @@ func TestLexerNumbers(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 			assert.Equal(t, NUMBER, tokens[0].Type)
@@ -108,7 +111,8 @@ func TestLexerStrings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 			assert.Equal(t, STRING, tokens[0].Type)
@@ -133,7 +137,8 @@ func TestLexerAccounts(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 			assert.Equal(t, ACCOUNT, tokens[0].Type)
@@ -154,7 +159,8 @@ func TestLexerDates(t *testing.T) {
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {
 			lexer := NewLexer([]byte(input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 			assert.Equal(t, DATE, tokens[0].Type)
@@ -190,7 +196,8 @@ func TestLexerKeywords(t *testing.T) {
 	for input, want := range tests {
 		t.Run(input, func(t *testing.T) {
 			lexer := NewLexer([]byte(input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 			assert.Equal(t, want, tokens[0].Type)
@@ -214,7 +221,8 @@ func TestLexerTagsAndLinks(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.input, func(t *testing.T) {
 			lexer := NewLexer([]byte(tt.input), "test")
-			tokens := lexer.ScanAll()
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
 
 			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
 			assert.Equal(t, tt.want, tokens[0].Type)
@@ -229,7 +237,8 @@ func TestLexerComments(t *testing.T) {
 `
 
 	lexer := NewLexer([]byte(input), "test")
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
 
 	// Should have: COMMENT, DATE, OPEN, ACCOUNT, COMMENT, EOF
 	// Comments are now emitted as tokens
@@ -251,7 +260,8 @@ func TestLexerTransaction(t *testing.T) {
 `
 
 	lexer := NewLexer([]byte(input), "test")
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{
 		DATE,     // 2014-05-05
@@ -278,7 +288,8 @@ func TestLexerBalance(t *testing.T) {
 	input := `2014-08-09 balance Assets:Checking 100.00 USD`
 
 	lexer := NewLexer([]byte(input), "test")
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{
 		DATE,    // 2014-08-09
@@ -300,7 +311,8 @@ func TestLexerCost(t *testing.T) {
 	input := `10 HOOL {518.73 USD}`
 
 	lexer := NewLexer([]byte(input), "test")
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{
 		NUMBER, // 10
@@ -326,7 +338,8 @@ Assets:Bank:Checking
 `
 
 	lexer := NewLexer([]byte(input), "test")
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
 
 	// Should have 3 ACCOUNT tokens + EOF (trailing newline at EOF doesn't generate NEWLINE)
 	assert.Equal(t, 4, len(tokens))
@@ -360,7 +373,8 @@ func TestLexerLineAndColumn(t *testing.T) {
 `
 
 	lexer := NewLexer([]byte(input), "test")
-	tokens := lexer.ScanAll()
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
 
 	// First token should be on line 1, column 1
 	assert.Equal(t, 1, tokens[0].Line, "first token line")
@@ -395,6 +409,96 @@ func BenchmarkLexer(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		lexer := NewLexer(input, "bench")
-		_ = lexer.ScanAll()
+		_, _ = lexer.ScanAll()
+	}
+}
+
+func TestInvalidUTF8(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    []byte
+		wantLine int
+		wantByte byte
+	}{
+		{
+			name:     "invalid byte 0xff",
+			input:    []byte("2024-01-01\xff"),
+			wantLine: 1,
+			wantByte: 0xff,
+		},
+		{
+			name:     "null byte",
+			input:    []byte("2024-01-01\x00"),
+			wantLine: 1,
+			wantByte: 0x00,
+		},
+		{
+			name:     "control char 0x01",
+			input:    []byte("2024-01-01\x01"),
+			wantLine: 1,
+			wantByte: 0x01,
+		},
+		{
+			name:     "control char 0x1f",
+			input:    []byte("2024-01-01\x1f"),
+			wantLine: 1,
+			wantByte: 0x1f,
+		},
+		{
+			name:     "invalid UTF-8 after valid chars",
+			input:    []byte("2024-01-01 * \"desc\"\xff"),
+			wantLine: 1,
+			wantByte: 0xff,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer(tt.input, "test.beancount")
+			_, err := lexer.ScanAll()
+			assert.Error(t, err)
+
+			var utf8Err *InvalidUTF8Error
+			assert.True(t, errors.As(err, &utf8Err), "expected InvalidUTF8Error")
+			assert.Equal(t, utf8Err.Line, tt.wantLine)
+			assert.Equal(t, utf8Err.Byte, tt.wantByte)
+		})
+	}
+}
+
+func TestValidUTF8(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{
+			name:  "ASCII only",
+			input: "2024-01-01 * \"test\"",
+		},
+		{
+			name:  "valid UTF-8 with accents",
+			input: "2024-01-01 * \"Café\"",
+		},
+		{
+			name:  "valid UTF-8 with Japanese",
+			input: "2024-01-01 * \"日本語\"",
+		},
+		{
+			name:  "valid UTF-8 with Chinese",
+			input: "2024-01-01 * \"中文\"",
+		},
+		{
+			name:  "valid UTF-8 with emoji",
+			input: "2024-01-01 * \"test 😀\"",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer([]byte(tt.input), "test.beancount")
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
+			assert.True(t, len(tokens) > 0, "expected tokens")
+		})
 	}
 }

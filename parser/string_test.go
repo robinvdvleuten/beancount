@@ -252,7 +252,8 @@ func TestParseString(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// Create a lexer to tokenize the input
 			l := NewLexer([]byte(tt.input), "test.beancount")
-			tokens := l.ScanAll()
+			tokens, err := l.ScanAll()
+			assert.NoError(t, err)
 			interner := l.Interner()
 
 			p := NewParser([]byte(tt.input), tokens, "test.beancount", interner)
