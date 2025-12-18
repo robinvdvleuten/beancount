@@ -1206,6 +1206,10 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 	}
 
 	for _, m := range metadata {
+		// Skip inline metadata - it's already been formatted on the directive line
+		if m.Inline {
+			continue
+		}
 		buf.WriteString(strings.Repeat(" ", f.Indentation))
 		buf.WriteString(m.Key)
 		buf.WriteString(": ")

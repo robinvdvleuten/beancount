@@ -130,10 +130,10 @@ func TestParseMetadataMultipleTypes(t *testing.T) {
 	txn, ok := parsed.Directives[0].(*ast.Transaction)
 	assert.True(t, ok)
 
-	assert.Equal(t, 7, len(txn.Metadata)) // TODO: Debug why only 7 instead of 9
+	assert.Equal(t, 9, len(txn.Metadata))
 
 	// Check each metadata type
-	expectedTypes := []string{"string", "date", "account", "currency", "tag", "link", "amount"}
+	expectedTypes := []string{"string", "date", "account", "currency", "tag", "link", "number", "amount", "boolean"}
 	for i, expected := range expectedTypes {
 		if i < len(txn.Metadata) {
 			assert.Equal(t, expected, txn.Metadata[i].Value.Type(), "metadata at index %d", i)

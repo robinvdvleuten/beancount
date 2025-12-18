@@ -445,8 +445,9 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 
 	case NUMBER:
 		// Could be Number or Amount - need LL(2) lookahead
-		if p.peekAhead(1).Type == IDENT {
-			// Amount (number + currency)
+		nextTok := p.peekAhead(1)
+		if nextTok.Type == IDENT && nextTok.Line == tok.Line {
+			// Amount (number + currency) - both must be on same line
 			amount, err := p.parseAmount()
 			if err == nil {
 				return &ast.MetadataValue{Amount: amount}
