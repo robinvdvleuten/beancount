@@ -629,6 +629,7 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 	buf.WriteString(c.Date.String())
 	buf.WriteString(" commodity ")
 	buf.WriteString(c.Currency)
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(c.Metadata, buf)
 }
@@ -684,6 +685,7 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 	buf.WriteString(c.Date.String())
 	buf.WriteString(" close ")
 	buf.WriteString(string(c.Account))
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(c.Metadata, buf)
 }
@@ -699,6 +701,13 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 		f.formatAmountAligned(b.Amount, currentWidth, buf)
 	}
 
+	// Append inline comment if present
+	if b.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(b.GetComment().Content)
+	}
+
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(b.Metadata, buf)
 }
@@ -720,6 +729,7 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 	buf.WriteString(string(p.Account))
 	buf.WriteByte(' ')
 	buf.WriteString(string(p.AccountPad))
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(p.Metadata, buf)
 }
@@ -741,6 +751,7 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 	buf.WriteString(string(n.Account))
 	buf.WriteByte(' ')
 	f.formatStringWithMetadata(n.Description, n.DescriptionEscapes, buf)
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(n.Metadata, buf)
 }
@@ -762,6 +773,7 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	buf.WriteString(string(d.Account))
 	buf.WriteByte(' ')
 	f.formatStringWithMetadata(d.PathToDocument, d.PathEscapes, buf)
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(d.Metadata, buf)
 }
@@ -777,6 +789,7 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 		f.formatAmountAligned(p.Amount, currentWidth, buf)
 	}
 
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(p.Metadata, buf)
 }
@@ -798,6 +811,7 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 	f.formatStringWithMetadata(e.Name, e.NameEscapes, buf)
 	buf.WriteByte(' ')
 	f.formatStringWithMetadata(e.Value, e.ValueEscapes, buf)
+	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(e.Metadata, buf)
 }
@@ -929,6 +943,12 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 		buf.WriteString(string(tag))
 	}
 
+	// Append inline comment if present
+	if t.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(t.GetComment().Content)
+	}
+
 	buf.WriteByte('\n')
 
 	f.formatMetadata(t.Metadata, buf)
@@ -972,6 +992,12 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 			buf.WriteByte(' ')
 			buf.WriteString(p.Price.Currency)
 		}
+	}
+
+	// Append inline comment if present
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
 	}
 
 	buf.WriteByte('\n')

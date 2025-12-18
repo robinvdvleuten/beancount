@@ -25,6 +25,17 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 		Account: account,
 		Amount:  amount,
 	}
+
+	// Capture inline comment at end of balance line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		bal.InlineComment = p.parseComment()
+	}
+
+	// Capture inline comment at end of bal line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		bal.SetComment(p.parseComment())
+	}
+
 	bal.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return bal, nil
@@ -73,6 +84,11 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 		open.BookingMethod = method
 	}
 
+	// Capture inline comment at end of open line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		open.SetComment(p.parseComment())
+	}
+
 	open.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return open, nil
@@ -92,6 +108,11 @@ func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error
 		Date:    date,
 		Account: account,
 	}
+	// Capture inline comment at end of close line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		close.SetComment(p.parseComment())
+	}
+
 	close.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return close, nil
@@ -111,6 +132,11 @@ func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodit
 		Date:     date,
 		Currency: currency,
 	}
+	// Capture inline comment at end of commodity line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		commodity.SetComment(p.parseComment())
+	}
+
 	commodity.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return commodity, nil
@@ -136,6 +162,11 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 		Account:    account,
 		AccountPad: accountPad,
 	}
+	// Capture inline comment at end of pad line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		pad.SetComment(p.parseComment())
+	}
+
 	pad.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return pad, nil
@@ -162,6 +193,11 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 		Description:        description,
 		DescriptionEscapes: descMeta,
 	}
+	// Capture inline comment at end of note line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		note.SetComment(p.parseComment())
+	}
+
 	note.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return note, nil
@@ -188,6 +224,11 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		PathToDocument: path,
 		PathEscapes:    pathMeta,
 	}
+	// Capture inline comment at end of doc line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		doc.SetComment(p.parseComment())
+	}
+
 	doc.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return doc, nil
@@ -213,6 +254,11 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 		Commodity: commodity,
 		Amount:    amount,
 	}
+	// Capture inline comment at end of price line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		price.SetComment(p.parseComment())
+	}
+
 	price.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return price, nil
@@ -240,6 +286,11 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 		Value:        value,
 		ValueEscapes: valueMeta,
 	}
+	// Capture inline comment at end of event line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		event.SetComment(p.parseComment())
+	}
+
 	event.Metadata = p.parseMetadataFromLine(pos.Line)
 
 	return event, nil
@@ -330,6 +381,11 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 
 		// val is always non-nil here since all cases set it (default continues)
 		custom.Values = append(custom.Values, val)
+	}
+
+	// Capture inline comment at end of custom line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		custom.SetComment(p.parseComment())
 	}
 
 	custom.Metadata = p.parseMetadataFromLine(pos.Line)

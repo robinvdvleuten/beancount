@@ -93,6 +93,11 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
+	// Capture inline comment at end of transaction header line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == txn.Pos.Line {
+		txn.SetComment(p.parseComment())
+	}
+
 	// Parse transaction-level metadata (only if on new line and properly indented)
 	if !p.isAtEnd() && p.peek().Line > txn.Pos.Line && p.peek().Column > 1 {
 		txn.Metadata = p.parseMetadataFromLine(txn.Pos.Line)
@@ -217,6 +222,11 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 			return nil, err
 		}
 		posting.Price = amount
+	}
+
+	// Capture inline comment at end of posting line
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == postingLine {
+		posting.SetComment(p.parseComment())
 	}
 
 	// Parse posting-level metadata

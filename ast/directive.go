@@ -15,6 +15,7 @@ type Commodity struct {
 	Date     *Date
 	Currency string
 
+	withComment
 	withMetadata
 }
 
@@ -40,6 +41,7 @@ type Open struct {
 	ConstraintCurrencies []string
 	BookingMethod        string
 
+	withComment
 	withMetadata
 }
 
@@ -62,6 +64,7 @@ type Close struct {
 	Date    *Date
 	Account Account
 
+	withComment
 	withMetadata
 }
 
@@ -86,6 +89,7 @@ type Balance struct {
 	Account Account
 	Amount  *Amount
 
+	withComment
 	withMetadata
 }
 
@@ -110,6 +114,7 @@ type Pad struct {
 	Account    Account
 	AccountPad Account
 
+	withComment
 	withMetadata
 }
 
@@ -134,6 +139,7 @@ type Note struct {
 	Description        string
 	DescriptionEscapes *StringMetadata
 
+	withComment
 	withMetadata
 }
 
@@ -159,6 +165,7 @@ type Document struct {
 	PathToDocument string
 	PathEscapes    *StringMetadata
 
+	withComment
 	withMetadata
 }
 
@@ -183,6 +190,7 @@ type Price struct {
 	Commodity string
 	Amount    *Amount
 
+	withComment
 	withMetadata
 }
 
@@ -209,6 +217,7 @@ type Event struct {
 	Value        string
 	ValueEscapes *StringMetadata
 
+	withComment
 	withMetadata
 }
 
@@ -234,6 +243,7 @@ type Custom struct {
 	TypeEscapes *StringMetadata
 	Values      []*CustomValue
 
+	withComment
 	withMetadata
 }
 

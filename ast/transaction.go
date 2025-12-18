@@ -27,6 +27,7 @@ type Transaction struct {
 	Links            []Link
 	Tags             []Tag
 
+	withComment
 	withMetadata
 
 	Postings []*Posting
@@ -60,5 +61,6 @@ type Posting struct {
 	PriceTotal  bool   // Captures presence of second @ for total price
 	Price       *Amount
 
+	withComment
 	withMetadata
 }
