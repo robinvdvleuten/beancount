@@ -2,6 +2,42 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0](https://github.com/robinvdvleuten/beancount/compare/v0.5.0...v0.6.0) (2025-12-18)
+
+
+### Features
+
+* **ast:** attach string escape metadata and inline flag to AST nodes ([8bdd108](https://github.com/robinvdvleuten/beancount/commit/8bdd108b91983ddca01900b074fb225403baddec))
+* **ast:** store inferred amounts directly on AST nodes ([7211e03](https://github.com/robinvdvleuten/beancount/commit/7211e03e516685c51c3bc9a57b910b627281d958))
+* **lexer:** implement consistent token consumption ([bececd1](https://github.com/robinvdvleuten/beancount/commit/bececd15a6690de40760170da758c4dcbc62aacd))
+* make codemirror aware of beancount syntax ([#79](https://github.com/robinvdvleuten/beancount/issues/79)) ([d7298fc](https://github.com/robinvdvleuten/beancount/commit/d7298fc69d830e81bab92df2b1e3e6a7162b2cbb))
+* make codemirror popover colors consistent with overall theme ([6adaeb3](https://github.com/robinvdvleuten/beancount/commit/6adaeb36886e7eb4513f178074c0b19baf930174))
+* **parser:** add UTF-8 validation to lexer ([9af4688](https://github.com/robinvdvleuten/beancount/commit/9af46889e218735501e0c71b14c909447208cb87))
+* **parser:** add validation to reject invalid beancount syntax at parse time ([bf06702](https://github.com/robinvdvleuten/beancount/commit/bf0670240f8ff66c362e48c176ea958e2043f386))
+* **parser:** improve string literal parsing with escapes and validation ([d873409](https://github.com/robinvdvleuten/beancount/commit/d873409f87b37e919497c74e2919ef56e38580af))
+* **parser:** preserve original string escape information for round-trip formatting ([6bcfbc7](https://github.com/robinvdvleuten/beancount/commit/6bcfbc7b35bc9c7144ea6d7b915cf94dc4cfe079))
+* **parser:** track escape sequences for round-trip formatting ([98b6c8b](https://github.com/robinvdvleuten/beancount/commit/98b6c8b8386a5b2ac884d602ff4e3eef6dbb1ef5))
+* **web:** add account autocomplete with match-sorter ([90bdb2c](https://github.com/robinvdvleuten/beancount/commit/90bdb2cbd1df48af44ca4a52d432012bdb69f95e))
+* **web:** add context-aware account autocomplete ([16e567e](https://github.com/robinvdvleuten/beancount/commit/16e567ea9cb32d6d922a31451a6f7566849acaf0))
+* **web:** add GET /api/accounts endpoint ([0a6ce4f](https://github.com/robinvdvleuten/beancount/commit/0a6ce4fb723ab60392bdb6778d395e7717bb8d4f))
+
+
+### Bug Fixes
+
+* **formatter:** ensure idempotency by trimming leading and trailing blank lines ([5c33705](https://github.com/robinvdvleuten/beancount/commit/5c337056f889046e6fd27500b5b65841c009dcec))
+* **formatter:** ensure idempotency by trimming trailing blank lines ([4d57fa1](https://github.com/robinvdvleuten/beancount/commit/4d57fa19061ffd06c1397a953419735ffc02143a))
+* **formatter:** gracefully handle malformed input ([227895e](https://github.com/robinvdvleuten/beancount/commit/227895ee2cb30a38e24da561debef0250fd7d66c))
+* **formatter:** resolve idempotency failure in Note/Document with inline metadata ([6c06ab8](https://github.com/robinvdvleuten/beancount/commit/6c06ab8d6a79e47fa73f2fbe026a56f93ebb2db0))
+* **formatter:** respect Metadata.Inline flag for posting metadata ([c3c9abb](https://github.com/robinvdvleuten/beancount/commit/c3c9abbcad0317f9b1b10f0fb30045c1cd206579))
+* **formatter:** skip directives with invalid dates to prevent malformed output ([c1008fe](https://github.com/robinvdvleuten/beancount/commit/c1008fe7568fe39fd257f8cbfcb0eccf69f991cd))
+* **formatter:** skip raw tokens with newlines to preserve idempotency ([f552d07](https://github.com/robinvdvleuten/beancount/commit/f552d070d191f667d1fa8396b3ab09966d53f28a))
+* **ledger:** reject invalid years ([48e35d2](https://github.com/robinvdvleuten/beancount/commit/48e35d21f4b898a2525375460ecd26c56c320134))
+* metadata parsing and formatting bugs affecting idempotency ([b77a8e9](https://github.com/robinvdvleuten/beancount/commit/b77a8e940a9a9f1eddecccecc9e15f23381cca69))
+* **parser:** correct position tracking for multi-line directives ([6e575be](https://github.com/robinvdvleuten/beancount/commit/6e575be6c562e0b1990e8af764dd8c1d6d9aa9df))
+* **parser:** handle escaped backslash with escape chars correctly ([f59e7e5](https://github.com/robinvdvleuten/beancount/commit/f59e7e5e0affe867e36ef426a0b87cdf8f641d5d))
+* **parser:** handle inline comments in transaction postings ([718444c](https://github.com/robinvdvleuten/beancount/commit/718444cff2bf4bddc71931117bace4a4513012a2))
+* **parser:** require narration in transaction headers ([f59b5cf](https://github.com/robinvdvleuten/beancount/commit/f59b5cf923953770ebf1eded9ac4902c7717a20a))
+
 ## [0.5.0](https://github.com/robinvdvleuten/beancount/compare/v0.4.0...v0.5.0) (2025-11-03)
 
 
