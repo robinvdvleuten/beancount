@@ -220,7 +220,7 @@ fmtr.Format(context.Background(), ast, sourceContent, os.Stdout)
 
 ### Complete Example
 
-See the [CSV Importer example](examples/csv_importer/) for a complete working example that demonstrates:
+See the [CSV Importer example](_examples/csv_importer/) for a complete working example that demonstrates:
 - Reading CSV files with Go's `encoding/csv`
 - Building transactions programmatically with the builder API
 - Automatic expense categorization
@@ -230,7 +230,7 @@ See the [CSV Importer example](examples/csv_importer/) for a complete working ex
 Run the example:
 
 ```sh
-cd examples/csv_importer
+cd _examples/csv_importer
 go run main.go transactions.csv
 ```
 
