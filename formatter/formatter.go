@@ -423,8 +423,15 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	}
 	directiveTimer.End()
 
+	// Trim trailing whitespace to avoid orphaned blank lines
+	// This happens when directives are skipped, leaving trailing blank lines
+	output := strings.TrimRight(buf.String(), "\n")
+	if output != "" {
+		output += "\n"
+	}
+
 	// Write all output at once
-	_, err := w.Write([]byte(buf.String()))
+	_, err := w.Write([]byte(output))
 	return err
 }
 
