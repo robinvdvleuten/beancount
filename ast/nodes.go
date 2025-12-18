@@ -10,11 +10,9 @@ package ast
 //	option "operating_currency" "USD"
 //	option "booking_method" "STRICT"
 type Option struct {
-	Pos          Position
-	Name         string
-	NameEscapes  *StringMetadata
-	Value        string
-	ValueEscapes *StringMetadata
+	Pos   Position
+	Name  RawString
+	Value RawString
 }
 
 func (o *Option) Position() Position { return o.Pos }
@@ -30,9 +28,8 @@ func (o *Option) Position() Position { return o.Pos }
 //	include "prices/2014.beancount"
 //	include "transactions/2014-expenses.beancount"
 type Include struct {
-	Pos             Position
-	Filename        string
-	FilenameEscapes *StringMetadata
+	Pos      Position
+	Filename RawString
 }
 
 func (i *Include) Position() Position { return i.Pos }
@@ -47,11 +44,9 @@ func (i *Include) Position() Position { return i.Pos }
 //	plugin "beancount.plugins.auto_accounts"
 //	plugin "beancount.plugins.check_commodity" "USD,EUR,GBP"
 type Plugin struct {
-	Pos           Position
-	Name          string
-	NameEscapes   *StringMetadata
-	Config        string
-	ConfigEscapes *StringMetadata
+	Pos    Position
+	Name   RawString
+	Config RawString
 }
 
 func (p *Plugin) Position() Position { return p.Pos }

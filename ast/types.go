@@ -7,45 +7,49 @@ import (
 	"time"
 )
 
-// EscapeType indicates how escape sequences were handled in the original string.
-type EscapeType int
-
-const (
-	// EscapeTypeUnknown means we don't know the original escape style (parsed before tracking was added).
-	EscapeTypeUnknown EscapeType = iota
-	// EscapeTypeNone means the string had no escape sequences (or we want to output without escapes).
-	EscapeTypeNone
-	// EscapeTypeCStyle means the string used C-style escapes (\n, \t, \", \\, \r).
-	EscapeTypeCStyle
-)
-
-// StringMetadata tracks how a string was escaped in the original source.
-// This allows the formatter to round-trip formatted output with original escape styles.
-// It stores only formatting-related information; the logical unquoted value is kept
-// on the AST node fields (e.g., Option.Value, Include.Filename) as the single source of truth.
-type StringMetadata struct {
-	// EscapeType indicates which escape sequences were present.
-	EscapeType EscapeType
-	// OriginalValue is the raw token text including quotes and escape sequences (e.g., "hello\\nworld").
-	// Used to reconstruct original formatting when requested.
-	OriginalValue string
-	// HasLiteralNewlines is true if the original string contained actual newline characters
-	// (not escaped \n sequences). This allows preserving multi-line strings during formatting.
-	HasLiteralNewlines bool
+// RawString stores both the raw token (including quotes and escapes) and the unquoted
+// logical value. This eliminates the need for the formatter to re-escape strings, enabling
+// perfect round-tripping of string formatting while providing the logical value for processing.
+//
+// The parser populates both fields: Raw contains the original token text (e.g., "hello\\nworld")
+// and Value contains the unquoted string (e.g., "hello\nworld" with an actual newline).
+//
+// For programmatic construction, only Value needs to be set; the formatter will quote and
+// escape it automatically when Raw is empty.
+type RawString struct {
+	// Raw is the original token text including quotes and escape sequences.
+	// Used for perfect round-trip formatting. Empty for programmatically created strings.
+	Raw string
+	// Value is the unquoted logical string value (escapes processed).
+	// This is the semantic value used by the ledger and validation.
+	Value string
 }
 
-// QuotedContent returns the string content with quotes (suitable for output).
-// If metadata is nil or OriginalValue is empty, returns the value with quotes applied.
-func (m *StringMetadata) QuotedContent() string {
-	if m != nil && m.OriginalValue != "" {
-		return m.OriginalValue
-	}
-	return ""
+// String returns the unquoted value for use in string contexts.
+func (s RawString) String() string {
+	return s.Value
 }
 
-// HasOriginal returns true if the original quoted value is available.
-func (m *StringMetadata) HasOriginal() bool {
-	return m != nil && m.OriginalValue != ""
+// HasRaw returns true if the raw token is available for formatting.
+func (s RawString) HasRaw() bool {
+	return s.Raw != ""
+}
+
+// IsEmpty returns true if the string has no value.
+func (s RawString) IsEmpty() bool {
+	return s.Value == ""
+}
+
+// NewRawString creates a RawString from a logical value without raw token.
+// Use this for programmatic construction; the formatter will quote it.
+func NewRawString(value string) RawString {
+	return RawString{Value: value}
+}
+
+// NewRawStringWithRaw creates a RawString with both raw token and unquoted value.
+// Use this in the parser when both are available.
+func NewRawStringWithRaw(raw, value string) RawString {
+	return RawString{Raw: raw, Value: value}
 }
 
 // Amount represents a numerical value with its associated currency or commodity symbol.
@@ -283,16 +287,15 @@ func (t *Tag) Capture(values []string) error {
 //	budget: 1000.00 USD               ; Amount (number + currency)
 //	active: TRUE                      ; Boolean (uppercase TRUE/FALSE)
 type MetadataValue struct {
-	StringValue   *string
-	StringEscapes *StringMetadata // Escape metadata for StringValue
-	Date          *Date
-	Account       *Account
-	Currency      *string
-	Tag           *Tag
-	Link          *Link
-	Number        *string // Stored as string to preserve precision
-	Amount        *Amount
-	Boolean       *bool
+	StringValue *RawString
+	Date        *Date
+	Account     *Account
+	Currency    *string
+	Tag         *Tag
+	Link        *Link
+	Number      *string // Stored as string to preserve precision
+	Amount      *Amount
+	Boolean     *bool
 }
 
 // Type returns a string representation of the metadata value's type.
@@ -331,7 +334,7 @@ func (m *MetadataValue) String() string {
 	}
 	switch {
 	case m.StringValue != nil:
-		return *m.StringValue
+		return m.StringValue.Value
 	case m.Date != nil:
 		return m.Date.String()
 	case m.Account != nil:

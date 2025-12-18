@@ -219,62 +219,40 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	return cost, nil
 }
 
-// parseString parses a STRING token and unquotes it.
-// Returns the unquoted string and its metadata for round-trip formatting.
-func (p *Parser) parseString() (string, *ast.StringMetadata, error) {
+// parseString parses a STRING token and returns a RawString with both
+// the raw token (for round-trip formatting) and the unquoted value.
+func (p *Parser) parseString() (ast.RawString, error) {
 	tok := p.expect(STRING, "expected string")
 	if tok.Type == ILLEGAL {
-		return "", nil, p.errorAtEndOfPrevious("expected string")
+		return ast.RawString{}, p.errorAtEndOfPrevious("expected string")
 	}
 
 	rawValue := tok.String(p.source)
-	unquoted, metadata, err := p.unquoteStringWithMetadata(rawValue)
+	unquoted, err := p.unquoteString(rawValue)
 	if err != nil {
-		return "", nil, p.errorAtToken(tok, "invalid string literal: %v", err)
+		return ast.RawString{}, p.errorAtToken(tok, "invalid string literal: %v", err)
 	}
 
-	return p.internString(unquoted), metadata, nil
+	return ast.NewRawStringWithRaw(rawValue, p.internString(unquoted)), nil
 }
 
-// unquoteStringWithMetadata unquotes a string and tracks escape sequence information.
-// Returns the unquoted string, metadata about escapes, and any error.
-// The metadata stores only formatting-related information (EscapeType, OriginalValue, HasLiteralNewlines).
-// The returned unquoted string is the canonical logical value to use throughout the AST.
-func (p *Parser) unquoteStringWithMetadata(s string) (string, *ast.StringMetadata, error) {
+// unquoteString unquotes a string by removing surrounding quotes and processing escapes.
+func (p *Parser) unquoteString(s string) (string, error) {
 	if len(s) < 2 || s[0] != '"' || s[len(s)-1] != '"' {
-		return s, &ast.StringMetadata{
-				EscapeType:    ast.EscapeTypeUnknown,
-				OriginalValue: s,
-			}, &StringLiteralError{
-				Message: "string must be enclosed in double quotes",
-			}
+		return s, &StringLiteralError{
+			Message: "string must be enclosed in double quotes",
+		}
 	}
 
 	inner := s[1 : len(s)-1]
 
-	// Check for literal newlines in the original string
-	hasLiteralNewlines := strings.IndexByte(inner, '\n') >= 0
-
 	// Fast path: no escape sequences, return as-is
 	if !containsEscapeSequences(inner) {
-		return inner, &ast.StringMetadata{
-			EscapeType:         ast.EscapeTypeNone,
-			OriginalValue:      s,
-			HasLiteralNewlines: hasLiteralNewlines,
-		}, nil
+		return inner, nil
 	}
 
 	// Slow path: process escape sequences
-	unquoted, err := p.processEscapeSequences(inner)
-	if err != nil {
-		return "", nil, err
-	}
-
-	return unquoted, &ast.StringMetadata{
-		EscapeType:         ast.EscapeTypeCStyle,
-		OriginalValue:      s,
-		HasLiteralNewlines: hasLiteralNewlines,
-	}, nil
+	return p.processEscapeSequences(inner)
 }
 
 // containsEscapeSequences checks if a string contains any backslash that needs processing.
@@ -338,13 +316,6 @@ func (p *Parser) processEscapeSequences(inner string) (string, error) {
 	}
 
 	return buf.String(), nil
-}
-
-// unquoteString is the old public API kept for backwards compatibility in tests.
-// It unquotes a string without tracking metadata.
-func (p *Parser) unquoteString(s string) (string, error) {
-	unquoted, _, err := p.unquoteStringWithMetadata(s)
-	return unquoted, err
 }
 
 // parseIdent parses an IDENT token.
@@ -434,9 +405,9 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 	switch tok.Type {
 	case STRING:
 		// String (quoted) - most specific
-		str, strMeta, err := p.parseString()
+		str, err := p.parseString()
 		if err == nil {
-			return &ast.MetadataValue{StringValue: &str, StringEscapes: strMeta}
+			return &ast.MetadataValue{StringValue: &str}
 		}
 
 	case DATE:
@@ -517,9 +488,11 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 	if err != nil {
 		// For fallback metadata, if unquoting fails, keep original value
 		// This maintains compatibility with existing behavior
-		return &ast.MetadataValue{StringValue: &value}
+		rawStr := ast.NewRawString(value)
+		return &ast.MetadataValue{StringValue: &rawStr}
 	}
-	return &ast.MetadataValue{StringValue: &unquoted}
+	rawStr := ast.NewRawString(unquoted)
+	return &ast.MetadataValue{StringValue: &rawStr}
 }
 
 // isKeyword returns true if the token type is a keyword.

@@ -600,9 +600,9 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 	}
 
 	buf.WriteString("option ")
-	f.formatStringWithMetadata(opt.Name, opt.NameEscapes, buf)
+	f.formatRawString(opt.Name, buf)
 	buf.WriteByte(' ')
-	f.formatStringWithMetadata(opt.Value, opt.ValueEscapes, buf)
+	f.formatRawString(opt.Value, buf)
 	buf.WriteByte('\n')
 }
 
@@ -613,7 +613,7 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 	}
 
 	buf.WriteString("include ")
-	f.formatStringWithMetadata(inc.Filename, inc.FilenameEscapes, buf)
+	f.formatRawString(inc.Filename, buf)
 	buf.WriteByte('\n')
 }
 
@@ -750,7 +750,7 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 	buf.WriteString(" note ")
 	buf.WriteString(string(n.Account))
 	buf.WriteByte(' ')
-	f.formatStringWithMetadata(n.Description, n.DescriptionEscapes, buf)
+	f.formatRawString(n.Description, buf)
 	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(n.Metadata, buf)
@@ -772,7 +772,7 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	buf.WriteString(" document ")
 	buf.WriteString(string(d.Account))
 	buf.WriteByte(' ')
-	f.formatStringWithMetadata(d.PathToDocument, d.PathEscapes, buf)
+	f.formatRawString(d.PathToDocument, buf)
 	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(d.Metadata, buf)
@@ -808,9 +808,9 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 
 	buf.WriteString(e.Date.String())
 	buf.WriteString(" event ")
-	f.formatStringWithMetadata(e.Name, e.NameEscapes, buf)
+	f.formatRawString(e.Name, buf)
 	buf.WriteByte(' ')
-	f.formatStringWithMetadata(e.Value, e.ValueEscapes, buf)
+	f.formatRawString(e.Value, buf)
 	// Append inline comment if present
 	buf.WriteByte('\n')
 	f.formatMetadata(e.Metadata, buf)
@@ -830,7 +830,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 
 	buf.WriteString(c.Date.String())
 	buf.WriteString(" custom ")
-	f.formatStringWithMetadata(c.Type, c.TypeEscapes, buf)
+	f.formatRawString(c.Type, buf)
 
 	for _, val := range c.Values {
 		buf.WriteByte(' ')
@@ -859,10 +859,10 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 	}
 
 	buf.WriteString("plugin ")
-	f.formatStringWithMetadata(p.Name, p.NameEscapes, buf)
-	if p.Config != "" {
+	f.formatRawString(p.Name, buf)
+	if !p.Config.IsEmpty() {
 		buf.WriteByte(' ')
-		f.formatStringWithMetadata(p.Config, p.ConfigEscapes, buf)
+		f.formatRawString(p.Config, buf)
 	}
 	buf.WriteByte('\n')
 }
@@ -923,14 +923,14 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 	buf.WriteByte(' ')
 	buf.WriteString(t.Flag)
 
-	if t.Payee != "" {
+	if !t.Payee.IsEmpty() {
 		buf.WriteByte(' ')
-		f.formatStringWithMetadata(t.Payee, t.PayeeEscapes, buf)
+		f.formatRawString(t.Payee, buf)
 	}
 
-	if t.Narration != "" {
+	if !t.Narration.IsEmpty() {
 		buf.WriteByte(' ')
-		f.formatStringWithMetadata(t.Narration, t.NarrationEscapes, buf)
+		f.formatRawString(t.Narration, buf)
 	}
 
 	for _, link := range t.Links {
@@ -1135,7 +1135,7 @@ func (f *Formatter) formatMetadataValue(value *ast.MetadataValue, buf *strings.B
 
 	switch {
 	case value.StringValue != nil:
-		f.formatStringWithMetadata(*value.StringValue, value.StringEscapes, buf)
+		f.formatRawString(*value.StringValue, buf)
 	case value.Date != nil:
 		buf.WriteString(value.Date.String())
 	case value.Account != nil:

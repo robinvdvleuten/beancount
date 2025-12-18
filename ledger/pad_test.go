@@ -31,8 +31,8 @@ func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 
 	txn := paddingTxns[0]
 	assert.Equal(t, "P", txn.Flag, "Expected flag P for padding transaction")
-	assert.Contains(t, txn.Narration, "Padding inserted", "Expected narration to contain 'Padding inserted'")
-	assert.Contains(t, txn.Narration, "1000.00 USD", "Expected narration to contain amount with decimals")
+	assert.Contains(t, txn.Narration.Value, "Padding inserted", "Expected narration to contain 'Padding inserted'")
+	assert.Contains(t, txn.Narration.Value, "1000.00 USD", "Expected narration to contain amount with decimals")
 	assert.Equal(t, 2, len(txn.Postings), "Expected 2 postings")
 
 	// Verify first posting
@@ -77,10 +77,10 @@ func TestPadWithMultipleCurrencies(t *testing.T) {
 	foundEUR := false
 	foundGBP := false
 	for _, txn := range paddingTxns {
-		if containsString(txn.Narration, "500.00 EUR") {
+		if containsString(txn.Narration.Value, "500.00 EUR") {
 			foundEUR = true
 		}
-		if containsString(txn.Narration, "750.00 GBP") {
+		if containsString(txn.Narration.Value, "750.00 GBP") {
 			foundGBP = true
 		}
 	}
@@ -118,7 +118,7 @@ func TestPadWithExistingBalance(t *testing.T) {
 
 	// Should pad 450.00 USD (550.00 - 100.00)
 	txn := paddingTxns[0]
-	assert.Contains(t, txn.Narration, "450.00 USD", "Expected padding of 450.00 USD with decimals")
+	assert.Contains(t, txn.Narration.Value, "450.00 USD", "Expected padding of 450.00 USD with decimals")
 	assert.Equal(t, "450.00", txn.Postings[0].Amount.Value)
 
 	// Final balance should be 550

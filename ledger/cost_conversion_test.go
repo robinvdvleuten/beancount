@@ -149,7 +149,7 @@ func TestValidateTotalCost(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			txn := &ast.Transaction{
 				Date:      &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
-				Narration: "Test transaction",
+				Narration: ast.NewRawString("Test transaction"),
 				Postings:  []*ast.Posting{test.posting},
 			}
 

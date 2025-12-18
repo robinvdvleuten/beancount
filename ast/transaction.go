@@ -17,15 +17,13 @@ package ast
 //	  Assets:US:BofA:Checking                  -100.00 USD
 //	  Assets:US:BofA:Savings                    100.00 USD
 type Transaction struct {
-	Pos              Position
-	Date             *Date
-	Flag             string
-	Payee            string
-	PayeeEscapes     *StringMetadata
-	Narration        string
-	NarrationEscapes *StringMetadata
-	Links            []Link
-	Tags             []Tag
+	Pos       Position
+	Date      *Date
+	Flag      string
+	Payee     RawString
+	Narration RawString
+	Links     []Link
+	Tags      []Tag
 
 	withComment
 	withMetadata
@@ -60,7 +58,7 @@ type Posting struct {
 	PriceMarker string // Matches @ price marker (grammar only, always empty)
 	PriceTotal  bool   // Captures presence of second @ for total price
 	Price       *Amount
-	Inferred    bool   // True if Amount was inferred by the ledger (not parsed)
+	Inferred    bool // True if Amount was inferred by the ledger (not parsed)
 
 	withComment
 	withMetadata

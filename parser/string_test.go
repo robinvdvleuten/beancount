@@ -256,7 +256,7 @@ func TestParseString(t *testing.T) {
 			interner := l.Interner()
 
 			p := NewParser([]byte(tt.input), tokens, "test.beancount", interner)
-			result, _, err := p.parseString()
+			result, err := p.parseString()
 
 			if tt.expectError {
 				assert.Error(t, err)
@@ -265,7 +265,7 @@ func TestParseString(t *testing.T) {
 				}
 			} else {
 				assert.NoError(t, err)
-				assert.Equal(t, tt.expected, result)
+				assert.Equal(t, tt.expected, result.Value)
 			}
 		})
 	}

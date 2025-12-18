@@ -747,7 +747,7 @@ func TestValidateMetadata(t *testing.T) {
 						ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 					),
 				)
-				inv123 := "INV-123"
+				inv123 := ast.NewRawString("INV-123")
 				txn.Metadata = []*ast.Metadata{
 					{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
 				}
@@ -764,8 +764,8 @@ func TestValidateMetadata(t *testing.T) {
 						ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 					),
 				)
-				inv123 := "INV-123"
-				inv456 := "INV-456"
+				inv123 := ast.NewRawString("INV-123")
+				inv456 := ast.NewRawString("INV-456")
 				txn.Metadata = []*ast.Metadata{
 					{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
 					{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv456}},
@@ -842,8 +842,8 @@ func BenchmarkValidateMetadata(b *testing.B) {
 			ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 		),
 	)
-	inv123 := "INV-123"
-	food := "food"
+	inv123 := ast.NewRawString("INV-123")
+	food := ast.NewRawString("food")
 	txn.Metadata = []*ast.Metadata{
 		{Key: "invoice", Value: &ast.MetadataValue{StringValue: &inv123}},
 		{Key: "category", Value: &ast.MetadataValue{StringValue: &food}},
@@ -1330,7 +1330,7 @@ func TestValidateOpen(t *testing.T) {
 					Date:    date2024,
 					Account: checking,
 				}
-				note := "Test account"
+				note := ast.NewRawString("Test account")
 				open.Metadata = []*ast.Metadata{
 					{Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
 				}
@@ -1760,12 +1760,12 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 	expenses, _ := ast.NewAccount("Expenses:Groceries")
 
 	tests := []struct {
-		name         string
-		constraints  []string
-		txn            *ast.Transaction
-		setupInferred  bool // whether to simulate inferred amounts
-		inferCurrency  string
-		wantErrCount   int
+		name          string
+		constraints   []string
+		txn           *ast.Transaction
+		setupInferred bool // whether to simulate inferred amounts
+		inferCurrency string
+		wantErrCount  int
 	}{
 		{
 			name:        "no constraint (passes)",

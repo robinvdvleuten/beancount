@@ -161,22 +161,20 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 	pos := p.tokenPositionFromPeek()
 	p.consume(OPTION, "expected 'option'")
 
-	name, nameMeta, err := p.parseString()
+	name, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
-	value, valueMeta, err := p.parseString()
+	value, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ast.Option{
-		Pos:          pos,
-		Name:         name,
-		NameEscapes:  nameMeta,
-		Value:        value,
-		ValueEscapes: valueMeta,
+		Pos:   pos,
+		Name:  name,
+		Value: value,
 	}, nil
 }
 
@@ -185,15 +183,14 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 	pos := p.tokenPositionFromPeek()
 	p.consume(INCLUDE, "expected 'include'")
 
-	filename, filenameMeta, err := p.parseString()
+	filename, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	return &ast.Include{
-		Pos:             pos,
-		Filename:        filename,
-		FilenameEscapes: filenameMeta,
+		Pos:      pos,
+		Filename: filename,
 	}, nil
 }
 
@@ -202,25 +199,23 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 	pos := p.tokenPositionFromPeek()
 	p.consume(PLUGIN, "expected 'plugin'")
 
-	name, nameMeta, err := p.parseString()
+	name, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	plugin := &ast.Plugin{
-		Pos:         pos,
-		Name:        name,
-		NameEscapes: nameMeta,
+		Pos:  pos,
+		Name: name,
 	}
 
 	// Optional config string
 	if p.check(STRING) {
-		config, configMeta, err := p.parseString()
+		config, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
 		plugin.Config = config
-		plugin.ConfigEscapes = configMeta
 	}
 
 	return plugin, nil

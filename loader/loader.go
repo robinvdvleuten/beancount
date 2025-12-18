@@ -258,7 +258,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		}
 
 		// Resolve path relative to the including file's directory
-		includePath := inc.Filename
+		includePath := inc.Filename.Value
 		if !filepath.IsAbs(includePath) {
 			includePath = filepath.Join(baseDir, includePath)
 		}

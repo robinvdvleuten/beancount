@@ -232,7 +232,8 @@ func ApplyPushPopDirectives(ast *AST) error {
 			// Apply active metadata to all directives with metadata
 			if withMeta, ok := item.directive.(WithMetadata); ok {
 				for key, value := range activeMetadata {
-					withMeta.AddMetadata(&Metadata{Key: key, Value: &MetadataValue{StringValue: &value}})
+					rawStr := NewRawString(value)
+					withMeta.AddMetadata(&Metadata{Key: key, Value: &MetadataValue{StringValue: &rawStr}})
 				}
 			}
 		}

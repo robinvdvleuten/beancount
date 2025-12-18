@@ -66,7 +66,7 @@ include "included.beancount"
 
 	// Should preserve the include directive
 	assert.Equal(t, 1, len(tree.Includes))
-	assert.Equal(t, "included.beancount", tree.Includes[0].Filename)
+	assert.Equal(t, "included.beancount", tree.Includes[0].Filename.Value)
 }
 
 func TestLoadWithInclude_WithFollow(t *testing.T) {
@@ -373,7 +373,7 @@ include "included.beancount"
 	// Find and verify options
 	optionsMap := make(map[string]string)
 	for _, opt := range tree.Options {
-		optionsMap[opt.Name] = opt.Value
+		optionsMap[opt.Name.Value] = opt.Value.Value
 	}
 
 	assert.Equal(t, "Main File", optionsMap["title"])
@@ -414,7 +414,7 @@ include "included.beancount"
 	// Verify plugin names
 	pluginNames := make([]string, 2)
 	for i, plugin := range tree.Plugins {
-		pluginNames[i] = plugin.Name
+		pluginNames[i] = plugin.Name.Value
 	}
 
 	// Main file plugins come first
@@ -456,7 +456,7 @@ include "accounts.beancount"
 		tree, err := ldr.LoadBytes(context.Background(), "main.beancount", testData)
 		assert.NoError(t, err)
 		assert.Equal(t, 1, len(tree.Includes))
-		assert.Equal(t, "accounts.beancount", tree.Includes[0].Filename)
+		assert.Equal(t, "accounts.beancount", tree.Includes[0].Filename.Value)
 	})
 
 	t.Run("LoadBytesWithIncludesFollowStdin", func(t *testing.T) {

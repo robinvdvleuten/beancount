@@ -105,10 +105,11 @@ func NewTag(name string) Tag {
 //
 //	meta := ast.NewMetadata("invoice", "INV-2024-001")
 func NewMetadata(key, value string) *Metadata {
+	rawStr := NewRawString(value)
 	return &Metadata{
 		Key: key,
 		Value: &MetadataValue{
-			StringValue: &value,
+			StringValue: &rawStr,
 		},
 	}
 }
@@ -133,7 +134,7 @@ type TransactionOption func(*Transaction)
 func NewTransaction(date *Date, narration string, opts ...TransactionOption) *Transaction {
 	txn := &Transaction{
 		Date:      date,
-		Narration: narration,
+		Narration: NewRawString(narration),
 		Flag:      "", // Default to no flag (will be 'txn' in output)
 	}
 
@@ -155,7 +156,7 @@ func WithFlag(flag string) TransactionOption {
 // WithPayee sets the transaction payee.
 func WithPayee(payee string) TransactionOption {
 	return func(t *Transaction) {
-		t.Payee = payee
+		t.Payee = NewRawString(payee)
 	}
 }
 
@@ -425,7 +426,7 @@ func NewNote(date *Date, account Account, description string) *Note {
 	return &Note{
 		Date:        date,
 		Account:     account,
-		Description: description,
+		Description: NewRawString(description),
 	}
 }
 
@@ -440,7 +441,7 @@ func NewDocument(date *Date, account Account, pathToDocument string) *Document {
 	return &Document{
 		Date:           date,
 		Account:        account,
-		PathToDocument: pathToDocument,
+		PathToDocument: NewRawString(pathToDocument),
 	}
 }
 
@@ -480,7 +481,7 @@ func NewPrice(date *Date, commodity string, amount *Amount) *Price {
 func NewEvent(date *Date, name, value string) *Event {
 	return &Event{
 		Date:  date,
-		Name:  name,
-		Value: value,
+		Name:  NewRawString(name),
+		Value: NewRawString(value),
 	}
 }

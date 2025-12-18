@@ -17,7 +17,7 @@ const (
 	// Newlines become \n, tabs become \t, quotes become \", backslashes become \\.
 	EscapeStyleCStyle
 	// EscapeStyleOriginal tries to match the original source escape style.
-	// Falls back to CStyle if original metadata is unavailable.
+	// Falls back to CStyle if original raw token is unavailable.
 	EscapeStyleOriginal
 )
 
@@ -36,34 +36,19 @@ func (f *Formatter) escapeString(s string) string {
 	}
 }
 
-// formatStringWithMetadata formats a string using StringMetadata when available.
-// It preserves the original escape style when EscapeStyleOriginal is set:
-// - If the original had literal newlines, preserves them without escaping
-// - If the original had C-style escapes, uses the original quoted content
-// Otherwise falls back to escaping the logical value per the configured style.
-func (f *Formatter) formatStringWithMetadata(value string, meta *ast.StringMetadata, buf *strings.Builder) {
-	// EscapeStyleOriginal: preserve the original escape style
-	if f.StringEscapeStyle == EscapeStyleOriginal && meta != nil && meta.HasOriginal() {
-		// If the original string had literal newlines, preserve them without escaping
-		if meta.HasLiteralNewlines {
-			buf.WriteString(meta.QuotedContent())
-			return
-		}
-		// Otherwise use the original quoted content (which has C-style escapes)
-		buf.WriteString(meta.QuotedContent())
+// formatRawString formats a RawString to the buffer.
+// If the RawString has a raw token and EscapeStyleOriginal is set, uses the raw token directly.
+// Otherwise, quotes and escapes the logical value.
+func (f *Formatter) formatRawString(s ast.RawString, buf *strings.Builder) {
+	// EscapeStyleOriginal: use raw token if available
+	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() {
+		buf.WriteString(s.Raw)
 		return
 	}
 
-	// EscapeStyleNone: output without escaping (may produce multi-line strings)
-	if f.StringEscapeStyle == EscapeStyleNone && meta != nil && meta.HasLiteralNewlines {
-		// Use the original quoted content to preserve literal newlines
-		buf.WriteString(meta.QuotedContent())
-		return
-	}
-
-	// Fallback: escape the logical value per the configured style
+	// Otherwise, quote and escape the logical value
 	buf.WriteByte('"')
-	buf.WriteString(f.escapeString(value))
+	buf.WriteString(f.escapeString(s.Value))
 	buf.WriteByte('"')
 }
 

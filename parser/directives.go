@@ -77,11 +77,11 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 
 	// Optional booking method
 	if p.check(STRING) {
-		method, _, err := p.parseString()
+		method, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
-		open.BookingMethod = method
+		open.BookingMethod = method.Value
 	}
 
 	// Capture inline comment at end of open line
@@ -181,17 +181,16 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 		return nil, err
 	}
 
-	description, descMeta, err := p.parseString()
+	description, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	note := &ast.Note{
-		Pos:                pos,
-		Date:               date,
-		Account:            account,
-		Description:        description,
-		DescriptionEscapes: descMeta,
+		Pos:         pos,
+		Date:        date,
+		Account:     account,
+		Description: description,
 	}
 	// Capture inline comment at end of note line
 	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
@@ -212,7 +211,7 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		return nil, err
 	}
 
-	path, pathMeta, err := p.parseString()
+	path, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +221,6 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		Date:           date,
 		Account:        account,
 		PathToDocument: path,
-		PathEscapes:    pathMeta,
 	}
 	// Capture inline comment at end of doc line
 	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
@@ -268,23 +266,21 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error) {
 	p.consume(EVENT, "expected 'event'")
 
-	name, nameMeta, err := p.parseString()
+	name, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
-	value, valueMeta, err := p.parseString()
+	value, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	event := &ast.Event{
-		Pos:          pos,
-		Date:         date,
-		Name:         name,
-		NameEscapes:  nameMeta,
-		Value:        value,
-		ValueEscapes: valueMeta,
+		Pos:   pos,
+		Date:  date,
+		Name:  name,
+		Value: value,
 	}
 	// Capture inline comment at end of event line
 	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
@@ -301,17 +297,16 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, error) {
 	p.consume(CUSTOM, "expected 'custom'")
 
-	customType, typeMeta, err := p.parseString()
+	customType, err := p.parseString()
 	if err != nil {
 		return nil, err
 	}
 
 	custom := &ast.Custom{
-		Pos:         pos,
-		Date:        date,
-		Type:        customType,
-		TypeEscapes: typeMeta,
-		Values:      make([]*ast.CustomValue, 0, 4),
+		Pos:    pos,
+		Date:   date,
+		Type:   customType,
+		Values: make([]*ast.CustomValue, 0, 4),
 	}
 
 	// Parse custom values until we hit metadata or end of line
@@ -330,7 +325,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		case STRING:
 			p.advance()
 			rawValue := tok.String(p.source)
-			unquoted, _, err := p.unquoteStringWithMetadata(rawValue)
+			unquoted, err := p.unquoteString(rawValue)
 			if err != nil {
 				return nil, p.errorAtToken(tok, "invalid string literal: %v", err)
 			}

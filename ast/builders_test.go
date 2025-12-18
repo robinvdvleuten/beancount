@@ -166,9 +166,9 @@ func TestNewTransaction(t *testing.T) {
 	t.Run("MinimalTransaction", func(t *testing.T) {
 		txn := NewTransaction(date, "Test transaction")
 		assert.Equal(t, date, txn.Date)
-		assert.Equal(t, "Test transaction", txn.Narration)
+		assert.Equal(t, "Test transaction", txn.Narration.Value)
 		assert.Equal(t, "", txn.Flag)
-		assert.Equal(t, "", txn.Payee)
+		assert.Equal(t, "", txn.Payee.Value)
 		assert.Equal(t, 0, len(txn.Postings))
 	})
 
@@ -179,7 +179,7 @@ func TestNewTransaction(t *testing.T) {
 
 	t.Run("WithPayee", func(t *testing.T) {
 		txn := NewTransaction(date, "Test", WithPayee("Amazon"))
-		assert.Equal(t, "Amazon", txn.Payee)
+		assert.Equal(t, "Amazon", txn.Payee.Value)
 	})
 
 	t.Run("WithTags", func(t *testing.T) {
@@ -219,7 +219,7 @@ func TestNewTransaction(t *testing.T) {
 		)
 
 		assert.Equal(t, "*", txn.Flag)
-		assert.Equal(t, "Whole Foods", txn.Payee)
+		assert.Equal(t, "Whole Foods", txn.Payee.Value)
 		assert.Equal(t, 2, len(txn.Tags))
 		assert.Equal(t, 1, len(txn.Links))
 		assert.Equal(t, 2, len(txn.Postings))
@@ -341,7 +341,7 @@ func TestNewClearedTransaction(t *testing.T) {
 	)
 
 	assert.Equal(t, "*", txn.Flag)
-	assert.Equal(t, "Buy groceries", txn.Narration)
+	assert.Equal(t, "Buy groceries", txn.Narration.Value)
 	assert.Equal(t, 2, len(txn.Postings))
 }
 
@@ -356,7 +356,7 @@ func TestNewPendingTransaction(t *testing.T) {
 	)
 
 	assert.Equal(t, "!", txn.Flag)
-	assert.Equal(t, "Pending transfer", txn.Narration)
+	assert.Equal(t, "Pending transfer", txn.Narration.Value)
 	assert.Equal(t, 2, len(txn.Postings))
 }
 
@@ -416,7 +416,7 @@ func TestNewNote(t *testing.T) {
 	note := NewNote(date, account, "Opened new checking account")
 	assert.Equal(t, date, note.Date)
 	assert.Equal(t, account, note.Account)
-	assert.Equal(t, "Opened new checking account", note.Description)
+	assert.Equal(t, "Opened new checking account", note.Description.Value)
 }
 
 func TestNewDocument(t *testing.T) {
@@ -426,7 +426,7 @@ func TestNewDocument(t *testing.T) {
 	doc := NewDocument(date, account, "/path/to/statement.pdf")
 	assert.Equal(t, date, doc.Date)
 	assert.Equal(t, account, doc.Account)
-	assert.Equal(t, "/path/to/statement.pdf", doc.PathToDocument)
+	assert.Equal(t, "/path/to/statement.pdf", doc.PathToDocument.Value)
 }
 
 func TestNewCommodity(t *testing.T) {
@@ -450,8 +450,8 @@ func TestNewEvent(t *testing.T) {
 	date, _ := NewDate("2024-01-01")
 	event := NewEvent(date, "location", "New York, USA")
 	assert.Equal(t, date, event.Date)
-	assert.Equal(t, "location", event.Name)
-	assert.Equal(t, "New York, USA", event.Value)
+	assert.Equal(t, "location", event.Name.Value)
+	assert.Equal(t, "New York, USA", event.Value.Value)
 }
 
 // Example_csvImporter demonstrates how to use the builders to create

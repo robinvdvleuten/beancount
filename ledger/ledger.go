@@ -134,7 +134,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 	// Process options first
 	for _, opt := range tree.Options {
-		l.options[opt.Name] = append(l.options[opt.Name], opt.Value)
+		l.options[opt.Name.Value] = append(l.options[opt.Name.Value], opt.Value.Value)
 	}
 
 	// Parse tolerance configuration from options

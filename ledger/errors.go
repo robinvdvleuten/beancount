@@ -455,7 +455,7 @@ func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]s
 	return &TransactionNotBalancedError{
 		Pos:         txn.Pos,
 		Date:        txn.Date,
-		Narration:   txn.Narration,
+		Narration:   txn.Narration.Value,
 		Residuals:   residuals,
 		Transaction: txn,
 	}
@@ -881,7 +881,7 @@ func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
 func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *InsufficientInventoryError {
 	return &InsufficientInventoryError{
 		Date:      txn.Date,
-		Payee:     txn.Payee,
+		Payee:     txn.Payee.Value,
 		Account:   account,
 		Details:   details,
 		Pos:       txn.Pos,
@@ -943,7 +943,7 @@ func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account,
 	currency string, allowedCurrencies []string) *CurrencyConstraintError {
 	return &CurrencyConstraintError{
 		Date:              txn.Date,
-		Payee:             txn.Payee,
+		Payee:             txn.Payee.Value,
 		Account:           account,
 		Currency:          currency,
 		AllowedCurrencies: allowedCurrencies,

@@ -114,14 +114,14 @@ func TestLinesWithMultipleItems(t *testing.T) {
 			Options: []*Option{
 				{
 					Pos:   Position{Line: 5},
-					Name:  "title",
-					Value: "My Ledger",
+					Name:  NewRawString("title"),
+					Value: NewRawString("My Ledger"),
 				},
 			},
 			Includes: []*Include{
 				{
 					Pos:      Position{Line: 5}, // Same line as Option
-					Filename: "accounts.beancount",
+					Filename: NewRawString("accounts.beancount"),
 				},
 			},
 			Directives: []Directive{
@@ -190,13 +190,13 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Options: []*Option{
-				{Pos: Position{Line: 1}, Name: "title", Value: "Test"},
+				{Pos: Position{Line: 1}, Name: NewRawString("title"), Value: NewRawString("Test")},
 			},
 			Includes: []*Include{
-				{Pos: Position{Line: 2}, Filename: "test.beancount"},
+				{Pos: Position{Line: 2}, Filename: NewRawString("test.beancount")},
 			},
 			Plugins: []*Plugin{
-				{Pos: Position{Line: 3}, Name: "test_plugin"},
+				{Pos: Position{Line: 3}, Name: NewRawString("test_plugin")},
 			},
 			Pushtags: []*Pushtag{
 				{Pos: Position{Line: 4}, Tag: NewTag("test")},

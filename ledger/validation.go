@@ -467,7 +467,7 @@ func (v *validator) validateMetadata(txn *ast.Transaction) []error {
 			seen[meta.Key] = true
 
 			// Check for empty values (empty string values)
-			if meta.Value != nil && meta.Value.StringValue != nil && *meta.Value.StringValue == "" {
+			if meta.Value != nil && meta.Value.StringValue != nil && meta.Value.StringValue.IsEmpty() {
 				errs = append(errs, NewInvalidMetadataError(txn, "", meta.Key, meta.Value, "empty value"))
 			}
 		}
@@ -486,7 +486,7 @@ func (v *validator) validateMetadata(txn *ast.Transaction) []error {
 				seen[meta.Key] = true
 
 				// Check for empty values (empty string values)
-				if meta.Value != nil && meta.Value.StringValue != nil && *meta.Value.StringValue == "" {
+				if meta.Value != nil && meta.Value.StringValue != nil && meta.Value.StringValue.IsEmpty() {
 					errs = append(errs, NewInvalidMetadataError(txn, posting.Account, meta.Key, meta.Value, "empty value"))
 				}
 			}
@@ -950,7 +950,7 @@ func (v *validator) validateNote(note *ast.Note) []error {
 	}
 
 	// 2. Validate description is non-empty
-	if note.Description == "" {
+	if note.Description.IsEmpty() {
 		// This is already enforced by the parser, but check anyway
 		errs = append(errs, fmt.Errorf("note description cannot be empty"))
 	}
@@ -977,7 +977,7 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 	}
 
 	// 2. Validate path is non-empty
-	if doc.PathToDocument == "" {
+	if doc.PathToDocument.IsEmpty() {
 		// This is already enforced by the parser, but check anyway
 		errs = append(errs, fmt.Errorf("document path cannot be empty"))
 	}
