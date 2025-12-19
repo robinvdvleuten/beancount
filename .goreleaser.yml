@@ -81,4 +81,4 @@ release:
   prerelease: false
 
 changelog:
-  skip: true
+  disable: true
