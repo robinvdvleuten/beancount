@@ -125,6 +125,14 @@ func (p *Parser) parsePostings(headerLine int) ([]*ast.Posting, error) {
 			return nil, p.errorAtToken(tok, "postings must start on a new line")
 		}
 
+		// Skip blank lines (NEWLINE tokens) that might appear between postings
+		// This handles cases like trailing whitespace that creates unwanted blank lines
+		// Must check NEWLINE before column check since blank lines have column 1
+		if tok.Type == NEWLINE {
+			p.advance() // consume the blank line and continue
+			continue
+		}
+
 		// Postings must be indented (not at column 1)
 		// This distinguishes them from org-mode headers like "* Credit-Cards"
 		if tok.Column <= 1 {
