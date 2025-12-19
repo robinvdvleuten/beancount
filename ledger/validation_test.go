@@ -560,6 +560,176 @@ func TestValidateTransaction_Integration(t *testing.T) {
 	}
 }
 
+// TestImplicitPostings tests the implicit posting (amount interpolation) feature.
+// Beancount allows exactly one posting per transaction to have no amount specified.
+// The missing amount is automatically calculated to make the transaction balance to zero.
+func TestImplicitPostings(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	deposit, _ := ast.NewAccount("Assets:Deposit")
+	savings, _ := ast.NewAccount("Assets:Savings")
+	expenses, _ := ast.NewAccount("Expenses:Food")
+	income, _ := ast.NewAccount("Income:Salary")
+	multiCurr, _ := ast.NewAccount("Assets:MultiCurr")
+
+	// Setup accounts for validator
+	accounts := map[string]*Account{
+		"Assets:Checking": {
+			Name:      checking,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Assets:Deposit": {
+			Name:      deposit,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Assets:Savings": {
+			Name:      savings,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Expenses:Food": {
+			Name:      expenses,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Income:Salary": {
+			Name:      income,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+		"Assets:MultiCurr": {
+			Name:      multiCurr,
+			OpenDate:  date,
+			Inventory: NewInventory(),
+		},
+	}
+
+	tests := []struct {
+		name           string
+		txn            *ast.Transaction
+		wantErrCount   int
+		wantBalanced   bool
+		wantInferred   bool
+		wantInferredAmt string // Expected inferred amount value
+	}{
+		{
+			name: "implicit posting - simple two-way transfer",
+			txn: ast.NewTransaction(date, "Transfer",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("-400", "EUR")),
+					ast.NewPosting(deposit), // Amount should be inferred as 400 EUR
+				),
+			),
+			wantErrCount:   0,
+			wantBalanced:   true,
+			wantInferred:   true,
+			wantInferredAmt: "400",
+		},
+		{
+			name: "implicit posting - three-way split with implicit last",
+			txn: ast.NewTransaction(date, "Split",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("-100", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("60", "USD")),
+					ast.NewPosting(savings), // Should be inferred as 40 USD
+				),
+			),
+			wantErrCount:   0,
+			wantBalanced:   true,
+			wantInferred:   true,
+			wantInferredAmt: "40",
+		},
+		{
+			name: "implicit posting - negative inferred amount",
+			txn: ast.NewTransaction(date, "Expense split",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("300", "USD")),
+					ast.NewPosting(savings), // Should be inferred as -800 USD
+				),
+			),
+			wantErrCount:   0,
+			wantBalanced:   true,
+			wantInferred:   true,
+			wantInferredAmt: "-800",
+		},
+		{
+			name: "error: multiple postings without amounts",
+			txn: ast.NewTransaction(date, "Ambiguous",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("-100", "USD")),
+					ast.NewPosting(deposit),   // First missing
+					ast.NewPosting(savings),   // Second missing
+				),
+			),
+			wantErrCount: 1,
+			wantBalanced: false,
+			wantInferred: false,
+		},
+		{
+			name: "error: implicit posting with multiple currencies",
+			txn: ast.NewTransaction(date, "Multi-currency",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("-100", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("60", "EUR")),
+					ast.NewPosting(multiCurr), // Can't infer - which currency?
+				),
+			),
+			wantErrCount: 1,
+			wantBalanced: false,
+			wantInferred: false,
+		},
+		{
+			name: "implicit posting - income transaction",
+			txn: ast.NewTransaction(date, "Paycheck",
+				ast.WithPostings(
+					ast.NewPosting(income, ast.WithAmount("-5000", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("4500", "USD")),
+					ast.NewPosting(expenses), // Taxes: should be inferred as 500 USD
+				),
+			),
+			wantErrCount:   0,
+			wantBalanced:   true,
+			wantInferred:   true,
+			wantInferredAmt: "500",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			v := newValidator(accounts, nil)
+			errs, result := v.validateTransaction(context.Background(), tt.txn)
+
+			assert.Equal(t, tt.wantErrCount, len(errs), fmt.Sprintf("errors: %v", errs))
+
+			// Check if any posting was inferred
+			inferredCount := 0
+			var inferredPosting *ast.Posting
+			for _, posting := range tt.txn.Postings {
+				if posting.Inferred {
+					inferredCount++
+					inferredPosting = posting
+				}
+			}
+
+			if tt.wantInferred {
+				assert.Equal(t, 1, inferredCount, "expected exactly 1 inferred posting")
+				if inferredPosting != nil && inferredPosting.Amount != nil {
+					assert.Equal(t, tt.wantInferredAmt, inferredPosting.Amount.Value)
+				}
+			} else {
+				assert.Equal(t, 0, inferredCount, "expected no inferred postings")
+			}
+
+			if tt.wantBalanced {
+				assert.NotEqual(t, nil, result, "expected validation to pass")
+			}
+		})
+	}
+}
+
 // Helper to get error type name for testing
 func getErrorType(err error) string {
 	switch err.(type) {

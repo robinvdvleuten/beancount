@@ -550,33 +550,41 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	delta := &TransactionDelta{}
 
 	// Infer missing amounts if possible
-	// Can only infer if exactly 1 posting without amount AND exactly 1 currency with residual
-	if len(pc.withoutAmounts) == 1 && len(balance) == 1 {
+	// Beancount allows at most 1 posting without amount per transaction
+	// It's automatically balanced to make the transaction sum to zero
+	if len(pc.withoutAmounts) == 1 {
 		posting := pc.withoutAmounts[0]
-		for currency, residual := range balance {
-			needed := residual.Neg()
-			// Set amount directly on posting and mark as inferred
-			posting.Amount = &ast.Amount{
-				Value:    needed.String(),
-				Currency: currency,
+
+		if len(balance) == 1 {
+			// Exactly 1 currency - can infer the amount uniquely
+			for currency, residual := range balance {
+				needed := residual.Neg()
+				// Set amount directly on posting and mark as inferred
+				posting.Amount = &ast.Amount{
+					Value:    needed.String(),
+					Currency: currency,
+				}
+				posting.Inferred = true
+				// Update balance to reflect the inferred amount
+				balance[currency] = balance[currency].Add(needed)
 			}
-			posting.Inferred = true
-			// Update balance to reflect the inferred amount
-			balance[currency] = balance[currency].Add(needed)
+		} else if len(balance) > 1 {
+			// Multiple currencies - infer posting must balance all of them
+			// Create multi-currency amount (not supported, so fail)
+			// This matches official beancount: "cannot infer multi-currency amount"
+			residuals := make(map[string]decimal.Decimal)
+			for currency, residual := range balance {
+				residuals[currency] = residual
+			}
+			validation := &balanceValidation{
+				isBalanced: false,
+				residuals:  residuals,
+			}
+			return delta, validation, nil
 		}
+		// else: len(balance) == 0 means already balanced, no inference needed
 	} else if len(pc.withoutAmounts) > 1 {
 		// Multiple postings without amounts - ambiguous, can't infer
-		residuals := make(map[string]decimal.Decimal)
-		for currency, residual := range balance {
-			residuals[currency] = residual
-		}
-		validation := &balanceValidation{
-			isBalanced: false,
-			residuals:  residuals,
-		}
-		return delta, validation, nil
-	} else if len(pc.withoutAmounts) == 1 && len(balance) > 1 {
-		// One posting without amount but multiple currencies - ambiguous
 		residuals := make(map[string]decimal.Decimal)
 		for currency, residual := range balance {
 			residuals[currency] = residual
