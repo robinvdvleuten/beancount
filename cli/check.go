@@ -4,7 +4,6 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync"
 
@@ -66,7 +65,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		printError(ctx.Stderr, "parse error")
 
 		reportTelemetry()
-		os.Exit(1)
+		return NewCommandError(1)
 	}
 
 	l := ledger.New()
@@ -81,7 +80,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 			printError(ctx.Stderr, fmt.Sprintf("%d validation error(s) found", len(validationErrors.Errors)))
 
 			reportTelemetry()
-			os.Exit(1)
+			return NewCommandError(1)
 		}
 		return err
 	}

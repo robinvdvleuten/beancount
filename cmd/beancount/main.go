@@ -1,7 +1,9 @@
 package main
 
 import (
+	stdErrors "errors"
 	"fmt"
+	"os"
 
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/cli"
@@ -38,6 +40,13 @@ func main() {
 	)
 
 	err := ctx.Run()
+
+	// Handle CommandError for centralized exit code management
+	var cmdErr *cli.CommandError
+	if stdErrors.As(err, &cmdErr) {
+		os.Exit(cmdErr.ExitCode())
+	}
+
 	ctx.FatalIfErrorf(err)
 }
 

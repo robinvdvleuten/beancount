@@ -50,7 +50,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
 		printError(ctx.Stderr, "parse error")
-		os.Exit(1)
+		return NewCommandError(1)
 	}
 
 	var opts []formatter.Option
