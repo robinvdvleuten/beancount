@@ -41,13 +41,12 @@ option "title" "Test"
   Expenses:Food  100.00 USD
 `
 		// Parse the input
-		ast, err := parser.ParseBytes(context.Background(), []byte(source))
-		assert.NoError(t, err)
+		ast := parser.MustParseBytes(context.Background(), []byte(source))
 
 		// Format to buffer
 		f := formatter.New()
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -65,13 +64,12 @@ option "title" "Test"
   Expenses:Food  50.00 USD
 `
 		// Parse the input
-		ast, err := parser.ParseBytes(context.Background(), []byte(source))
-		assert.NoError(t, err)
+		ast := parser.MustParseBytes(context.Background(), []byte(source))
 
 		// Format with custom column
 		f := formatter.New(formatter.WithCurrencyColumn(60))
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()
@@ -84,12 +82,11 @@ option "title" "Test"
 	t.Run("EmptyFile", func(t *testing.T) {
 		source := ``
 		// Empty file should parse successfully but produce no output
-		ast, err := parser.ParseBytes(context.Background(), []byte(source))
-		assert.NoError(t, err)
+		ast := parser.MustParseBytes(context.Background(), []byte(source))
 
 		f := formatter.New()
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		// Empty file produces minimal output
@@ -114,12 +111,11 @@ option "title" "Integration Test"
 
 2021-01-03 balance Assets:Checking  1000.00 USD
 `
-		ast, err := parser.ParseBytes(context.Background(), []byte(source))
-		assert.NoError(t, err)
+		ast := parser.MustParseBytes(context.Background(), []byte(source))
 
 		f := formatter.New()
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		output := buf.String()

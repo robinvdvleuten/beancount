@@ -72,11 +72,10 @@ func TestLedger_ProcessOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -144,11 +143,10 @@ func TestLedger_ProcessClose(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -307,11 +305,10 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -466,11 +463,10 @@ func TestLedger_ProcessBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -644,11 +640,10 @@ func TestAccountLifecycleEdgeCases(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -736,11 +731,10 @@ func TestLedger_MultipleOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 			assert.NoError(t, err)
 
 			if tt.checkFunc != nil {
@@ -771,11 +765,10 @@ func TestMergeCostBooking(t *testing.T) {
                 Income:CapitalGains
         `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	assert.NoError(t, err, "parsing should succeed")
+	ast := parser.MustParseString(context.Background(), input)
 
 	l := New()
-	err = l.Process(context.Background(), ast)
+	err := l.Process(context.Background(), ast)
 	assert.NoError(t, err)
 
 	// Check final inventory state
@@ -789,4 +782,112 @@ func TestMergeCostBooking(t *testing.T) {
 	assert.True(t, lots[0].Spec != nil)
 	assert.True(t, lots[0].Spec.Cost != nil)
 	assert.Equal(t, "150", lots[0].Spec.Cost.String())
+}
+func TestMustProcess(t *testing.T) {
+	ctx := context.Background()
+
+	// Valid beancount file that should process without errors
+	source := `2024-01-01 open Assets:Checking
+2024-01-01 open Expenses:Groceries
+2024-01-15 * "Buy groceries"
+  Assets:Checking     -45.60 USD
+  Expenses:Groceries   45.60 USD
+`
+
+	ast := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	// Should not panic on valid AST
+	ledger.MustProcess(ctx, ast)
+
+	// Verify ledger state was built
+	account, ok := ledger.GetAccount("Assets:Checking")
+	assert.True(t, ok)
+	assert.True(t, account != nil)
+}
+
+func TestMustProcessInvalidPanics(t *testing.T) {
+	ctx := context.Background()
+
+	// Invalid: transaction doesn't balance
+	source := `2024-01-01 open Assets:Checking
+2024-01-01 open Expenses:Groceries
+2024-01-15 * "Unbalanced transaction"
+  Assets:Checking     -45.60 USD
+  Expenses:Groceries   50.00 USD
+`
+
+	ast := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	// Should panic due to validation error
+	assert.Panics(t, func() {
+		ledger.MustProcess(ctx, ast)
+	})
+}
+
+func TestMustProcessMultipleCurrencies(t *testing.T) {
+	ctx := context.Background()
+
+	source := `2024-01-01 open Assets:Checking
+2024-01-01 open Assets:Savings
+2024-01-01 open Expenses:Groceries
+2024-01-15 * "Multi-currency transaction"
+  Assets:Checking     -45.60 USD
+  Assets:Savings      100.00 EUR
+  Expenses:Groceries   45.60 USD
+  Expenses:Groceries -100.00 EUR
+`
+
+	ast := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	// Should process successfully with multiple currencies
+	ledger.MustProcess(ctx, ast)
+
+	// Verify both accounts exist
+	checking, ok := ledger.GetAccount("Assets:Checking")
+	assert.True(t, ok)
+	assert.True(t, checking != nil)
+
+	savings, ok := ledger.GetAccount("Assets:Savings")
+	assert.True(t, ok)
+	assert.True(t, savings != nil)
+}
+
+func TestMustProcessWithMetadata(t *testing.T) {
+	ctx := context.Background()
+
+	source := `2024-01-01 open Assets:Checking USD
+2024-01-01 open Expenses:Other USD
+2024-01-15 * "Transaction with metadata"
+  invoice: "INV-001"
+  Assets:Checking -100.00 USD
+  Expenses:Other   100.00 USD
+`
+
+	ast := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	// Should process metadata without errors
+	ledger.MustProcess(ctx, ast)
+
+	checking, ok := ledger.GetAccount("Assets:Checking")
+	assert.True(t, ok)
+	assert.True(t, checking != nil)
+}
+
+func TestMustProcessEmpty(t *testing.T) {
+	ctx := context.Background()
+
+	// Empty file should process successfully
+	ast := parser.MustParseString(ctx, "")
+	ledger := New()
+
+	// Should not panic on empty AST
+	ledger.MustProcess(ctx, ast)
+
+	// No accounts should be opened
+	accounts := ledger.Accounts()
+	assert.Equal(t, len(accounts), 0)
 }

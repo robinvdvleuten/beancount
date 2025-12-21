@@ -127,13 +127,12 @@ func TestFormatCostIntegration(t *testing.T) {
   Assets:Cash   -1000.00 USD`
 
 		// Parse the source
-		ast, err := parser.ParseString(context.Background(), source)
-		assert.NoError(t, err)
+		ast := parser.MustParseString(context.Background(), source)
 
 		// Format it back
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		formatted := buf.String()
@@ -148,13 +147,12 @@ func TestFormatCostIntegration(t *testing.T) {
   Assets:Cash   -1000.00 USD`
 
 		// Parse the source
-		ast, err := parser.ParseString(context.Background(), source)
-		assert.NoError(t, err)
+		ast := parser.MustParseString(context.Background(), source)
 
 		// Format it back
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		formatted := buf.String()
@@ -169,13 +167,12 @@ func TestFormatCostIntegration(t *testing.T) {
   Assets:Cash   -800.00 USD`
 
 		// Parse the source
-		ast, err := parser.ParseString(context.Background(), source)
-		assert.NoError(t, err)
+		ast := parser.MustParseString(context.Background(), source)
 
 		// Format it back
 		f := New()
 		var buf bytes.Buffer
-		err = f.Format(context.Background(), ast, []byte(source), &buf)
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
 		formatted := buf.String()

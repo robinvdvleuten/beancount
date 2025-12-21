@@ -18,11 +18,10 @@ func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 		2020-01-15 balance Assets:Checking 1000.00 USD
 	`
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err = ledger.Process(context.Background(), tree)
+	err := ledger.Process(context.Background(), tree)
 	assert.NoError(t, err)
 
 	// Find padding transactions in AST
@@ -62,11 +61,10 @@ func TestPadWithMultipleCurrencies(t *testing.T) {
 		2020-02-01 balance Assets:Investment 750.00 GBP
 	`
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err = ledger.Process(context.Background(), tree)
+	err := ledger.Process(context.Background(), tree)
 	assert.NoError(t, err)
 
 	// Should generate 2 padding transactions (one per currency)
@@ -106,11 +104,10 @@ func TestPadWithExistingBalance(t *testing.T) {
 		2020-01-20 balance Assets:Savings 550.00 USD
 	`
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err = ledger.Process(context.Background(), tree)
+	err := ledger.Process(context.Background(), tree)
 	assert.NoError(t, err)
 
 	paddingTxns := findPaddingTransactions(tree)
@@ -139,11 +136,10 @@ func TestPadWithinTolerance(t *testing.T) {
 		2020-01-15 balance Assets:Cash 200.00 USD
 	`
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err = ledger.Process(context.Background(), tree)
+	err := ledger.Process(context.Background(), tree)
 	assert.NoError(t, err)
 
 	// No padding needed - balance already matches
@@ -159,11 +155,10 @@ func TestUnusedPadWarning(t *testing.T) {
 		2020-01-10 pad Assets:Cash Equity:Opening-Balances
 	`
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err = ledger.Process(context.Background(), tree)
+	err := ledger.Process(context.Background(), tree)
 
 	// Should have a warning about unused pad
 	assert.Error(t, err, "Expected error for unused pad")
@@ -185,11 +180,10 @@ func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
 		2020-02-15 balance Assets:Checking 1000.00 USD
 	`
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err = ledger.Process(context.Background(), tree)
+	err := ledger.Process(context.Background(), tree)
 	assert.NoError(t, err)
 
 	paddingTxns := findPaddingTransactions(tree)

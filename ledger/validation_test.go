@@ -607,11 +607,11 @@ func TestImplicitPostings(t *testing.T) {
 	}
 
 	tests := []struct {
-		name           string
-		txn            *ast.Transaction
-		wantErrCount   int
-		wantBalanced   bool
-		wantInferred   bool
+		name            string
+		txn             *ast.Transaction
+		wantErrCount    int
+		wantBalanced    bool
+		wantInferred    bool
 		wantInferredAmt string // Expected inferred amount value
 	}{
 		{
@@ -622,9 +622,9 @@ func TestImplicitPostings(t *testing.T) {
 					ast.NewPosting(deposit), // Amount should be inferred as 400 EUR
 				),
 			),
-			wantErrCount:   0,
-			wantBalanced:   true,
-			wantInferred:   true,
+			wantErrCount:    0,
+			wantBalanced:    true,
+			wantInferred:    true,
 			wantInferredAmt: "400",
 		},
 		{
@@ -636,9 +636,9 @@ func TestImplicitPostings(t *testing.T) {
 					ast.NewPosting(savings), // Should be inferred as 40 USD
 				),
 			),
-			wantErrCount:   0,
-			wantBalanced:   true,
-			wantInferred:   true,
+			wantErrCount:    0,
+			wantBalanced:    true,
+			wantInferred:    true,
 			wantInferredAmt: "40",
 		},
 		{
@@ -650,9 +650,9 @@ func TestImplicitPostings(t *testing.T) {
 					ast.NewPosting(savings), // Should be inferred as -800 USD
 				),
 			),
-			wantErrCount:   0,
-			wantBalanced:   true,
-			wantInferred:   true,
+			wantErrCount:    0,
+			wantBalanced:    true,
+			wantInferred:    true,
 			wantInferredAmt: "-800",
 		},
 		{
@@ -660,8 +660,8 @@ func TestImplicitPostings(t *testing.T) {
 			txn: ast.NewTransaction(date, "Ambiguous",
 				ast.WithPostings(
 					ast.NewPosting(checking, ast.WithAmount("-100", "USD")),
-					ast.NewPosting(deposit),   // First missing
-					ast.NewPosting(savings),   // Second missing
+					ast.NewPosting(deposit), // First missing
+					ast.NewPosting(savings), // Second missing
 				),
 			),
 			wantErrCount: 1,
@@ -690,9 +690,9 @@ func TestImplicitPostings(t *testing.T) {
 					ast.NewPosting(expenses), // Taxes: should be inferred as 500 USD
 				),
 			),
-			wantErrCount:   0,
-			wantBalanced:   true,
-			wantInferred:   true,
+			wantErrCount:    0,
+			wantBalanced:    true,
+			wantInferred:    true,
 			wantInferredAmt: "500",
 		},
 	}
@@ -1124,11 +1124,10 @@ func TestEmptyCostBehavior(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1227,11 +1226,10 @@ func TestPadTiming(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1346,11 +1344,10 @@ func TestBalanceTolerance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1423,11 +1420,10 @@ func TestConstraintCurrencyEnforcement(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ast, err := parser.ParseString(context.Background(), tt.input)
-			assert.NoError(t, err, "parsing should succeed")
+			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			err := l.Process(context.Background(), ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)

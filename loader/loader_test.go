@@ -510,3 +510,74 @@ include "accounts.beancount"
 		assert.True(t, errors.As(err, &parseErr))
 	})
 }
+func TestMustLoadBytes(t *testing.T) {
+	ctx := context.Background()
+	loader := New()
+
+	data := []byte(`2024-01-01 open Assets:Checking
+2024-01-01 open Expenses:Groceries
+2024-01-15 * "Buy groceries"
+  Assets:Checking     -45.60 USD
+  Expenses:Groceries   45.60 USD
+`)
+
+	// Should not panic on valid input
+	ast := loader.MustLoadBytes(ctx, "test.beancount", data)
+	assert.True(t, ast != nil)
+	assert.Equal(t, len(ast.Directives), 3)
+}
+
+func TestMustLoad(t *testing.T) {
+	ctx := context.Background()
+
+	// Create a temporary beancount file
+	tmpDir := t.TempDir()
+	tmpFile := filepath.Join(tmpDir, "test.beancount")
+	content := []byte(`2024-01-01 open Assets:Checking
+2024-01-01 open Expenses:Groceries
+2024-01-15 * "Buy groceries"
+  Assets:Checking     -45.60 USD
+  Expenses:Groceries   45.60 USD
+`)
+	err := os.WriteFile(tmpFile, content, 0644)
+	assert.NoError(t, err)
+
+	loader := New()
+
+	// Should not panic on valid file
+	ast := loader.MustLoad(ctx, tmpFile)
+	assert.True(t, ast != nil)
+	assert.Equal(t, len(ast.Directives), 3)
+}
+
+func TestMustLoadBytesInvalidPanics(t *testing.T) {
+	ctx := context.Background()
+	loader := New()
+
+	// Invalid syntax - unclosed string
+	data := []byte(`2024-01-01 open Assets:Checking "unclosed`)
+
+	assert.Panics(t, func() {
+		loader.MustLoadBytes(ctx, "invalid.beancount", data)
+	})
+}
+
+func TestMustLoadNonexistentFilePanics(t *testing.T) {
+	ctx := context.Background()
+	loader := New()
+
+	// Nonexistent file should panic
+	assert.Panics(t, func() {
+		loader.MustLoad(ctx, "/nonexistent/file.beancount")
+	})
+}
+
+func TestMustLoadBytesEmpty(t *testing.T) {
+	ctx := context.Background()
+	loader := New()
+
+	// Empty input should parse successfully
+	ast := loader.MustLoadBytes(ctx, "empty.beancount", []byte(""))
+	assert.True(t, ast != nil)
+	assert.Equal(t, len(ast.Directives), 0)
+}

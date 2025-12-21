@@ -229,6 +229,20 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	return nil
 }
 
+// MustProcess processes an AST, panicking on validation errors.
+// Intended for use in tests and examples where error handling is not needed.
+//
+// Example:
+//
+//	ledger := ledger.New()
+//	ledger.MustProcess(context.Background(), ast)
+func (l *Ledger) MustProcess(ctx context.Context, tree *ast.AST) {
+	err := l.Process(ctx, tree)
+	if err != nil {
+		panic(err)
+	}
+}
+
 // Errors returns all collected errors
 func (l *Ledger) Errors() []error {
 	return l.errors

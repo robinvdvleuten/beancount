@@ -18,12 +18,11 @@ func TestFormatTransactionWithInlineComments(t *testing.T) {
   Expenses:Food    -100.00 USD  ; posting 2 comment
 `
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	f := New()
 	output := bytes.NewBufferString("")
-	err = f.Format(context.Background(), tree, []byte(source), output)
+	err := f.Format(context.Background(), tree, []byte(source), output)
 	assert.NoError(t, err)
 
 	result := output.String()
@@ -38,12 +37,11 @@ func TestFormatDirectiveWithInlineComment(t *testing.T) {
 	source := `2024-01-01 open Assets:Checking ; test comment
 `
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	f := New()
 	output := bytes.NewBufferString("")
-	err = f.Format(context.Background(), tree, []byte(source), output)
+	err := f.Format(context.Background(), tree, []byte(source), output)
 	assert.NoError(t, err)
 
 	result := output.String()
@@ -58,12 +56,11 @@ func TestFormatPreservesCommentPosition(t *testing.T) {
   Expenses:Food    -100.00 USD
 `
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	f := New()
 	output := bytes.NewBufferString("")
-	err = f.Format(context.Background(), tree, []byte(source), output)
+	err := f.Format(context.Background(), tree, []byte(source), output)
 	assert.NoError(t, err)
 
 	result := output.String()
@@ -90,18 +87,16 @@ func TestFormatRoundTripPreservesComments(t *testing.T) {
 `
 
 	// First parse
-	tree1, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree1 := parser.MustParseBytes(context.Background(), []byte(source))
 
 	// First format
 	f := New()
 	output1 := bytes.NewBufferString("")
-	err = f.Format(context.Background(), tree1, []byte(source), output1)
+	err := f.Format(context.Background(), tree1, []byte(source), output1)
 	assert.NoError(t, err)
 
 	// Second parse (formatted output)
-	tree2, err := parser.ParseBytes(context.Background(), output1.Bytes())
-	assert.NoError(t, err)
+	tree2 := parser.MustParseBytes(context.Background(), output1.Bytes())
 
 	// Second format
 	output2 := bytes.NewBufferString("")
@@ -126,12 +121,11 @@ func TestFormatWithoutInlineComments(t *testing.T) {
   Expenses:Food    -100.00 USD
 `
 
-	tree, err := parser.ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	f := New()
 	output := bytes.NewBufferString("")
-	err = f.Format(context.Background(), tree, []byte(source), output)
+	err := f.Format(context.Background(), tree, []byte(source), output)
 	assert.NoError(t, err)
 
 	result := output.String()

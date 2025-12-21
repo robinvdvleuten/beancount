@@ -18,8 +18,7 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 		  Assets:Stock         5 AAPL {100.00 USD}
 	`
 
-	tree, err := parser.ParseString(context.Background(), input)
-	assert.NoError(t, err)
+	tree := parser.MustParseString(context.Background(), input)
 	assert.Equal(t, 1, len(tree.Directives))
 
 	txn, ok := tree.Directives[0].(*ast.Transaction)
@@ -81,11 +80,10 @@ func TestFullTransactionWithCost(t *testing.T) {
 		  Assets:Stock     5 AAPL {100.00 USD}
 	`
 
-	ast, err := parser.ParseString(context.Background(), input)
-	assert.NoError(t, err)
+	ast := parser.MustParseString(context.Background(), input)
 
 	l := New()
-	err = l.Process(context.Background(), ast)
+	err := l.Process(context.Background(), ast)
 
 	// Should have NO errors - transaction should balance!
 	if err != nil {
@@ -107,8 +105,7 @@ func TestCalculateWeights_Price(t *testing.T) {
 		  Assets:Cash     1600.00 USD
 	`
 
-	tree, err := parser.ParseString(context.Background(), input)
-	assert.NoError(t, err)
+	tree := parser.MustParseString(context.Background(), input)
 
 	txn, ok := tree.Directives[0].(*ast.Transaction)
 	assert.True(t, ok)

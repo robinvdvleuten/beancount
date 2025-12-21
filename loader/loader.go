@@ -113,6 +113,21 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 	return state.loadRecursive(ctx, filename)
 }
 
+// MustLoad loads a beancount file, panicking on error.
+// Intended for use in tests and examples where error handling is not needed.
+//
+// Example:
+//
+//	loader := loader.New(loader.WithFollowIncludes())
+//	ast := loader.MustLoad(context.Background(), "main.beancount")
+func (l *Loader) MustLoad(ctx context.Context, filename string) *ast.AST {
+	result, err := l.Load(ctx, filename)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // LoadBytes parses beancount content from bytes with optional include resolution.
 // The filename parameter is used only for error reporting and position tracking in
 // parse errors. It does not need to be a real file path.
@@ -161,6 +176,21 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 	}
 
 	return result, nil
+}
+
+// MustLoadBytes parses beancount content from bytes, panicking on error.
+// Intended for use in tests and examples where error handling is not needed.
+//
+// Example:
+//
+//	loader := loader.New()
+//	ast := loader.MustLoadBytes(context.Background(), "test.beancount", data)
+func (l *Loader) MustLoadBytes(ctx context.Context, filename string, data []byte) *ast.AST {
+	result, err := l.LoadBytes(ctx, filename, data)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // loaderState tracks state during recursive loading.

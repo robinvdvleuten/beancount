@@ -18,10 +18,7 @@ func BenchmarkProcessTransaction(b *testing.B) {
   Expenses:Food     50.00 USD
 `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	if err != nil {
-		b.Fatal(err)
-	}
+	ast := parser.MustParseString(context.Background(), input)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -43,10 +40,7 @@ func BenchmarkProcessTransactionWithCost(b *testing.B) {
   Expenses:Commission       5.00 USD
 `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	if err != nil {
-		b.Fatal(err)
-	}
+	ast := parser.MustParseString(context.Background(), input)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -66,10 +60,7 @@ func BenchmarkProcessTransactionWithInference(b *testing.B) {
   Expenses:Food
 `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	if err != nil {
-		b.Fatal(err)
-	}
+	ast := parser.MustParseString(context.Background(), input)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -97,10 +88,7 @@ func BenchmarkProcessTransactionComplex(b *testing.B) {
   Income:Salary      -3405.00 USD
 `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	if err != nil {
-		b.Fatal(err)
-	}
+	ast := parser.MustParseString(context.Background(), input)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -122,10 +110,7 @@ func BenchmarkProcessBalance(b *testing.B) {
 2021-01-03 balance Assets:Cash  -50.00 USD
 `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	if err != nil {
-		b.Fatal(err)
-	}
+	ast := parser.MustParseString(context.Background(), input)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -148,10 +133,7 @@ func BenchmarkProcessPad(b *testing.B) {
 2021-01-06 balance Assets:Checking  500.00 USD
 `
 
-	ast, err := parser.ParseString(context.Background(), input)
-	if err != nil {
-		b.Fatal(err)
-	}
+	ast := parser.MustParseString(context.Background(), input)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

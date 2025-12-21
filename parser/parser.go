@@ -373,10 +373,38 @@ func ParseString(ctx context.Context, str string) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", []byte(str))
 }
 
+// MustParseString parses AST from a string, panicking on error.
+// Intended for use in tests and examples where error handling is not needed.
+//
+// Example:
+//
+//	ast := parser.MustParseString(context.Background(), "2024-01-01 open Assets:Checking")
+func MustParseString(ctx context.Context, str string) *ast.AST {
+	result, err := ParseString(ctx, str)
+	if err != nil {
+		panic(err)
+	}
+	return result
+}
+
 // ParseBytes parses AST from bytes.
 // This is a convenience wrapper around ParseBytesWithFilename.
 func ParseBytes(ctx context.Context, data []byte) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", data)
+}
+
+// MustParseBytes parses AST from bytes, panicking on error.
+// Intended for use in tests and examples where error handling is not needed.
+//
+// Example:
+//
+//	ast := parser.MustParseBytes(context.Background(), []byte("2024-01-01 open Assets:Checking"))
+func MustParseBytes(ctx context.Context, data []byte) *ast.AST {
+	result, err := ParseBytes(ctx, data)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
 
 // ParseBytesWithFilename parses AST from bytes with a filename for position tracking.
@@ -425,4 +453,18 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	sortTimer.End()
 
 	return tree, err
+}
+
+// MustParseBytesWithFilename parses AST from bytes with a filename, panicking on error.
+// Intended for use in tests and examples where error handling is not needed.
+//
+// Example:
+//
+//	ast := parser.MustParseBytesWithFilename(context.Background(), "main.beancount", data)
+func MustParseBytesWithFilename(ctx context.Context, filename string, data []byte) *ast.AST {
+	result, err := ParseBytesWithFilename(ctx, filename, data)
+	if err != nil {
+		panic(err)
+	}
+	return result
 }
