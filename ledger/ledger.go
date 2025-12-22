@@ -596,3 +596,31 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 		Inferred: true,
 	})
 }
+
+// applyCommodity creates an explicit commodity node in the graph with metadata.
+// Commodities are treated as explicit graph nodes rather than implicit currency references.
+// This allows tracking commodity-specific metadata, properties, and constraints.
+//
+// If a currency node was previously created implicitly (e.g., via enrichment or a transaction),
+// it is upgraded to an explicit commodity node with kind "commodity" and its metadata.
+func (l *Ledger) applyCommodity(commodity *ast.Commodity, delta *CommodityDelta) {
+	// Create or upgrade the commodity node with metadata
+	// This upgrades implicit "currency" nodes to explicit "commodity" nodes
+	node := l.graph.AddNode(delta.CommodityID, "commodity", &CommodityNode{
+		ID:       delta.CommodityID,
+		Date:     delta.Date,
+		Metadata: delta.Metadata,
+	})
+
+	// Ensure the node kind is set to "commodity" (not "currency")
+	// This handles the case where the node was previously created as "currency"
+	node.Kind = "commodity"
+}
+
+// CommodityNode represents a commodity or currency as an explicit graph node.
+// Stores metadata from the Commodity directive for future queries and constraints.
+type CommodityNode struct {
+	ID       string          // Currency/commodity code (e.g., "USD", "HOOL")
+	Date     *ast.Date       // Effective date of the commodity declaration
+	Metadata []*ast.Metadata // Commodity-specific metadata (name, precision, etc.)
+}

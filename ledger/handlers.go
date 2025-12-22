@@ -171,16 +171,31 @@ func (h *PriceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, de
 }
 
 // CommodityHandler processes Commodity directives.
-// Currently, commodities are not validated or stored - they're informational only.
+// Creates explicit commodity nodes in the graph with metadata from the directive.
 type CommodityHandler struct{}
 
 func (h *CommodityHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
-	// Commodity directives are currently informational and don't require validation
-	return nil, nil
+	commodity := d.(*ast.Commodity)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
+	errs := v.validateCommodity(commodity)
+	if len(errs) > 0 {
+		return errs, nil
+	}
+
+	// Create delta with commodity metadata for graph node creation
+	delta := &CommodityDelta{
+		CommodityID: commodity.Currency,
+		Date:        commodity.Date,
+		Metadata:    commodity.Metadata,
+	}
+
+	return nil, delta
 }
 
 func (h *CommodityHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	// Commodity directives don't mutate state
+	commodity := d.(*ast.Commodity)
+	commodityDelta := delta.(*CommodityDelta)
+	l.applyCommodity(commodity, commodityDelta)
 }
 
 // EventHandler processes Event directives.

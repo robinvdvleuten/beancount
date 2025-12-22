@@ -279,11 +279,22 @@ func TestCommodityHandler(t *testing.T) {
 	// Process commodity
 	commodityHandler := &CommodityHandler{}
 	commodityDirective := tree.Directives[0]
-	errs, _ := commodityHandler.Validate(ctx, ledger, commodityDirective)
+	errs, delta := commodityHandler.Validate(ctx, ledger, commodityDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	commodityHandler.Apply(ctx, ledger, commodityDirective, nil)
-	// Commodity handler doesn't mutate state currently
+	commodityHandler.Apply(ctx, ledger, commodityDirective, delta)
+
+	// Verify commodity node was created in the graph
+	commodity := commodityDirective.(*ast.Commodity)
+	commodityNode := ledger.graph.GetNode(commodity.Currency)
+	assert.NotZero(t, commodityNode, "commodity node should be created")
+	assert.Equal(t, commodityNode.Kind, "commodity", "node should be of commodity kind")
+
+	// Verify metadata is stored
+	if commodityNodeMeta, ok := commodityNode.Meta.(*CommodityNode); ok {
+		assert.Equal(t, commodityNodeMeta.ID, commodity.Currency, "commodity ID should match")
+		assert.NotZero(t, commodityNodeMeta.Date, "commodity date should be stored")
+	}
 }
 
 func TestEventHandler(t *testing.T) {
@@ -323,4 +334,118 @@ func TestCustomHandler(t *testing.T) {
 
 	customHandler.Apply(ctx, ledger, custom, nil)
 	// Custom handler doesn't mutate state currently
+}
+
+// TestCommodityValidation_ValidCodes tests that multiple valid commodity codes are accepted
+func TestCommodityValidation_ValidCodes(t *testing.T) {
+	ctx := context.Background()
+	// Use commodity codes that the parser recognizes
+	source := `
+		2024-01-01 commodity USD
+		2024-01-01 commodity EUR
+		2024-01-01 commodity BTC
+		2024-01-01 commodity HOOL
+		2024-01-01 commodity VTSAX
+		2024-01-01 commodity VACHR
+	`
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	for _, directive := range tree.Directives {
+		handler := &CommodityHandler{}
+		errs, delta := handler.Validate(ctx, ledger, directive)
+		assert.Equal(t, len(errs), 0, "valid commodity codes should have no errors")
+		assert.NotZero(t, delta, "delta should be returned")
+
+		handler.Apply(ctx, ledger, directive, delta)
+	}
+
+	// Verify all commodities were added to the graph
+	assert.NotZero(t, ledger.graph.GetNode("USD"), "USD node should exist")
+	assert.NotZero(t, ledger.graph.GetNode("EUR"), "EUR node should exist")
+	assert.NotZero(t, ledger.graph.GetNode("BTC"), "BTC node should exist")
+	assert.NotZero(t, ledger.graph.GetNode("HOOL"), "HOOL node should exist")
+	assert.NotZero(t, ledger.graph.GetNode("VTSAX"), "VTSAX node should exist")
+	assert.NotZero(t, ledger.graph.GetNode("VACHR"), "VACHR (vacation hours) node should exist")
+}
+
+// TestCommodityWithMetadata tests that commodity metadata is preserved
+func TestCommodityWithMetadata(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2024-01-01 commodity USD
+		  name: "US Dollar"
+		  asset-class: "cash"
+	`
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	handler := &CommodityHandler{}
+	directive := tree.Directives[0]
+	errs, delta := handler.Validate(ctx, ledger, directive)
+	assert.Equal(t, len(errs), 0, "commodity with metadata should validate")
+
+	handler.Apply(ctx, ledger, directive, delta)
+
+	// Verify metadata was stored
+	node := ledger.graph.GetNode("USD")
+	assert.NotZero(t, node, "node should exist")
+	assert.Equal(t, node.Kind, "commodity", "node should be commodity kind")
+
+	if commodityNodeMeta, ok := node.Meta.(*CommodityNode); ok {
+		assert.Equal(t, commodityNodeMeta.ID, "USD", "ID should match")
+		assert.True(t, len(commodityNodeMeta.Metadata) > 0, "metadata should be stored")
+	}
+}
+
+// TestCommodityNodeKind tests that declared commodities have distinct node kind
+func TestCommodityNodeKind(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2024-01-01 commodity BTC
+		  precision: 8
+	`
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	handler := &CommodityHandler{}
+	directive := tree.Directives[0]
+	_, delta := handler.Validate(ctx, ledger, directive)
+	handler.Apply(ctx, ledger, directive, delta)
+
+	// Verify the node type is distinct from implicit currency nodes
+	btcNode := ledger.graph.GetNode("BTC")
+	assert.Equal(t, btcNode.Kind, "commodity", "declared commodities should have 'commodity' kind")
+}
+
+// TestCommodityIntegrationWithOtherDirectives tests that commodities work with other directives
+func TestCommodityIntegrationWithOtherDirectives(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2024-01-01 commodity USD
+		  name: "US Dollar"
+		
+		2024-01-01 open Assets:Checking USD
+		2024-01-01 open Equity:Opening USD
+		
+		2024-01-02 * "Initial deposit"
+		  Assets:Checking  100 USD
+		  Equity:Opening  -100 USD
+	`
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	// Process all directives
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err, "should process without errors")
+
+	// Verify commodity node exists alongside account nodes
+	commodityNode := ledger.graph.GetNode("USD")
+	assert.NotZero(t, commodityNode, "commodity node should exist")
+	assert.Equal(t, commodityNode.Kind, "commodity", "commodity node kind should be correct")
+
+	// Verify account node also exists
+	accountNode := ledger.graph.GetNode("Assets:Checking")
+	assert.NotZero(t, accountNode, "account node should exist")
+	assert.Equal(t, accountNode.Kind, "account", "account node kind should be correct")
 }

@@ -121,5 +121,18 @@ func (d *PadDelta) HasMutations() bool {
 	return true // Always stores the pad entry
 }
 
+// CommodityDelta describes changes from a commodity declaration.
+// Stores commodity metadata for graph node creation.
+type CommodityDelta struct {
+	CommodityID string          // Currency/commodity code
+	Date        *ast.Date       // Effective date
+	Metadata    []*ast.Metadata // Commodity metadata
+}
+
+// HasMutations returns true if delta requires state changes
+func (d *CommodityDelta) HasMutations() bool {
+	return true // Commodity declaration always creates/updates node
+}
+
 // NoteDelta - no mutations needed (validation only)
 // DocumentDelta - no mutations needed (validation only)

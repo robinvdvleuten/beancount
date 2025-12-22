@@ -1408,3 +1408,23 @@ func validatePrice(price *ast.Price) []error {
 
 	return errs
 }
+
+// validateCommodity validates a commodity directive.
+// Per Beancount spec and Parser → Validate separation:
+//   - Parser ensures: non-empty currency code (via parseIdent requirement)
+//   - Parser ensures: valid IDENT format (via lexer tokenization)
+//   - Validator ensures: semantic constraints (future: duplicate detection)
+//
+// Currently, the parser already enforces all syntactic requirements for
+// commodity directives, so validateCommodity is a pass-through.
+//
+// Reference: https://beancount.github.io/docs/beancount_language_syntax.html#commodities-currencies
+func (v *validator) validateCommodity(commodity *ast.Commodity) []error {
+	// Parser enforces:
+	// - Currency code is non-empty (parseIdent fails otherwise)
+	// - Currency code is valid IDENT (lexer validates format)
+	//
+	// No additional validation needed at this stage.
+	// Future: Duplicate detection would go here.
+	return nil
+}
