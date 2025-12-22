@@ -133,7 +133,7 @@ type Directive interface {
 	Positioned
 
 	date() *Date
-	Directive() string
+	Kind() DirectiveKind
 }
 
 // positionedItem represents any AST item that has a position in the source file.

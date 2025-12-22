@@ -137,7 +137,7 @@ func TestDirectivePositioning(t *testing.T) {
 			// Verify position and type of each directive
 			for i, directive := range tree.Directives {
 				expectedType := tt.expectedTypes[i]
-				actualType := directive.Directive()
+				actualType := string(directive.Kind())
 				actualLine := getDirectiveLine(directive)
 
 				assert.Equal(t, expectedType, actualType,

@@ -1,5 +1,22 @@
 package ast
 
+// DirectiveKind identifies the type of directive for dispatch without type switching.
+type DirectiveKind string
+
+const (
+	KindCommodity   DirectiveKind = "commodity"
+	KindOpen        DirectiveKind = "open"
+	KindClose       DirectiveKind = "close"
+	KindBalance     DirectiveKind = "balance"
+	KindPad         DirectiveKind = "pad"
+	KindNote        DirectiveKind = "note"
+	KindDocument    DirectiveKind = "document"
+	KindPrice       DirectiveKind = "price"
+	KindEvent       DirectiveKind = "event"
+	KindCustom      DirectiveKind = "custom"
+	KindTransaction DirectiveKind = "transaction"
+)
+
 // Commodity declares a commodity or currency that can be used in the ledger.
 // This directive is optional but helps document which currencies and commodities
 // are expected in your accounts. It establishes the existence of a tradable
@@ -21,9 +38,9 @@ type Commodity struct {
 
 var _ Directive = &Commodity{}
 
-func (c *Commodity) Position() Position { return c.Pos }
-func (c *Commodity) date() *Date        { return c.Date }
-func (c *Commodity) Directive() string  { return "commodity" }
+func (c *Commodity) Position() Position  { return c.Pos }
+func (c *Commodity) date() *Date         { return c.Date }
+func (c *Commodity) Kind() DirectiveKind { return KindCommodity }
 
 // Open declares the opening of an account at a specific date, marking the beginning
 // of its lifetime in the ledger. You can optionally constrain which currencies the
@@ -47,9 +64,9 @@ type Open struct {
 
 var _ Directive = &Open{}
 
-func (o *Open) Position() Position { return o.Pos }
-func (o *Open) date() *Date        { return o.Date }
-func (o *Open) Directive() string  { return "open" }
+func (o *Open) Position() Position  { return o.Pos }
+func (o *Open) date() *Date         { return o.Date }
+func (o *Open) Kind() DirectiveKind { return KindOpen }
 
 // Close declares the closing of an account at a specific date, marking the end of
 // its lifetime in the ledger. After this date, the account should have a zero balance
@@ -70,9 +87,9 @@ type Close struct {
 
 var _ Directive = &Close{}
 
-func (c *Close) Position() Position { return c.Pos }
-func (c *Close) date() *Date        { return c.Date }
-func (c *Close) Directive() string  { return "close" }
+func (c *Close) Position() Position  { return c.Pos }
+func (c *Close) date() *Date         { return c.Date }
+func (c *Close) Kind() DirectiveKind { return KindClose }
 
 // Balance asserts that an account should have a specific balance at the beginning
 // of a given date. This directive is used to verify the integrity of your ledger
@@ -95,9 +112,9 @@ type Balance struct {
 
 var _ Directive = &Balance{}
 
-func (b *Balance) Position() Position { return b.Pos }
-func (b *Balance) date() *Date        { return b.Date }
-func (b *Balance) Directive() string  { return "balance" }
+func (b *Balance) Position() Position  { return b.Pos }
+func (b *Balance) date() *Date         { return b.Date }
+func (b *Balance) Kind() DirectiveKind { return KindBalance }
 
 // Pad automatically inserts a transaction to bring an account to a specific balance
 // determined by the next balance assertion. The padding amount is calculated from the
@@ -120,9 +137,9 @@ type Pad struct {
 
 var _ Directive = &Pad{}
 
-func (p *Pad) Position() Position { return p.Pos }
-func (p *Pad) date() *Date        { return p.Date }
-func (p *Pad) Directive() string  { return "pad" }
+func (p *Pad) Position() Position  { return p.Pos }
+func (p *Pad) date() *Date         { return p.Date }
+func (p *Pad) Kind() DirectiveKind { return KindPad }
 
 // Note attaches a dated comment or note to an account, allowing you to record
 // important information about an account at a specific point in time. These notes
@@ -144,9 +161,9 @@ type Note struct {
 
 var _ Directive = &Note{}
 
-func (n *Note) Position() Position { return n.Pos }
-func (n *Note) date() *Date        { return n.Date }
-func (n *Note) Directive() string  { return "note" }
+func (n *Note) Position() Position  { return n.Pos }
+func (n *Note) date() *Date         { return n.Date }
+func (n *Note) Kind() DirectiveKind { return KindNote }
 
 // Document associates an external file (such as a receipt, invoice, statement, or
 // contract) with an account at a specific date. The path can be absolute or relative
@@ -169,9 +186,9 @@ type Document struct {
 
 var _ Directive = &Document{}
 
-func (d *Document) Position() Position { return d.Pos }
-func (d *Document) date() *Date        { return d.Date }
-func (d *Document) Directive() string  { return "document" }
+func (d *Document) Position() Position  { return d.Pos }
+func (d *Document) date() *Date         { return d.Date }
+func (d *Document) Kind() DirectiveKind { return KindDocument }
 
 // Price declares the price of a commodity in terms of another currency at a specific
 // date. These entries are used to track exchange rates, stock prices, and other market
@@ -194,9 +211,9 @@ type Price struct {
 
 var _ Directive = &Price{}
 
-func (p *Price) Position() Position { return p.Pos }
-func (p *Price) date() *Date        { return p.Date }
-func (p *Price) Directive() string  { return "price" }
+func (p *Price) Position() Position  { return p.Pos }
+func (p *Price) date() *Date         { return p.Date }
+func (p *Price) Kind() DirectiveKind { return KindPrice }
 
 // Event records a named event with a value at a specific date, allowing you to track
 // important life events, location changes, employment history, or other time-based
@@ -219,9 +236,9 @@ type Event struct {
 
 var _ Directive = &Event{}
 
-func (e *Event) Position() Position { return e.Pos }
-func (e *Event) date() *Date        { return e.Date }
-func (e *Event) Directive() string  { return "event" }
+func (e *Event) Position() Position  { return e.Pos }
+func (e *Event) date() *Date         { return e.Date }
+func (e *Event) Kind() DirectiveKind { return KindEvent }
 
 // Custom is a prototype directive for plugin development, allowing arbitrary typed values
 // after the directive name. This provides a flexible extension mechanism for plugins to
@@ -244,9 +261,9 @@ type Custom struct {
 
 var _ Directive = &Custom{}
 
-func (c *Custom) Position() Position { return c.Pos }
-func (c *Custom) date() *Date        { return c.Date }
-func (c *Custom) Directive() string  { return "custom" }
+func (c *Custom) Position() Position  { return c.Pos }
+func (c *Custom) date() *Date         { return c.Date }
+func (c *Custom) Kind() DirectiveKind { return KindCustom }
 
 // CustomValue represents a single value in a custom directive, which can be a string,
 // number, boolean, or amount. Only one field will be non-nil/non-zero for each value.

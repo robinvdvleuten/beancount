@@ -63,7 +63,7 @@ const (
 //
 // Example: balance directive → "balance" → 8 (7 chars + 1 space)
 func directiveKeywordWidth(d ast.Directive) int {
-	return runewidth.StringWidth(d.Directive()) + 1
+	return runewidth.StringWidth(string(d.Kind())) + 1
 }
 
 // Formatter handles formatting of Beancount files with proper alignment and spacing.

@@ -33,9 +33,9 @@ type Transaction struct {
 
 var _ Directive = &Transaction{}
 
-func (t *Transaction) Position() Position { return t.Pos }
-func (t *Transaction) date() *Date        { return t.Date }
-func (t *Transaction) Directive() string  { return "transaction" }
+func (t *Transaction) Position() Position  { return t.Pos }
+func (t *Transaction) date() *Date         { return t.Date }
+func (t *Transaction) Kind() DirectiveKind { return KindTransaction }
 
 // Posting represents a single leg of a transaction, specifying an account and optional
 // amount, cost, and price. Each transaction must have at least two postings that balance
