@@ -8,25 +8,6 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Helper to parse decimal - consistent with existing tests
-func mustParseDec(s string) decimal.Decimal {
-	d, err := decimal.NewFromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return d
-}
-
-// Helper to create a Date from string (consistent with existing tests)
-func newTestDate(dateStr string) *ast.Date {
-	date := &ast.Date{}
-	err := date.Capture([]string{dateStr})
-	if err != nil {
-		panic(err)
-	}
-	return date
-}
-
 // Helper to add price and panic on error (for tests with valid inputs)
 func addPriceMust(pg *PriceGraph, date *ast.Date, from, to string, rate decimal.Decimal) {
 	err := pg.AddPrice(date, from, to, rate)
