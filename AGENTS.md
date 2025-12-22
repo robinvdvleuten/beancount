@@ -65,6 +65,10 @@ diff /tmp/official.beancount /tmp/our.beancount
 
 # Validate round-trip
 beancount format input.beancount | bean-check /dev/stdin
+
+# Debug lexer issues
+beancount doctor lex input.beancount
+bean-doctor lex input.beancount
 ```
 
 ## Error Handling
