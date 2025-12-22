@@ -891,3 +891,76 @@ func TestMustProcessEmpty(t *testing.T) {
 	accounts := ledger.Accounts()
 	assert.Equal(t, len(accounts), 0)
 }
+
+func TestLedger_GetAccountsByType(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2020-01-01 open Assets:Checking
+		2020-01-01 open Assets:Savings
+		2020-01-01 open Liabilities:CreditCard
+		2020-01-01 open Liabilities:Loan
+		2020-01-01 open Equity:OpeningBalances
+		2020-01-01 open Income:Salary
+		2020-01-01 open Expenses:Groceries
+		2020-01-01 open Expenses:Utilities
+	`
+
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+	ledger.MustProcess(ctx, tree)
+
+	tests := []struct {
+		accountType ast.AccountType
+		expected    []string
+	}{
+		{
+			accountType: ast.AccountTypeAssets,
+			expected:    []string{"Assets:Checking", "Assets:Savings"},
+		},
+		{
+			accountType: ast.AccountTypeLiabilities,
+			expected:    []string{"Liabilities:CreditCard", "Liabilities:Loan"},
+		},
+		{
+			accountType: ast.AccountTypeEquity,
+			expected:    []string{"Equity:OpeningBalances"},
+		},
+		{
+			accountType: ast.AccountTypeIncome,
+			expected:    []string{"Income:Salary"},
+		},
+		{
+			accountType: ast.AccountTypeExpenses,
+			expected:    []string{"Expenses:Groceries", "Expenses:Utilities"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.accountType.String(), func(t *testing.T) {
+			accounts := ledger.GetAccountsByType(tt.accountType)
+			assert.Equal(t, len(accounts), len(tt.expected))
+
+			// Verify sorted order and correct type
+			for i, account := range accounts {
+				assert.Equal(t, string(account.Name), tt.expected[i])
+				assert.Equal(t, account.Type, tt.accountType)
+			}
+		})
+	}
+}
+
+func TestLedger_GetAccountsByTypeEmpty(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2020-01-01 open Assets:Checking
+		2020-01-01 open Assets:Savings
+	`
+
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+	ledger.MustProcess(ctx, tree)
+
+	// Query for account type with no accounts
+	expenses := ledger.GetAccountsByType(ast.AccountTypeExpenses)
+	assert.Equal(t, len(expenses), 0)
+}

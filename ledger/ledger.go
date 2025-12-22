@@ -36,6 +36,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -257,6 +258,26 @@ func (l *Ledger) GetAccount(name string) (*Account, bool) {
 // Accounts returns all accounts
 func (l *Ledger) Accounts() map[string]*Account {
 	return l.accounts
+}
+
+// GetAccountsByType returns all accounts of the specified type, sorted by name.
+func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
+	// Pre-allocate slice with capacity hint
+	accounts := make([]*Account, 0, len(l.accounts))
+
+	// Collect accounts of the specified type
+	for _, account := range l.accounts {
+		if account.Type == accountType {
+			accounts = append(accounts, account)
+		}
+	}
+
+	// Sort by name for deterministic output
+	sort.Slice(accounts, func(i, j int) bool {
+		return accounts[i].Name < accounts[j].Name
+	})
+
+	return accounts
 }
 
 // processDirective processes a single directive
