@@ -22,7 +22,7 @@
     "match-sorter": "^8.2.0",
     "react": "^19",
     "react-dom": "^19",
-    "tailwindcss": "^4.1.16"
+    "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",
