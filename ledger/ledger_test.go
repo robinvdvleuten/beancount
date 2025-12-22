@@ -1064,7 +1064,7 @@ func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
 	assert.True(t, rate.IsZero())
 }
 
-func TestLedger_PriceGraphAccessor(t *testing.T) {
+func TestLedger_GraphAccessor(t *testing.T) {
 	source := `
 2024-01-15 price USD 1.08 CAD
 `
@@ -1076,12 +1076,12 @@ func TestLedger_PriceGraphAccessor(t *testing.T) {
 	err := ledger.Process(ctx, tree)
 	assert.NoError(t, err)
 
-	// Verify we can access the price graph directly
-	pg := ledger.PriceGraph()
-	assert.NotZero(t, pg)
+	// Verify we can access the graph directly
+	g := ledger.Graph()
+	assert.NotZero(t, g)
 
 	date := newTestDate("2024-01-15")
-	rate, found := pg.LookupPrice(date, "USD", "CAD")
+	rate, found := ledger.GetPrice(date, "USD", "CAD")
 	assert.True(t, found)
 	assert.True(t, rate.Equal(mustParseDec("1.08")))
 }

@@ -48,18 +48,22 @@ import (
 // transaction validation, and error tracking. It processes directives in date order
 // and maintains the complete state of all accounts including their inventory positions.
 //
+// The ledger is implemented as a unified graph where:
+//   - Nodes represent accounts and currencies
+//   - Edges represent prices (currency conversions) and account state changes
+//   - Temporal queries use forward-fill semantics (most recent price on or before date)
+//
 // The ledger validates all transactions for balance, ensures accounts are opened before
 // use, verifies balance assertions, and processes pad directives. All validation errors
 // are collected and returned together after processing.
 type Ledger struct {
-	accounts              map[string]*Account
+	graph                 *Graph // Unified graph of accounts, currencies, and relationships
 	errors                []error
 	options               map[string][]string
 	padEntries            map[string]*ast.Pad // account -> pad directive
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
 	toleranceConfig       *ToleranceConfig
-	priceGraph            *PriceGraph // Temporal index of currency exchange rates
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -92,13 +96,12 @@ func (e *ValidationErrors) Unwrap() []error {
 // New creates a new empty ledger
 func New() *Ledger {
 	return &Ledger{
-		accounts:        make(map[string]*Account),
+		graph:           NewGraph(),
 		errors:          make([]error, 0),
 		options:         make(map[string][]string),
 		padEntries:      make(map[string]*ast.Pad),
 		usedPads:        make(map[string]bool),
 		toleranceConfig: NewToleranceConfig(),
-		priceGraph:      NewPriceGraph(),
 	}
 }
 
@@ -134,6 +137,15 @@ func (l *Ledger) GetOptions(key string) []string {
 func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	// Extract telemetry collector from context
 	collector := telemetry.FromContext(ctx)
+
+	// Enrich AST with semantic information (currencies, accounts)
+	enriched := tree.Enrich()
+
+	// Pre-populate graph with currency nodes (they're not explicitly opened)
+	// Account nodes are created by Open directives with full metadata
+	for currency := range enriched.Currencies {
+		l.graph.AddNode(currency, "currency", nil)
+	}
 
 	// Process options first
 	for _, opt := range tree.Options {
@@ -258,24 +270,33 @@ func (l *Ledger) Errors() []error {
 
 // GetAccount returns an account by name
 func (l *Ledger) GetAccount(name string) (*Account, bool) {
-	acc, ok := l.accounts[name]
+	node := l.graph.GetNode(name)
+	if node == nil || node.Kind != "account" {
+		return nil, false
+	}
+	acc, ok := node.Meta.(*Account)
 	return acc, ok
 }
 
-// Accounts returns all accounts
+// Accounts returns all accounts in the ledger
 func (l *Ledger) Accounts() map[string]*Account {
-	return l.accounts
+	result := make(map[string]*Account)
+	for _, node := range l.graph.GetNodesByKind("account") {
+		if acc, ok := node.Meta.(*Account); ok {
+			result[node.ID] = acc
+		}
+	}
+	return result
 }
 
 // GetAccountsByType returns all accounts of the specified type, sorted by name.
 func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
-	// Pre-allocate slice with capacity hint
-	accounts := make([]*Account, 0, len(l.accounts))
+	var accounts []*Account
 
-	// Collect accounts of the specified type
-	for _, account := range l.accounts {
-		if account.Type == accountType {
-			accounts = append(accounts, account)
+	// Collect accounts of the specified type from graph
+	for _, node := range l.graph.GetNodesByKind("account") {
+		if acc, ok := node.Meta.(*Account); ok && acc.Type == accountType {
+			accounts = append(accounts, acc)
 		}
 	}
 
@@ -293,17 +314,101 @@ func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
 //
 // Same-currency conversions always return 1.0.
 func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (decimal.Decimal, bool) {
-	return l.priceGraph.LookupPrice(date, fromCurrency, toCurrency)
+	// Same currency always returns 1.0
+	if fromCurrency == toCurrency {
+		return decimal.NewFromInt(1), true
+	}
+
+	// Build temporary graph with most recent edges per currency pair
+	tempGraph := l.buildForwardFillGraph(date)
+
+	// Find path using the filtered edges
+	path, err := tempGraph.FindPath(fromCurrency, toCurrency, date)
+	if err != nil {
+		return decimal.Zero, false
+	}
+
+	// Multiply rates along the path
+	result := decimal.NewFromInt(1)
+	for _, edge := range path {
+		if edge.Kind == "price" && !edge.Weight.IsZero() {
+			result = result.Mul(edge.Weight)
+		}
+	}
+
+	return result, true
+}
+
+// buildForwardFillGraph constructs a temporary graph with only the most recent
+// price edges for each currency pair on or before the given date.
+// This implements forward-fill semantics for price lookups.
+func (l *Ledger) buildForwardFillGraph(date *ast.Date) *Graph {
+	tempGraph := NewGraph()
+	validEdges := l.graph.GetPriceEdgesOnDate(date)
+	seenPairs := make(map[string]bool)
+
+	for _, edge := range validEdges {
+		// Only add the first (most recent) edge for each currency pair
+		pairKey := edge.From + "->" + edge.To
+		if !seenPairs[pairKey] {
+			tempGraph.AddEdge(edge)
+			seenPairs[pairKey] = true
+		}
+
+		// Also add inverse if not inferred and not already seen
+		if !edge.Inferred {
+			inversePairKey := edge.To + "->" + edge.From
+			if !seenPairs[inversePairKey] {
+				inverseEdge := &Edge{
+					From:     edge.To,
+					To:       edge.From,
+					Kind:     "price",
+					Date:     edge.Date,
+					Weight:   decimal.NewFromInt(1).Div(edge.Weight),
+					Meta:     edge.Meta,
+					Inferred: true,
+				}
+				tempGraph.AddEdge(inverseEdge)
+				seenPairs[inversePairKey] = true
+			}
+		}
+	}
+
+	return tempGraph
 }
 
 // HasPrice returns true if a price exists for the given currency pair on or before the date.
 func (l *Ledger) HasPrice(date *ast.Date, fromCurrency, toCurrency string) bool {
-	return l.priceGraph.HasPrice(date, fromCurrency, toCurrency)
+	_, found := l.GetPrice(date, fromCurrency, toCurrency)
+	return found
 }
 
-// PriceGraph returns the underlying price graph for advanced queries.
-func (l *Ledger) PriceGraph() *PriceGraph {
-	return l.priceGraph
+// ConvertAmount converts an amount from one currency to another at a given date.
+// Uses pathfinding to find a conversion route if a direct edge doesn't exist.
+// Returns (converted amount, error). Same-currency conversions always return 1.0.
+func (l *Ledger) ConvertAmount(amount decimal.Decimal, fromCurrency, toCurrency string, date *ast.Date) (decimal.Decimal, error) {
+	if fromCurrency == toCurrency {
+		return decimal.NewFromInt(1), nil
+	}
+
+	rate, found := l.GetPrice(date, fromCurrency, toCurrency)
+	if !found {
+		return decimal.Zero, fmt.Errorf("no price found for %s→%s on %s", fromCurrency, toCurrency, date.String())
+	}
+
+	return amount.Mul(rate), nil
+}
+
+// FindPath finds a path of price edges from one currency to another at a given date.
+// Returns the edges in order, or an error if no path exists.
+// Useful for debugging or understanding currency conversion routes.
+func (l *Ledger) FindPath(fromCurrency, toCurrency string, date *ast.Date) ([]*Edge, error) {
+	return l.graph.FindPath(fromCurrency, toCurrency, date)
+}
+
+// Graph returns the underlying graph for advanced queries.
+func (l *Ledger) Graph() *Graph {
+	return l.graph
 }
 
 // processDirective processes a single directive
@@ -327,7 +432,7 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 
 // applyOpen applies the open delta to the ledger (mutation only)
 func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta) {
-	// Build account from delta (avoid allocating during validation)
+	accountName := string(delta.Account)
 	account := &Account{
 		Name:                 delta.Account,
 		Type:                 delta.Account.Type(),
@@ -335,32 +440,80 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta) {
 		ConstraintCurrencies: delta.ConstraintCurrencies,
 		BookingMethod:        delta.BookingMethod,
 		Metadata:             delta.Metadata,
-		Inventory:            NewInventory(), // Create inventory only at mutation time
+		Inventory:            NewInventory(),
 	}
+	l.graph.AddNode(accountName, "account", account)
 
-	l.accounts[string(delta.Account)] = account
+	// Create implicit parent nodes and hierarchy edges
+	l.ensureAccountHierarchy(accountName)
+}
+
+// ensureAccountHierarchy creates parent nodes and hierarchy edges for an account.
+// For example, "Assets:US:Checking" creates edges:
+//
+//	Assets -> Assets:US
+//	Assets:US -> Assets:US:Checking
+func (l *Ledger) ensureAccountHierarchy(accountName string) {
+	parts := strings.Split(accountName, ":")
+	for i := 1; i < len(parts); i++ {
+		parentPath := strings.Join(parts[:i], ":")
+		childPath := strings.Join(parts[:i+1], ":")
+
+		// Ensure parent node exists (implicit if not explicitly opened)
+		if l.graph.GetNode(parentPath) == nil {
+			l.graph.AddNode(parentPath, "account", nil)
+		}
+
+		// Ensure hierarchy edge exists
+		existsEdge := false
+		for _, edge := range l.graph.GetOutgoingEdges(parentPath) {
+			if edge.Kind == "hierarchy" && edge.To == childPath {
+				existsEdge = true
+				break
+			}
+		}
+
+		if !existsEdge {
+			l.graph.AddEdge(&Edge{
+				From:   parentPath,
+				To:     childPath,
+				Kind:   "hierarchy",
+				Date:   nil,
+				Weight: decimal.Zero,
+				Meta:   nil,
+			})
+		}
+	}
 }
 
 // applyClose applies the close delta to the ledger (mutation only)
 func (l *Ledger) applyClose(delta *CloseDelta) {
-	account := l.accounts[delta.AccountName]
-	account.CloseDate = delta.CloseDate
+	node := l.graph.GetNode(delta.AccountName)
+	if node == nil {
+		return
+	}
+	if account, ok := node.Meta.(*Account); ok {
+		account.CloseDate = delta.CloseDate
+	}
 }
 
 // applyTransaction mutates ledger state (inventory updates)
 // Only called after validation passes. Panics on bugs (invariant violations).
 func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta) {
 	for _, posting := range txn.Postings {
-		// Amount is always set after inference (either explicit or inferred)
 		if posting.Amount == nil {
 			continue
 		}
 
 		accountName := string(posting.Account)
-		account, ok := l.accounts[accountName]
-		if !ok {
-			// This should never happen after validation - panic to catch bugs
+		node := l.graph.GetNode(accountName)
+		if node == nil {
 			panic(fmt.Sprintf("BUG: account %s not found after validation", accountName))
+		}
+
+		account, ok := node.Meta.(*Account)
+		if !ok {
+			panic(fmt.Sprintf("BUG: account %s metadata is not *Account", accountName))
 		}
 
 		amount, err := ParseAmount(posting.Amount)
@@ -370,20 +523,9 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 		}
 		currency := posting.Amount.Currency
 
-		// Determine cost - inferred costs are now stored directly on posting.Cost
-		var costToUse *ast.Cost
-		hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost() && !posting.Cost.Inferred
-		hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
-		hasInferredCost := posting.Cost != nil && posting.Cost.Inferred
-		hasMergeCost := posting.Cost != nil && posting.Cost.IsMergeCost()
-
-		if hasExplicitCost || hasEmptyCost || hasMergeCost || hasInferredCost {
-			costToUse = posting.Cost
-		}
-
-		// Update inventory
-		if hasExplicitCost || hasEmptyCost || hasInferredCost || hasMergeCost {
-			lotSpec, err := ParseLotSpec(costToUse)
+		// Update inventory if posting has cost specification
+		if posting.Cost != nil {
+			lotSpec, err := ParseLotSpec(posting.Cost)
 			if err != nil {
 				// This should never happen after validation - panic to catch bugs
 				panic(fmt.Sprintf("BUG: lot spec parsing failed after validation: %v", err))
@@ -422,13 +564,35 @@ func (l *Ledger) applyBalance(delta *BalanceDelta) {
 	// Pad removal happens at end of processing to support multiple currencies
 }
 
-// applyPrice adds a price to the ledger's price graph (mutation only)
+// applyPrice adds price edges to the ledger's graph (mutation only)
 func (l *Ledger) applyPrice(price *ast.Price) {
 	amount, err := ParseAmount(price.Amount)
 	if err != nil {
-		// This should never happen after validation - panic to catch bugs
 		panic(fmt.Sprintf("BUG: amount parsing failed after validation: %v", err))
 	}
 
-	_ = l.priceGraph.AddPrice(price.Date, price.Commodity, price.Amount.Currency, amount)
+	from := string(price.Commodity)
+	to := price.Amount.Currency
+
+	// Add forward price edge
+	l.graph.AddEdge(&Edge{
+		From:     from,
+		To:       to,
+		Kind:     "price",
+		Date:     price.Date,
+		Weight:   amount,
+		Meta:     price,
+		Inferred: false,
+	})
+
+	// Add inverse price edge (bidirectional)
+	l.graph.AddEdge(&Edge{
+		From:     to,
+		To:       from,
+		Kind:     "price",
+		Date:     price.Date,
+		Weight:   decimal.NewFromInt(1).Div(amount),
+		Meta:     price,
+		Inferred: true,
+	})
 }

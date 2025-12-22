@@ -1,5 +1,14 @@
 package ast
 
+// Stateful indicates a directive affects graph nodes and can report which ones.
+// This enables semantic analysis without type switching or field inspection.
+type Stateful interface {
+	// AffectedNodes returns the node IDs (account names, currency codes) this directive touches.
+	// Used to build the graph skeleton and understand directive dependencies.
+	// Returns empty slice if directive affects no nodes.
+	AffectedNodes() []string
+}
+
 // DirectiveKind identifies the type of directive for dispatch without type switching.
 type DirectiveKind string
 
@@ -41,6 +50,12 @@ var _ Directive = &Commodity{}
 func (c *Commodity) Position() Position  { return c.Pos }
 func (c *Commodity) date() *Date         { return c.Date }
 func (c *Commodity) Kind() DirectiveKind { return KindCommodity }
+func (c *Commodity) AffectedNodes() []string {
+	if c.Currency == "" {
+		return []string{}
+	}
+	return []string{c.Currency}
+}
 
 // Open declares the opening of an account at a specific date, marking the beginning
 // of its lifetime in the ledger. You can optionally constrain which currencies the
@@ -67,6 +82,11 @@ var _ Directive = &Open{}
 func (o *Open) Position() Position  { return o.Pos }
 func (o *Open) date() *Date         { return o.Date }
 func (o *Open) Kind() DirectiveKind { return KindOpen }
+func (o *Open) AffectedNodes() []string {
+	nodes := []string{string(o.Account)}
+	nodes = append(nodes, o.ConstraintCurrencies...)
+	return nodes
+}
 
 // Close declares the closing of an account at a specific date, marking the end of
 // its lifetime in the ledger. After this date, the account should have a zero balance
@@ -90,6 +110,9 @@ var _ Directive = &Close{}
 func (c *Close) Position() Position  { return c.Pos }
 func (c *Close) date() *Date         { return c.Date }
 func (c *Close) Kind() DirectiveKind { return KindClose }
+func (c *Close) AffectedNodes() []string {
+	return []string{string(c.Account)}
+}
 
 // Balance asserts that an account should have a specific balance at the beginning
 // of a given date. This directive is used to verify the integrity of your ledger
@@ -115,6 +138,13 @@ var _ Directive = &Balance{}
 func (b *Balance) Position() Position  { return b.Pos }
 func (b *Balance) date() *Date         { return b.Date }
 func (b *Balance) Kind() DirectiveKind { return KindBalance }
+func (b *Balance) AffectedNodes() []string {
+	nodes := []string{string(b.Account)}
+	if b.Amount != nil {
+		nodes = append(nodes, b.Amount.Currency)
+	}
+	return nodes
+}
 
 // Pad automatically inserts a transaction to bring an account to a specific balance
 // determined by the next balance assertion. The padding amount is calculated from the
@@ -140,6 +170,9 @@ var _ Directive = &Pad{}
 func (p *Pad) Position() Position  { return p.Pos }
 func (p *Pad) date() *Date         { return p.Date }
 func (p *Pad) Kind() DirectiveKind { return KindPad }
+func (p *Pad) AffectedNodes() []string {
+	return []string{string(p.Account), string(p.AccountPad)}
+}
 
 // Note attaches a dated comment or note to an account, allowing you to record
 // important information about an account at a specific point in time. These notes
@@ -164,6 +197,9 @@ var _ Directive = &Note{}
 func (n *Note) Position() Position  { return n.Pos }
 func (n *Note) date() *Date         { return n.Date }
 func (n *Note) Kind() DirectiveKind { return KindNote }
+func (n *Note) AffectedNodes() []string {
+	return []string{string(n.Account)}
+}
 
 // Document associates an external file (such as a receipt, invoice, statement, or
 // contract) with an account at a specific date. The path can be absolute or relative
@@ -189,6 +225,9 @@ var _ Directive = &Document{}
 func (d *Document) Position() Position  { return d.Pos }
 func (d *Document) date() *Date         { return d.Date }
 func (d *Document) Kind() DirectiveKind { return KindDocument }
+func (d *Document) AffectedNodes() []string {
+	return []string{string(d.Account)}
+}
 
 // Price declares the price of a commodity in terms of another currency at a specific
 // date. These entries are used to track exchange rates, stock prices, and other market
@@ -214,6 +253,13 @@ var _ Directive = &Price{}
 func (p *Price) Position() Position  { return p.Pos }
 func (p *Price) date() *Date         { return p.Date }
 func (p *Price) Kind() DirectiveKind { return KindPrice }
+func (p *Price) AffectedNodes() []string {
+	nodes := []string{p.Commodity}
+	if p.Amount != nil {
+		nodes = append(nodes, p.Amount.Currency)
+	}
+	return nodes
+}
 
 // Event records a named event with a value at a specific date, allowing you to track
 // important life events, location changes, employment history, or other time-based
@@ -239,6 +285,9 @@ var _ Directive = &Event{}
 func (e *Event) Position() Position  { return e.Pos }
 func (e *Event) date() *Date         { return e.Date }
 func (e *Event) Kind() DirectiveKind { return KindEvent }
+func (e *Event) AffectedNodes() []string {
+	return []string{}
+}
 
 // Custom is a prototype directive for plugin development, allowing arbitrary typed values
 // after the directive name. This provides a flexible extension mechanism for plugins to
@@ -264,6 +313,9 @@ var _ Directive = &Custom{}
 func (c *Custom) Position() Position  { return c.Pos }
 func (c *Custom) date() *Date         { return c.Date }
 func (c *Custom) Kind() DirectiveKind { return KindCustom }
+func (c *Custom) AffectedNodes() []string {
+	return []string{}
+}
 
 // CustomValue represents a single value in a custom directive, which can be a string,
 // number, boolean, or amount. Only one field will be non-nil/non-zero for each value.

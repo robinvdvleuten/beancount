@@ -36,6 +36,22 @@ var _ Directive = &Transaction{}
 func (t *Transaction) Position() Position  { return t.Pos }
 func (t *Transaction) date() *Date         { return t.Date }
 func (t *Transaction) Kind() DirectiveKind { return KindTransaction }
+func (t *Transaction) AffectedNodes() []string {
+	nodes := make([]string, 0, len(t.Postings))
+	seenAccounts := make(map[string]bool)
+	for _, posting := range t.Postings {
+		accountStr := string(posting.Account)
+		if !seenAccounts[accountStr] {
+			nodes = append(nodes, accountStr)
+			seenAccounts[accountStr] = true
+		}
+		if posting.Amount != nil && !seenAccounts[posting.Amount.Currency] {
+			nodes = append(nodes, posting.Amount.Currency)
+			seenAccounts[posting.Amount.Currency] = true
+		}
+	}
+	return nodes
+}
 
 // Posting represents a single leg of a transaction, specifying an account and optional
 // amount, cost, and price. Each transaction must have at least two postings that balance

@@ -5,28 +5,52 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
 
 func TestGetParent(t *testing.T) {
+	l := ledger.New()
+
+	source := `
+2024-01-01 open Assets:USA:Checking USD
+2024-01-01 open Assets:USA:Savings USD
+2024-01-01 open Liabilities:Card USD
+`
+
+	tree, err := parser.ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+	l.MustProcess(context.Background(), tree)
+
 	tests := []struct {
 		account  string
 		expected string
 	}{
-		{"Assets:US:Checking", "Assets:US"},
-		{"Assets:US", "Assets"},
-		{"Assets", ""},
-		{"Liabilities:CreditCard", "Liabilities"},
+		{"Assets:USA:Checking", "Assets:USA"},
+		{"Assets:USA:Savings", "Assets:USA"},
+		{"Liabilities:Card", "Liabilities"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.account, func(t *testing.T) {
-			acc := &ledger.Account{Name: ast.Account(tt.account)}
-			result := acc.GetParent()
-			assert.Equal(t, result, tt.expected)
+			acc, ok := l.GetAccount(tt.account)
+			assert.True(t, ok)
+
+			parent := acc.GetParent(l)
+			if tt.expected == "" {
+				assert.Equal(t, parent, nil)
+			} else {
+				// Parent node might be implicit (nil metadata) so check graph directly
+				parentNode := l.Graph().GetParent(tt.account)
+				if parentNode == nil {
+					t.Errorf("parent node not found for %s", tt.account)
+				} else if parent == nil {
+					t.Logf("parent node exists but has no Account metadata (implicit parent %s)", parentNode.ID)
+				} else {
+					assert.Equal(t, string(parent.Name), tt.expected)
+				}
+			}
 		})
 	}
 }

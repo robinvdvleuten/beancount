@@ -89,6 +89,17 @@ func (g *Graph) GetNode(id string) *Node {
 	return g.nodes[id]
 }
 
+// GetNodesByKind returns all nodes of a given kind.
+func (g *Graph) GetNodesByKind(kind string) []*Node {
+	var result []*Node
+	for _, node := range g.nodes {
+		if node.Kind == kind {
+			result = append(result, node)
+		}
+	}
+	return result
+}
+
 // AddEdge adds a directed edge to the graph.
 // Automatically ensures both source and target nodes exist.
 // Returns the added edge for chaining or inspection.
@@ -263,6 +274,55 @@ func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, dat
 	}
 
 	return result, nil
+}
+
+// GetChildren returns all direct child nodes via hierarchy edges.
+// Returns nodes in no particular order.
+func (g *Graph) GetChildren(nodeID string) []*Node {
+	var children []*Node
+	for _, edge := range g.GetOutgoingEdges(nodeID) {
+		if edge.Kind == "hierarchy" {
+			if node := g.GetNode(edge.To); node != nil {
+				children = append(children, node)
+			}
+		}
+	}
+	return children
+}
+
+// GetParent returns the parent node via hierarchy edge, or nil if no parent.
+// Since edges are parent → child, we look for incoming edges (someone pointing to us).
+func (g *Graph) GetParent(nodeID string) *Node {
+	// Look for incoming hierarchy edges: parent -> nodeID
+	for _, edges := range g.edges {
+		for _, edge := range edges {
+			if edge.Kind == "hierarchy" && edge.To == nodeID {
+				return g.GetNode(edge.From)
+			}
+		}
+	}
+	return nil
+}
+
+// GetDescendants returns all descendant nodes via depth-first traversal.
+func (g *Graph) GetDescendants(nodeID string) []*Node {
+	var descendants []*Node
+	visited := make(map[string]bool)
+	g.collectDescendants(nodeID, &descendants, visited)
+	return descendants
+}
+
+// collectDescendants is a helper for GetDescendants that does DFS traversal.
+func (g *Graph) collectDescendants(nodeID string, descendants *[]*Node, visited map[string]bool) {
+	if visited[nodeID] {
+		return
+	}
+	visited[nodeID] = true
+
+	for _, child := range g.GetChildren(nodeID) {
+		*descendants = append(*descendants, child)
+		g.collectDescendants(child.ID, descendants, visited)
+	}
 }
 
 // Stats returns information about the graph structure.

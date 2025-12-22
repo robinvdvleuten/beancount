@@ -31,7 +31,7 @@ type OpenHandler struct{}
 
 func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	open := d.(*ast.Open)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 	return v.validateOpen(ctx, open)
 }
 
@@ -46,7 +46,7 @@ type CloseHandler struct{}
 
 func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	close := d.(*ast.Close)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 	errs, delta := v.validateClose(ctx, close)
 	return errs, delta
 }
@@ -61,7 +61,7 @@ type TransactionHandler struct{}
 
 func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	txn := d.(*ast.Transaction)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 	return v.validateTransaction(ctx, txn)
 }
 
@@ -76,7 +76,7 @@ type BalanceHandler struct{}
 
 func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	balance := d.(*ast.Balance)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 
 	// Basic validation
 	errs := v.validateBalance(balance)
@@ -117,7 +117,7 @@ type PadHandler struct{}
 
 func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	pad := d.(*ast.Pad)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 	errs := v.validatePad(pad)
 	return errs, pad
 }
@@ -133,7 +133,7 @@ type NoteHandler struct{}
 
 func (h *NoteHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	note := d.(*ast.Note)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 	errs := v.validateNote(note)
 	return errs, nil
 }
@@ -147,7 +147,7 @@ type DocumentHandler struct{}
 
 func (h *DocumentHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	doc := d.(*ast.Document)
-	v := newValidator(l.accounts, l.toleranceConfig)
+	v := newValidator(l.Accounts(), l.toleranceConfig)
 	errs := v.validateDocument(doc)
 	return errs, nil
 }
