@@ -59,7 +59,7 @@ type Ledger struct {
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
 	toleranceConfig       *ToleranceConfig
-	priceGraph            *PriceGraph         // Temporal index of currency exchange rates
+	priceGraph            *PriceGraph // Temporal index of currency exchange rates
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -211,7 +211,12 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		// Process synthetic transactions to update inventory
 		// Note: These transactions are pre-validated and always balance
 		for _, txn := range l.syntheticTransactions {
-			l.processTransaction(ctx, txn)
+			// Synthetic transactions skip validation - they're pre-validated by padding calculation
+			handler := GetHandler(txn.Kind())
+			if handler != nil {
+				_, delta := handler.Validate(ctx, l, txn)
+				handler.Apply(ctx, l, txn, delta)
+			}
 		}
 
 		insertTimer.End()
@@ -303,41 +308,21 @@ func (l *Ledger) PriceGraph() *PriceGraph {
 
 // processDirective processes a single directive
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
-	switch d := directive.(type) {
-	case *ast.Open:
-		l.processOpen(ctx, d)
-	case *ast.Close:
-		l.processClose(ctx, d)
-	case *ast.Transaction:
-		l.processTransaction(ctx, d)
-	case *ast.Balance:
-		l.processBalance(ctx, d)
-	case *ast.Pad:
-		l.processPad(ctx, d)
-	case *ast.Note:
-		l.processNote(ctx, d)
-	case *ast.Document:
-		l.processDocument(ctx, d)
-	case *ast.Price:
-		l.processPrice(ctx, d)
-	default:
-		// Unknown directive type - ignore for now
-		// Note: Commodity and Event directives are intentionally not processed
-		// as they don't affect ledger state or require validation
+	handler := GetHandler(directive.Kind())
+	if handler == nil {
+		// Unknown directive kind - ignore
+		return
 	}
-}
 
-// processOpen processes an Open directive with validation
-func (l *Ledger) processOpen(ctx context.Context, open *ast.Open) {
-	v := newValidator(l.accounts, l.toleranceConfig)
-	errs, delta := v.validateOpen(ctx, open)
-
+	// Validate directive
+	errs, delta := handler.Validate(ctx, l, directive)
 	if len(errs) > 0 {
 		l.errors = append(l.errors, errs...)
 		return
 	}
 
-	l.applyOpen(open, delta)
+	// Validation passed - apply mutations
+	handler.Apply(ctx, l, directive, delta)
 }
 
 // applyOpen applies the open delta to the ledger (mutation only)
@@ -356,41 +341,10 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta) {
 	l.accounts[string(delta.Account)] = account
 }
 
-// processClose processes a Close directive with validation
-func (l *Ledger) processClose(ctx context.Context, close *ast.Close) {
-	v := newValidator(l.accounts, l.toleranceConfig)
-	errs, delta := v.validateClose(ctx, close)
-
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-		return
-	}
-
-	l.applyClose(delta)
-}
-
 // applyClose applies the close delta to the ledger (mutation only)
 func (l *Ledger) applyClose(delta *CloseDelta) {
 	account := l.accounts[delta.AccountName]
 	account.CloseDate = delta.CloseDate
-}
-
-// processTransaction processes a Transaction directive
-func (l *Ledger) processTransaction(ctx context.Context, txn *ast.Transaction) {
-	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
-
-	// Run pure validation
-	errs, delta := v.validateTransaction(ctx, txn)
-
-	// Collect validation errors
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-		return
-	}
-
-	// Validation passed - now apply effects
-	l.applyTransaction(txn, delta)
 }
 
 // applyTransaction mutates ledger state (inventory updates)
@@ -461,114 +415,11 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 	}
 }
 
-// processBalance processes a Balance directive with validation and delta calculation
-func (l *Ledger) processBalance(ctx context.Context, balance *ast.Balance) {
-	v := newValidator(l.accounts, l.toleranceConfig)
-
-	// Basic validation
-	errs := v.validateBalance(balance)
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-		return
-	}
-
-	// Get pad entry if exists
-	accountName := string(balance.Account)
-	padEntry := l.padEntries[accountName]
-
-	// Mark pad as used if it existed (even if validation fails)
-	// A pad is "used" if any balance assertion references it
-	if padEntry != nil {
-		l.usedPads[accountName] = true
-	}
-
-	// Calculate delta (returns error separately, not in delta)
-	delta, err := v.calculateBalanceDelta(balance, padEntry)
-	if err != nil {
-		l.errors = append(l.errors, err)
-		return
-	}
-
-	// Store synthetic transaction for AST insertion
-	if delta.SyntheticTransaction != nil {
-		l.syntheticTransactions = append(l.syntheticTransactions, delta.SyntheticTransaction)
-	}
-
-	// Apply mutations (but don't remove pad yet)
-	l.applyBalance(delta)
-}
-
 // applyBalance applies the balance delta to the ledger (mutation only)
 func (l *Ledger) applyBalance(delta *BalanceDelta) {
 	// Note: Padding adjustments are applied by processing synthetic transactions
 	// (not here, to avoid double-application)
 	// Pad removal happens at end of processing to support multiple currencies
-}
-
-// processPad processes a Pad directive
-func (l *Ledger) processPad(ctx context.Context, pad *ast.Pad) {
-	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
-
-	// Run pure validation
-	errs := v.validatePad(pad)
-
-	// Collect validation errors
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-		return
-	}
-
-	// Validation passed - store pad directive
-	// Will be applied when next balance assertion is encountered
-	accountName := string(pad.Account)
-	l.padEntries[accountName] = pad
-}
-
-// processNote processes a Note directive
-func (l *Ledger) processNote(ctx context.Context, note *ast.Note) {
-	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
-
-	// Run pure validation
-	errs := v.validateNote(note)
-
-	// Collect validation errors
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-	}
-
-	// Note has no state mutation - just validation
-}
-
-// processDocument processes a Document directive
-func (l *Ledger) processDocument(ctx context.Context, doc *ast.Document) {
-	// Create validator with read-only view of current state
-	v := newValidator(l.accounts, l.toleranceConfig)
-
-	// Run pure validation
-	errs := v.validateDocument(doc)
-
-	// Collect validation errors
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-	}
-
-	// Document has no state mutation - just validation
-}
-
-// processPrice processes a Price directive with validation
-func (l *Ledger) processPrice(ctx context.Context, price *ast.Price) {
-	// Run validation
-	errs := validatePrice(price)
-
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
-		return
-	}
-
-	// Validation passed - add price to graph
-	l.applyPrice(price)
 }
 
 // applyPrice adds a price to the ledger's price graph (mutation only)
