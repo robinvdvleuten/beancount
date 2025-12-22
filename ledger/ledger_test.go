@@ -964,3 +964,195 @@ func TestLedger_GetAccountsByTypeEmpty(t *testing.T) {
 	expenses := ledger.GetAccountsByType(ast.AccountTypeExpenses)
 	assert.Equal(t, len(expenses), 0)
 }
+
+// Price directive integration tests
+
+func TestLedger_PriceDirectiveProcessing(t *testing.T) {
+	source := `
+plugin "beancount.plugins.auto_accounts"
+
+2024-01-15 price USD 1.08 CAD
+2024-01-15 price EUR 0.92 USD
+2024-01-20 price USD 1.10 CAD
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	// Verify prices were indexed
+	date115 := newTestDate("2024-01-15")
+	rate1, found1 := ledger.GetPrice(date115, "USD", "CAD")
+	assert.True(t, found1)
+	assert.True(t, rate1.Equal(mustParseDec("1.08")))
+
+	// Verify bidirectional lookup (inverse created automatically)
+	rate2, found2 := ledger.GetPrice(date115, "CAD", "USD")
+	assert.True(t, found2)
+	expectedInv := mustParseDec("1").Div(mustParseDec("1.08"))
+	assert.True(t, rate2.Equal(expectedInv))
+
+	// Verify EUR price
+	rate3, found3 := ledger.GetPrice(date115, "EUR", "USD")
+	assert.True(t, found3)
+	assert.True(t, rate3.Equal(mustParseDec("0.92")))
+
+	// Verify forward-fill: price from 2024-01-15 used for 2024-01-18
+	date118 := newTestDate("2024-01-18")
+	rate4, found4 := ledger.GetPrice(date118, "USD", "CAD")
+	assert.True(t, found4)
+	assert.True(t, rate4.Equal(mustParseDec("1.08")))
+
+	// Verify most recent price used after 2024-01-20
+	date125 := newTestDate("2024-01-25")
+	rate5, found5 := ledger.GetPrice(date125, "USD", "CAD")
+	assert.True(t, found5)
+	assert.True(t, rate5.Equal(mustParseDec("1.10")))
+}
+
+func TestLedger_HasPrice(t *testing.T) {
+	source := `
+2024-01-15 price USD 1.08 CAD
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	date := newTestDate("2024-01-15")
+
+	assert.True(t, ledger.HasPrice(date, "USD", "CAD"))
+	assert.True(t, ledger.HasPrice(date, "CAD", "USD"))
+	assert.False(t, ledger.HasPrice(date, "USD", "EUR"))
+	// Same currency always exists
+	assert.True(t, ledger.HasPrice(date, "USD", "USD"))
+}
+
+func TestLedger_GetPriceSameCurrency(t *testing.T) {
+	ledger := New()
+
+	date := newTestDate("2024-01-15")
+
+	// Same-currency price should always return 1.0, no prices needed
+	rate, found := ledger.GetPrice(date, "USD", "USD")
+	assert.True(t, found)
+	assert.True(t, rate.Equal(mustParseDec("1")))
+}
+
+func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
+	source := `
+2024-01-15 price USD 1.08 CAD
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	// Before the first price, should not be found
+	dateBefore := newTestDate("2024-01-10")
+	rate, found := ledger.GetPrice(dateBefore, "USD", "CAD")
+	assert.False(t, found)
+	assert.True(t, rate.IsZero())
+}
+
+func TestLedger_PriceGraphAccessor(t *testing.T) {
+	source := `
+2024-01-15 price USD 1.08 CAD
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	// Verify we can access the price graph directly
+	pg := ledger.PriceGraph()
+	assert.NotZero(t, pg)
+
+	date := newTestDate("2024-01-15")
+	rate, found := pg.LookupPrice(date, "USD", "CAD")
+	assert.True(t, found)
+	assert.True(t, rate.Equal(mustParseDec("1.08")))
+}
+
+func TestLedger_InvalidPriceZeroAmount(t *testing.T) {
+	source := `
+2024-01-15 price USD 0 CAD
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+
+	assert.Error(t, err)
+	verrs, ok := err.(*ValidationErrors)
+	assert.True(t, ok)
+	assert.True(t, len(verrs.Errors) > 0)
+
+	// Check that it's an InvalidDirectivePriceError
+	_, ok = verrs.Errors[0].(*InvalidDirectivePriceError)
+	assert.True(t, ok)
+}
+
+func TestLedger_InvalidPriceMissingAmount(t *testing.T) {
+	// Test validatePrice directly with a manually constructed price
+	date := newTestDate("2024-01-15")
+
+	price := &ast.Price{
+		Pos:       ast.Position{Line: 1},
+		Date:      date,
+		Commodity: "USD",
+		Amount:    nil,
+	}
+
+	errs := validatePrice(price)
+	assert.True(t, len(errs) > 0)
+
+	_, ok := errs[0].(*InvalidDirectivePriceError)
+	assert.True(t, ok)
+}
+
+func TestLedger_PricesWithAccounts(t *testing.T) {
+	// Verify prices work alongside normal ledger operations
+	source := `
+2024-01-01 open Assets:Cash USD
+2024-01-01 open Assets:Savings USD
+
+2024-01-15 price USD 1.08 CAD
+2024-01-15 price EUR 0.92 USD
+
+2024-01-15 * "Transfer money"
+  Assets:Cash    100.00 USD
+  Assets:Savings
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	// Verify account was created
+	acc, ok := ledger.GetAccount("Assets:Cash")
+	assert.True(t, ok)
+	assert.NotZero(t, acc)
+
+	// Verify prices were indexed
+	date := newTestDate("2024-01-15")
+	assert.True(t, ledger.HasPrice(date, "USD", "CAD"))
+	assert.True(t, ledger.HasPrice(date, "EUR", "USD"))
+}

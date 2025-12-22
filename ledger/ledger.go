@@ -59,6 +59,7 @@ type Ledger struct {
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
 	toleranceConfig       *ToleranceConfig
+	priceGraph            *PriceGraph         // Temporal index of currency exchange rates
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -97,6 +98,7 @@ func New() *Ledger {
 		padEntries:      make(map[string]*ast.Pad),
 		usedPads:        make(map[string]bool),
 		toleranceConfig: NewToleranceConfig(),
+		priceGraph:      NewPriceGraph(),
 	}
 }
 
@@ -280,6 +282,25 @@ func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
 	return accounts
 }
 
+// GetPrice returns the exchange rate from one currency to another at a given date,
+// using forward-fill semantics (most recent price on or before the date).
+// Returns (rate, found) where found is false if no price exists.
+//
+// Same-currency conversions always return 1.0.
+func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (decimal.Decimal, bool) {
+	return l.priceGraph.LookupPrice(date, fromCurrency, toCurrency)
+}
+
+// HasPrice returns true if a price exists for the given currency pair on or before the date.
+func (l *Ledger) HasPrice(date *ast.Date, fromCurrency, toCurrency string) bool {
+	return l.priceGraph.HasPrice(date, fromCurrency, toCurrency)
+}
+
+// PriceGraph returns the underlying price graph for advanced queries.
+func (l *Ledger) PriceGraph() *PriceGraph {
+	return l.priceGraph
+}
+
 // processDirective processes a single directive
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	switch d := directive.(type) {
@@ -297,9 +318,11 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 		l.processNote(ctx, d)
 	case *ast.Document:
 		l.processDocument(ctx, d)
+	case *ast.Price:
+		l.processPrice(ctx, d)
 	default:
 		// Unknown directive type - ignore for now
-		// Note: Price, Commodity, and Event directives are intentionally not processed
+		// Note: Commodity and Event directives are intentionally not processed
 		// as they don't affect ledger state or require validation
 	}
 }
@@ -532,4 +555,29 @@ func (l *Ledger) processDocument(ctx context.Context, doc *ast.Document) {
 	}
 
 	// Document has no state mutation - just validation
+}
+
+// processPrice processes a Price directive with validation
+func (l *Ledger) processPrice(ctx context.Context, price *ast.Price) {
+	// Run validation
+	errs := validatePrice(price)
+
+	if len(errs) > 0 {
+		l.errors = append(l.errors, errs...)
+		return
+	}
+
+	// Validation passed - add price to graph
+	l.applyPrice(price)
+}
+
+// applyPrice adds a price to the ledger's price graph (mutation only)
+func (l *Ledger) applyPrice(price *ast.Price) {
+	amount, err := ParseAmount(price.Amount)
+	if err != nil {
+		// This should never happen after validation - panic to catch bugs
+		panic(fmt.Sprintf("BUG: amount parsing failed after validation: %v", err))
+	}
+
+	_ = l.priceGraph.AddPrice(price.Date, price.Commodity, price.Amount.Currency, amount)
 }

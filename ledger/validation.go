@@ -1368,3 +1368,43 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction, delta *Tr
 
 	return errs
 }
+
+// validatePrice validates a Price directive for semantic correctness
+func validatePrice(price *ast.Price) []error {
+	var errs []error
+
+	// Validate commodity is non-empty
+	if price.Commodity == "" {
+		errs = append(errs, NewInvalidDirectivePriceError("price commodity cannot be empty", price))
+	}
+
+	// Validate amount is present
+	if price.Amount == nil {
+		errs = append(errs, NewInvalidDirectivePriceError("price amount is required", price))
+		return errs
+	}
+
+	// Validate currency is non-empty
+	if price.Amount.Currency == "" {
+		errs = append(errs, NewInvalidDirectivePriceError("price currency cannot be empty", price))
+	}
+
+	// Validate amount value is non-empty and parseable
+	if price.Amount.Value == "" {
+		errs = append(errs, NewInvalidDirectivePriceError("price amount value cannot be empty", price))
+		return errs
+	}
+
+	// Parse and validate amount is non-zero
+	amount, err := ParseAmount(price.Amount)
+	if err != nil {
+		errs = append(errs, NewInvalidDirectivePriceError(fmt.Sprintf("invalid price amount: %v", err), price))
+		return errs
+	}
+
+	if amount.IsZero() {
+		errs = append(errs, NewInvalidDirectivePriceError("price amount cannot be zero", price))
+	}
+
+	return errs
+}

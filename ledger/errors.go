@@ -1005,3 +1005,27 @@ func NewUnusedPadWarning(pad *ast.Pad) *UnusedPadWarning {
 		Account: string(pad.Account),
 	}
 }
+
+// InvalidDirectivePriceError indicates a price directive has invalid data
+type InvalidDirectivePriceError struct {
+	Message   string
+	Pos       ast.Position
+	Directive *ast.Price
+}
+
+func (e *InvalidDirectivePriceError) Error() string {
+	return fmt.Sprintf("%s at %s", e.Message, e.Pos)
+}
+
+func (e *InvalidDirectivePriceError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+// NewInvalidDirectivePriceError creates an error for an invalid price directive
+func NewInvalidDirectivePriceError(message string, price *ast.Price) *InvalidDirectivePriceError {
+	return &InvalidDirectivePriceError{
+		Message:   message,
+		Pos:       price.Pos,
+		Directive: price,
+	}
+}
