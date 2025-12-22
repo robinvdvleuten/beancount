@@ -9,7 +9,7 @@
     "test": "playwright test"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.18.3",
+    "@codemirror/autocomplete": "^6.20.0",
     "@codemirror/language": "^6.11.3",
     "@codemirror/lint": "^6.9.2",
     "@heroicons/react": "^2.2.0",
