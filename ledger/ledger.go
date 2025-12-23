@@ -388,7 +388,7 @@ func (l *Ledger) HasPrice(date *ast.Date, fromCurrency, toCurrency string) bool 
 // Returns (converted amount, error). Same-currency conversions always return 1.0.
 func (l *Ledger) ConvertAmount(amount decimal.Decimal, fromCurrency, toCurrency string, date *ast.Date) (decimal.Decimal, error) {
 	if fromCurrency == toCurrency {
-		return decimal.NewFromInt(1), nil
+		return amount, nil
 	}
 
 	rate, found := l.GetPrice(date, fromCurrency, toCurrency)
@@ -409,6 +409,116 @@ func (l *Ledger) FindPath(fromCurrency, toCurrency string, date *ast.Date) ([]*E
 // Graph returns the underlying graph for advanced queries.
 func (l *Ledger) Graph() *Graph {
 	return l.graph
+}
+
+// GetBalancesAsOf returns the balance of every account as of a given date.
+// Accounts with no postings before the date are omitted from the result.
+// Balances are returned in no particular order.
+func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
+	var result []AccountBalance
+
+	for _, node := range l.graph.GetNodesByKind("account") {
+		if account, ok := node.Meta.(*Account); ok {
+			// Delegate to account, which returns AccountBalance directly
+			acctBalance := account.GetBalanceAsOf(date)
+			if !acctBalance.IsZero() {
+				result = append(result, *acctBalance)
+			}
+		}
+	}
+
+	return result
+}
+
+// GetBalancesInPeriod returns net balance changes for accounts within a date range [start, end].
+// Optionally filters by account type (e.g., Income, Expenses for income statement).
+// Accounts with no postings in the period are omitted from the result.
+// Balances are returned in no particular order.
+func (l *Ledger) GetBalancesInPeriod(
+	start, end *ast.Date,
+	accountTypes ...ast.AccountType,
+) []AccountBalance {
+	var result []AccountBalance
+
+	// Build type filter if specified
+	var typeFilter map[ast.AccountType]bool
+	if len(accountTypes) > 0 {
+		typeFilter = make(map[ast.AccountType]bool)
+		for _, t := range accountTypes {
+			typeFilter[t] = true
+		}
+	}
+
+	for _, node := range l.graph.GetNodesByKind("account") {
+		if account, ok := node.Meta.(*Account); ok {
+			// Skip if type filter is set and account doesn't match
+			if typeFilter != nil && !typeFilter[account.Type] {
+				continue
+			}
+
+			// Delegate to account, which returns AccountBalance directly
+			acctBalance := account.GetBalanceInPeriod(start, end)
+			if !acctBalance.IsZero() {
+				result = append(result, *acctBalance)
+			}
+		}
+	}
+
+	return result
+}
+
+// CloseBooks moves Income and Expense balances to Equity:Earnings:Current.
+// Returns synthetic transactions created for closing (for audit trail/AST insertion).
+// The closingDate is typically the last day of the accounting period.
+func (l *Ledger) CloseBooks(closingDate *ast.Date) []*ast.Transaction {
+	var syntheticTxns []*ast.Transaction
+
+	// Get all Income and Expense balances accumulated up to closing date
+	incomeExpenses := l.GetBalancesInPeriod(
+		&ast.Date{}, // Dummy start date (will use zero)
+		closingDate,
+		ast.AccountTypeIncome, ast.AccountTypeExpenses,
+	)
+
+	// If no activity, nothing to close
+	if len(incomeExpenses) == 0 {
+		return syntheticTxns
+	}
+
+	// Build closing transactions: each account → Equity:Earnings:Current
+	earningsAccount, err := ast.NewAccount("Equity:Earnings:Current")
+	if err != nil {
+		// Should never happen for hardcoded account name
+		return syntheticTxns
+	}
+
+	for _, accBal := range incomeExpenses {
+		accountName, err := ast.NewAccount(accBal.Account)
+		if err != nil {
+			// Skip malformed account names (shouldn't happen)
+			continue
+		}
+
+		// Create postings for each currency in the balance
+		for currency, amount := range accBal.Balances {
+			if amount.IsZero() {
+				continue
+			}
+
+			// Create synthetic transaction: close to equity
+			txn := ast.NewTransaction(closingDate, "Period closing",
+				ast.WithFlag("P"), // Mark as padding/synthetic
+				ast.WithPostings(
+					ast.NewPosting(accountName, ast.WithAmount(amount.Neg().String(), currency)),
+					ast.NewPosting(earningsAccount), // Inferred amount
+				),
+			)
+
+			syntheticTxns = append(syntheticTxns, txn)
+		}
+	}
+
+	return syntheticTxns
 }
 
 // processDirective processes a single directive
@@ -497,7 +607,7 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 	}
 }
 
-// applyTransaction mutates ledger state (inventory updates)
+// applyTransaction mutates ledger state (inventory updates) and records posting history.
 // Only called after validation passes. Panics on bugs (invariant violations).
 func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta) {
 	for _, posting := range txn.Postings {
@@ -554,6 +664,12 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 		} else {
 			account.Inventory.Add(currency, amount)
 		}
+
+		// Record posting in account history (after mutation for correct ordering)
+		account.Postings = append(account.Postings, &AccountPosting{
+			Transaction: txn,
+			Posting:     posting,
+		})
 	}
 }
 

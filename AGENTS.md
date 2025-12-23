@@ -81,6 +81,44 @@ bean-doctor lex input.beancount
 
 ## Key Patterns
 
+### Separation of Concerns: Single Responsibility
+
+**Rule**: Data owner computes on its own data. Coordinator calls owner methods, then aggregates/filters. Never duplicate computation logic across boundaries.
+
+```go
+// ✓ CORRECT: Owner computes, coordinator delegates
+func (a *Account) GetBalanceAsOf(date *ast.Date) map[string]decimal.Decimal {
+    balance := make(map[string]decimal.Decimal)
+    for _, posting := range a.GetPostingsBefore(date) {
+        // Account computes on its data
+    }
+    return balance
+}
+
+func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
+    var result []AccountBalance
+    for _, account := range l.Accounts() {
+        balance := account.GetBalanceAsOf(date)  // Delegate, don't recompute
+        if hasBalance(balance) {
+            result = append(result, AccountBalance{...})
+        }
+    }
+    return result
+}
+
+// ✗ WRONG: Coordinator reimplements owner's logic
+func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
+    for _, account := range l.Accounts() {
+        postings := account.GetPostingsBefore(date)  // Coordinator now owns posting logic
+        balance := make(map[string]decimal.Decimal)
+        for _, posting := range postings {
+            // ... duplicates Account's computation ...
+        }
+    }
+    return result
+}
+```
+
 ### Handler Registry Pattern (No Switch Statements)
 
 Directives dispatch via `handlerRegistry` map (DirectiveKind → Handler), not switch statements. Handlers call validation functions directly from `validation.go`:

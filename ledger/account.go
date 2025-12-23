@@ -7,6 +7,37 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// AccountBalance represents the balance of a single account.
+// Useful for balance sheet and income statement reporting.
+type AccountBalance struct {
+	Account  string                     // Account name (e.g., "Assets:Cash")
+	Balances map[string]decimal.Decimal // Currency → amount
+}
+
+// IsZero returns true if all balances are zero.
+func (ab *AccountBalance) IsZero() bool {
+	for _, amt := range ab.Balances {
+		if !amt.IsZero() {
+			return false
+		}
+	}
+	return true
+}
+
+// AccountPosting records a single posting's impact on an account.
+// Used to trace balance mutations and enable reconciliation.
+//
+// Store postings in chronological order (enforced by transaction processing order).
+// Balances are reconstructed on demand from the posting sequence rather than stored
+// (DRY principle: avoids snapshot duplication and synchronization issues).
+type AccountPosting struct {
+	// The transaction this posting belongs to
+	Transaction *ast.Transaction
+
+	// The posting itself
+	Posting *ast.Posting
+}
+
 // Account represents an account in the ledger
 type Account struct {
 	Name                 ast.Account
@@ -16,7 +47,8 @@ type Account struct {
 	ConstraintCurrencies []string
 	BookingMethod        string
 	Metadata             []*ast.Metadata
-	Inventory            *Inventory // Inventory with lot tracking
+	Inventory            *Inventory        // Inventory with lot tracking
+	Postings             []*AccountPosting // Transaction history in chronological order
 }
 
 // IsOpen returns true if the account is open at the given date
@@ -123,4 +155,83 @@ func (a *Account) GetSubtreeBalance(l *Ledger) map[string]decimal.Decimal {
 	}
 
 	return result
+}
+
+// GetPostingsBefore returns postings up to and including the given date (chronological).
+// Used to compute account balance as of a specific point in time.
+func (a *Account) GetPostingsBefore(date *ast.Date) []*AccountPosting {
+	var result []*AccountPosting
+	for _, posting := range a.Postings {
+		if !posting.Transaction.Date.After(date.Time) {
+			result = append(result, posting)
+		}
+	}
+	return result
+}
+
+// GetPostingsInPeriod returns postings within [start, end] inclusive.
+// Used to compute period changes for income statements.
+func (a *Account) GetPostingsInPeriod(start, end *ast.Date) []*AccountPosting {
+	var result []*AccountPosting
+	for _, posting := range a.Postings {
+		txnDate := posting.Transaction.Date
+		if !txnDate.Before(start.Time) && !txnDate.After(end.Time) {
+			result = append(result, posting)
+		}
+	}
+	return result
+}
+
+// GetBalanceAsOf returns the account balance as of a specific date.
+// Reconstructs balance from postings up to and including the given date.
+// Returns AccountBalance with empty map if no postings exist before the date.
+func (a *Account) GetBalanceAsOf(date *ast.Date) *AccountBalance {
+	balance := make(map[string]decimal.Decimal)
+	postings := a.GetPostingsBefore(date)
+
+	for _, posting := range postings {
+		if posting.Posting.Amount == nil {
+			continue
+		}
+
+		amount, err := ParseAmount(posting.Posting.Amount)
+		if err != nil {
+			continue
+		}
+		currency := posting.Posting.Amount.Currency
+
+		balance[currency] = balance[currency].Add(amount)
+	}
+
+	return &AccountBalance{
+		Account:  string(a.Name),
+		Balances: balance,
+	}
+}
+
+// GetBalanceInPeriod returns the net balance change for this account within [start, end].
+// Used to compute period changes for income statements.
+// Returns AccountBalance with empty map if no postings exist in the period.
+func (a *Account) GetBalanceInPeriod(start, end *ast.Date) *AccountBalance {
+	balance := make(map[string]decimal.Decimal)
+	postings := a.GetPostingsInPeriod(start, end)
+
+	for _, posting := range postings {
+		if posting.Posting.Amount == nil {
+			continue
+		}
+
+		amount, err := ParseAmount(posting.Posting.Amount)
+		if err != nil {
+			continue
+		}
+		currency := posting.Posting.Amount.Currency
+
+		balance[currency] = balance[currency].Add(amount)
+	}
+
+	return &AccountBalance{
+		Account:  string(a.Name),
+		Balances: balance,
+	}
 }
