@@ -81,6 +81,27 @@ bean-doctor lex input.beancount
 
 ## Key Patterns
 
+### Handler Registry Pattern (No Switch Statements)
+
+Directives dispatch via `handlerRegistry` map (DirectiveKind → Handler), not switch statements. Handlers call validation functions directly from `validation.go`:
+
+```go
+var handlerRegistry = map[ast.DirectiveKind]Handler{
+    ast.KindTransaction: &TransactionHandler{}, // ... 11 total
+}
+
+type TransactionHandler struct{}
+func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+    v := newValidator(l.Accounts(), l.toleranceConfig)
+    return v.validateTransaction(ctx, d.(*ast.Transaction))
+}
+func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+    l.applyTransaction(d.(*ast.Transaction), delta.(*TransactionDelta))
+}
+```
+
+**Key principle**: One registry (handlers), validation functions called directly. Don't create parallel validator registries—it's just indirection without benefit.
+
 ### Lexer Token Consumption
 
 All content-bearing tokens (everything except NEWLINE which represents blank lines) consume their trailing newline if present. This ensures clear semantics:
