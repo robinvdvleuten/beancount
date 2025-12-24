@@ -399,6 +399,80 @@ func (l *Ledger) ConvertAmount(amount decimal.Decimal, fromCurrency, toCurrency 
 	return amount.Mul(rate), nil
 }
 
+// ConvertBalance converts a multi-currency balance map to a single currency by summing all amounts
+// using the exchange rates on the given date. Uses forward-fill semantics for price lookups.
+//
+// Returns the consolidated amount, or an error if any currency conversion fails.
+// Same-currency amounts are added directly without conversion overhead.
+//
+// Example: ConvertBalance({"USD": 100, "EUR": 50}, "USD", date) returns
+// 100 + (50 * EUR→USD rate) = consolidated USD amount
+func (l *Ledger) ConvertBalance(balance map[string]decimal.Decimal, targetCurrency string, date *ast.Date) (decimal.Decimal, error) {
+	if len(balance) == 0 {
+		return decimal.Zero, nil
+	}
+
+	// If only one currency and it's the target, return directly
+	if len(balance) == 1 {
+		if amount, ok := balance[targetCurrency]; ok {
+			return amount, nil
+		}
+	}
+
+	result := decimal.Zero
+
+	// Sum amounts, converting each currency to target
+	for currency, amount := range balance {
+		if amount.IsZero() {
+			continue
+		}
+
+		// Same currency - add directly
+		if currency == targetCurrency {
+			result = result.Add(amount)
+			continue
+		}
+
+		// Convert currency to target currency
+		rate, found := l.GetPrice(date, currency, targetCurrency)
+		if !found {
+			return decimal.Zero, fmt.Errorf(
+				"no price found to convert %s to %s on %s",
+				currency, targetCurrency, date.String(),
+			)
+		}
+
+		converted := amount.Mul(rate)
+		result = result.Add(converted)
+	}
+
+	return result, nil
+}
+
+// GetBalanceInCurrency returns an account's balance in a specific currency as of a date.
+// Converts all holdings to the target currency using exchange rates.
+// Returns an AccountBalance with the account name and consolidated amount, or an error
+// if any conversion fails.
+//
+// This is the account-level convenience method. Use ConvertBalance for arbitrary balance maps.
+func (l *Ledger) GetBalanceInCurrency(account *Account, reportingCurrency string, date *ast.Date) (*AccountBalance, error) {
+	// Get the multi-currency balance
+	balance := account.GetBalanceAsOf(date)
+
+	// Convert to single currency
+	amount, err := l.ConvertBalance(balance.Balances, reportingCurrency, date)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AccountBalance{
+		Account: balance.Account,
+		Balances: map[string]decimal.Decimal{
+			reportingCurrency: amount,
+		},
+	}, nil
+}
+
 // FindPath finds a path of price edges from one currency to another at a given date.
 // Returns the edges in order, or an error if no path exists.
 // Useful for debugging or understanding currency conversion routes.
