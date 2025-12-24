@@ -281,11 +281,10 @@ func (l *Ledger) GetAccount(name string) (*Account, bool) {
 // Accounts returns all accounts in the ledger
 func (l *Ledger) Accounts() map[string]*Account {
 	result := make(map[string]*Account)
-	for _, node := range l.graph.GetNodesByKind("account") {
-		if acc, ok := node.Meta.(*Account); ok {
-			result[node.ID] = acc
-		}
-	}
+	l.forEachAccount(func(acc *Account) bool {
+		result[string(acc.Name)] = acc
+		return true
+	})
 	return result
 }
 
@@ -293,12 +292,12 @@ func (l *Ledger) Accounts() map[string]*Account {
 func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
 	var accounts []*Account
 
-	// Collect accounts of the specified type from graph
-	for _, node := range l.graph.GetNodesByKind("account") {
-		if acc, ok := node.Meta.(*Account); ok && acc.Type == accountType {
+	l.forEachAccount(func(acc *Account) bool {
+		if acc.Type == accountType {
 			accounts = append(accounts, acc)
 		}
-	}
+		return true
+	})
 
 	// Sort by name for deterministic output
 	sort.Slice(accounts, func(i, j int) bool {
@@ -485,23 +484,73 @@ func (l *Ledger) Graph() *Graph {
 	return l.graph
 }
 
+// forEachAccount iterates over all accounts in the ledger, calling fn for each.
+// The callback can return false to break early (not used currently, but enables future filtering).
+func (l *Ledger) forEachAccount(fn func(*Account) bool) {
+	for _, node := range l.graph.GetNodesByKind("account") {
+		if account, ok := node.Meta.(*Account); ok {
+			if !fn(account) {
+				break
+			}
+		}
+	}
+}
+
 // GetBalancesAsOf returns the balance of every account as of a given date.
 // Accounts with no postings before the date are omitted from the result.
 // Balances are returned in no particular order.
 func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
 	var result []AccountBalance
-
-	for _, node := range l.graph.GetNodesByKind("account") {
-		if account, ok := node.Meta.(*Account); ok {
-			// Delegate to account, which returns AccountBalance directly
-			acctBalance := account.GetBalanceAsOf(date)
-			if !acctBalance.IsZero() {
-				result = append(result, *acctBalance)
-			}
+	l.forEachAccount(func(account *Account) bool {
+		acctBalance := account.GetBalanceAsOf(date)
+		if !acctBalance.IsZero() {
+			result = append(result, *acctBalance)
 		}
+		return true
+	})
+	return result
+}
+
+// GetBalancesAsOfInCurrency returns all accounts consolidated to a single
+// currency as of a given date. Accounts with no postings before the date are
+// omitted from the result.
+//
+// Returns an error if any currency conversion fails (e.g., missing price).
+// Balances are returned in no particular order.
+func (l *Ledger) GetBalancesAsOfInCurrency(
+	date *ast.Date,
+	currency string,
+) ([]AccountBalance, error) {
+	var result []AccountBalance
+	var errs []error
+
+	l.forEachAccount(func(account *Account) bool {
+		acctBalance := account.GetBalanceAsOf(date)
+		if acctBalance.IsZero() {
+			return true // continue to next account
+		}
+
+		// Convert to target currency
+		amount, err := l.ConvertBalance(acctBalance.Balances, currency, date)
+		if err != nil {
+			errs = append(errs, err)
+			return true // collect error and continue
+		}
+
+		result = append(result, AccountBalance{
+			Account: acctBalance.Account,
+			Balances: map[string]decimal.Decimal{
+				currency: amount,
+			},
+		})
+		return true
+	})
+
+	if len(errs) > 0 {
+		return nil, &ValidationErrors{Errors: errs}
 	}
 
-	return result
+	return result, nil
 }
 
 // GetBalancesInPeriod returns net balance changes for accounts within a date range [start, end].
@@ -515,28 +564,23 @@ func (l *Ledger) GetBalancesInPeriod(
 	var result []AccountBalance
 
 	// Build type filter if specified
-	var typeFilter map[ast.AccountType]bool
-	if len(accountTypes) > 0 {
-		typeFilter = make(map[ast.AccountType]bool)
-		for _, t := range accountTypes {
-			typeFilter[t] = true
-		}
+	typeFilter := make(map[ast.AccountType]bool)
+	for _, t := range accountTypes {
+		typeFilter[t] = true
 	}
 
-	for _, node := range l.graph.GetNodesByKind("account") {
-		if account, ok := node.Meta.(*Account); ok {
-			// Skip if type filter is set and account doesn't match
-			if typeFilter != nil && !typeFilter[account.Type] {
-				continue
-			}
-
-			// Delegate to account, which returns AccountBalance directly
-			acctBalance := account.GetBalanceInPeriod(start, end)
-			if !acctBalance.IsZero() {
-				result = append(result, *acctBalance)
-			}
+	l.forEachAccount(func(account *Account) bool {
+		// Skip if type filter is set and account doesn't match
+		if len(accountTypes) > 0 && !typeFilter[account.Type] {
+			return true
 		}
-	}
+
+		acctBalance := account.GetBalanceInPeriod(start, end)
+		if !acctBalance.IsZero() {
+			result = append(result, *acctBalance)
+		}
+		return true
+	})
 
 	return result
 }
