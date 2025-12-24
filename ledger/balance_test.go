@@ -641,124 +641,7 @@ func TestConvertBalance_ComplexScenario(t *testing.T) {
 	assert.True(t, result.Equal(expected))
 }
 
-// GetBalanceInCurrency Tests
-
-// TestGetBalanceInCurrency_SingleCurrency verifies account balance in its own currency.
-func TestGetBalanceInCurrency_SingleCurrency(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
-			ast.NewTransaction(date1, "Opening", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-	result, err := l.GetBalanceInCurrency(account, "USD", date2)
-
-	assert.NoError(t, err)
-	assert.Equal(t, result.Account, string(assets))
-	assert.Equal(t, len(result.Balances), 1)
-	assert.True(t, result.Balances["USD"].Equal(decimal.NewFromInt(100)))
-}
-
-// TestGetBalanceInCurrency_MultiCurrencyWithPrice verifies multi-currency account consolidated.
-func TestGetBalanceInCurrency_MultiCurrencyWithPrice(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
-			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date1, "Opening EUR", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("50", "EUR")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewPrice(date2, "EUR", ast.NewAmount("1.10", "USD")),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-	result, err := l.GetBalanceInCurrency(account, "USD", date2)
-
-	assert.NoError(t, err)
-	assert.Equal(t, result.Account, string(assets))
-	assert.Equal(t, len(result.Balances), 1)
-	// 100 + 50 * 1.10 = 155
-	expected := decimal.NewFromInt(100).Add(decimal.NewFromInt(50).Mul(mustParseDec("1.10")))
-	assert.True(t, result.Balances["USD"].Equal(expected))
-}
-
-// TestGetBalanceInCurrency_NoPrice verifies error when conversion price missing.
-func TestGetBalanceInCurrency_NoPrice(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
-			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date1, "Opening EUR", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("50", "EUR")),
-				ast.NewPosting(equity),
-			)),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-	_, err := l.GetBalanceInCurrency(account, "USD", date2)
-
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "no price found")
-}
-
-// TestGetBalanceInCurrency_ZeroBalance verifies zero balance converts to zero.
-func TestGetBalanceInCurrency_ZeroBalance(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-	result, err := l.GetBalanceInCurrency(account, "USD", date2)
-
-	assert.NoError(t, err)
-	assert.True(t, result.Balances["USD"].IsZero())
-}
+// (GetBalanceInCurrency tests removed - tests are under Account.GetBalanceInCurrencyAsOf)
 
 // GetBalancesAsOfInCurrency Tests
 
@@ -767,7 +650,7 @@ func TestGetBalancesAsOfInCurrency_Empty(t *testing.T) {
 	l := New()
 	date, _ := ast.NewDate("2024-01-01")
 
-	results, err := l.GetBalancesAsOfInCurrency(date, "USD")
+	results, err := l.GetBalancesAsOfInCurrency("USD", date)
 	assert.NoError(t, err)
 	assert.Equal(t, len(results), 0)
 }
@@ -792,7 +675,7 @@ func TestGetBalancesAsOfInCurrency_SingleAccount(t *testing.T) {
 		},
 	})
 
-	results, err := l.GetBalancesAsOfInCurrency(date2, "USD")
+	results, err := l.GetBalancesAsOfInCurrency("USD", date2)
 	assert.NoError(t, err)
 	assert.Equal(t, len(results), 2)
 
@@ -839,7 +722,7 @@ func TestGetBalancesAsOfInCurrency_MultiAccount(t *testing.T) {
 		},
 	})
 
-	results, err := l.GetBalancesAsOfInCurrency(date2, "USD")
+	results, err := l.GetBalancesAsOfInCurrency("USD", date2)
 	assert.NoError(t, err)
 	assert.Equal(t, len(results), 3) // Assets, Expenses, Equity
 
@@ -879,7 +762,7 @@ func TestGetBalancesAsOfInCurrency_MultiCurrency(t *testing.T) {
 		},
 	})
 
-	results, err := l.GetBalancesAsOfInCurrency(date2, "USD")
+	results, err := l.GetBalancesAsOfInCurrency("USD", date2)
 	assert.NoError(t, err)
 	assert.Equal(t, len(results), 2)
 
@@ -922,7 +805,7 @@ func TestGetBalancesAsOfInCurrency_MissingPrice(t *testing.T) {
 		},
 	})
 
-	_, err := l.GetBalancesAsOfInCurrency(date2, "USD")
+	_, err := l.GetBalancesAsOfInCurrency("USD", date2)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "no price found")
 }
@@ -961,7 +844,7 @@ func TestGetBalancesAsOfInCurrency_PartialMissingPrice(t *testing.T) {
 		},
 	})
 
-	_, err := l.GetBalancesAsOfInCurrency(date2, "USD")
+	_, err := l.GetBalancesAsOfInCurrency("USD", date2)
 
 	// Should have error due to missing GBP price
 	assert.Error(t, err)
@@ -989,7 +872,159 @@ func TestGetBalancesAsOfInCurrency_BeforeFirstTransaction(t *testing.T) {
 		},
 	})
 
-	results, err := l.GetBalancesAsOfInCurrency(date0, "USD")
+	results, err := l.GetBalancesAsOfInCurrency("USD", date0)
 	assert.NoError(t, err)
 	assert.Equal(t, len(results), 0)
+}
+
+// Account.GetBalanceInCurrencyAsOf Tests
+
+// TestAccount_GetBalanceInCurrencyAsOf_SingleCurrency verifies conversion when account has single currency.
+func TestAccount_GetBalanceInCurrencyAsOf_SingleCurrency(t *testing.T) {
+	l := New()
+	assets, _ := ast.NewAccount("Assets:Cash")
+	equity, _ := ast.NewAccount("Equity:Opening")
+
+	date1, _ := ast.NewDate("2024-01-01")
+	date2, _ := ast.NewDate("2024-02-01")
+
+	l.MustProcess(context.Background(), &ast.AST{
+		Directives: []ast.Directive{
+			&ast.Open{Date: date1, Account: assets},
+			&ast.Open{Date: date1, Account: equity},
+			ast.NewTransaction(date1, "Opening", ast.WithPostings(
+				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
+				ast.NewPosting(equity),
+			)),
+		},
+	})
+
+	account := l.Accounts()[string(assets)]
+	result, err := account.GetBalanceInCurrencyAsOf(l, "USD", date2)
+
+	assert.NoError(t, err)
+	assert.Equal(t, result.Account, "Assets:Cash")
+	assert.True(t, result.Balances["USD"].Equal(decimal.NewFromInt(100)))
+}
+
+// TestAccount_GetBalanceInCurrencyAsOf_MultiCurrency verifies conversion with multiple currencies.
+func TestAccount_GetBalanceInCurrencyAsOf_MultiCurrency(t *testing.T) {
+	l := New()
+	assets, _ := ast.NewAccount("Assets:Cash")
+	equity, _ := ast.NewAccount("Equity:Opening")
+
+	date1, _ := ast.NewDate("2024-01-01")
+	date2, _ := ast.NewDate("2024-02-01")
+
+	l.MustProcess(context.Background(), &ast.AST{
+		Directives: []ast.Directive{
+			&ast.Open{Date: date1, Account: assets},
+			&ast.Open{Date: date1, Account: equity},
+			ast.NewTransaction(date1, "USD", ast.WithPostings(
+				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
+				ast.NewPosting(equity),
+			)),
+			ast.NewTransaction(date1, "EUR", ast.WithPostings(
+				ast.NewPosting(assets, ast.WithAmount("50", "EUR")),
+				ast.NewPosting(equity),
+			)),
+			ast.NewPrice(date2, "EUR", ast.NewAmount("1.10", "USD")),
+		},
+	})
+
+	account := l.Accounts()[string(assets)]
+	result, err := account.GetBalanceInCurrencyAsOf(l, "USD", date2)
+
+	assert.NoError(t, err)
+	assert.Equal(t, result.Account, "Assets:Cash")
+	// 100 + 50 * 1.10 = 155
+	expected := decimal.NewFromInt(100).Add(decimal.NewFromInt(50).Mul(mustParseDec("1.10")))
+	assert.True(t, result.Balances["USD"].Equal(expected))
+}
+
+// TestAccount_GetBalanceInCurrencyAsOf_MissingPrice verifies error on missing price.
+func TestAccount_GetBalanceInCurrencyAsOf_MissingPrice(t *testing.T) {
+	l := New()
+	assets, _ := ast.NewAccount("Assets:Cash")
+	equity, _ := ast.NewAccount("Equity:Opening")
+
+	date1, _ := ast.NewDate("2024-01-01")
+	date2, _ := ast.NewDate("2024-02-01")
+
+	l.MustProcess(context.Background(), &ast.AST{
+		Directives: []ast.Directive{
+			&ast.Open{Date: date1, Account: assets},
+			&ast.Open{Date: date1, Account: equity},
+			ast.NewTransaction(date1, "USD", ast.WithPostings(
+				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
+				ast.NewPosting(equity),
+			)),
+			ast.NewTransaction(date1, "EUR", ast.WithPostings(
+				ast.NewPosting(assets, ast.WithAmount("50", "EUR")),
+				ast.NewPosting(equity),
+			)),
+			// No EUR→USD price
+		},
+	})
+
+	account := l.Accounts()[string(assets)]
+	_, err := account.GetBalanceInCurrencyAsOf(l, "USD", date2)
+
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "no price found")
+}
+
+// TestAccount_GetBalanceInCurrencyAsOf_ZeroBalance verifies zero balance converts to zero.
+func TestAccount_GetBalanceInCurrencyAsOf_ZeroBalance(t *testing.T) {
+	l := New()
+	assets, _ := ast.NewAccount("Assets:Cash")
+
+	date1, _ := ast.NewDate("2024-01-01")
+	date2, _ := ast.NewDate("2024-02-01")
+
+	l.MustProcess(context.Background(), &ast.AST{
+		Directives: []ast.Directive{
+			&ast.Open{Date: date1, Account: assets},
+		},
+	})
+
+	account := l.Accounts()[string(assets)]
+	result, err := account.GetBalanceInCurrencyAsOf(l, "USD", date2)
+
+	assert.NoError(t, err)
+	assert.Equal(t, result.Account, "Assets:Cash")
+	assert.True(t, result.Balances["USD"].IsZero())
+}
+
+// TestAccount_GetBalanceInCurrencyAsOf_MultiPath verifies multi-hop conversion.
+func TestAccount_GetBalanceInCurrencyAsOf_MultiPath(t *testing.T) {
+	l := New()
+	assets, _ := ast.NewAccount("Assets:Cash")
+	equity, _ := ast.NewAccount("Equity:Opening")
+
+	date1, _ := ast.NewDate("2024-01-01")
+	date2, _ := ast.NewDate("2024-02-01")
+
+	l.MustProcess(context.Background(), &ast.AST{
+		Directives: []ast.Directive{
+			&ast.Open{Date: date1, Account: assets},
+			&ast.Open{Date: date1, Account: equity},
+			ast.NewTransaction(date1, "GBP", ast.WithPostings(
+				ast.NewPosting(assets, ast.WithAmount("100", "GBP")),
+				ast.NewPosting(equity),
+			)),
+			// GBP → EUR → USD chain
+			ast.NewPrice(date2, "GBP", ast.NewAmount("1.15", "EUR")),
+			ast.NewPrice(date2, "EUR", ast.NewAmount("1.10", "USD")),
+		},
+	})
+
+	account := l.Accounts()[string(assets)]
+	result, err := account.GetBalanceInCurrencyAsOf(l, "USD", date2)
+
+	assert.NoError(t, err)
+	assert.Equal(t, result.Account, "Assets:Cash")
+	// 100 * 1.15 * 1.10 = 126.5
+	expected := decimal.NewFromInt(100).Mul(mustParseDec("1.15")).Mul(mustParseDec("1.10"))
+	assert.True(t, result.Balances["USD"].Equal(expected))
 }

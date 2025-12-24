@@ -235,3 +235,24 @@ func (a *Account) GetBalanceInPeriod(start, end *ast.Date) *AccountBalance {
 		Balances: balance,
 	}
 }
+
+// GetBalanceInCurrencyAsOf returns the account balance in a single currency as of a specific date.
+// Converts multi-currency balance using prices from the ledger.
+// Returns error if prices are missing or conversion fails.
+func (a *Account) GetBalanceInCurrencyAsOf(l *Ledger, targetCurrency string, date *ast.Date) (*AccountBalance, error) {
+	// Account computes its balance, coordinator converts
+	balance := a.GetBalanceAsOf(date)
+
+	// Convert to single currency using ledger's price infrastructure
+	amount, err := l.ConvertBalance(balance.Balances, targetCurrency, date)
+	if err != nil {
+		return nil, err
+	}
+
+	return &AccountBalance{
+		Account: balance.Account,
+		Balances: map[string]decimal.Decimal{
+			targetCurrency: amount,
+		},
+	}, nil
+}

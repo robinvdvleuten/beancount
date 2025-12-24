@@ -448,30 +448,6 @@ func (l *Ledger) ConvertBalance(balance map[string]decimal.Decimal, targetCurren
 	return result, nil
 }
 
-// GetBalanceInCurrency returns an account's balance in a specific currency as of a date.
-// Converts all holdings to the target currency using exchange rates.
-// Returns an AccountBalance with the account name and consolidated amount, or an error
-// if any conversion fails.
-//
-// This is the account-level convenience method. Use ConvertBalance for arbitrary balance maps.
-func (l *Ledger) GetBalanceInCurrency(account *Account, reportingCurrency string, date *ast.Date) (*AccountBalance, error) {
-	// Get the multi-currency balance
-	balance := account.GetBalanceAsOf(date)
-
-	// Convert to single currency
-	amount, err := l.ConvertBalance(balance.Balances, reportingCurrency, date)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AccountBalance{
-		Account: balance.Account,
-		Balances: map[string]decimal.Decimal{
-			reportingCurrency: amount,
-		},
-	}, nil
-}
-
 // FindPath finds a path of price edges from one currency to another at a given date.
 // Returns the edges in order, or an error if no path exists.
 // Useful for debugging or understanding currency conversion routes.
@@ -518,8 +494,8 @@ func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
 // Returns an error if any currency conversion fails (e.g., missing price).
 // Balances are returned in no particular order.
 func (l *Ledger) GetBalancesAsOfInCurrency(
-	date *ast.Date,
 	currency string,
+	date *ast.Date,
 ) ([]AccountBalance, error) {
 	var result []AccountBalance
 	var errs []error
