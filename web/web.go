@@ -33,6 +33,7 @@ type Server struct {
 	Host      string
 	Version   string
 	CommitSHA string
+	ReadOnly  bool
 
 	mu         sync.RWMutex
 	ledger     *ledger.Ledger
@@ -87,7 +88,7 @@ func (s *Server) setupRouter() (*http.ServeMux, error) {
 
 	// API routes
 	mux.HandleFunc("GET /api/source", s.handleGetSource)
-	mux.HandleFunc("PUT /api/source", s.handlePutSource)
+	mux.HandleFunc("PUT /api/source", s.requireWritable(s.handlePutSource))
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 
 	// Get the appropriate dist filesystem for the build mode
@@ -129,11 +130,23 @@ func (s *Server) makeIndexHandler(distFS fs.FS) http.HandlerFunc {
 			"Vite":      viteFragment,
 			"Version":   s.Version,
 			"CommitSHA": s.CommitSHA,
+			"ReadOnly":  s.ReadOnly,
 		}
 
 		if err := tmpl.Execute(w, data); err != nil {
 			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		}
+	}
+}
+
+// requireWritable is middleware that rejects write requests in read-only mode.
+func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.ReadOnly {
+			http.Error(w, "Server is in read-only mode", http.StatusForbidden)
+			return
+		}
+		next(w, r)
 	}
 }
 

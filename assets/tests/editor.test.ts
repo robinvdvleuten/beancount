@@ -11,7 +11,6 @@ import { test, expect } from '@playwright/test';
  */
 
 test.describe('Beancount Web Editor', () => {
-
   test('loads and renders editor with file content', async ({ page }) => {
     const errors: string[] = [];
 

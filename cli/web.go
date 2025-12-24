@@ -13,9 +13,10 @@ import (
 )
 
 type WebCmd struct {
-	File   string `help:"Beancount ledger file to serve." arg:""`
-	Port   int    `help:"Port to listen on." default:"8080"`
-	Create bool   `help:"Automatically create file if it doesn't exist (no confirmation prompt)." short:"c"`
+	File     string `help:"Beancount ledger file to serve." arg:""`
+	Port     int    `help:"Port to listen on." default:"8080"`
+	Create   bool   `help:"Automatically create file if it doesn't exist (no confirmation prompt)." short:"c"`
+	ReadOnly bool   `help:"Enable read-only mode (no write operations allowed)." short:"r"`
 }
 
 func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
@@ -67,10 +68,24 @@ func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
 		}
 	}
 
-	server := web.NewWithVersion(cmd.Port, ledgerFile, Version, CommitSHA)
+	version := Version
+	if version == "" {
+		version = "dev"
+	}
+	commitSHA := CommitSHA
+	if commitSHA == "" {
+		commitSHA = "local"
+	}
+
+	server := web.NewWithVersion(cmd.Port, ledgerFile, version, commitSHA)
+	server.ReadOnly = cmd.ReadOnly
 
 	printInfof(ctx.Stdout, "Starting server on %s:%d", server.Host, cmd.Port)
 	printInfof(ctx.Stdout, "Serving ledger: %s", pathStyle.Render(ledgerFile))
+
+	if cmd.ReadOnly {
+		printInfof(ctx.Stdout, "Server running in READ-ONLY mode")
+	}
 
 	return server.Start(runCtx)
 }

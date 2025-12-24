@@ -5,7 +5,7 @@ import Application from "./components/application";
 import "./style.css";
 
 type InitialData = {
-  meta: { version: string; commitSHA: string };
+  meta: { version: string; commitSHA: string; readOnly: boolean };
 };
 
 const { meta } = jsonFromScript<InitialData>();

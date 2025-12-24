@@ -13,7 +13,7 @@ interface SourceResponse {
 }
 
 interface ApplicationProps {
-  meta: { version: string; commitSHA: string };
+  meta: { version: string; commitSHA: string; readOnly: boolean };
 }
 
 const Application: React.FC<ApplicationProps> = ({ meta }) => {
@@ -109,7 +109,11 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
         </div>
 
         <div className="flex items-center gap-2">
-          <button className="btn" onClick={handleSaveClick}>
+          <button 
+            className="btn" 
+            onClick={handleSaveClick}
+            disabled={meta.readOnly}
+          >
             <ArrowDownTrayIcon className="size-4" />
             Save
           </button>
@@ -124,6 +128,7 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
         <div className="text-xs text-base-content/70">
           {meta.version}
           {meta.commitSHA && ` (${meta.commitSHA})`}
+          {meta.readOnly && " read-only mode"}
         </div>
       </footer>
     </div>
