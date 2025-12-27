@@ -1,8 +1,2 @@
 @import "tailwindcss";
 @plugin "daisyui";
-
-/* CodeMirror gutter seamless integration */
-.cm-editor .cm-gutters {
-  border-right: none;
-  padding-right: 0.5em;
-}

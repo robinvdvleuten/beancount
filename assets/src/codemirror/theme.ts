@@ -1,25 +1,37 @@
-import { createTheme } from "@uiw/codemirror-themes";
 import { syntaxHighlighting, HighlightStyle } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { tags as t } from "@lezer/highlight";
 
-export const editorTheme = createTheme({
-  theme: "light",
-  settings: {
-    background: "var(--color-base-100)",
-    foreground: "color-mix(in oklab, var(--color-base-content) 85%, transparent)",
-    caret: "var(--color-base-content)",
-    selection: "color-mix(in oklab, var(--color-base-content) 8%, transparent)",
-    selectionMatch: "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
-    lineHighlight: "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
-    gutterBackground: "var(--color-base-100)",
-    gutterForeground: "color-mix(in oklab, var(--color-base-content) 25%, transparent)",
-    gutterActiveForeground: "color-mix(in oklab, var(--color-base-content) 50%, transparent)",
+export const editorTheme = EditorView.theme({
+  "&": {
+    backgroundColor: "var(--color-base-100)",
+    color: "color-mix(in oklab, var(--color-base-content) 85%, transparent)",
+    height: "100%",
   },
-  styles: [],
-});
-
-export const tooltipTheme = EditorView.theme({
+  ".cm-content": {
+    caretColor: "var(--color-base-content)",
+  },
+  ".cm-cursor, .cm-dropCursor": {
+    borderLeftColor: "var(--color-base-content)",
+  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
+    backgroundColor: "color-mix(in oklab, var(--color-base-content) 8%, transparent)",
+  },
+  ".cm-activeLine": {
+    backgroundColor: "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
+  },
+  ".cm-selectionMatch": {
+    backgroundColor: "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
+  },
+  ".cm-gutters": {
+    backgroundColor: "var(--color-base-100)",
+    color: "color-mix(in oklab, var(--color-base-content) 25%, transparent)",
+    borderRight: "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
+  },
+  ".cm-activeLineGutter": {
+    backgroundColor: "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
+    color: "color-mix(in oklab, var(--color-base-content) 50%, transparent)",
+  },
   ".cm-tooltip": {
     backgroundColor: "var(--color-base-100)",
     color: "var(--color-base-content)",

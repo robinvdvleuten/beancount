@@ -2,8 +2,34 @@
 
 Project-specific conventions for the beancount Go implementation.
 
+## Feature Evaluation: Question First, Plan Second
+
+**CRITICAL**: Before diving into implementation planning, critically evaluate whether a feature is actually needed for this project's use case.
+
+**Ask these questions FIRST**:
+1. **What problem does this solve?** Be specific about the actual benefit.
+2. **What is the context?** (e.g., localhost-only, production, development tool)
+3. **What is the measurable impact?** Quantify the benefit (time saved, bytes reduced, errors prevented).
+4. **Is the complexity justified?** Compare implementation cost vs. actual value delivered.
+
+**Examples**:
+- **Compression for localhost server**: Saves ~3ms per page load. Not worth the complexity.
+- **Position tracking in parser errors**: Shows exact line/column for syntax errors. Worth the complexity—saves hours of debugging.
+- **Validation in parser**: Catches errors earlier. Worth the complexity for better error messages.
+- **Premature optimization**: "Might be useful later" is not justification. YAGNI applies.
+
+**Process**:
+1. User requests feature
+2. **Before exploring or planning**, ask: "Is this actually valuable for [specific context]?"
+3. If unclear, ask the user about their use case and constraints
+4. If not valuable, explain why and suggest alternatives (or skip it entirely)
+5. Only proceed with planning if the value is clear and justified
+
+Don't waste time planning solutions to non-problems.
+
 ## Essential Commands
 
+**Go**:
 ```bash
 gofmt -w .           # Format (required)
 golangci-lint run    # Lint (must pass)
@@ -11,6 +37,14 @@ go test ./...        # Test all (must pass)
 go test -run TestName ./package  # Run single test
 go test -fuzz=FuzzName -fuzztime=30s ./package  # Run fuzz test
 make fuzz-promote    # Promote fuzz corpus to testdata
+```
+
+**Frontend**:
+```bash
+npm run --prefix assets dev   # Dev server with hot reload (proxies /api to :8080)
+npm run --prefix assets build # Build to web/dist
+npm run --prefix assets lint  # oxlint
+npm run --prefix assets test  # Playwright
 ```
 
 ## Validation Logic Separation
@@ -230,13 +264,42 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 | **web** | **Local dev only**. Bind to localhost. No auth. Path traversal protection. |
 | **errors** | Formatting infrastructure. `TextFormatter` for CLI, `JSONFormatter` for APIs. |
 
+## Frontend (assets/)
+
+**Structure**: Vite + React + TypeScript. Built into `web/dist/`, embedded in Go binary.
+
+**Dependency Management**: Use `npm install --prefix assets <package>` and `npm uninstall --prefix assets <package>`. NEVER manually edit `package.json`.
+
+**CodeMirror**: Minimal setup only. Import only what you use: `@codemirror/{state,view,commands,language,lint,autocomplete}`. Drop `@uiw/react-codemirror`, `@uiw/codemirror-themes`—use `EditorView.theme()` directly. Only `indentWithTab` for keybindings. Result: ~75KB gzipped (vs 400KB+ with basicSetup). Wrappers defeat tree-shaking.
+
+| Directory | Purpose |
+|-----------|---------|
+| `src/codemirror/` | CodeMirror setup (language, theme, linting, autocomplete) |
+| `src/components/` | React components (editor, application) |
+| `index.html` | Entry point with metadata template (replaced by Go at runtime) |
+
+**Styling**: Tailwind CSS 4 + DaisyUI for component presets. CSS variables for (CodeMirror) theming (prefixed `--color-`).
+
+**Metadata**: Injected at build time by `web.go` (version, commitSHA, readOnly). Dev server injects dummy values via Vite plugin.
+
 ## Testing
 
-Use `github.com/alecthomas/assert/v2` for all assertions. Fuzz tests must `defer recover()`.
+**Go**: Use `github.com/alecthomas/assert/v2` for all assertions. Fuzz tests must `defer recover()`.
 
 ```bash
-go test -fuzz=FuzzParser -fuzztime=30s ./parser
+go test ./...                                   # Test all (must pass)
+go test -run TestName ./package                 # Run single test
+go test -fuzz=FuzzName -fuzztime=30s ./package  # Run fuzz test
 ```
+
+**Frontend**: Playwright for e2e tests (from `assets/`).
+
+```bash
+npm run test                  # Run all tests
+npx playwright show-report    # View last test report
+```
+
+Tests in `assets/tests/`. Config in `playwright.config.ts`.
 
 ## Performance
 

@@ -1,8 +1,8 @@
-import type { EditorView as CodeMirrorEditorView } from "@uiw/react-codemirror";
+import type { EditorView } from "@codemirror/view";
 import type { Diagnostic } from "@codemirror/lint";
 import type { EditorError } from "../types";
 
-export function errorsToDiagnostics(errors: EditorError[] | null, view: CodeMirrorEditorView): Diagnostic[] {
+export function errorsToDiagnostics(errors: EditorError[] | null, view: EditorView): Diagnostic[] {
   if (!errors || errors.length === 0) {
     return [];
   }
