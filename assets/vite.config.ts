@@ -1,10 +1,28 @@
 import * as path from "node:path";
-import { defineConfig } from "vite";
+import { type Plugin, defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 
+// Plugin to replace Go template variable ONLY in dev server mode
+// In production build, it stays as-is for Go to replace at runtime
+function metadataPlugin(): Plugin {
+  return {
+    name: 'metadata',
+    apply: 'serve', // Only run during dev server, not build
+    transformIndexHtml(html) {
+      // In dev server, inject complete metadata JSON object
+      const metadata = {
+        version: 'dev',
+        commitSHA: 'local',
+        readOnly: false,
+      };
+      return html.replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadata));
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), tailwindcss()],
+  plugins: [react(), tailwindcss(), metadataPlugin()],
 
   server: {
     proxy: {
@@ -17,8 +35,9 @@ export default defineConfig({
     emptyOutDir: true,
     manifest: true,
     rollupOptions: {
-      // Specify entry point (not index.html)
-      input: "./src/main.tsx",
+      input: {
+        main: path.resolve(__dirname, "index.html"),
+      },
     },
   },
 });

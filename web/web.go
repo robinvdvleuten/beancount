@@ -12,10 +12,7 @@ package web
 
 import (
 	"context"
-	_ "embed"
 	"fmt"
-	"html/template"
-	"io/fs"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -24,9 +21,6 @@ import (
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
-
-//go:embed index.html.tmpl
-var indexTemplate string
 
 type Server struct {
 	Port      int
@@ -86,57 +80,15 @@ func (s *Server) Start(ctx context.Context) error {
 func (s *Server) setupRouter() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 
-	// API routes
+	// API routes (both dev and prod)
 	mux.HandleFunc("GET /api/source", s.handleGetSource)
 	mux.HandleFunc("PUT /api/source", s.requireWritable(s.handlePutSource))
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 
-	// Get the appropriate dist filesystem for the build mode
-	distFS, err := s.getDistFS()
-	if err != nil {
-		return nil, err
-	}
-
-	// Index handler with Vite fragment + version injection
-	mux.HandleFunc("GET /{$}", s.makeIndexHandler(distFS))
-
-	// Asset handlers
-	assetsHandler := s.createAssetsHandler(distFS)
-	mux.Handle("/assets/", assetsHandler) // Prod: hashed assets
-	mux.Handle("/src/", assetsHandler)    // Dev: source files
+	// Asset routes (prod: serves embedded files with template vars replaced, dev: no-op)
+	s.mountAssets(mux)
 
 	return mux, nil
-}
-
-// makeIndexHandler creates handler that injects Vite tags and version/commit into HTML
-func (s *Server) makeIndexHandler(distFS fs.FS) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-
-		// Get Vite fragment (build-tag specific implementation)
-		viteFragment, err := s.getViteFragment(distFS)
-		if err != nil {
-			http.Error(w, "Error instantiating vite fragment", http.StatusInternalServerError)
-			return
-		}
-
-		tmpl, err := template.New("index").Parse(indexTemplate)
-		if err != nil {
-			http.Error(w, "Error parsing template", http.StatusInternalServerError)
-			return
-		}
-
-		data := map[string]any{
-			"Vite":      viteFragment,
-			"Version":   s.Version,
-			"CommitSHA": s.CommitSHA,
-			"ReadOnly":  s.ReadOnly,
-		}
-
-		if err := tmpl.Execute(w, data); err != nil {
-			http.Error(w, "Internal Server Error", http.StatusInternalServerError)
-		}
-	}
 }
 
 // requireWritable is middleware that rejects write requests in read-only mode.
