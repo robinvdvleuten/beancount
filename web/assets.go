@@ -68,7 +68,7 @@ func (s *Server) mountAssets(mux *http.ServeMux) {
 	// Register index route
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		fmt.Fprint(w, htmlContent)
+		_, _ = fmt.Fprint(w, htmlContent)
 	})
 
 	// Register static assets
