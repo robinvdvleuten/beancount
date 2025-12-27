@@ -22,7 +22,7 @@ jobs:
       - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c # v6.1.0
         with:
           go-version: ${{ matrix.go }}
-      - run: go test ./...
+      - run: go test -tags=dev ./...
 
   build:
     runs-on: ubuntu-latest

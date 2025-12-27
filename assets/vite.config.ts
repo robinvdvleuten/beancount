@@ -32,7 +32,7 @@ export default defineConfig({
 
   build: {
     outDir: path.resolve(__dirname, "../web/dist"),
-    emptyOutDir: true,
+    emptyOutDir: false,
     manifest: true,
     rollupOptions: {
       input: {

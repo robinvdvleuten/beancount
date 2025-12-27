@@ -1,6 +1,5 @@
 .gocache/
 .vite/
 beancount
-dist/
 node_modules/
 test-results/
