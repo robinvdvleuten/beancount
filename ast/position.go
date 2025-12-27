@@ -4,10 +4,10 @@ import "fmt"
 
 // Position represents a location in the source file.
 type Position struct {
-	Filename string
-	Offset   int // Byte offset
-	Line     int // Line number (1-indexed)
-	Column   int // Column number (1-indexed)
+	Filename string `json:"filename"`
+	Offset   int    `json:"offset"` // Byte offset
+	Line     int    `json:"line"`   // Line number (1-indexed)
+	Column   int    `json:"column"` // Column number (1-indexed)
 }
 
 // Positioned is implemented by all AST nodes that have a source position.
