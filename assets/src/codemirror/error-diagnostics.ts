@@ -24,7 +24,8 @@ export function errorsToDiagnostics(errors: EditorError[] | null, view: CodeMirr
 
     try {
       const line = view.state.doc.line(error.position.line);
-      const from = line.from + Math.max(0, error.position.column - 1);
+      // Start error marker at beginning of line for better visibility
+      const from = line.from;
       const to = line.to;
 
       return {
