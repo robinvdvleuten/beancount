@@ -1,7 +1,8 @@
 import * as path from "node:path";
 import { type Plugin, defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
-import react from "@vitejs/plugin-react";
+import solid from "vite-plugin-solid";
+import solidSvg from "vite-plugin-solid-svg";
 
 // Plugin to replace Go template variable ONLY in dev server mode
 // In production build, it stays as-is for Go to replace at runtime
@@ -22,7 +23,7 @@ function metadataPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), metadataPlugin()],
+  plugins: [solid(), solidSvg(), tailwindcss(), metadataPlugin()],
 
   server: {
     proxy: {

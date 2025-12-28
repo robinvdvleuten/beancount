@@ -1,8 +1,6 @@
-import * as React from "react";
-import {
-  ArrowDownTrayIcon,
-  DocumentCurrencyDollarIcon,
-} from "@heroicons/react/24/outline";
+import { createSignal, onMount } from "solid-js";
+import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid"
+import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid"
 import type { AccountInfo, EditorError } from "../types";
 import Editor from "./editor";
 
@@ -16,17 +14,17 @@ interface ApplicationProps {
   meta: { version: string; commitSHA: string; readOnly: boolean };
 }
 
-const Application: React.FC<ApplicationProps> = ({ meta }) => {
-  const [filepath, setFilepath] = React.useState<string | null>(null);
-  const [source, setSource] = React.useState<string>();
-  const [errors, setErrors] = React.useState<EditorError[] | null>(null);
-  const [accounts, setAccounts] = React.useState<AccountInfo[]>([]);
+const Application = (props: ApplicationProps) => {
+  const [filepath, setFilepath] = createSignal<string | null>(null);
+  const [source, setSource] = createSignal<string>();
+  const [errors, setErrors] = createSignal<EditorError[] | null>(null);
+  const [accounts, setAccounts] = createSignal<AccountInfo[]>([]);
 
-  const handleValueChange = React.useCallback((value: string) => {
+  const handleValueChange = (value: string) => {
     setSource(value);
-  }, []);
+  };
 
-  const fetchAccounts = React.useCallback(async () => {
+  const fetchAccounts = async () => {
     try {
       const response = await fetch("/api/accounts");
       if (!response.ok) {
@@ -39,16 +37,16 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
       console.error("Failed to fetch accounts:", error);
       setAccounts([]);
     }
-  }, []);
+  };
 
-  const handleSaveClick = React.useCallback(async () => {
+  const handleSaveClick = async () => {
     const response = await fetch("/api/source", {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        source,
+        source: source(),
       }),
     });
 
@@ -64,9 +62,9 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
 
     // Reload accounts to pick up new accounts from the saved file
     await fetchAccounts();
-  }, [source, fetchAccounts]);
+  };
 
-  React.useEffect(() => {
+  onMount(() => {
     async function fetchSource() {
       setSource(undefined);
       setErrors(null);
@@ -79,56 +77,49 @@ const Application: React.FC<ApplicationProps> = ({ meta }) => {
 
       const result: SourceResponse = await response.json();
 
-      if (!ignore) {
-        setFilepath(result.filepath);
-        setSource(result.source);
-        setErrors(result.errors);
-      }
+      setFilepath(result.filepath);
+      setSource(result.source);
+      setErrors(result.errors);
     }
 
-    let ignore = false;
     fetchSource();
     fetchAccounts();
-
-    return () => {
-      ignore = true;
-    };
-  }, [fetchAccounts]);
+  });
 
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex items-center justify-between border-b border-base-300 px-6 py-2">
-        <div className="flex items-center gap-3">
-          <div className="text-primary">
-            <DocumentCurrencyDollarIcon className="size-8" />
+    <div class="flex h-screen flex-col">
+      <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
+        <div class="flex items-center gap-3">
+          <div class="text-primary">
+            <DocumentCurrencyDollarIcon class="size-8" />
           </div>
-          <div className="text-base-content">
-            <h1 className="text-xl font-semibold">Beancount Editor</h1>
-            <p className="text-sm text-base-content/50">{filepath ?? "..."}</p>
+          <div class="text-base-content">
+            <h1 class="text-xl font-semibold">Beancount Editor</h1>
+            <p class="text-sm text-base-content/50">{filepath() ?? "..."}</p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button 
-            className="btn" 
+        <div class="flex items-center gap-2">
+          <button
+            class="btn"
             onClick={handleSaveClick}
-            disabled={meta.readOnly}
+            disabled={props.meta.readOnly}
           >
-            <ArrowDownTrayIcon className="size-4" />
+            <ArrowDownTrayIcon class="size-4" />
             Save
           </button>
         </div>
       </header>
 
-      <div className="flex-1 overflow-auto">
-        <Editor value={source} errors={errors} accounts={accounts} onChange={handleValueChange} />
+      <div class="flex-1 overflow-auto">
+        <Editor value={source()} errors={errors()} accounts={accounts()} onChange={handleValueChange} />
       </div>
 
-      <footer className="flex items-center justify-between border-t border-base-300 px-6 py-2">
-        <div className="text-xs text-base-content/70">
-          {meta.version}
-          {meta.commitSHA && ` (${meta.commitSHA})`}
-          {meta.readOnly && " read-only mode"}
+      <footer class="flex items-center justify-between border-t border-base-300 px-6 py-2">
+        <div class="text-xs text-base-content/70">
+          {props.meta.version}
+          {props.meta.commitSHA && ` (${props.meta.commitSHA})`}
+          {props.meta.readOnly && " read-only mode"}
         </div>
       </footer>
     </div>

@@ -266,7 +266,7 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 
 ## Frontend (assets/)
 
-**Structure**: Vite + React + TypeScript. Built into `web/dist/`, embedded in Go binary.
+**Structure**: Vite + Solidjs + TypeScript. Built into `web/dist/`, embedded in Go binary.
 
 **Dependency Management**: Use `npm install --prefix assets <package>` and `npm uninstall --prefix assets <package>`. NEVER manually edit `package.json`.
 
@@ -275,7 +275,7 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 | Directory | Purpose |
 |-----------|---------|
 | `src/codemirror/` | CodeMirror setup (language, theme, linting, autocomplete) |
-| `src/components/` | React components (editor, application) |
+| `src/components/` | Solidjs components (editor, application) |
 | `index.html` | Entry point with metadata template (replaced by Go at runtime) |
 
 **Styling**: Tailwind CSS 4 + DaisyUI for component presets. CSS variables for (CodeMirror) theming (prefixed `--color-`).

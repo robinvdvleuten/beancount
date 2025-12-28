@@ -1,4 +1,4 @@
-import * as React from "react";
+import { createEffect, createMemo, onCleanup, onMount } from "solid-js";
 import { linter as linterExt, lintGutter } from "@codemirror/lint";
 import { StateEffect } from "@codemirror/state";
 import { lineNumbers, type EditorView } from "@codemirror/view";
@@ -16,61 +16,61 @@ interface EditorProps {
   onChange?: (value: string) => void;
 }
 
-const Editor: React.FC<EditorProps> = ({ value, errors, accounts, onChange }) => {
-  const editorRef = React.useRef<HTMLDivElement>(null);
-  const viewRef = React.useRef<EditorView | null>(null);
+const Editor = (props: EditorProps) => {
+  let editorRef: HTMLDivElement | undefined;
+  let viewRef: EditorView | null = null;
 
-  const linter = React.useMemo(() => {
-    return linterExt((view) => errorsToDiagnostics(errors ?? null, view));
-  }, [errors]);
+  const linter = createMemo(() => {
+    return linterExt((view) => errorsToDiagnostics(props.errors ?? null, view));
+  });
 
-  const accountCompletion = React.useMemo(() => {
-    return createAccountCompletion(accounts);
-  }, [accounts]);
+  const accountCompletion = createMemo(() => {
+    return createAccountCompletion(props.accounts);
+  });
 
   // Create editor view once on mount
-  React.useEffect(() => {
-    if (!editorRef.current) return;
+  onMount(() => {
+    if (!editorRef) return;
 
     const view = createEditorView({
-      parent: editorRef.current,
-      value: value ?? "",
+      parent: editorRef,
+      value: props.value ?? "",
       extensions: [
         lineNumbers(),
         beancount(),
         beancountSyntaxHighlighting,
         editorTheme,
-        linter,
+        linter(),
         lintGutter(),
-        accountCompletion,
+        accountCompletion(),
       ],
-      onChange,
+      onChange: props.onChange,
     });
 
-    viewRef.current = view;
+    viewRef = view;
 
-    return () => {
+    onCleanup(() => {
       view.destroy();
-      viewRef.current = null;
-    };
-  }, []); // Empty deps - only create once
+      viewRef = null;
+    });
+  });
 
   // Update editor content when value prop changes externally
-  React.useEffect(() => {
-    const view = viewRef.current;
-    if (!view || value === undefined) return;
+  createEffect(() => {
+    const view = viewRef;
+    if (!view || props.value === undefined) return;
 
     const currentValue = view.state.doc.toString();
-    if (value !== currentValue) {
+    if (props.value !== currentValue) {
       view.dispatch({
-        changes: { from: 0, to: currentValue.length, insert: value },
+        changes: { from: 0, to: currentValue.length, insert: props.value },
       });
     }
-  }, [value]);
+  });
 
   // Reconfigure extensions when linter or completion changes
-  React.useEffect(() => {
-    const view = viewRef.current;
+  createEffect(() => {
+    const view = viewRef;
     if (!view) return;
 
     view.dispatch({
@@ -79,14 +79,14 @@ const Editor: React.FC<EditorProps> = ({ value, errors, accounts, onChange }) =>
         beancount(),
         beancountSyntaxHighlighting,
         editorTheme,
-        linter,
+        linter(),
         lintGutter(),
-        accountCompletion,
+        accountCompletion(),
       ]),
     });
-  }, [linter, accountCompletion]);
+  });
 
-  return <div ref={editorRef} className="h-full" />;
+  return <div ref={editorRef} class="h-full" />;
 };
 
 export default Editor;
