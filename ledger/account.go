@@ -4,24 +4,18 @@ import (
 	"sort"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/shopspring/decimal"
 )
 
 // AccountBalance represents the balance of a single account.
 // Useful for balance sheet and income statement reporting.
 type AccountBalance struct {
-	Account  string                     // Account name (e.g., "Assets:Cash")
-	Balances map[string]decimal.Decimal // Currency → amount
+	Account string   // Account name (e.g., "Assets:Cash")
+	Balance *Balance // Currency → amount mapping
 }
 
 // IsZero returns true if all balances are zero.
 func (ab *AccountBalance) IsZero() bool {
-	for _, amt := range ab.Balances {
-		if !amt.IsZero() {
-			return false
-		}
-	}
-	return true
+	return ab.Balance.IsZero()
 }
 
 // AccountPosting records a single posting's impact on an account.
@@ -97,13 +91,16 @@ func (a *Account) GetParent(l *Ledger) *Account {
 }
 
 // GetBalance returns the balance for this account (not including children).
-// Returns a map of commodity to decimal amount.
-func (a *Account) GetBalance() map[string]decimal.Decimal {
-	result := make(map[string]decimal.Decimal)
-	for _, currency := range a.Inventory.Currencies() {
-		result[currency] = a.Inventory.Get(currency)
+func (a *Account) GetBalance() *Balance {
+	if a.Inventory == nil {
+		return NewBalance()
 	}
-	return result
+
+	balance := NewBalance()
+	for _, currency := range a.Inventory.Currencies() {
+		balance.Set(currency, a.Inventory.Get(currency))
+	}
+	return balance
 }
 
 // GetChildren returns direct child accounts.
@@ -130,9 +127,8 @@ func (a *Account) GetChildren(l *Ledger) []*Account {
 
 // GetSubtreeBalance returns the aggregated balance for this account and all its descendants.
 // Useful for balance sheet reporting where parent balances sum their children.
-// Returns a map of commodity to total decimal amount.
-func (a *Account) GetSubtreeBalance(l *Ledger) map[string]decimal.Decimal {
-	result := make(map[string]decimal.Decimal)
+func (a *Account) GetSubtreeBalance(l *Ledger) *Balance {
+	result := NewBalance()
 
 	// Traverse all descendants via graph
 	descendantNodes := l.Graph().GetDescendants(string(a.Name))
@@ -149,9 +145,7 @@ func (a *Account) GetSubtreeBalance(l *Ledger) map[string]decimal.Decimal {
 
 	// Sum balances from this account and all descendants
 	for _, acc := range allAccounts {
-		for currency, amount := range acc.GetBalance() {
-			result[currency] = result[currency].Add(amount)
-		}
+		result.Merge(acc.GetBalance())
 	}
 
 	return result
@@ -184,9 +178,9 @@ func (a *Account) GetPostingsInPeriod(start, end *ast.Date) []*AccountPosting {
 
 // GetBalanceAsOf returns the account balance as of a specific date.
 // Reconstructs balance from postings up to and including the given date.
-// Returns AccountBalance with empty map if no postings exist before the date.
+// Returns AccountBalance with empty balance if no postings exist before the date.
 func (a *Account) GetBalanceAsOf(date *ast.Date) *AccountBalance {
-	balance := make(map[string]decimal.Decimal)
+	balance := NewBalance()
 	postings := a.GetPostingsBefore(date)
 
 	for _, posting := range postings {
@@ -200,20 +194,20 @@ func (a *Account) GetBalanceAsOf(date *ast.Date) *AccountBalance {
 		}
 		currency := posting.Posting.Amount.Currency
 
-		balance[currency] = balance[currency].Add(amount)
+		balance.Add(currency, amount)
 	}
 
 	return &AccountBalance{
-		Account:  string(a.Name),
-		Balances: balance,
+		Account: string(a.Name),
+		Balance: balance,
 	}
 }
 
 // GetBalanceInPeriod returns the net balance change for this account within [start, end].
 // Used to compute period changes for income statements.
-// Returns AccountBalance with empty map if no postings exist in the period.
+// Returns AccountBalance with empty balance if no postings exist in the period.
 func (a *Account) GetBalanceInPeriod(start, end *ast.Date) *AccountBalance {
-	balance := make(map[string]decimal.Decimal)
+	balance := NewBalance()
 	postings := a.GetPostingsInPeriod(start, end)
 
 	for _, posting := range postings {
@@ -227,12 +221,12 @@ func (a *Account) GetBalanceInPeriod(start, end *ast.Date) *AccountBalance {
 		}
 		currency := posting.Posting.Amount.Currency
 
-		balance[currency] = balance[currency].Add(amount)
+		balance.Add(currency, amount)
 	}
 
 	return &AccountBalance{
-		Account:  string(a.Name),
-		Balances: balance,
+		Account: string(a.Name),
+		Balance: balance,
 	}
 }
 
@@ -244,15 +238,16 @@ func (a *Account) GetBalanceInCurrencyAsOf(l *Ledger, targetCurrency string, dat
 	balance := a.GetBalanceAsOf(date)
 
 	// Convert to single currency using ledger's price infrastructure
-	amount, err := l.ConvertBalance(balance.Balances, targetCurrency, date)
+	amount, err := l.ConvertBalance(balance.Balance.ToMap(), targetCurrency, date)
 	if err != nil {
 		return nil, err
 	}
 
+	converted := NewBalance()
+	converted.Set(targetCurrency, amount)
+
 	return &AccountBalance{
 		Account: balance.Account,
-		Balances: map[string]decimal.Decimal{
-			targetCurrency: amount,
-		},
+		Balance: converted,
 	}, nil
 }

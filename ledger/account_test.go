@@ -98,7 +98,7 @@ func TestGetBalance(t *testing.T) {
 
 			balance := account.GetBalance()
 			expected := decimal.RequireFromString(tt.amount)
-			actual := balance[tt.currency]
+			actual := balance.Get(tt.currency)
 			assert.Equal(t, actual.String(), expected.String())
 		})
 	}
@@ -187,7 +187,7 @@ func TestGetSubtreeBalance(t *testing.T) {
 
 			balance := account.GetSubtreeBalance(l)
 			expected := decimal.RequireFromString(tt.amount)
-			actual := balance[tt.currency]
+			actual := balance.Get(tt.currency)
 			assert.Equal(t, actual.String(), expected.String())
 		})
 	}
@@ -218,7 +218,7 @@ func TestGetSubtreeBalance_MultiCurrency(t *testing.T) {
 	usChecking, ok := l.GetAccount("Assets:US:Checking")
 	assert.True(t, ok)
 	balance := usChecking.GetSubtreeBalance(l)
-	assert.Equal(t, balance["USD"].Equal(decimal.RequireFromString("1000.00")), true)
+	assert.Equal(t, balance.Get("USD").Equal(decimal.RequireFromString("1000.00")), true)
 }
 
 func TestGetChildren_DeeplyNested(t *testing.T) {
@@ -296,7 +296,7 @@ func TestGetSubtreeBalance_DeeplyNested(t *testing.T) {
 
 			balance := account.GetSubtreeBalance(l)
 			expected := decimal.RequireFromString(tt.expected)
-			assert.Equal(t, balance["USD"].Equal(expected), true)
+			assert.Equal(t, balance.Get("USD").Equal(expected), true)
 		})
 	}
 }

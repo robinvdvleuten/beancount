@@ -172,8 +172,8 @@ func TestGetBalancesAsOf_SimpleCase(t *testing.T) {
 	}
 	assert.True(t, assetBal != nil, "Assets:Cash should exist")
 	assert.True(t, equityBal != nil, "Equity:Opening should exist")
-	assert.True(t, assetBal.Balances["USD"].Equal(decimal.NewFromInt(100)))
-	assert.True(t, equityBal.Balances["USD"].Equal(decimal.NewFromInt(-100)))
+	assert.True(t, assetBal.Balance.Get("USD").Equal(decimal.NewFromInt(100)))
+	assert.True(t, equityBal.Balance.Get("USD").Equal(decimal.NewFromInt(-100)))
 }
 
 // TestGetBalancesAsOf_MultiCurrency verifies balance calculation with multiple currencies.
@@ -216,11 +216,11 @@ func TestGetBalancesAsOf_MultiCurrency(t *testing.T) {
 	}
 	assert.True(t, assetBal != nil, "Assets:Cash should exist")
 	assert.True(t, equityBal != nil, "Equity:Opening should exist")
-	assert.True(t, assetBal.Balances["USD"].Equal(decimal.NewFromInt(100)))
-	assert.True(t, assetBal.Balances["EUR"].Equal(decimal.NewFromInt(50)))
+	assert.True(t, assetBal.Balance.Get("USD").Equal(decimal.NewFromInt(100)))
+	assert.True(t, assetBal.Balance.Get("EUR").Equal(decimal.NewFromInt(50)))
 	// Equity:Opening has inverse balance
-	assert.True(t, equityBal.Balances["USD"].Equal(decimal.NewFromInt(-100)))
-	assert.True(t, equityBal.Balances["EUR"].Equal(decimal.NewFromInt(-50)))
+	assert.True(t, equityBal.Balance.Get("USD").Equal(decimal.NewFromInt(-100)))
+	assert.True(t, equityBal.Balance.Get("EUR").Equal(decimal.NewFromInt(-50)))
 }
 
 // TestGetBalancesInPeriod_IncomeExpenses verifies period balance filtering by account type.
@@ -274,9 +274,9 @@ func TestGetBalancesInPeriod_IncomeExpenses(t *testing.T) {
 	assert.True(t, incomeBal != nil, "Income:Salary should exist")
 	assert.True(t, expenseBal != nil, "Expenses:Food should exist")
 	// Income should be negative (offset)
-	assert.True(t, incomeBal.Balances["USD"].Equal(decimal.NewFromInt(-1000)))
+	assert.True(t, incomeBal.Balance.Get("USD").Equal(decimal.NewFromInt(-1000)))
 	// Expenses should be positive
-	assert.True(t, expenseBal.Balances["USD"].Equal(decimal.NewFromInt(50)))
+	assert.True(t, expenseBal.Balance.Get("USD").Equal(decimal.NewFromInt(50)))
 }
 
 // TestCloseBooks_SimpleIncome verifies closing transactions are generated correctly.
@@ -692,8 +692,8 @@ func TestGetBalancesAsOfInCurrency_SingleAccount(t *testing.T) {
 
 	assert.True(t, assetBal != nil, "Assets:Cash should exist")
 	assert.True(t, equityBal != nil, "Equity:Opening should exist")
-	assert.True(t, assetBal.Balances["USD"].Equal(decimal.NewFromInt(100)))
-	assert.True(t, equityBal.Balances["USD"].Equal(decimal.NewFromInt(-100)))
+	assert.True(t, assetBal.Balance.Get("USD").Equal(decimal.NewFromInt(100)))
+	assert.True(t, equityBal.Balance.Get("USD").Equal(decimal.NewFromInt(-100)))
 }
 
 // TestGetBalancesAsOfInCurrency_MultiAccount verifies multiple accounts consolidated.
@@ -729,7 +729,7 @@ func TestGetBalancesAsOfInCurrency_MultiAccount(t *testing.T) {
 	// Verify each account
 	balances := make(map[string]decimal.Decimal)
 	for _, bal := range results {
-		balances[bal.Account] = bal.Balances["USD"]
+		balances[bal.Account] = bal.Balance.Get("USD")
 	}
 
 	assert.True(t, balances["Assets:Cash"].Equal(decimal.NewFromInt(950)))
@@ -777,7 +777,7 @@ func TestGetBalancesAsOfInCurrency_MultiCurrency(t *testing.T) {
 	assert.True(t, assetBal != nil, "Assets:Cash should exist")
 	// 100 + 50 * 1.10 = 155
 	expected := decimal.NewFromInt(100).Add(decimal.NewFromInt(50).Mul(mustParseDec("1.10")))
-	assert.True(t, assetBal.Balances["USD"].Equal(expected))
+	assert.True(t, assetBal.Balance.Get("USD").Equal(expected))
 }
 
 // TestGetBalancesAsOfInCurrency_MissingPrice verifies error on missing price.
@@ -904,7 +904,7 @@ func TestAccount_GetBalanceInCurrencyAsOf_SingleCurrency(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, result.Account, "Assets:Cash")
-	assert.True(t, result.Balances["USD"].Equal(decimal.NewFromInt(100)))
+	assert.True(t, result.Balance.Get("USD").Equal(decimal.NewFromInt(100)))
 }
 
 // TestAccount_GetBalanceInCurrencyAsOf_MultiCurrency verifies conversion with multiple currencies.
@@ -939,7 +939,7 @@ func TestAccount_GetBalanceInCurrencyAsOf_MultiCurrency(t *testing.T) {
 	assert.Equal(t, result.Account, "Assets:Cash")
 	// 100 + 50 * 1.10 = 155
 	expected := decimal.NewFromInt(100).Add(decimal.NewFromInt(50).Mul(mustParseDec("1.10")))
-	assert.True(t, result.Balances["USD"].Equal(expected))
+	assert.True(t, result.Balance.Get("USD").Equal(expected))
 }
 
 // TestAccount_GetBalanceInCurrencyAsOf_MissingPrice verifies error on missing price.
@@ -993,7 +993,7 @@ func TestAccount_GetBalanceInCurrencyAsOf_ZeroBalance(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.Equal(t, result.Account, "Assets:Cash")
-	assert.True(t, result.Balances["USD"].IsZero())
+	assert.True(t, result.Balance.Get("USD").IsZero())
 }
 
 // TestAccount_GetBalanceInCurrencyAsOf_MultiPath verifies multi-hop conversion.
@@ -1026,5 +1026,5 @@ func TestAccount_GetBalanceInCurrencyAsOf_MultiPath(t *testing.T) {
 	assert.Equal(t, result.Account, "Assets:Cash")
 	// 100 * 1.15 * 1.10 = 126.5
 	expected := decimal.NewFromInt(100).Mul(mustParseDec("1.15")).Mul(mustParseDec("1.10"))
-	assert.True(t, result.Balances["USD"].Equal(expected))
+	assert.True(t, result.Balance.Get("USD").Equal(expected))
 }

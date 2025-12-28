@@ -507,17 +507,18 @@ func (l *Ledger) GetBalancesAsOfInCurrency(
 		}
 
 		// Convert to target currency
-		amount, err := l.ConvertBalance(acctBalance.Balances, currency, date)
+		amount, err := l.ConvertBalance(acctBalance.Balance.ToMap(), currency, date)
 		if err != nil {
 			errs = append(errs, err)
 			return true // collect error and continue
 		}
 
+		converted := NewBalance()
+		converted.Set(currency, amount)
+
 		result = append(result, AccountBalance{
 			Account: acctBalance.Account,
-			Balances: map[string]decimal.Decimal{
-				currency: amount,
-			},
+			Balance: converted,
 		})
 		return true
 	})
@@ -594,8 +595,8 @@ func (l *Ledger) CloseBooks(closingDate *ast.Date) []*ast.Transaction {
 		}
 
 		// Create postings for each currency in the balance
-		for currency, amount := range accBal.Balances {
-			if amount.IsZero() {
+		for _, currencyAmount := range accBal.Balance.Entries() {
+			if currencyAmount.Amount.IsZero() {
 				continue
 			}
 
@@ -603,7 +604,7 @@ func (l *Ledger) CloseBooks(closingDate *ast.Date) []*ast.Transaction {
 			txn := ast.NewTransaction(closingDate, "Period closing",
 				ast.WithFlag("P"), // Mark as padding/synthetic
 				ast.WithPostings(
-					ast.NewPosting(accountName, ast.WithAmount(amount.Neg().String(), currency)),
+					ast.NewPosting(accountName, ast.WithAmount(currencyAmount.Amount.Neg().String(), currencyAmount.Currency)),
 					ast.NewPosting(earningsAccount), // Inferred amount
 				),
 			)
