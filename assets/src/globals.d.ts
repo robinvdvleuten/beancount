@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-declare module 'virtual:globals' {
+declare module "virtual:globals" {
   export const meta: {
     version: string;
     commitSHA: string;

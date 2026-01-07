@@ -27,7 +27,7 @@ const Editor = (props: EditorProps) => {
       return linterExt((view) => errorsToDiagnostics(_errors ?? null, view));
     },
     undefined,
-    { equals: false }
+    { equals: false },
   );
 
   const accountCompletion = createMemo(() => {
@@ -91,7 +91,7 @@ const Editor = (props: EditorProps) => {
           accountCompletion(),
         ]),
       });
-    })
+    }),
   );
 
   return <div ref={editorRef} class="h-full" />;

@@ -2,7 +2,14 @@ import type { CompletionContext } from "@codemirror/autocomplete";
 import type { SyntaxNode } from "@lezer/common";
 
 // Account directives that expect account names as arguments
-export const ACCOUNT_DIRECTIVE_TYPES = new Set(["Open", "Close", "Balance", "Pad", "Note", "Document"]);
+export const ACCOUNT_DIRECTIVE_TYPES = new Set([
+  "Open",
+  "Close",
+  "Balance",
+  "Pad",
+  "Note",
+  "Document",
+]);
 
 /**
  * Checks if the cursor is inside a string literal, line comment, or org-mode header.
@@ -15,7 +22,11 @@ export const ACCOUNT_DIRECTIVE_TYPES = new Set(["Open", "Close", "Balance", "Pad
 export const isInStringOrComment = (node: SyntaxNode): boolean => {
   let current: SyntaxNode | null = node;
   while (current) {
-    if (current.name === "String" || current.name === "LineComment" || current.name === "OrgHeader") {
+    if (
+      current.name === "String" ||
+      current.name === "LineComment" ||
+      current.name === "OrgHeader"
+    ) {
       return true;
     }
     current = current.parent;
@@ -58,7 +69,10 @@ export const isChildOfPosting = (node: SyntaxNode): boolean => {
  * @param node - The syntax node at cursor position
  * @returns true if in account position of a directive, false otherwise
  */
-export const isAfterAccountDirectiveKeyword = (context: CompletionContext, node: SyntaxNode): boolean => {
+export const isAfterAccountDirectiveKeyword = (
+  context: CompletionContext,
+  node: SyntaxNode,
+): boolean => {
   let current: SyntaxNode | null = node;
   while (current) {
     // Check if we're in an account directive

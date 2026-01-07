@@ -1,8 +1,15 @@
-import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
+import {
+  autocompletion,
+  type CompletionContext,
+} from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
 import { matchSorter } from "match-sorter";
 import type { AccountInfo } from "../../types";
-import { isInStringOrComment, isChildOfPosting, isAfterAccountDirectiveKeyword } from "./syntax-predicates";
+import {
+  isInStringOrComment,
+  isChildOfPosting,
+  isAfterAccountDirectiveKeyword,
+} from "./syntax-predicates";
 
 /**
  * Main context detection function that determines if autocomplete should trigger.
@@ -67,14 +74,14 @@ export const createAccountCompletion = (accounts: AccountInfo[]) => {
         const options = matchedAccounts.map((account) => ({
           label: account.name,
           type: "variable",
-          detail: account.type,  // Show account type as detail
+          detail: account.type, // Show account type as detail
           apply: account.name,
         }));
 
         return {
           from: word.from,
           options,
-          validFor: /^[\w:-]*$/,  // Keep completion open while typing valid account characters
+          validFor: /^[\w:-]*$/, // Keep completion open while typing valid account characters
         };
       },
     ],

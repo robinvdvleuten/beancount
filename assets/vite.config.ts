@@ -5,18 +5,18 @@ import solid from "vite-plugin-solid";
 import solidSvg from "vite-plugin-solid-svg";
 
 const metadataDevValue = {
-  version: 'dev',
-  commitSHA: 'local',
+  version: "dev",
+  commitSHA: "local",
   readOnly: false,
 };
 
 // Plugin to handle metadata: replaces Go template in HTML (dev only) and provides virtual module
 function metadataPlugin(): Plugin {
-  const virtualModuleId = 'virtual:globals';
-  const resolvedId = '\0' + virtualModuleId;
+  const virtualModuleId = "virtual:globals";
+  const resolvedId = "\0" + virtualModuleId;
 
   return {
-    name: 'metadata',
+    name: "metadata",
     resolveId(id) {
       if (id === virtualModuleId) {
         return resolvedId;
@@ -24,7 +24,7 @@ function metadataPlugin(): Plugin {
     },
     load(id) {
       if (id === resolvedId) {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === "development") {
           // Dev mode: return actual metadata
           return `export const meta = ${JSON.stringify(metadataDevValue)};`;
         } else {
@@ -35,8 +35,11 @@ function metadataPlugin(): Plugin {
     },
     transformIndexHtml(html) {
       // In dev server, replace Go template variable with actual metadata
-      if (process.env.NODE_ENV === 'development') {
-        return html.replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadataDevValue));
+      if (process.env.NODE_ENV === "development") {
+        return html.replace(
+          /\{\{ \.Metadata \}\}/g,
+          JSON.stringify(metadataDevValue),
+        );
       }
     },
   };

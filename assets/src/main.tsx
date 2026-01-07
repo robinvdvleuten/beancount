@@ -6,6 +6,11 @@ import routes from "./routes";
 
 const elem = document.getElementById("root")!;
 
-render(() => (<Root>
-  <Router>{routes}</Router>
-  </Root>), elem);
+render(
+  () => (
+    <Root>
+      <Router>{routes}</Router>
+    </Root>
+  ),
+  elem,
+);

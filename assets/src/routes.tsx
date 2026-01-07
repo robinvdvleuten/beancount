@@ -4,12 +4,12 @@ import Editor from "./routes/editor";
 const routes = [
   {
     path: "/",
-    component: () => <Navigate href="/editor" />
+    component: () => <Navigate href="/editor" />,
   },
   {
     path: "/editor",
-    component: Editor
-  }
-]
+    component: Editor,
+  },
+];
 
 export default routes;

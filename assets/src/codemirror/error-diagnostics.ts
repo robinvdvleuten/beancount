@@ -2,7 +2,10 @@ import type { EditorView } from "@codemirror/view";
 import type { Diagnostic } from "@codemirror/lint";
 import type { EditorError } from "../types";
 
-export function errorsToDiagnostics(errors: EditorError[] | null, view: EditorView): Diagnostic[] {
+export function errorsToDiagnostics(
+  errors: EditorError[] | null,
+  view: EditorView,
+): Diagnostic[] {
   if (!errors || errors.length === 0) {
     return [];
   }
@@ -10,7 +13,9 @@ export function errorsToDiagnostics(errors: EditorError[] | null, view: EditorVi
   return errors.map((error) => {
     const messageParts = error.message.split(": ");
     const cleanMessage =
-      messageParts.length >= 2 ? messageParts.slice(1).join(": ") : error.message;
+      messageParts.length >= 2
+        ? messageParts.slice(1).join(": ")
+        : error.message;
 
     if (!error.position) {
       return {

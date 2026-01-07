@@ -14,29 +14,37 @@ export const editorTheme = EditorView.theme({
   ".cm-cursor, .cm-dropCursor": {
     borderLeftColor: "var(--color-base-content)",
   },
-  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-    backgroundColor: "color-mix(in oklab, var(--color-base-content) 8%, transparent)",
-  },
+  "&.cm-focused .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection":
+    {
+      backgroundColor:
+        "color-mix(in oklab, var(--color-base-content) 8%, transparent)",
+    },
   ".cm-activeLine": {
-    backgroundColor: "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
+    backgroundColor:
+      "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
   },
   ".cm-selectionMatch": {
-    backgroundColor: "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
+    backgroundColor:
+      "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
   },
   ".cm-gutters": {
     backgroundColor: "var(--color-base-100)",
     color: "color-mix(in oklab, var(--color-base-content) 25%, transparent)",
-    borderRight: "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
+    borderRight:
+      "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
   },
   ".cm-activeLineGutter": {
-    backgroundColor: "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
+    backgroundColor:
+      "color-mix(in oklab, var(--color-base-content) 3%, transparent)",
     color: "color-mix(in oklab, var(--color-base-content) 50%, transparent)",
   },
   ".cm-tooltip": {
     backgroundColor: "var(--color-base-100)",
     color: "var(--color-base-content)",
-    border: "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
-    boxShadow: "0 12px 40px color-mix(in oklab, var(--color-base-content) 10%, transparent)",
+    border:
+      "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
+    boxShadow:
+      "0 12px 40px color-mix(in oklab, var(--color-base-content) 10%, transparent)",
   },
   ".cm-tooltip-autocomplete": {
     padding: 0,
@@ -50,7 +58,8 @@ export const editorTheme = EditorView.theme({
     color: "color-mix(in oklab, var(--color-base-content) 80%, transparent)",
   },
   ".cm-tooltip-autocomplete li[aria-selected]": {
-    backgroundColor: "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
+    backgroundColor:
+      "color-mix(in oklab, var(--color-base-content) 6%, transparent)",
     color: "var(--color-base-content)",
   },
   ".cm-completionMatchedText": {
@@ -59,14 +68,18 @@ export const editorTheme = EditorView.theme({
   ".cm-tooltip-lint": {
     backgroundColor: "var(--color-base-100)",
     color: "var(--color-base-content)",
-    border: "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
-    boxShadow: "0 12px 40px color-mix(in oklab, var(--color-base-content) 10%, transparent)",
+    border:
+      "1px solid color-mix(in oklab, var(--color-base-content) 12%, transparent)",
+    boxShadow:
+      "0 12px 40px color-mix(in oklab, var(--color-base-content) 10%, transparent)",
   },
   ".cm-diagnostic": {
-    borderLeft: "4px solid color-mix(in oklab, var(--color-base-content) 10%, transparent)",
+    borderLeft:
+      "4px solid color-mix(in oklab, var(--color-base-content) 10%, transparent)",
   },
   ".cm-diagnostic-error": {
-    borderLeftColor: "color-mix(in oklab, var(--color-error, #f31260) 65%, transparent)",
+    borderLeftColor:
+      "color-mix(in oklab, var(--color-error, #f31260) 65%, transparent)",
   },
 });
 
@@ -130,7 +143,8 @@ const highlightStyle = HighlightStyle.define([
     color: "color-mix(in oklab, var(--color-base-content) 40%, transparent)",
     textDecoration: "underline",
     textUnderlineOffset: "2px",
-    textDecorationColor: "color-mix(in oklab, var(--color-base-content) 20%, transparent)",
+    textDecorationColor:
+      "color-mix(in oklab, var(--color-base-content) 20%, transparent)",
   },
   {
     tag: t.lineComment,

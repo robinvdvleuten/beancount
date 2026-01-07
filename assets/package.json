@@ -4,7 +4,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "eslint",
+    "lint": "prettier . --check && eslint",
     "preview": "vite preview",
     "test": "playwright test"
   },
@@ -30,7 +30,9 @@
     "@tailwindcss/vite": "^4.1.18",
     "@types/node": "^25.0.3",
     "eslint": "~9.39.2",
+    "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-solid": "~0.14.5",
+    "prettier": "3.7.4",
     "typescript": "~5.9.3",
     "typescript-eslint": "~8.52.0",
     "vite": "^7.3.0",

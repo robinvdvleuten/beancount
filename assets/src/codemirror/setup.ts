@@ -20,11 +20,7 @@ export function createEditorView(config: EditorViewConfig): EditorView {
 
   const state = EditorState.create({
     doc: value,
-    extensions: [
-      ...extensions,
-      keymap.of([indentWithTab]),
-      updateListener,
-    ],
+    extensions: [...extensions, keymap.of([indentWithTab]), updateListener],
   });
 
   return new EditorView({

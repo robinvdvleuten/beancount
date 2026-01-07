@@ -1,6 +1,6 @@
 import { type Component, createSignal, onMount } from "solid-js";
-import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid"
-import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid"
+import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid";
+import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid";
 import type { AccountInfo, EditorError } from "../types";
 import EditorComp from "../components/editor";
 import { meta } from "virtual:globals";
@@ -109,7 +109,12 @@ const Editor: Component = () => {
       </header>
 
       <div class="flex-1 overflow-auto">
-        <EditorComp value={source()} errors={errors()} accounts={accounts()} onChange={handleValueChange} />
+        <EditorComp
+          value={source()}
+          errors={errors()}
+          accounts={accounts()}
+          onChange={handleValueChange}
+        />
       </div>
     </>
   );
