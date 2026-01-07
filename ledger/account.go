@@ -78,16 +78,28 @@ func (a *Account) HasMetadata() bool {
 // GetParent returns the parent account.
 // For example, parent of "Assets:US:Checking" is "Assets:US".
 // Returns nil if the account has no parent.
-// Note: Returns nil for implicit parents (nodes without Account metadata).
+// Includes both explicitly opened accounts and implicit parent accounts.
 func (a *Account) GetParent(l *Ledger) *Account {
 	parentNode := l.Graph().GetParent(string(a.Name))
-	if parentNode == nil || parentNode.Meta == nil {
+	if parentNode == nil {
 		return nil
 	}
-	if parent, ok := parentNode.Meta.(*Account); ok {
-		return parent
+
+	// If parent has Account metadata, use it
+	if parentNode.Meta != nil {
+		if parent, ok := parentNode.Meta.(*Account); ok {
+			return parent
+		}
 	}
-	return nil
+
+	// For implicit parent accounts (created by ensureAccountHierarchy),
+	// reconstruct Account from node ID
+	name := ast.Account(parentNode.ID)
+	parent := &Account{
+		Name: name,
+		Type: name.Root(),
+	}
+	return parent
 }
 
 // GetBalance returns the balance for this account (not including children).
@@ -105,6 +117,7 @@ func (a *Account) GetBalance() *Balance {
 
 // GetChildren returns direct child accounts.
 // For example, if this account is "Assets", returns child accounts like "Assets:US" and "Assets:Investments".
+// Includes both explicitly opened accounts and implicit parent accounts (which have no Account metadata).
 func (a *Account) GetChildren(l *Ledger) []*Account {
 	childNodes := l.Graph().GetChildren(string(a.Name))
 
@@ -112,9 +125,20 @@ func (a *Account) GetChildren(l *Ledger) []*Account {
 	var children []*Account
 	for _, node := range childNodes {
 		if node.Kind == "account" {
-			if acc, ok := node.Meta.(*Account); ok {
-				children = append(children, acc)
+			var acc *Account
+			if a, ok := node.Meta.(*Account); ok {
+				// Explicitly opened account
+				acc = a
+			} else {
+				// Implicit parent account (created by ensureAccountHierarchy)
+				// Reconstruct Account from node ID (the account name)
+				name := ast.Account(node.ID)
+				acc = &Account{
+					Name: name,
+					Type: name.Root(),
+				}
 			}
+			children = append(children, acc)
 		}
 	}
 

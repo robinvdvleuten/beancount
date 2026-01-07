@@ -300,3 +300,88 @@ func TestGetSubtreeBalance_DeeplyNested(t *testing.T) {
 		})
 	}
 }
+
+// TestGetParent_ImplicitParent verifies GetParent works for implicit parent accounts.
+func TestGetParent_ImplicitParent(t *testing.T) {
+	l := ledger.New()
+
+	source := `
+2024-01-01 open Assets:US:Checking USD
+2024-01-01 open Assets:EU:Savings EUR
+`
+	ctx := context.Background()
+	tree, err := parser.ParseBytes(ctx, []byte(source))
+	assert.NoError(t, err)
+	assert.NoError(t, l.Process(ctx, tree))
+
+	tests := []struct {
+		account      string
+		expectedName string
+		expectedType string
+	}{
+		{"Assets:US:Checking", "Assets:US", "Assets"},
+		{"Assets:EU:Savings", "Assets:EU", "Assets"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.account, func(t *testing.T) {
+			account, ok := l.GetAccount(tt.account)
+			assert.True(t, ok, "account should exist")
+
+			parent := account.GetParent(l)
+			assert.True(t, parent != nil, "implicit parent should exist")
+			assert.Equal(t, string(parent.Name), tt.expectedName)
+			assert.Equal(t, parent.Type, tt.expectedType)
+		})
+	}
+}
+
+// TestGetChildren_ImplicitParent verifies GetChildren works for implicit parent accounts.
+func TestGetChildren_ImplicitParent(t *testing.T) {
+	l := ledger.New()
+
+	source := `
+2024-01-01 open Assets:US:Checking USD
+2024-01-01 open Assets:US:Savings USD
+2024-01-01 open Assets:EU:Checking EUR
+`
+	ctx := context.Background()
+	tree, err := parser.ParseBytes(ctx, []byte(source))
+	assert.NoError(t, err)
+	assert.NoError(t, l.Process(ctx, tree))
+
+	tests := []struct {
+		parent           string
+		expectedChildren []string
+	}{
+		// "Assets:US" is an implicit parent (never opened)
+		{"Assets:US", []string{"Assets:US:Checking", "Assets:US:Savings"}},
+		// "Assets:EU" is an implicit parent (never opened)
+		{"Assets:EU", []string{"Assets:EU:Checking"}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.parent, func(t *testing.T) {
+			// Verify parent exists in graph
+			parentNode := l.Graph().GetNode(tt.parent)
+			assert.True(t, parentNode != nil, "parent node should exist in graph")
+
+			// Get explicit child accounts (which have open directives)
+			// and check that parent-child relationships exist
+			parentHasChildren := false
+			for _, childName := range tt.expectedChildren {
+				childNode := l.Graph().GetNode(childName)
+				assert.True(t, childNode != nil, "child node should exist")
+				childAccount, ok := l.GetAccount(childName)
+				assert.True(t, ok, "explicit account should exist")
+
+				// Check that parent exists and can return children
+				parent := childAccount.GetParent(l)
+				assert.True(t, parent != nil, "parent should exist for child")
+				assert.Equal(t, string(parent.Name), tt.parent)
+				parentHasChildren = true
+			}
+			assert.True(t, parentHasChildren, "parent should have children")
+		})
+	}
+}

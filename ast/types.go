@@ -178,14 +178,26 @@ func (t AccountType) String() string {
 	}
 }
 
-// Type returns the account type based on the first segment.
-// Panics if the account has an invalid type prefix (indicates validation was bypassed).
-func (a Account) Type() AccountType {
+// Root returns the account type root (first component before colon).
+// For "Assets:US:Checking", returns "Assets".
+func (a Account) Root() string {
 	idx := strings.IndexByte(string(a), ':')
 	if idx == -1 {
-		panic(fmt.Sprintf("invalid account %q: missing type prefix", a))
+		// Single-segment account (shouldn't happen with valid Capture validation)
+		return string(a)
 	}
-	switch string(a)[:idx] {
+	return string(a)[:idx]
+}
+
+// Type returns the account type based on the first segment.
+// Panics if the account has an invalid type prefix or missing colon (indicates validation was bypassed).
+func (a Account) Type() AccountType {
+	// Check that account has at least two segments (type:name format)
+	if !strings.ContainsRune(string(a), ':') {
+		panic(fmt.Sprintf("invalid account format %q: must have at least type:name segments", a))
+	}
+	root := a.Root()
+	switch root {
 	case "Assets":
 		return AccountTypeAssets
 	case "Liabilities":
@@ -197,7 +209,7 @@ func (a Account) Type() AccountType {
 	case "Expenses":
 		return AccountTypeExpenses
 	default:
-		panic(fmt.Sprintf("invalid account type prefix %q in account %q", string(a)[:idx], a))
+		panic(fmt.Sprintf("invalid account type prefix %q in account %q", root, a))
 	}
 }
 
