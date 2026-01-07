@@ -242,10 +242,6 @@ func (d *Date) Capture(values []string) error {
 	if err != nil {
 		return fmt.Errorf("invalid date: %s", values[0])
 	}
-	// Validate year is in reasonable range (Beancount convention: 1900-9999)
-	if t.Year() < 1000 || t.Year() > 9999 {
-		return fmt.Errorf("invalid date: year %d out of range (must be 1000-9999)", t.Year())
-	}
 	d.Time = t
 	return nil
 }

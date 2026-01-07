@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
@@ -15,6 +16,77 @@ import (
 // newTestValidator is a helper for tests that need a validator with default config.
 func newTestValidator(accounts map[string]*Account) *validator {
 	return newValidator(accounts, NewConfig())
+}
+
+func TestValidateDateRange(t *testing.T) {
+	tests := []struct {
+		name      string
+		dateStr   string
+		wantError bool
+		errorMsg  string
+	}{
+		{
+			name:      "valid year 2024",
+			dateStr:   "2024-01-15",
+			wantError: false,
+		},
+		{
+			name:      "valid year 1 (minimum)",
+			dateStr:   "0001-01-01",
+			wantError: false,
+		},
+		{
+			name:      "valid year 9999 (maximum)",
+			dateStr:   "9999-12-31",
+			wantError: false,
+		},
+		{
+			name:      "valid year 100",
+			dateStr:   "0100-06-15",
+			wantError: false,
+		},
+		{
+			name:      "valid year 1000",
+			dateStr:   "1000-01-01",
+			wantError: false,
+		},
+		{
+			name:      "nil date is valid",
+			dateStr:   "",
+			wantError: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var date *ast.Date
+			if tt.dateStr != "" {
+				d, err := ast.NewDate(tt.dateStr)
+				assert.NoError(t, err)
+				date = d
+			}
+
+			err := validateDateRange(date)
+
+			if tt.wantError {
+				assert.Error(t, err)
+				if tt.errorMsg != "" {
+					assert.Contains(t, err.Error(), tt.errorMsg)
+				}
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+
+	// Test year 0 separately - must use time.Date since ast.NewDate parses strings
+	// and Go's time.Parse("2006-01-02", "0000-01-01") produces year 0
+	t.Run("invalid year 0", func(t *testing.T) {
+		date := ast.NewDateFromTime(time.Date(0, 1, 1, 0, 0, 0, 0, time.UTC))
+		err := validateDateRange(date)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "year 0 is out of range")
+	})
 }
 
 func TestValidateAccountsOpen(t *testing.T) {
