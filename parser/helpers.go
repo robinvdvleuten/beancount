@@ -50,6 +50,8 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 // The ledger phase evaluates expressions when computing balances.
 func (p *Parser) parseAmount() (*ast.Amount, error) {
 	var value string
+	var numTok Token
+	isExpression := false
 
 	// Check if next character in source is '(' (start of expression)
 	// We need to look at the raw source since '(' is not tokenized
@@ -57,9 +59,10 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	if tok.Start < len(p.source) && p.source[tok.Start] == '(' {
 		// Capture expression text without evaluating
 		value = p.parseExpression()
+		isExpression = true
 	} else {
 		// Plain number
-		numTok := p.peek()
+		numTok = p.peek()
 		if numTok.Type == NUMBER {
 			p.advance()
 		} else {
@@ -68,7 +71,8 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 				return nil, p.errorAtToken(numTok, "expected number or expression")
 			}
 		}
-		value = numTok.String(p.source)
+		// Remove commas from number (e.g., "1,000" -> "1000")
+		value = strings.ReplaceAll(numTok.String(p.source), ",", "")
 	}
 
 	// Parse currency (same for both plain and expression)
@@ -80,10 +84,14 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	// Intern currency code (USD, EUR, etc.)
 	currency := p.internCurrency(currTok)
 
-	return &ast.Amount{
-		Value:    value,
-		Currency: currency,
-	}, nil
+	// Get the raw number token for perfect round-trip formatting
+	// Only available for plain numbers, not expressions
+	var raw string
+	if !isExpression && numTok.Type == NUMBER {
+		raw = numTok.String(p.source)
+	}
+
+	return ast.NewAmountWithRaw(raw, value, currency), nil
 }
 
 // parseExpression captures an expression's text from source without evaluating it.
@@ -453,8 +461,8 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 				return &ast.MetadataValue{Amount: amount}
 			}
 		} else {
-			// Just a number
-			numStr := tok.String(p.source)
+			// Just a number - remove commas from thousands separators
+			numStr := strings.ReplaceAll(tok.String(p.source), ",", "")
 			p.advance()
 			return &ast.MetadataValue{Number: &numStr}
 		}

@@ -55,9 +55,19 @@ func NewRawStringWithRaw(raw, value string) RawString {
 // Amount represents a numerical value with its associated currency or commodity symbol.
 // The value is stored as a string to preserve the exact decimal representation from
 // the input, avoiding floating-point precision issues.
+//
+// Raw stores the original token text (e.g., "1,234.56") for perfect round-trip formatting.
+// Value stores the canonical form with commas stripped (e.g., "1234.56") for processing.
+// For programmatic construction, only Value needs to be set; the formatter will use it as-is.
 type Amount struct {
-	Value    string
+	Raw      string // Original token including thousands separators (e.g., "1,234.56")
+	Value    string // Canonical value with commas stripped (e.g., "1234.56")
 	Currency string
+}
+
+// HasRaw returns true if the raw token is available for formatting.
+func (a *Amount) HasRaw() bool {
+	return a != nil && a.Raw != ""
 }
 
 // Cost represents the cost basis specification for a posting, used primarily for tracking

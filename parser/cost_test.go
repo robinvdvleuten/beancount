@@ -21,7 +21,7 @@ func TestParseCost(t *testing.T) {
 			input: "{100.00 USD}",
 			expected: &ast.Cost{
 				IsTotal: false,
-				Amount:  &ast.Amount{Value: "100.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
 			},
 		},
 		{
@@ -29,7 +29,7 @@ func TestParseCost(t *testing.T) {
 			input: "{{1000.00 USD}}",
 			expected: &ast.Cost{
 				IsTotal: true,
-				Amount:  &ast.Amount{Value: "1000.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "1000.00", Value: "1000.00", Currency: "USD"},
 			},
 		},
 		{
@@ -37,7 +37,7 @@ func TestParseCost(t *testing.T) {
 			input: "{100.00 USD, 2020-01-01}",
 			expected: &ast.Cost{
 				IsTotal: false,
-				Amount:  &ast.Amount{Value: "100.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
 				Date:    &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 			},
 		},
@@ -46,7 +46,7 @@ func TestParseCost(t *testing.T) {
 			input: "{{1000.00 USD, 2020-01-01}}",
 			expected: &ast.Cost{
 				IsTotal: true,
-				Amount:  &ast.Amount{Value: "1000.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "1000.00", Value: "1000.00", Currency: "USD"},
 				Date:    &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 			},
 		},
@@ -55,7 +55,7 @@ func TestParseCost(t *testing.T) {
 			input: `{100.00 USD, "lot-1"}`,
 			expected: &ast.Cost{
 				IsTotal: false,
-				Amount:  &ast.Amount{Value: "100.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
 				Label:   "lot-1",
 			},
 		},
@@ -64,7 +64,7 @@ func TestParseCost(t *testing.T) {
 			input: `{{1000.00 USD, "lot-1"}}`,
 			expected: &ast.Cost{
 				IsTotal: true,
-				Amount:  &ast.Amount{Value: "1000.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "1000.00", Value: "1000.00", Currency: "USD"},
 				Label:   "lot-1",
 			},
 		},
@@ -73,7 +73,7 @@ func TestParseCost(t *testing.T) {
 			input: `{100.00 USD, 2020-01-01, "lot-1"}`,
 			expected: &ast.Cost{
 				IsTotal: false,
-				Amount:  &ast.Amount{Value: "100.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
 				Date:    &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 				Label:   "lot-1",
 			},
@@ -83,7 +83,7 @@ func TestParseCost(t *testing.T) {
 			input: `{{1000.00 USD, 2020-01-01, "lot-1"}}`,
 			expected: &ast.Cost{
 				IsTotal: true,
-				Amount:  &ast.Amount{Value: "1000.00", Currency: "USD"},
+				Amount:  &ast.Amount{Raw: "1000.00", Value: "1000.00", Currency: "USD"},
 				Date:    &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 				Label:   "lot-1",
 			},
