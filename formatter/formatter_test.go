@@ -1010,3 +1010,146 @@ func TestFormatterWidthOptions(t *testing.T) {
 		assert.Equal(t, 70, f.CurrencyColumn)
 	})
 }
+
+// TestFormatPreservesCommasInNumbers tests that formatter preserves thousands separators
+func TestFormatPreservesCommasInNumbers(t *testing.T) {
+	t.Run("SimpleCommaInTransaction", func(t *testing.T) {
+		source := `2024-01-15 * "Test"
+  Assets:Bank 1,000 USD
+  Expenses:Food -1,000 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		// Should preserve the comma in the formatted output
+		assert.True(t, strings.Contains(output, "1,000 USD"), "formatter should preserve commas")
+	})
+
+	t.Run("MultipleCommasInLargeNumbers", func(t *testing.T) {
+		source := `2024-01-15 * "Large transaction"
+  Assets:Bank 1,234,567.89 USD
+  Expenses:Food -1,234,567.89 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		// Should preserve all commas
+		assert.True(t, strings.Contains(output, "1,234,567.89 USD"), "formatter should preserve multiple commas")
+	})
+
+	t.Run("CommasInBalance", func(t *testing.T) {
+		source := `2024-01-01 open Assets:Bank USD
+2024-01-15 balance Assets:Bank 1,234.56 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		assert.True(t, strings.Contains(output, "1,234.56 USD"), "formatter should preserve commas in balance")
+	})
+
+	t.Run("CommasInPrice", func(t *testing.T) {
+		source := `2024-01-15 price AAPL 150,000.00 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		assert.True(t, strings.Contains(output, "150,000.00 USD"), "formatter should preserve commas in price")
+	})
+
+	t.Run("WidthCalculationWithCommas", func(t *testing.T) {
+		// Test that width calculation is correct when using raw values with commas
+		source := `2024-01-15 * "Test"
+  Assets:Checking 1,000 USD
+  Assets:Savings -1,000 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		// Both amounts should be properly aligned despite the comma width
+		lines := strings.Split(output, "\n")
+		assert.True(t, len(lines) > 3)
+		// The USD should be in the same column for both postings
+		assert.True(t, strings.Contains(output, "1,000 USD"), "should preserve comma")
+	})
+
+	t.Run("RoundTripFormatting", func(t *testing.T) {
+		source := `2024-01-15 * "Round trip test"
+  Assets:Checking 10,000.00 USD
+  Expenses:Food -10,000.00 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf1 bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf1)
+		assert.NoError(t, err)
+
+		firstFormat := buf1.String()
+
+		// Parse the formatted output and format again
+		result2, err := parser.ParseString(context.Background(), firstFormat)
+		assert.NoError(t, err)
+
+		var buf2 bytes.Buffer
+		err = f.Format(context.Background(), result2, []byte(firstFormat), &buf2)
+		assert.NoError(t, err)
+
+		secondFormat := buf2.String()
+
+		// Both formats should be identical (idempotent)
+		assert.Equal(t, firstFormat, secondFormat, "round-trip formatting should be idempotent")
+		// And both should preserve commas
+		assert.True(t, strings.Contains(firstFormat, "10,000.00 USD"), "first format should preserve commas")
+		assert.True(t, strings.Contains(secondFormat, "10,000.00 USD"), "second format should preserve commas")
+	})
+
+	t.Run("NegativeNumbersWithCommas", func(t *testing.T) {
+		source := `2024-01-15 * "Negative amounts"
+  Assets:Bank -1,234.56 USD
+  Expenses:Food 1,234.56 USD
+`
+		result, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+
+		f := New()
+		var buf bytes.Buffer
+		err = f.Format(context.Background(), result, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		output := buf.String()
+		// Should preserve commas in negative numbers too
+		assert.True(t, strings.Contains(output, "-1,234.56 USD"), "formatter should preserve commas in negative numbers")
+		assert.True(t, strings.Contains(output, "1,234.56 USD"), "formatter should preserve commas in positive numbers")
+	})
+}

@@ -25,6 +25,22 @@ func NewAmount(value, currency string) *Amount {
 	}
 }
 
+// NewAmountWithRaw creates a new Amount with both raw (original) and canonical (processed) values.
+// The raw value preserves formatting from the source (e.g., "1,234.56"), while the value
+// is the canonical form with commas stripped (e.g., "1234.56").
+// Use this in the parser when the raw token is available for perfect round-trip formatting.
+//
+// Example:
+//
+//	amount := ast.NewAmountWithRaw("1,234.56", "1234.56", "USD")
+func NewAmountWithRaw(raw, value, currency string) *Amount {
+	return &Amount{
+		Raw:      raw,
+		Value:    value,
+		Currency: currency,
+	}
+}
+
 // NewDate parses a date string in YYYY-MM-DD format and returns a Date.
 // Returns an error if the string cannot be parsed as a valid date.
 //

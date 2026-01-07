@@ -349,8 +349,8 @@ func TestParseMultipleTransactions(t *testing.T) {
 // TestParseTransactionWithExpressions tests postings with arithmetic expressions
 func TestParseTransactionWithExpressions(t *testing.T) {
 	source := `2024-01-15 * "With expressions"
-  Assets:Checking      (100 + 50) USD
-  Expenses:Food       -(100 + 50) USD
+   Assets:Checking      (100 + 50) USD
+   Expenses:Food       -(100 + 50) USD
 `
 
 	result, err := ParseString(context.Background(), source)
@@ -360,4 +360,40 @@ func TestParseTransactionWithExpressions(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(txn.Postings))
 	assert.True(t, txn.Postings[0].Amount != nil)
+}
+
+// TestParseTransactionWithCommaSeparatedAmounts tests parsing numbers with comma thousands separators
+func TestParseTransactionWithCommaSeparatedAmounts(t *testing.T) {
+	source := `2024-01-15 * "Large transaction"
+  Assets:Bank       1,000 USD
+  Expenses:Food    -1,000 USD
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	txn, ok := result.Directives[0].(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(txn.Postings))
+	// The amount value should have commas stripped during parsing
+	assert.Equal(t, "1000", txn.Postings[0].Amount.Value)
+	assert.Equal(t, "-1000", txn.Postings[1].Amount.Value)
+}
+
+// TestParseTransactionWithLargeCommaSeparatedAmounts tests multi-comma separated numbers
+func TestParseTransactionWithLargeCommaSeparatedAmounts(t *testing.T) {
+	source := `2024-01-15 * "Million dollar transaction"
+  Assets:Bank       1,234,567.89 USD
+  Expenses:Food    -1,234,567.89 USD
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	txn, ok := result.Directives[0].(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(txn.Postings))
+	assert.Equal(t, "1234567.89", txn.Postings[0].Amount.Value)
+	assert.Equal(t, "-1234567.89", txn.Postings[1].Amount.Value)
 }

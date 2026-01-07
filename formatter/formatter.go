@@ -247,8 +247,12 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 					prefixWidth += runewidth.StringWidth(string(posting.Account)) + MinimumSpacing
 					metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
 
-					// Calculate number width
-					numWidth := runewidth.StringWidth(posting.Amount.Value)
+					// Calculate number width (use raw if available for accurate width)
+					displayValue := posting.Amount.Value
+					if posting.Amount.HasRaw() {
+						displayValue = posting.Amount.Raw
+					}
+					numWidth := runewidth.StringWidth(displayValue)
 					metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 
 					// Calculate total width for currency column
@@ -261,7 +265,11 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			if d.Amount != nil {
 				// Calculate width: date + "balance" + account + spacing + number
 				width := DateWidth + 1 + directiveKeywordWidth(d) + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
-				numWidth := runewidth.StringWidth(d.Amount.Value)
+				displayValue := d.Amount.Value
+				if d.Amount.HasRaw() {
+					displayValue = d.Amount.Raw
+				}
+				numWidth := runewidth.StringWidth(displayValue)
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
@@ -271,7 +279,11 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			if d.Amount != nil {
 				// Calculate width: date + "price" + commodity + spacing + number
 				width := DateWidth + 1 + directiveKeywordWidth(d) + runewidth.StringWidth(d.Commodity) + MinimumSpacing
-				numWidth := runewidth.StringWidth(d.Amount.Value)
+				displayValue := d.Amount.Value
+				if d.Amount.HasRaw() {
+					displayValue = d.Amount.Raw
+				}
+				numWidth := runewidth.StringWidth(displayValue)
 				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
 				totalWidth := width + numWidth
 				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
@@ -881,7 +893,11 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 		} else if val.BooleanValue != nil {
 			buf.WriteString(*val.BooleanValue)
 		} else if val.Amount != nil {
-			buf.WriteString(val.Amount.Value)
+			displayValue := val.Amount.Value
+			if val.Amount.HasRaw() {
+				displayValue = val.Amount.Raw
+			}
+			buf.WriteString(displayValue)
 			buf.WriteByte(' ')
 			buf.WriteString(val.Amount.Currency)
 		} else if val.Number != nil {
@@ -1096,26 +1112,33 @@ func isValidNumericValue(value string) bool {
 }
 
 // formatAmountAligned formats an amount with proper alignment to the currency column.
+// Uses the raw token (with commas) if available for perfect round-trip formatting.
 func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, buf *strings.Builder) {
 	if amount == nil {
 		return
 	}
 
+	// Use raw value if available (preserves formatting like commas), otherwise use canonical value
+	displayValue := amount.Value
+	if amount.HasRaw() {
+		displayValue = amount.Raw
+	}
+
 	if !isValidNumericValue(amount.Value) {
 		buf.WriteString(strings.Repeat(" ", MinimumSpacing))
-		buf.WriteString(amount.Value)
+		buf.WriteString(displayValue)
 		buf.WriteByte(' ')
 		buf.WriteString(amount.Currency)
 		return
 	}
 
-	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amount.Value) - 1
+	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(displayValue) - 1
 	if padding < MinimumSpacing {
 		padding = MinimumSpacing
 	}
 
 	buf.WriteString(strings.Repeat(" ", padding))
-	buf.WriteString(amount.Value)
+	buf.WriteString(displayValue)
 	buf.WriteByte(' ')
 	buf.WriteString(amount.Currency)
 }

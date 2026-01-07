@@ -328,13 +328,31 @@ func (l *Lexer) scanDate(start, line, col int) Token {
 	return Token{DATE, start, l.pos, line, col}
 }
 
-// scanNumber scans a number: [-+]?[0-9]+(\.[0-9]+)?
+// scanNumber scans a number: [-+]?[0-9]+(,[0-9]{3})*(\.[0-9]+)?
+// Commas are allowed as thousands separators within the integer part.
 func (l *Lexer) scanNumber(start, line, col int) Token {
 	// Optional sign already consumed if present
 
-	// Scan integer part
-	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
-		l.advance()
+	// Scan integer part (including optional comma thousands separators)
+	for l.pos < len(l.source) {
+		ch := l.source[l.pos]
+		if isDigit(ch) {
+			l.advance()
+		} else if ch == ',' {
+			// Look ahead: comma must be followed by exactly 3 digits
+			// Valid: 1,000  1,000,000
+			// Invalid: 1,00 1,0000
+			if l.pos+4 <= len(l.source) &&
+				isDigit(l.source[l.pos+1]) &&
+				isDigit(l.source[l.pos+2]) &&
+				isDigit(l.source[l.pos+3]) {
+				l.advance() // consume comma
+			} else {
+				break
+			}
+		} else {
+			break
+		}
 	}
 
 	// Scan optional decimal part
