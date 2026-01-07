@@ -289,20 +289,18 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 		if posting.Cost.IsTotal {
 			if posting.Amount == nil {
 				errs = append(errs, &TotalCostError{
-					Posting:   posting,
-					Directive: txn,
-					Pos:       txn.Pos,
-					Message:   "total cost requires a quantity",
+					directiveError: newDirectiveError(txn),
+					Posting:        posting,
+					Message:        "total cost requires a quantity",
 				})
 				continue
 			}
 
 			if posting.Cost.Amount == nil {
 				errs = append(errs, &TotalCostError{
-					Posting:   posting,
-					Directive: txn,
-					Pos:       txn.Pos,
-					Message:   "total cost requires an amount",
+					directiveError: newDirectiveError(txn),
+					Posting:        posting,
+					Message:        "total cost requires an amount",
 				})
 				continue
 			}
@@ -310,10 +308,9 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 			quantity, err := decimal.NewFromString(posting.Amount.Value)
 			if err != nil {
 				errs = append(errs, &TotalCostError{
-					Posting:   posting,
-					Directive: txn,
-					Pos:       txn.Pos,
-					Message:   fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err),
+					directiveError: newDirectiveError(txn),
+					Posting:        posting,
+					Message:        fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err),
 				})
 				continue
 			}
@@ -321,20 +318,18 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 			_, err = decimal.NewFromString(posting.Cost.Amount.Value)
 			if err != nil {
 				errs = append(errs, &TotalCostError{
-					Posting:   posting,
-					Directive: txn,
-					Pos:       txn.Pos,
-					Message:   fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err),
+					directiveError: newDirectiveError(txn),
+					Posting:        posting,
+					Message:        fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err),
 				})
 				continue
 			}
 
 			if quantity.IsZero() {
 				errs = append(errs, &TotalCostError{
-					Posting:   posting,
-					Directive: txn,
-					Pos:       txn.Pos,
-					Message:   "cannot use total cost with zero quantity",
+					directiveError: newDirectiveError(txn),
+					Posting:        posting,
+					Message:        "cannot use total cost with zero quantity",
 				})
 				continue
 			}
@@ -859,18 +854,18 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 	accountName := string(balance.Account)
 	acc, exists := v.accounts[accountName]
 	if !exists {
-		errs = append(errs, NewAccountNotOpenErrorFromBalance(balance))
+		errs = append(errs, NewAccountNotOpenError(balance, balance.Account))
 		return errs
 	}
 
 	if !acc.IsOpen(balance.Date) {
-		errs = append(errs, NewAccountNotOpenErrorFromBalance(balance))
+		errs = append(errs, NewAccountNotOpenError(balance, balance.Account))
 		return errs
 	}
 
 	// 2. Validate amount is parseable
 	if _, err := ParseAmount(balance.Amount); err != nil {
-		errs = append(errs, NewInvalidAmountErrorFromBalance(balance, err))
+		errs = append(errs, NewInvalidAmountError(balance, balance.Account, balance.Amount.Value, err))
 		return errs
 	}
 
@@ -911,12 +906,12 @@ func (v *validator) validatePad(pad *ast.Pad) []error {
 
 	// 1. Validate main account is open
 	if !v.isAccountOpen(pad.Account, pad.Date) {
-		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.Account))
+		errs = append(errs, NewAccountNotOpenError(pad, pad.Account))
 	}
 
 	// 2. Validate pad account is open
 	if !v.isAccountOpen(pad.AccountPad, pad.Date) {
-		errs = append(errs, NewAccountNotOpenErrorFromPad(pad, pad.AccountPad))
+		errs = append(errs, NewAccountNotOpenError(pad, pad.AccountPad))
 	}
 
 	return errs
@@ -954,7 +949,7 @@ func (v *validator) validateNote(note *ast.Note) []error {
 
 	// 1. Validate account is open
 	if !v.isAccountOpen(note.Account, note.Date) {
-		errs = append(errs, NewAccountNotOpenErrorFromNote(note))
+		errs = append(errs, NewAccountNotOpenError(note, note.Account))
 	}
 
 	// 2. Validate description is non-empty
@@ -981,7 +976,7 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 
 	// 1. Validate account is open
 	if !v.isAccountOpen(doc.Account, doc.Date) {
-		errs = append(errs, NewAccountNotOpenErrorFromDocument(doc))
+		errs = append(errs, NewAccountNotOpenError(doc, doc.Account))
 	}
 
 	// 2. Validate path is non-empty

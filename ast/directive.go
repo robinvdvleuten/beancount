@@ -48,7 +48,7 @@ type Commodity struct {
 var _ Directive = &Commodity{}
 
 func (c *Commodity) Position() Position  { return c.Pos }
-func (c *Commodity) date() *Date         { return c.Date }
+func (c *Commodity) GetDate() *Date      { return c.Date }
 func (c *Commodity) Kind() DirectiveKind { return KindCommodity }
 func (c *Commodity) AffectedNodes() []string {
 	if c.Currency == "" {
@@ -80,7 +80,7 @@ type Open struct {
 var _ Directive = &Open{}
 
 func (o *Open) Position() Position  { return o.Pos }
-func (o *Open) date() *Date         { return o.Date }
+func (o *Open) GetDate() *Date      { return o.Date }
 func (o *Open) Kind() DirectiveKind { return KindOpen }
 func (o *Open) AffectedNodes() []string {
 	nodes := []string{string(o.Account)}
@@ -108,7 +108,7 @@ type Close struct {
 var _ Directive = &Close{}
 
 func (c *Close) Position() Position  { return c.Pos }
-func (c *Close) date() *Date         { return c.Date }
+func (c *Close) GetDate() *Date      { return c.Date }
 func (c *Close) Kind() DirectiveKind { return KindClose }
 func (c *Close) AffectedNodes() []string {
 	return []string{string(c.Account)}
@@ -136,7 +136,7 @@ type Balance struct {
 var _ Directive = &Balance{}
 
 func (b *Balance) Position() Position  { return b.Pos }
-func (b *Balance) date() *Date         { return b.Date }
+func (b *Balance) GetDate() *Date      { return b.Date }
 func (b *Balance) Kind() DirectiveKind { return KindBalance }
 func (b *Balance) AffectedNodes() []string {
 	nodes := []string{string(b.Account)}
@@ -168,7 +168,7 @@ type Pad struct {
 var _ Directive = &Pad{}
 
 func (p *Pad) Position() Position  { return p.Pos }
-func (p *Pad) date() *Date         { return p.Date }
+func (p *Pad) GetDate() *Date      { return p.Date }
 func (p *Pad) Kind() DirectiveKind { return KindPad }
 func (p *Pad) AffectedNodes() []string {
 	return []string{string(p.Account), string(p.AccountPad)}
@@ -195,7 +195,7 @@ type Note struct {
 var _ Directive = &Note{}
 
 func (n *Note) Position() Position  { return n.Pos }
-func (n *Note) date() *Date         { return n.Date }
+func (n *Note) GetDate() *Date      { return n.Date }
 func (n *Note) Kind() DirectiveKind { return KindNote }
 func (n *Note) AffectedNodes() []string {
 	return []string{string(n.Account)}
@@ -223,7 +223,7 @@ type Document struct {
 var _ Directive = &Document{}
 
 func (d *Document) Position() Position  { return d.Pos }
-func (d *Document) date() *Date         { return d.Date }
+func (d *Document) GetDate() *Date      { return d.Date }
 func (d *Document) Kind() DirectiveKind { return KindDocument }
 func (d *Document) AffectedNodes() []string {
 	return []string{string(d.Account)}
@@ -251,7 +251,7 @@ type Price struct {
 var _ Directive = &Price{}
 
 func (p *Price) Position() Position  { return p.Pos }
-func (p *Price) date() *Date         { return p.Date }
+func (p *Price) GetDate() *Date      { return p.Date }
 func (p *Price) Kind() DirectiveKind { return KindPrice }
 func (p *Price) AffectedNodes() []string {
 	nodes := []string{p.Commodity}
@@ -283,7 +283,7 @@ type Event struct {
 var _ Directive = &Event{}
 
 func (e *Event) Position() Position  { return e.Pos }
-func (e *Event) date() *Date         { return e.Date }
+func (e *Event) GetDate() *Date      { return e.Date }
 func (e *Event) Kind() DirectiveKind { return KindEvent }
 func (e *Event) AffectedNodes() []string {
 	return []string{}
@@ -311,7 +311,7 @@ type Custom struct {
 var _ Directive = &Custom{}
 
 func (c *Custom) Position() Position  { return c.Pos }
-func (c *Custom) date() *Date         { return c.Date }
+func (c *Custom) GetDate() *Date      { return c.Date }
 func (c *Custom) Kind() DirectiveKind { return KindCustom }
 func (c *Custom) AffectedNodes() []string {
 	return []string{}

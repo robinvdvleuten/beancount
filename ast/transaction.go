@@ -34,7 +34,7 @@ type Transaction struct {
 var _ Directive = &Transaction{}
 
 func (t *Transaction) Position() Position  { return t.Pos }
-func (t *Transaction) date() *Date         { return t.Date }
+func (t *Transaction) GetDate() *Date      { return t.Date }
 func (t *Transaction) Kind() DirectiveKind { return KindTransaction }
 func (t *Transaction) AffectedNodes() []string {
 	nodes := make([]string, 0, len(t.Postings))

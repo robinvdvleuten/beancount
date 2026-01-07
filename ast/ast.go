@@ -29,9 +29,9 @@ func (d Directives) Less(i, j int) bool { return compareDirectives(d[i], d[j]) <
 //  4. Within same type, sort by line number (preserves source order)
 func compareDirectives(a, b Directive) int {
 	// First compare by date
-	if a.date().Before(b.date().Time) {
+	if a.GetDate().Before(b.GetDate().Time) {
 		return -1
-	} else if a.date().After(b.date().Time) {
+	} else if a.GetDate().After(b.GetDate().Time) {
 		return 1
 	}
 
@@ -132,7 +132,7 @@ type Directive interface {
 	WithComment
 	Positioned
 
-	date() *Date
+	GetDate() *Date
 	Kind() DirectiveKind
 }
 

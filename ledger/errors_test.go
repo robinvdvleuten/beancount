@@ -34,13 +34,13 @@ func TestInsufficientInventoryError(t *testing.T) {
 	})
 
 	t.Run("All fields populated correctly", func(t *testing.T) {
-		assert.Equal(t, date, err.Date)
+		assert.Equal(t, date, err.GetDate())
 		assert.Equal(t, "Broker Inc", err.Payee)
 		assert.Equal(t, account, err.Account)
 		assert.Equal(t, details, err.Details)
-		assert.Equal(t, "test.bean", err.Pos.Filename)
-		assert.Equal(t, 10, err.Pos.Line)
-		assert.Equal(t, ast.Directive(txn), err.Directive)
+		assert.Equal(t, "test.bean", err.GetPosition().Filename)
+		assert.Equal(t, 10, err.GetPosition().Line)
+		assert.Equal(t, ast.Directive(txn), err.GetDirective())
 	})
 
 	t.Run("GetPosition method", func(t *testing.T) {
@@ -65,15 +65,13 @@ func TestInsufficientInventoryError(t *testing.T) {
 	})
 
 	t.Run("Error message without filename", func(t *testing.T) {
-		// Test error message when Pos.Filename is empty
-		errNoFile := &InsufficientInventoryError{
-			Date:      date,
-			Payee:     "Broker Inc",
-			Account:   account,
-			Details:   details,
-			Pos:       ast.Position{},
-			Directive: txn,
-		}
+		// Test error message when Position has no filename - uses Date fallback
+		txnNoPos := ast.NewTransaction(date, "Test",
+			ast.WithFlag("*"),
+			ast.WithPayee("Broker Inc"),
+		)
+		// Pos.Filename is empty by default
+		errNoFile := NewInsufficientInventoryError(txnNoPos, account, details)
 		msg := errNoFile.Error()
 		assert.Contains(t, msg, "2024-01-15")
 		assert.Contains(t, msg, "Insufficient inventory")
@@ -107,14 +105,14 @@ func TestCurrencyConstraintError(t *testing.T) {
 	})
 
 	t.Run("All fields populated correctly", func(t *testing.T) {
-		assert.Equal(t, date, err.Date)
+		assert.Equal(t, date, err.GetDate())
 		assert.Equal(t, "Foreign Broker", err.Payee)
 		assert.Equal(t, account, err.Account)
 		assert.Equal(t, "EUR", err.Currency)
 		assert.Equal(t, allowedCurrencies, err.AllowedCurrencies)
-		assert.Equal(t, "ledger.bean", err.Pos.Filename)
-		assert.Equal(t, 25, err.Pos.Line)
-		assert.Equal(t, ast.Directive(txn), err.Directive)
+		assert.Equal(t, "ledger.bean", err.GetPosition().Filename)
+		assert.Equal(t, 25, err.GetPosition().Line)
+		assert.Equal(t, ast.Directive(txn), err.GetDirective())
 	})
 
 	t.Run("GetPosition method", func(t *testing.T) {
@@ -139,16 +137,13 @@ func TestCurrencyConstraintError(t *testing.T) {
 	})
 
 	t.Run("Error message without filename", func(t *testing.T) {
-		// Test error message when Pos.Filename is empty
-		errNoFile := &CurrencyConstraintError{
-			Date:              date,
-			Payee:             "Foreign Broker",
-			Account:           account,
-			Currency:          "EUR",
-			AllowedCurrencies: allowedCurrencies,
-			Pos:               ast.Position{},
-			Directive:         txn,
-		}
+		// Test error message when Position has no filename - uses Date fallback
+		txnNoPos := ast.NewTransaction(date, "Test",
+			ast.WithFlag("*"),
+			ast.WithPayee("Foreign Broker"),
+		)
+		// Pos.Filename is empty by default
+		errNoFile := NewCurrencyConstraintError(txnNoPos, account, "EUR", allowedCurrencies)
 		msg := errNoFile.Error()
 		assert.Contains(t, msg, "2024-02-20")
 		assert.Contains(t, msg, "Currency EUR not allowed")

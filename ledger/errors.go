@@ -9,113 +9,100 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
+// directiveError embeds common fields from directives, providing a consistent
+// base for all ledger validation errors. It extracts position and date from the
+// directive interface, eliminating redundant field extraction in constructors.
+type directiveError struct {
+	pos       ast.Position
+	directive ast.Directive
+}
+
+// newDirectiveError creates a directiveError from any directive type.
+// This replaces all type-specific field extraction with a single constructor.
+func newDirectiveError(d ast.Directive) directiveError {
+	return directiveError{
+		pos:       d.Position(),
+		directive: d,
+	}
+}
+
+func (e *directiveError) GetPosition() ast.Position   { return e.pos }
+func (e *directiveError) GetDirective() ast.Directive { return e.directive }
+func (e *directiveError) GetDate() *ast.Date          { return e.directive.GetDate() }
+
+// formatLocation returns a standard location string for error messages.
+// Uses filename:line if available, falls back to date string.
+func (e *directiveError) formatLocation() string {
+	if e.pos.Filename != "" {
+		return fmt.Sprintf("%s:%d", e.pos.Filename, e.pos.Line)
+	}
+	if date := e.directive.GetDate(); date != nil {
+		return date.String()
+	}
+	return "unknown"
+}
+
 // Error types for ledger validation errors
 
 // AccountNotOpenError is returned when a directive references an account that hasn't been opened
 type AccountNotOpenError struct {
-	Account   ast.Account
-	Date      *ast.Date
-	Pos       ast.Position  // Position in source file (includes filename)
-	Directive ast.Directive // The directive that referenced the closed account
+	directiveError
+	Account ast.Account
 }
 
 func (e *AccountNotOpenError) Error() string {
-	// Format: filename:line: message
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
-	return fmt.Sprintf("%s: Invalid reference to unknown account '%s'", location, e.Account)
-}
-
-func (e *AccountNotOpenError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *AccountNotOpenError) GetDirective() ast.Directive {
-	return e.Directive
+	return fmt.Sprintf("%s: Invalid reference to unknown account '%s'", e.formatLocation(), e.Account)
 }
 
 func (e *AccountNotOpenError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *AccountNotOpenError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *AccountNotOpenError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":     "AccountNotOpenError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.Date.String(),
+		"date":     e.GetDate().String(),
 	})
 }
 
 // AccountAlreadyOpenError is returned when trying to open an account that's already open
 type AccountAlreadyOpenError struct {
+	directiveError
 	Account    ast.Account
-	Date       *ast.Date
 	OpenedDate *ast.Date
-	Pos        ast.Position
-	Directive  ast.Directive
 }
 
 func (e *AccountAlreadyOpenError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Account %s is already open (opened on %s)",
-		location, e.Account, e.OpenedDate.String())
-}
-
-func (e *AccountAlreadyOpenError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *AccountAlreadyOpenError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Account, e.OpenedDate.String())
 }
 
 func (e *AccountAlreadyOpenError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *AccountAlreadyOpenError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":        "AccountAlreadyOpenError",
 		"message":     e.Error(),
-		"position":    e.Pos,
+		"position":    e.pos,
 		"account":     string(e.Account),
-		"date":        e.Date.String(),
+		"date":        e.GetDate().String(),
 		"opened_date": e.OpenedDate.String(),
 	})
 }
 
 // InvalidAccountNameError is returned when an account name uses an invalid account type
 type InvalidAccountNameError struct {
+	directiveError
 	Account           ast.Account
-	Date              *ast.Date
-	Pos               ast.Position
-	Directive         ast.Directive
 	ValidAccountTypes []string // The configured valid account types
 }
 
 func (e *InvalidAccountNameError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	// Extract account type from account name
 	idx := strings.IndexByte(string(e.Account), ':')
 	accountType := "?"
@@ -124,23 +111,11 @@ func (e *InvalidAccountNameError) Error() string {
 	}
 
 	return fmt.Sprintf("%s: Account %q uses invalid type %q, expected one of: %s",
-		location, e.Account, accountType, strings.Join(e.ValidAccountTypes, ", "))
-}
-
-func (e *InvalidAccountNameError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *InvalidAccountNameError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Account, accountType, strings.Join(e.ValidAccountTypes, ", "))
 }
 
 func (e *InvalidAccountNameError) GetAccount() ast.Account {
 	return e.Account
-}
-
-func (e *InvalidAccountNameError) GetDate() *ast.Date {
-	return e.Date
 }
 
 func (e *InvalidAccountNameError) MarshalJSON() ([]byte, error) {
@@ -154,7 +129,7 @@ func (e *InvalidAccountNameError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":                "InvalidAccountNameError",
 		"message":             e.Error(),
-		"position":            e.Pos,
+		"position":            e.pos,
 		"account":             string(e.Account),
 		"account_type":        accountType,
 		"valid_account_types": e.ValidAccountTypes,
@@ -163,115 +138,66 @@ func (e *InvalidAccountNameError) MarshalJSON() ([]byte, error) {
 
 // AccountAlreadyClosedError is returned when trying to use or close an account that's already closed
 type AccountAlreadyClosedError struct {
+	directiveError
 	Account    ast.Account
-	Date       *ast.Date
 	ClosedDate *ast.Date
-	Pos        ast.Position
-	Directive  ast.Directive
 }
 
 func (e *AccountAlreadyClosedError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Account %s is already closed (closed on %s)",
-		location, e.Account, e.ClosedDate.String())
-}
-
-func (e *AccountAlreadyClosedError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *AccountAlreadyClosedError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Account, e.ClosedDate.String())
 }
 
 func (e *AccountAlreadyClosedError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *AccountAlreadyClosedError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *AccountAlreadyClosedError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":        "AccountAlreadyClosedError",
 		"message":     e.Error(),
-		"position":    e.Pos,
+		"position":    e.pos,
 		"account":     string(e.Account),
-		"date":        e.Date.String(),
+		"date":        e.GetDate().String(),
 		"closed_date": e.ClosedDate.String(),
 	})
 }
 
 // AccountNotClosedError is returned when trying to close an account that was never opened
 type AccountNotClosedError struct {
-	Account   ast.Account
-	Date      *ast.Date
-	Pos       ast.Position
-	Directive ast.Directive
+	directiveError
+	Account ast.Account
 }
 
 func (e *AccountNotClosedError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Cannot close account %s that was never opened",
-		location, e.Account)
-}
-
-func (e *AccountNotClosedError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *AccountNotClosedError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Account)
 }
 
 func (e *AccountNotClosedError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *AccountNotClosedError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":     "AccountNotClosedError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.Date.String(),
+		"date":     e.GetDate().String(),
 	})
 }
 
 // TransactionNotBalancedError is returned when a transaction doesn't balance
 type TransactionNotBalancedError struct {
-	Pos         ast.Position      // Position in source file (includes filename)
-	Date        *ast.Date         // Transaction date
-	Narration   string            // Transaction narration
-	Residuals   map[string]string // currency -> amount string (unbalanced amounts)
-	Transaction *ast.Transaction  // Full transaction for context rendering
+	directiveError
+	Narration string            // Transaction narration
+	Residuals map[string]string // currency -> amount string (unbalanced amounts)
 }
 
 // Error returns a bean-check style error message with filename:line prefix.
 func (e *TransactionNotBalancedError) Error() string {
-	// Format the residual amounts
-	residualStr := e.formatResiduals()
-
-	// Format: filename:line: message (residual)
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
-	return fmt.Sprintf("%s: Transaction does not balance: %s", location, residualStr)
+	return fmt.Sprintf("%s: Transaction does not balance: %s", e.formatLocation(), e.formatResiduals())
 }
 
 // formatResiduals formats the residual amounts in a consistent order.
@@ -303,24 +229,12 @@ func (e *TransactionNotBalancedError) formatResiduals() string {
 	return buf.String()
 }
 
-func (e *TransactionNotBalancedError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *TransactionNotBalancedError) GetDirective() ast.Directive {
-	return e.Transaction
-}
-
-func (e *TransactionNotBalancedError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":      "TransactionNotBalancedError",
 		"message":   e.Error(),
-		"position":  e.Pos,
-		"date":      e.Date.String(),
+		"position":  e.pos,
+		"date":      e.GetDate().String(),
 		"narration": e.Narration,
 		"residuals": e.Residuals,
 	})
@@ -328,97 +242,59 @@ func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
 
 // InvalidAmountError is returned when an amount cannot be parsed
 type InvalidAmountError struct {
-	Date       *ast.Date
+	directiveError
 	Account    ast.Account
 	Value      string
 	Underlying error
-	Pos        ast.Position
-	Directive  ast.Directive
 }
 
 func (e *InvalidAmountError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Invalid amount %q for account %s: %v",
-		location, e.Value, e.Account, e.Underlying)
-}
-
-func (e *InvalidAmountError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *InvalidAmountError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Value, e.Account, e.Underlying)
 }
 
 func (e *InvalidAmountError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *InvalidAmountError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *InvalidAmountError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":     "InvalidAmountError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.Date.String(),
+		"date":     e.GetDate().String(),
 		"value":    e.Value,
 	})
 }
 
 // BalanceMismatchError is returned when a balance assertion fails
 type BalanceMismatchError struct {
-	Date      *ast.Date
-	Account   ast.Account
-	Expected  string // Expected amount
-	Actual    string // Actual amount in inventory
-	Currency  string
-	Pos       ast.Position
-	Directive ast.Directive
+	directiveError
+	Account  ast.Account
+	Expected string // Expected amount
+	Actual   string // Actual amount in inventory
+	Currency string
 }
 
 func (e *BalanceMismatchError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
-		location, e.Account,
+		e.formatLocation(), e.Account,
 		e.Expected, e.Currency,
 		e.Actual, e.Currency)
-}
-
-func (e *BalanceMismatchError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *BalanceMismatchError) GetDirective() ast.Directive {
-	return e.Directive
 }
 
 func (e *BalanceMismatchError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *BalanceMismatchError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":     "BalanceMismatchError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.Date.String(),
+		"date":     e.GetDate().String(),
 		"expected": e.Expected,
 		"actual":   e.Actual,
 	})
@@ -428,133 +304,68 @@ func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
 // These provide a cleaner API and ensure consistent field initialization.
 
 // NewAccountNotOpenError creates an error for when a directive references an unopened account.
-// Use this for transactions where the account comes from a posting.
-func NewAccountNotOpenError(txn *ast.Transaction, account ast.Account) *AccountNotOpenError {
+// Works with any directive type (Transaction, Balance, Pad, Note, Document, etc.).
+func NewAccountNotOpenError(d ast.Directive, account ast.Account) *AccountNotOpenError {
 	return &AccountNotOpenError{
-		Account:   account,
-		Date:      txn.Date,
-		Pos:       txn.Pos,
-		Directive: txn,
-	}
-}
-
-// NewAccountNotOpenErrorFromBalance creates an error for a balance directive referencing an unopened account.
-func NewAccountNotOpenErrorFromBalance(balance *ast.Balance) *AccountNotOpenError {
-	return &AccountNotOpenError{
-		Account:   balance.Account,
-		Date:      balance.Date,
-		Pos:       balance.Pos,
-		Directive: balance,
-	}
-}
-
-// NewAccountNotOpenErrorFromPad creates an error for a pad directive referencing an unopened account.
-func NewAccountNotOpenErrorFromPad(pad *ast.Pad, account ast.Account) *AccountNotOpenError {
-	return &AccountNotOpenError{
-		Account:   account,
-		Date:      pad.Date,
-		Pos:       pad.Pos,
-		Directive: pad,
-	}
-}
-
-// NewAccountNotOpenErrorFromNote creates an error for a note directive referencing an unopened account.
-func NewAccountNotOpenErrorFromNote(note *ast.Note) *AccountNotOpenError {
-	return &AccountNotOpenError{
-		Account:   note.Account,
-		Date:      note.Date,
-		Pos:       note.Pos,
-		Directive: note,
-	}
-}
-
-// NewAccountNotOpenErrorFromDocument creates an error for a document directive referencing an unopened account.
-func NewAccountNotOpenErrorFromDocument(doc *ast.Document) *AccountNotOpenError {
-	return &AccountNotOpenError{
-		Account:   doc.Account,
-		Date:      doc.Date,
-		Pos:       doc.Pos,
-		Directive: doc,
+		directiveError: newDirectiveError(d),
+		Account:        account,
 	}
 }
 
 // NewAccountAlreadyOpenError creates an error for when trying to open an already-open account.
 func NewAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *AccountAlreadyOpenError {
 	return &AccountAlreadyOpenError{
-		Account:    open.Account,
-		Date:       open.Date,
-		OpenedDate: openedDate,
-		Pos:        open.Pos,
-		Directive:  open,
+		directiveError: newDirectiveError(open),
+		Account:        open.Account,
+		OpenedDate:     openedDate,
 	}
 }
 
 // NewAccountAlreadyClosedError creates an error for when trying to use or close an already-closed account.
 func NewAccountAlreadyClosedError(close *ast.Close, closedDate *ast.Date) *AccountAlreadyClosedError {
 	return &AccountAlreadyClosedError{
-		Account:    close.Account,
-		Date:       close.Date,
-		ClosedDate: closedDate,
-		Pos:        close.Pos,
-		Directive:  close,
+		directiveError: newDirectiveError(close),
+		Account:        close.Account,
+		ClosedDate:     closedDate,
 	}
 }
 
 // NewAccountNotClosedError creates an error for when trying to close an account that was never opened.
 func NewAccountNotClosedError(close *ast.Close) *AccountNotClosedError {
 	return &AccountNotClosedError{
-		Account:   close.Account,
-		Date:      close.Date,
-		Pos:       close.Pos,
-		Directive: close,
+		directiveError: newDirectiveError(close),
+		Account:        close.Account,
 	}
 }
 
 // NewTransactionNotBalancedError creates an error for when a transaction doesn't balance.
 func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *TransactionNotBalancedError {
 	return &TransactionNotBalancedError{
-		Pos:         txn.Pos,
-		Date:        txn.Date,
-		Narration:   txn.Narration.Value,
-		Residuals:   residuals,
-		Transaction: txn,
+		directiveError: newDirectiveError(txn),
+		Narration:      txn.Narration.Value,
+		Residuals:      residuals,
 	}
 }
 
-// NewInvalidAmountError creates an error for when an amount in a transaction cannot be parsed or is invalid.
-func NewInvalidAmountError(txn *ast.Transaction, account ast.Account, value string, err error) *InvalidAmountError {
+// NewInvalidAmountError creates an error for when an amount cannot be parsed or is invalid.
+// Works with any directive type (Transaction, Balance, etc.).
+func NewInvalidAmountError(d ast.Directive, account ast.Account, value string, err error) *InvalidAmountError {
 	return &InvalidAmountError{
-		Date:       txn.Date,
-		Account:    account,
-		Value:      value,
-		Underlying: err,
-		Pos:        txn.Pos,
-		Directive:  txn,
-	}
-}
-
-// NewInvalidAmountErrorFromBalance creates an error for when a balance amount cannot be parsed.
-func NewInvalidAmountErrorFromBalance(balance *ast.Balance, err error) *InvalidAmountError {
-	return &InvalidAmountError{
-		Date:       balance.Date,
-		Account:    balance.Account,
-		Value:      balance.Amount.Value,
-		Underlying: err,
-		Pos:        balance.Pos,
-		Directive:  balance,
+		directiveError: newDirectiveError(d),
+		Account:        account,
+		Value:          value,
+		Underlying:     err,
 	}
 }
 
 // NewBalanceMismatchError creates an error for when a balance assertion fails.
 func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency string) *BalanceMismatchError {
 	return &BalanceMismatchError{
-		Date:      balance.Date,
-		Account:   balance.Account,
-		Expected:  expected,
-		Actual:    actual,
-		Currency:  currency,
-		Pos:       balance.Pos,
-		Directive: balance,
+		directiveError: newDirectiveError(balance),
+		Account:        balance.Account,
+		Expected:       expected,
+		Actual:         actual,
+		Currency:       currency,
 	}
 }
 
@@ -572,53 +383,34 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency st
 //
 //	"file.bean:15: Invalid cost specification (Posting #1: Assets:Stock): {500.x USD}: invalid decimal"
 type InvalidCostError struct {
-	Date         *ast.Date
+	directiveError
 	Account      ast.Account
 	PostingIndex int    // Index of posting in transaction (0-based)
 	CostSpec     string // String representation of the cost spec
 	Underlying   error
-	Pos          ast.Position
-	Directive    ast.Directive
 }
 
 func (e *InvalidCostError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	postingInfo := ""
 	if e.PostingIndex >= 0 {
 		postingInfo = fmt.Sprintf(" (Posting #%d: %s)", e.PostingIndex+1, e.Account)
 	}
 
 	return fmt.Sprintf("%s: Invalid cost specification%s: %s: %v",
-		location, postingInfo, e.CostSpec, e.Underlying)
-}
-
-func (e *InvalidCostError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *InvalidCostError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), postingInfo, e.CostSpec, e.Underlying)
 }
 
 func (e *InvalidCostError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *InvalidCostError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":          "InvalidCostError",
 		"message":       e.Error(),
-		"position":      e.Pos,
+		"position":      e.pos,
 		"account":       string(e.Account),
-		"date":          e.Date.String(),
+		"date":          e.GetDate().String(),
 		"cost_spec":     e.CostSpec,
 		"posting_index": e.PostingIndex,
 	})
@@ -627,13 +419,11 @@ func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
 // NewInvalidCostError creates an error for when a cost specification is invalid
 func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *InvalidCostError {
 	return &InvalidCostError{
-		Date:         txn.Date,
-		Account:      account,
-		PostingIndex: postingIndex,
-		CostSpec:     costSpec,
-		Underlying:   err,
-		Pos:          txn.Pos,
-		Directive:    txn,
+		directiveError: newDirectiveError(txn),
+		Account:        account,
+		PostingIndex:   postingIndex,
+		CostSpec:       costSpec,
+		Underlying:     err,
 	}
 }
 
@@ -652,41 +442,27 @@ func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex
 //
 //	"file.bean:15: Invalid total cost specification: cannot use total cost with zero quantity"
 type TotalCostError struct {
-	Posting   *ast.Posting
-	Directive ast.Directive
-	Pos       ast.Position
-	Message   string
+	directiveError
+	Posting *ast.Posting
+	Message string
 }
 
 func (e *TotalCostError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	return fmt.Sprintf("%s: Invalid total cost specification: %s", location, e.Message)
-}
-
-func (e *TotalCostError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *TotalCostError) GetDirective() ast.Directive {
-	return e.Directive
+	return fmt.Sprintf("%s: Invalid total cost specification: %s", e.formatLocation(), e.Message)
 }
 
 func (e *TotalCostError) GetAccount() ast.Account {
-	return e.Posting.Account
-}
-
-func (e *TotalCostError) GetDate() *ast.Date {
-	if txn, ok := e.Directive.(*ast.Transaction); ok {
-		return txn.Date
+	if e.Posting != nil {
+		return e.Posting.Account
 	}
-	return nil
+	return ""
 }
 
 func (e *TotalCostError) MarshalJSON() ([]byte, error) {
 	data := map[string]any{
 		"type":     "TotalCostError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 	}
 	if date := e.GetDate(); date != nil {
 		data["date"] = date.String()
@@ -710,53 +486,34 @@ func (e *TotalCostError) MarshalJSON() ([]byte, error) {
 //
 //	"file.bean:20: Invalid price specification (Posting #2: Expenses:Foreign): @ 1.x USD: invalid decimal"
 type InvalidPriceError struct {
-	Date         *ast.Date
+	directiveError
 	Account      ast.Account
 	PostingIndex int    // Index of posting in transaction (0-based)
 	PriceSpec    string // String representation of the price spec
 	Underlying   error
-	Pos          ast.Position
-	Directive    ast.Directive
 }
 
 func (e *InvalidPriceError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	postingInfo := ""
 	if e.PostingIndex >= 0 {
 		postingInfo = fmt.Sprintf(" (Posting #%d: %s)", e.PostingIndex+1, e.Account)
 	}
 
 	return fmt.Sprintf("%s: Invalid price specification%s: %s: %v",
-		location, postingInfo, e.PriceSpec, e.Underlying)
-}
-
-func (e *InvalidPriceError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *InvalidPriceError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), postingInfo, e.PriceSpec, e.Underlying)
 }
 
 func (e *InvalidPriceError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *InvalidPriceError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":          "InvalidPriceError",
 		"message":       e.Error(),
-		"position":      e.Pos,
+		"position":      e.pos,
 		"account":       string(e.Account),
-		"date":          e.Date.String(),
+		"date":          e.GetDate().String(),
 		"price_spec":    e.PriceSpec,
 		"posting_index": e.PostingIndex,
 	})
@@ -765,13 +522,11 @@ func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
 // NewInvalidPriceError creates an error for when a price specification is invalid
 func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingIndex int, priceSpec string, err error) *InvalidPriceError {
 	return &InvalidPriceError{
-		Date:         txn.Date,
-		Account:      account,
-		PostingIndex: postingIndex,
-		PriceSpec:    priceSpec,
-		Underlying:   err,
-		Pos:          txn.Pos,
-		Directive:    txn,
+		directiveError: newDirectiveError(txn),
+		Account:        account,
+		PostingIndex:   postingIndex,
+		PriceSpec:      priceSpec,
+		Underlying:     err,
 	}
 }
 
@@ -789,21 +544,14 @@ func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingInde
 //	"file.bean:10: Invalid metadata: key="invoice", value="": empty value"
 //	"file.bean:12: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
 type InvalidMetadataError struct {
-	Date      *ast.Date
-	Account   ast.Account // Empty if directive-level metadata
-	Key       string
-	Value     *ast.MetadataValue
-	Reason    string // Why it's invalid (e.g., "duplicate key", "empty value")
-	Pos       ast.Position
-	Directive ast.Directive
+	directiveError
+	Account ast.Account // Empty if directive-level metadata
+	Key     string
+	Value   *ast.MetadataValue
+	Reason  string // Why it's invalid (e.g., "duplicate key", "empty value")
 }
 
 func (e *InvalidMetadataError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" && e.Date != nil {
-		location = e.Date.String()
-	}
-
 	accountInfo := ""
 	if e.Account != "" {
 		accountInfo = fmt.Sprintf(" (account %s)", e.Account)
@@ -815,124 +563,64 @@ func (e *InvalidMetadataError) Error() string {
 	}
 
 	return fmt.Sprintf("%s: Invalid metadata%s: key=%q, value=%q: %s",
-		location, accountInfo, e.Key, valueStr, e.Reason)
-}
-
-func (e *InvalidMetadataError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *InvalidMetadataError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), accountInfo, e.Key, valueStr, e.Reason)
 }
 
 func (e *InvalidMetadataError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *InvalidMetadataError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *InvalidMetadataError) MarshalJSON() ([]byte, error) {
 	data := map[string]any{
 		"type":     "InvalidMetadataError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 		"account":  string(e.Account),
 		"key":      e.Key,
 		"reason":   e.Reason,
 	}
-	if e.Date != nil {
-		data["date"] = e.Date.String()
+	if date := e.GetDate(); date != nil {
+		data["date"] = date.String()
 	}
 	return json.Marshal(data)
 }
 
-// NewInvalidMetadataError creates an error for when metadata is invalid
+// NewInvalidMetadataError creates an error for when metadata is invalid.
+// Works with any directive type - no type switch needed.
 func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key string, value *ast.MetadataValue, reason string) *InvalidMetadataError {
-	var date *ast.Date
-	var pos ast.Position
-
-	// Extract date and position from directive
-	switch d := directive.(type) {
-	case *ast.Transaction:
-		date = d.Date
-		pos = d.Pos
-	case *ast.Balance:
-		date = d.Date
-		pos = d.Pos
-	case *ast.Pad:
-		date = d.Date
-		pos = d.Pos
-	case *ast.Note:
-		date = d.Date
-		pos = d.Pos
-	case *ast.Document:
-		date = d.Date
-		pos = d.Pos
-	case *ast.Open:
-		date = d.Date
-		pos = d.Pos
-	case *ast.Close:
-		date = d.Date
-		pos = d.Pos
-	}
-
 	return &InvalidMetadataError{
-		Date:      date,
-		Account:   account,
-		Key:       key,
-		Value:     value,
-		Reason:    reason,
-		Pos:       pos,
-		Directive: directive,
+		directiveError: newDirectiveError(directive),
+		Account:        account,
+		Key:            key,
+		Value:          value,
+		Reason:         reason,
 	}
 }
 
 // InsufficientInventoryError is returned when a transaction tries to reduce inventory but lacks enough lots
 type InsufficientInventoryError struct {
-	Date      *ast.Date
-	Payee     string
-	Account   ast.Account
-	Details   error
-	Pos       ast.Position
-	Directive ast.Directive
+	directiveError
+	Payee   string
+	Account ast.Account
+	Details error
 }
 
 func (e *InsufficientInventoryError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Insufficient inventory (account %s): %v",
-		location, e.Account, e.Details)
-}
-
-func (e *InsufficientInventoryError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *InsufficientInventoryError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Account, e.Details)
 }
 
 func (e *InsufficientInventoryError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *InsufficientInventoryError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":     "InsufficientInventoryError",
 		"message":  e.Error(),
-		"position": e.Pos,
+		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.Date.String(),
+		"date":     e.GetDate().String(),
 		"payee":    e.Payee,
 	})
 }
@@ -940,59 +628,38 @@ func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
 // NewInsufficientInventoryError creates an error for when inventory operations cannot be performed
 func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *InsufficientInventoryError {
 	return &InsufficientInventoryError{
-		Date:      txn.Date,
-		Payee:     txn.Payee.Value,
-		Account:   account,
-		Details:   details,
-		Pos:       txn.Pos,
-		Directive: txn,
+		directiveError: newDirectiveError(txn),
+		Payee:          txn.Payee.Value,
+		Account:        account,
+		Details:        details,
 	}
 }
 
 // CurrencyConstraintError is returned when a posting uses a currency not allowed by the account
 type CurrencyConstraintError struct {
-	Date              *ast.Date
+	directiveError
 	Payee             string
 	Account           ast.Account
 	Currency          string
 	AllowedCurrencies []string
-	Pos               ast.Position
-	Directive         ast.Directive
 }
 
 func (e *CurrencyConstraintError) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
-	if e.Pos.Filename == "" {
-		location = e.Date.String()
-	}
-
 	return fmt.Sprintf("%s: Currency %s not allowed for account %s (allowed: %v)",
-		location, e.Currency, e.Account, e.AllowedCurrencies)
-}
-
-func (e *CurrencyConstraintError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-func (e *CurrencyConstraintError) GetDirective() ast.Directive {
-	return e.Directive
+		e.formatLocation(), e.Currency, e.Account, e.AllowedCurrencies)
 }
 
 func (e *CurrencyConstraintError) GetAccount() ast.Account {
 	return e.Account
 }
 
-func (e *CurrencyConstraintError) GetDate() *ast.Date {
-	return e.Date
-}
-
 func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":               "CurrencyConstraintError",
 		"message":            e.Error(),
-		"position":           e.Pos,
+		"position":           e.pos,
 		"account":            string(e.Account),
-		"date":               e.Date.String(),
+		"date":               e.GetDate().String(),
 		"currency":           e.Currency,
 		"allowed_currencies": e.AllowedCurrencies,
 	})
@@ -1002,13 +669,11 @@ func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
 func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account,
 	currency string, allowedCurrencies []string) *CurrencyConstraintError {
 	return &CurrencyConstraintError{
-		Date:              txn.Date,
+		directiveError:    newDirectiveError(txn),
 		Payee:             txn.Payee.Value,
 		Account:           account,
 		Currency:          currency,
 		AllowedCurrencies: allowedCurrencies,
-		Pos:               txn.Pos,
-		Directive:         txn,
 	}
 }
 
@@ -1068,10 +733,8 @@ func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *InvalidAccountName
 		cfg.AccountNames.Expenses,
 	}
 	return &InvalidAccountNameError{
+		directiveError:    newDirectiveError(open),
 		Account:           open.Account,
-		Date:              open.Date,
-		Pos:               open.Pos,
-		Directive:         open,
 		ValidAccountTypes: validAccountTypes,
 	}
 }
