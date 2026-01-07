@@ -128,7 +128,20 @@ func (p *Parser) parsePostings(headerLine int) ([]*ast.Posting, error) {
 		// Skip blank lines (NEWLINE tokens) that might appear between postings
 		// This handles cases like trailing whitespace that creates unwanted blank lines
 		// Must check NEWLINE before column check since blank lines have column 1
+		// HOWEVER: Don't consume a NEWLINE if it's followed by a directive or end-of-file,
+		// as it's a blank line that should be preserved in the AST, not part of the transaction
 		if tok.Type == NEWLINE {
+			// Peek ahead to see what comes after the blank line
+			nextIdx := p.pos + 1
+			if nextIdx < len(p.tokens) {
+				nextTok := p.tokens[nextIdx]
+				// If the next token is at column <= 1 or is EOF, this blank line marks
+				// the end of the transaction and should NOT be consumed here
+				if nextTok.Column <= 1 || nextTok.Type == EOF {
+					break // Don't consume this blank line - let the main parser handle it
+				}
+			}
+			// Safe to consume - it's a blank line between postings
 			p.advance() // consume the blank line and continue
 			continue
 		}
