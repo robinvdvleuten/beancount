@@ -53,15 +53,18 @@ sboms:
       - "{{ .ArtifactName }}.sbom_assets.json"
 
 signs:
-  - cmd: cosign
+  - artifacts: checksum
     signature: "${artifact}.sigstore.json"
     output: true
-    artifacts: checksum
+    cmd: cosign
     args:
       - sign-blob
       - "--bundle=${signature}"
       - "${artifact}"
       - --yes
+
+docker_signs:
+  - artifacts: manifests
 
 nfpms:
   - vendor: robinvdvleuten
