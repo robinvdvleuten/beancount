@@ -58,6 +58,7 @@ import (
 // are collected and returned together after processing.
 type Ledger struct {
 	graph                 *Graph // Unified graph of accounts, currencies, and relationships
+	config                *Config
 	errors                []error
 	padEntries            map[string]*ast.Pad // account -> pad directive
 	usedPads              map[string]bool     // account -> whether pad was used
@@ -119,10 +120,11 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	cfg, err := configFromAST(tree)
 	if err != nil {
 		l.errors = append(l.errors, err)
-	} else {
-		// Attach config to context for use throughout processing
-		ctx = cfg.WithContext(ctx)
+		cfg = NewConfig() // Use defaults if parsing fails
 	}
+	l.config = cfg
+	// Attach config to context for use throughout processing
+	ctx = cfg.WithContext(ctx)
 
 	// Process directives in order (they're already sorted by date)
 	processTimer := collector.StartStructured(telemetry.TimerConfig{
@@ -255,10 +257,11 @@ func (l *Ledger) Accounts() map[string]*Account {
 
 // GetAccountsByType returns all accounts of the specified type, sorted by name.
 func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
+	typeName := l.config.ToAccountTypeName(accountType)
 	var accounts []*Account
 
 	l.forEachAccount(func(acc *Account) bool {
-		if acc.Type == accountType {
+		if acc.Type == typeName {
 			accounts = append(accounts, acc)
 		}
 		return true
@@ -270,6 +273,13 @@ func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
 	})
 
 	return accounts
+}
+
+// GetAccountType returns the AccountType enum for an account.
+// Looks up the account's configured root name and converts it to the enum.
+// Returns (0, false) if the account's type name is not a valid configured account type.
+func (l *Ledger) GetAccountType(account *Account) (ast.AccountType, bool) {
+	return l.config.GetAccountTypeFromName(account.Type)
 }
 
 // GetPrice returns the exchange rate from one currency to another at a given date,
@@ -505,10 +515,10 @@ func (l *Ledger) GetBalancesInPeriod(
 ) []AccountBalance {
 	var result []AccountBalance
 
-	// Build type filter if specified
-	typeFilter := make(map[ast.AccountType]bool)
+	// Build type filter if specified (convert enums to configured names)
+	typeFilter := make(map[string]bool)
 	for _, t := range accountTypes {
-		typeFilter[t] = true
+		typeFilter[l.config.ToAccountTypeName(t)] = true
 	}
 
 	l.forEachAccount(func(account *Account) bool {
@@ -601,11 +611,19 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 }
 
 // applyOpen applies the open delta to the ledger (mutation only)
-func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta) {
+func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 	accountName := string(delta.Account)
+
+	// Extract account type root name (e.g., "Assets" from "Assets:Checking")
+	idx := strings.IndexByte(string(delta.Account), ':')
+	accountTypeRoot := ""
+	if idx > 0 {
+		accountTypeRoot = string(delta.Account)[:idx]
+	}
+
 	account := &Account{
 		Name:                 delta.Account,
-		Type:                 delta.Account.Type(),
+		Type:                 accountTypeRoot,
 		OpenDate:             delta.OpenDate,
 		ConstraintCurrencies: delta.ConstraintCurrencies,
 		BookingMethod:        delta.BookingMethod,

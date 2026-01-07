@@ -28,7 +28,7 @@ func (s *Server) handleGetAccounts(w http.ResponseWriter, r *http.Request) {
 	for name, account := range s.ledger.Accounts() {
 		accounts = append(accounts, AccountInfo{
 			Name: name,
-			Type: account.Type.String(),
+			Type: account.Type, // Type is now a string (account root name)
 		})
 	}
 

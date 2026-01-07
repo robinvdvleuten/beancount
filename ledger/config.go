@@ -9,11 +9,21 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// AccountNamesConfig holds the customizable account root names.
+type AccountNamesConfig struct {
+	Assets      string
+	Liabilities string
+	Equity      string
+	Income      string
+	Expenses    string
+}
+
 // Config holds parsed Beancount options and configuration.
 // It's designed to be easily extended as more options are supported.
 type Config struct {
 	Tolerance     *ToleranceConfig
 	BookingMethod string
+	AccountNames  *AccountNamesConfig
 }
 
 // NewConfig creates a Config with defaults from Beancount.
@@ -21,6 +31,13 @@ func NewConfig() *Config {
 	return &Config{
 		Tolerance:     NewToleranceConfig(),
 		BookingMethod: "SIMPLE",
+		AccountNames: &AccountNamesConfig{
+			Assets:      "Assets",
+			Liabilities: "Liabilities",
+			Equity:      "Equity",
+			Income:      "Income",
+			Expenses:    "Expenses",
+		},
 	}
 }
 
@@ -40,6 +57,11 @@ func configFromAST(tree *ast.AST) (*Config, error) {
 //   - option "inferred_tolerance_multiplier" "0.6"
 //   - option "infer_tolerance_from_cost" "TRUE"
 //   - option "booking_method" "SIMPLE|FULL"
+//   - option "name_assets" "Assets"
+//   - option "name_liabilities" "Liabilities"
+//   - option "name_equity" "Equity"
+//   - option "name_income" "Income"
+//   - option "name_expenses" "Expenses"
 func configFromOptions(options map[string][]string) (*Config, error) {
 	cfg := NewConfig()
 
@@ -59,6 +81,23 @@ func configFromOptions(options map[string][]string) (*Config, error) {
 		cfg.BookingMethod = method
 	}
 
+	// Parse account names (use first value if multiple)
+	if vals := options["name_assets"]; len(vals) > 0 {
+		cfg.AccountNames.Assets = vals[0]
+	}
+	if vals := options["name_liabilities"]; len(vals) > 0 {
+		cfg.AccountNames.Liabilities = vals[0]
+	}
+	if vals := options["name_equity"]; len(vals) > 0 {
+		cfg.AccountNames.Equity = vals[0]
+	}
+	if vals := options["name_income"]; len(vals) > 0 {
+		cfg.AccountNames.Income = vals[0]
+	}
+	if vals := options["name_expenses"]; len(vals) > 0 {
+		cfg.AccountNames.Expenses = vals[0]
+	}
+
 	return cfg, nil
 }
 
@@ -71,18 +110,11 @@ func configFromOptions(options map[string][]string) (*Config, error) {
 func parseToleranceConfigFromOptions(options map[string][]string) (*ToleranceConfig, error) {
 	config := NewToleranceConfig()
 
-	// Parse inferred_tolerance_multiplier (takes precedence over tolerance_multiplier)
+	// Parse inferred_tolerance_multiplier
 	if vals := options["inferred_tolerance_multiplier"]; len(vals) > 0 {
 		multiplier, err := decimal.NewFromString(vals[0])
 		if err != nil {
 			return nil, fmt.Errorf("invalid inferred_tolerance_multiplier %q: %w", vals[0], err)
-		}
-		config.multiplier = multiplier
-	} else if vals := options["tolerance_multiplier"]; len(vals) > 0 {
-		// Fallback for legacy option name
-		multiplier, err := decimal.NewFromString(vals[0])
-		if err != nil {
-			return nil, fmt.Errorf("invalid tolerance_multiplier %q: %w", vals[0], err)
 		}
 		config.multiplier = multiplier
 	}
@@ -131,4 +163,57 @@ func ConfigFromContext(ctx context.Context) *Config {
 		return cfg
 	}
 	return NewConfig()
+}
+
+// IsValidAccountName checks if an account name starts with a configured account type.
+func (c *Config) IsValidAccountName(account ast.Account) bool {
+	// Extract the first part (account type) of the account name
+	idx := strings.IndexByte(string(account), ':')
+	if idx == -1 {
+		return false // Invalid account format
+	}
+	accountType := string(account)[:idx]
+
+	return accountType == c.AccountNames.Assets ||
+		accountType == c.AccountNames.Liabilities ||
+		accountType == c.AccountNames.Equity ||
+		accountType == c.AccountNames.Income ||
+		accountType == c.AccountNames.Expenses
+}
+
+// ToAccountTypeName converts an AccountType enum to the configured root name.
+func (c *Config) ToAccountTypeName(accountType ast.AccountType) string {
+	switch accountType {
+	case ast.AccountTypeAssets:
+		return c.AccountNames.Assets
+	case ast.AccountTypeLiabilities:
+		return c.AccountNames.Liabilities
+	case ast.AccountTypeEquity:
+		return c.AccountNames.Equity
+	case ast.AccountTypeIncome:
+		return c.AccountNames.Income
+	case ast.AccountTypeExpenses:
+		return c.AccountNames.Expenses
+	default:
+		panic(fmt.Sprintf("invalid account type: %v", accountType))
+	}
+}
+
+// GetAccountTypeFromName converts a configured account root name to its AccountType enum.
+// Returns (0, false) if the name doesn't match any configured account type.
+func (c *Config) GetAccountTypeFromName(name string) (ast.AccountType, bool) {
+	switch name {
+	case c.AccountNames.Assets:
+		return ast.AccountTypeAssets, true
+	case c.AccountNames.Liabilities:
+		return ast.AccountTypeLiabilities, true
+	case c.AccountNames.Equity:
+		return ast.AccountTypeEquity, true
+	case c.AccountNames.Income:
+		return ast.AccountTypeIncome, true
+	case c.AccountNames.Expenses:
+		return ast.AccountTypeExpenses, true
+	default:
+		return 0, false
+	}
 }

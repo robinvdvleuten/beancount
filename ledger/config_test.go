@@ -135,6 +135,39 @@ func TestConfigFromOptions(t *testing.T) {
 				assert.Equal(t, decimal.NewFromFloat(0.005), config.Tolerance.defaults["*"])
 			},
 		},
+		{
+			name: "custom account names",
+			options: map[string][]string{
+				"name_assets":      {"Vermoegen"},
+				"name_liabilities": {"Verbindlichkeiten"},
+				"name_equity":      {"Eigenkapital"},
+				"name_income":      {"Einkommen"},
+				"name_expenses":    {"Ausgaben"},
+			},
+			wantErr: false,
+			checkConfig: func(t *testing.T, config *Config) {
+				assert.Equal(t, "Vermoegen", config.AccountNames.Assets)
+				assert.Equal(t, "Verbindlichkeiten", config.AccountNames.Liabilities)
+				assert.Equal(t, "Eigenkapital", config.AccountNames.Equity)
+				assert.Equal(t, "Einkommen", config.AccountNames.Income)
+				assert.Equal(t, "Ausgaben", config.AccountNames.Expenses)
+			},
+		},
+		{
+			name: "partial account names (only assets)",
+			options: map[string][]string{
+				"name_assets": {"Actifs"},
+			},
+			wantErr: false,
+			checkConfig: func(t *testing.T, config *Config) {
+				assert.Equal(t, "Actifs", config.AccountNames.Assets)
+				// Others should have defaults
+				assert.Equal(t, "Liabilities", config.AccountNames.Liabilities)
+				assert.Equal(t, "Equity", config.AccountNames.Equity)
+				assert.Equal(t, "Income", config.AccountNames.Income)
+				assert.Equal(t, "Expenses", config.AccountNames.Expenses)
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -161,4 +194,10 @@ func TestNewConfig(t *testing.T) {
 	assert.True(t, cfg != nil)
 	assert.True(t, cfg.Tolerance != nil)
 	assert.Equal(t, "SIMPLE", cfg.BookingMethod)
+	assert.True(t, cfg.AccountNames != nil)
+	assert.Equal(t, "Assets", cfg.AccountNames.Assets)
+	assert.Equal(t, "Liabilities", cfg.AccountNames.Liabilities)
+	assert.Equal(t, "Equity", cfg.AccountNames.Equity)
+	assert.Equal(t, "Income", cfg.AccountNames.Income)
+	assert.Equal(t, "Expenses", cfg.AccountNames.Expenses)
 }

@@ -75,7 +75,7 @@ func TestNewAccount(t *testing.T) {
 		{"Equity", "Equity:Opening-Balances", false},
 		{"Income", "Income:Salary", false},
 		{"Expenses", "Expenses:Groceries", false},
-		{"InvalidType", "Foo:Bar", true},
+		{"CustomType", "Foo:Bar", false}, // Parser allows custom types - ledger validates against configured names
 		{"SingleSegment", "Assets", true},
 		{"Empty", "", true},
 
@@ -90,6 +90,10 @@ func TestNewAccount(t *testing.T) {
 		{"Greek", "Assets:Τράπεζα:Αθήνα", false},
 		{"Arabic", "Assets:بنك:حساب", false},
 		{"Mixed", "Assets:Café:München:中国", false},
+
+		// Custom root names (allowed by parser, validated in ledger)
+		{"CustomRoot", "Vermoegen:Checking", false},
+		{"CustomRootUnicode", "Vermögen:Konto", false},
 
 		// Edge cases
 		{"WithDigit", "Assets:Bank123:Account", false},

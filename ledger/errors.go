@@ -101,6 +101,66 @@ func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// InvalidAccountNameError is returned when an account name uses an invalid account type
+type InvalidAccountNameError struct {
+	Account           ast.Account
+	Date              *ast.Date
+	Pos               ast.Position
+	Directive         ast.Directive
+	ValidAccountTypes []string // The configured valid account types
+}
+
+func (e *InvalidAccountNameError) Error() string {
+	location := fmt.Sprintf("%s:%d", e.Pos.Filename, e.Pos.Line)
+	if e.Pos.Filename == "" {
+		location = e.Date.String()
+	}
+
+	// Extract account type from account name
+	idx := strings.IndexByte(string(e.Account), ':')
+	accountType := "?"
+	if idx != -1 {
+		accountType = string(e.Account)[:idx]
+	}
+
+	return fmt.Sprintf("%s: Account %q uses invalid type %q, expected one of: %s",
+		location, e.Account, accountType, strings.Join(e.ValidAccountTypes, ", "))
+}
+
+func (e *InvalidAccountNameError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+func (e *InvalidAccountNameError) GetDirective() ast.Directive {
+	return e.Directive
+}
+
+func (e *InvalidAccountNameError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *InvalidAccountNameError) GetDate() *ast.Date {
+	return e.Date
+}
+
+func (e *InvalidAccountNameError) MarshalJSON() ([]byte, error) {
+	// Extract account type from account name
+	idx := strings.IndexByte(string(e.Account), ':')
+	accountType := "?"
+	if idx != -1 {
+		accountType = string(e.Account)[:idx]
+	}
+
+	return json.Marshal(map[string]any{
+		"type":                "InvalidAccountNameError",
+		"message":             e.Error(),
+		"position":            e.Pos,
+		"account":             string(e.Account),
+		"account_type":        accountType,
+		"valid_account_types": e.ValidAccountTypes,
+	})
+}
+
 // AccountAlreadyClosedError is returned when trying to use or close an account that's already closed
 type AccountAlreadyClosedError struct {
 	Account    ast.Account
@@ -996,6 +1056,24 @@ func (e *UnusedPadWarning) MarshalJSON() ([]byte, error) {
 		"account":  e.Account,
 		"date":     e.Pad.Date.String(),
 	})
+}
+
+// NewInvalidAccountNameError creates an error for an account with an invalid account type
+func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *InvalidAccountNameError {
+	validAccountTypes := []string{
+		cfg.AccountNames.Assets,
+		cfg.AccountNames.Liabilities,
+		cfg.AccountNames.Equity,
+		cfg.AccountNames.Income,
+		cfg.AccountNames.Expenses,
+	}
+	return &InvalidAccountNameError{
+		Account:           open.Account,
+		Date:              open.Date,
+		Pos:               open.Pos,
+		Directive:         open,
+		ValidAccountTypes: validAccountTypes,
+	}
 }
 
 // NewUnusedPadWarning creates a warning for an unused pad directive

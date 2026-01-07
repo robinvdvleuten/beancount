@@ -124,16 +124,16 @@ type Account string
 func (a *Account) Capture(values []string) error {
 	parts := strings.Split(values[0], ":")
 
-	// Validate first segment (account type)
+	// Validate structure: must have at least type:name format
 	if len(parts) < 2 {
 		return fmt.Errorf("account must have at least two segments: %s", values[0])
 	}
 
-	t := parts[0]
-	switch t {
-	case "Assets", "Liabilities", "Equity", "Income", "Expenses":
-	default:
-		return fmt.Errorf(`unexpected account type "%s"`, t)
+	// Validate first segment (account type) - must be a valid identifier
+	// Actual type validation (checking against configured names) happens in ledger validation,
+	// allowing for custom account types via name_* options
+	if !isValidAccountSegment(parts[0]) {
+		return fmt.Errorf("invalid account type at position 0: %s", parts[0])
 	}
 
 	// Validate subsequent segments

@@ -35,7 +35,7 @@ type AccountPosting struct {
 // Account represents an account in the ledger
 type Account struct {
 	Name                 ast.Account
-	Type                 ast.AccountType
+	Type                 string // Account type root name (e.g., "Assets", "Vermoegen")
 	OpenDate             *ast.Date
 	CloseDate            *ast.Date
 	ConstraintCurrencies []string

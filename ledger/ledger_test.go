@@ -26,7 +26,7 @@ func TestLedger_ProcessOpen(t *testing.T) {
 				acc, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok, "account should exist")
 				assert.Equal(t, "Assets:Checking", string(acc.Name))
-				assert.Equal(t, ast.AccountTypeAssets, acc.Type)
+				assert.Equal(t, "Assets", acc.Type) // Account.Type is now the root name string
 				assert.False(t, acc.IsClosed())
 			},
 		},
@@ -912,10 +912,10 @@ func TestLedger_GetAccountsByType(t *testing.T) {
 			accounts := ledger.GetAccountsByType(tt.accountType)
 			assert.Equal(t, len(accounts), len(tt.expected))
 
-			// Verify sorted order and correct type
+			typeName := ledger.config.ToAccountTypeName(tt.accountType)
 			for i, account := range accounts {
 				assert.Equal(t, string(account.Name), tt.expected[i])
-				assert.Equal(t, account.Type, tt.accountType)
+				assert.Equal(t, account.Type, typeName)
 			}
 		})
 	}
@@ -935,6 +935,72 @@ func TestLedger_GetAccountsByTypeEmpty(t *testing.T) {
 	// Query for account type with no accounts
 	expenses := ledger.GetAccountsByType(ast.AccountTypeExpenses)
 	assert.Equal(t, len(expenses), 0)
+}
+
+func TestLedger_GetAccountType(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2020-01-01 open Assets:Checking
+		2020-01-01 open Liabilities:CreditCard
+		2020-01-01 open Equity:OpeningBalances
+		2020-01-01 open Income:Salary
+		2020-01-01 open Expenses:Groceries
+	`
+
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+	ledger.MustProcess(ctx, tree)
+
+	tests := []struct {
+		accountName string
+		expected    ast.AccountType
+	}{
+		{"Assets:Checking", ast.AccountTypeAssets},
+		{"Liabilities:CreditCard", ast.AccountTypeLiabilities},
+		{"Equity:OpeningBalances", ast.AccountTypeEquity},
+		{"Income:Salary", ast.AccountTypeIncome},
+		{"Expenses:Groceries", ast.AccountTypeExpenses},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.accountName, func(t *testing.T) {
+			acc, ok := ledger.GetAccount(tt.accountName)
+			assert.True(t, ok, "account should exist")
+
+			enumType, found := ledger.GetAccountType(acc)
+			assert.True(t, found, "should find account type")
+			assert.Equal(t, enumType, tt.expected)
+		})
+	}
+}
+
+func TestLedger_GetAccountTypeCustomNames(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		option "name_assets" "Vermoegen"
+		option "name_expenses" "Ausgaben"
+
+		2020-01-01 open Vermoegen:Checking
+		2020-01-01 open Ausgaben:Groceries
+	`
+
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+	ledger.MustProcess(ctx, tree)
+
+	// Verify assets account with custom name
+	acc, ok := ledger.GetAccount("Vermoegen:Checking")
+	assert.True(t, ok)
+	enumType, found := ledger.GetAccountType(acc)
+	assert.True(t, found)
+	assert.Equal(t, enumType, ast.AccountTypeAssets)
+
+	// Verify expenses account with custom name
+	expAcc, ok := ledger.GetAccount("Ausgaben:Groceries")
+	assert.True(t, ok)
+	expType, found := ledger.GetAccountType(expAcc)
+	assert.True(t, found)
+	assert.Equal(t, expType, ast.AccountTypeExpenses)
 }
 
 // Price directive integration tests

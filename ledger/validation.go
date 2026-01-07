@@ -1033,6 +1033,12 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 		return errs, nil
 	}
 
+	// 1. Validate account root name is configured
+	if !v.config.IsValidAccountName(open.Account) {
+		errs = append(errs, NewInvalidAccountNameError(open, v.config))
+		return errs, nil
+	}
+
 	// Check if account already exists - duplicate open is always an error
 	if existing, ok := v.accounts[accountName]; ok {
 		errs = append(errs, NewAccountAlreadyOpenError(open, existing.OpenDate))

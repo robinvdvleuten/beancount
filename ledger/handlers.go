@@ -39,7 +39,8 @@ func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) 
 func (h *OpenHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	open := d.(*ast.Open)
 	openDelta := delta.(*OpenDelta)
-	l.applyOpen(open, openDelta)
+	cfg := ConfigFromContext(ctx)
+	l.applyOpen(open, openDelta, cfg)
 }
 
 // CloseHandler processes Close directives.

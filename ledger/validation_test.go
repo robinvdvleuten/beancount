@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -13,8 +14,7 @@ import (
 
 // newTestValidator is a helper for tests that need a validator with default config.
 func newTestValidator(accounts map[string]*Account) *validator {
-	cfg := &Config{Tolerance: NewToleranceConfig()}
-	return newValidator(accounts, cfg)
+	return newValidator(accounts, NewConfig())
 }
 
 func TestValidateAccountsOpen(t *testing.T) {
@@ -1558,6 +1558,43 @@ func TestValidateOpen(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestValidateOpenWithCustomAccountTypes tests account type validation with custom names
+func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
+	date2024, _ := ast.NewDate("2024-01-15")
+	// Create account directly without using NewAccount (which validates against hardcoded types)
+	customAccount := ast.Account("Vermoegen:Checking")
+
+	t.Run("valid custom account type", func(t *testing.T) {
+		cfg := NewConfig()
+		cfg.AccountNames.Assets = "Vermoegen"
+
+		v := newValidator(map[string]*Account{}, cfg)
+		errs, delta := v.validateOpen(context.Background(), &ast.Open{
+			Date:    date2024,
+			Account: customAccount,
+		})
+
+		assert.Equal(t, 0, len(errs))
+		assert.True(t, delta != nil)
+		assert.Equal(t, customAccount, delta.Account)
+	})
+
+	t.Run("invalid custom account type", func(t *testing.T) {
+		cfg := NewConfig()
+		// Don't set custom Vermoegen - should reject it
+
+		v := newValidator(map[string]*Account{}, cfg)
+		errs, delta := v.validateOpen(context.Background(), &ast.Open{
+			Date:    date2024,
+			Account: customAccount,
+		})
+
+		assert.Equal(t, 1, len(errs))
+		assert.True(t, delta == nil)
+		assert.True(t, strings.Contains(errs[0].Error(), "invalid type"))
+	})
 }
 
 // TestValidateClose tests the validateClose() function
