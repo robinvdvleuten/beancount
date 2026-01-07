@@ -17,6 +17,7 @@ interface EditorProps {
 }
 
 const Editor = (props: EditorProps) => {
+  // eslint-disable-next-line no-unassigned-vars
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
 

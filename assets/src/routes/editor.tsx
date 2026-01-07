@@ -1,8 +1,9 @@
-import { createSignal, onMount } from "solid-js";
+import { type Component, createSignal, onMount } from "solid-js";
 import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid"
 import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid"
 import type { AccountInfo, EditorError } from "../types";
-import Editor from "./editor";
+import EditorComp from "../components/editor";
+import { meta } from "virtual:globals";
 
 interface SourceResponse {
   filepath: string;
@@ -10,11 +11,7 @@ interface SourceResponse {
   errors: EditorError[] | null;
 }
 
-interface ApplicationProps {
-  meta: { version: string; commitSHA: string; readOnly: boolean };
-}
-
-const Application = (props: ApplicationProps) => {
+const Editor: Component = () => {
   const [filepath, setFilepath] = createSignal<string | null>(null);
   const [source, setSource] = createSignal<string>();
   const [errors, setErrors] = createSignal<EditorError[] | null>(null);
@@ -87,7 +84,7 @@ const Application = (props: ApplicationProps) => {
   });
 
   return (
-    <div class="flex h-screen flex-col">
+    <>
       <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
         <div class="flex items-center gap-3">
           <div class="text-primary">
@@ -103,7 +100,7 @@ const Application = (props: ApplicationProps) => {
           <button
             class="btn"
             onClick={handleSaveClick}
-            disabled={props.meta.readOnly}
+            disabled={meta.readOnly}
           >
             <ArrowDownTrayIcon class="size-4" />
             Save
@@ -112,18 +109,10 @@ const Application = (props: ApplicationProps) => {
       </header>
 
       <div class="flex-1 overflow-auto">
-        <Editor value={source()} errors={errors()} accounts={accounts()} onChange={handleValueChange} />
+        <EditorComp value={source()} errors={errors()} accounts={accounts()} onChange={handleValueChange} />
       </div>
-
-      <footer class="flex items-center justify-between border-t border-base-300 px-6 py-2">
-        <div class="text-xs text-base-content/70">
-          {props.meta.version}
-          {props.meta.commitSHA && ` (${props.meta.commitSHA})`}
-          {props.meta.readOnly && " read-only mode"}
-        </div>
-      </footer>
-    </div>
+    </>
   );
 };
 
-export default Application;
+export default Editor;

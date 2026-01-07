@@ -4,20 +4,40 @@ import tailwindcss from "@tailwindcss/vite";
 import solid from "vite-plugin-solid";
 import solidSvg from "vite-plugin-solid-svg";
 
-// Plugin to replace Go template variable ONLY in dev server mode
-// In production build, it stays as-is for Go to replace at runtime
+const metadataDevValue = {
+  version: 'dev',
+  commitSHA: 'local',
+  readOnly: false,
+};
+
+// Plugin to handle metadata: replaces Go template in HTML (dev only) and provides virtual module
 function metadataPlugin(): Plugin {
+  const virtualModuleId = 'virtual:globals';
+  const resolvedId = '\0' + virtualModuleId;
+
   return {
     name: 'metadata',
-    apply: 'serve', // Only run during dev server, not build
+    resolveId(id) {
+      if (id === virtualModuleId) {
+        return resolvedId;
+      }
+    },
+    load(id) {
+      if (id === resolvedId) {
+        if (process.env.NODE_ENV === 'development') {
+          // Dev mode: return actual metadata
+          return `export const meta = ${JSON.stringify(metadataDevValue)};`;
+        } else {
+          // Production: read from window (set by Go at runtime)
+          return `export const meta = window.__metadata;`;
+        }
+      }
+    },
     transformIndexHtml(html) {
-      // In dev server, inject complete metadata JSON object
-      const metadata = {
-        version: 'dev',
-        commitSHA: 'local',
-        readOnly: false,
-      };
-      return html.replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadata));
+      // In dev server, replace Go template variable with actual metadata
+      if (process.env.NODE_ENV === 'development') {
+        return html.replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadataDevValue));
+      }
     },
   };
 }
