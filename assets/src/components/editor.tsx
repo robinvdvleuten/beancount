@@ -1,4 +1,4 @@
-import { createEffect, createMemo, onCleanup, onMount } from "solid-js";
+import { createEffect, createMemo, onCleanup, onMount, on } from "solid-js";
 import { linter as linterExt, lintGutter } from "@codemirror/lint";
 import { StateEffect } from "@codemirror/state";
 import { lineNumbers, type EditorView } from "@codemirror/view";
@@ -17,13 +17,18 @@ interface EditorProps {
 }
 
 const Editor = (props: EditorProps) => {
-  // eslint-disable-next-line no-unassigned-vars
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
 
-  const linter = createMemo(() => {
-    return linterExt((view) => errorsToDiagnostics(props.errors ?? null, view));
-  });
+  const linter = createMemo(
+    () => {
+      // Track errors dependency to recreate linter when errors change
+      const _errors = props.errors;
+      return linterExt((view) => errorsToDiagnostics(_errors ?? null, view));
+    },
+    undefined,
+    { equals: false }
+  );
 
   const accountCompletion = createMemo(() => {
     return createAccountCompletion(props.accounts);
@@ -70,22 +75,24 @@ const Editor = (props: EditorProps) => {
   });
 
   // Reconfigure extensions when linter or completion changes
-  createEffect(() => {
-    const view = viewRef;
-    if (!view) return;
+  createEffect(
+    on([linter, accountCompletion], () => {
+      const view = viewRef;
+      if (!view) return;
 
-    view.dispatch({
-      effects: StateEffect.reconfigure.of([
-        lineNumbers(),
-        beancount(),
-        beancountSyntaxHighlighting,
-        editorTheme,
-        linter(),
-        lintGutter(),
-        accountCompletion(),
-      ]),
-    });
-  });
+      view.dispatch({
+        effects: StateEffect.reconfigure.of([
+          lineNumbers(),
+          beancount(),
+          beancountSyntaxHighlighting,
+          editorTheme,
+          linter(),
+          lintGutter(),
+          accountCompletion(),
+        ]),
+      });
+    })
+  );
 
   return <div ref={editorRef} class="h-full" />;
 };

@@ -27,7 +27,7 @@ const Editor: Component = () => {
       if (!response.ok) {
         throw new Error(`Failed to fetch accounts: ${response.statusText}`);
       }
-      const data = await response.json();
+      const data = (await response.json()) as { accounts: AccountInfo[] };
       // Keep full objects with type information
       setAccounts(data.accounts);
     } catch (error) {
@@ -52,7 +52,7 @@ const Editor: Component = () => {
       return;
     }
 
-    const result: SourceResponse = await response.json();
+    const result = (await response.json()) as SourceResponse;
     setFilepath(result.filepath);
     setSource(result.source);
     setErrors(result.errors);
@@ -72,15 +72,15 @@ const Editor: Component = () => {
         return;
       }
 
-      const result: SourceResponse = await response.json();
+      const result = (await response.json()) as SourceResponse;
 
       setFilepath(result.filepath);
       setSource(result.source);
       setErrors(result.errors);
     }
 
-    fetchSource();
-    fetchAccounts();
+    void fetchSource();
+    void fetchAccounts();
   });
 
   return (
@@ -99,7 +99,7 @@ const Editor: Component = () => {
         <div class="flex items-center gap-2">
           <button
             class="btn"
-            onClick={handleSaveClick}
+            onClick={() => void handleSaveClick()}
             disabled={meta.readOnly}
           >
             <ArrowDownTrayIcon class="size-4" />
