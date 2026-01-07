@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0](https://github.com/robinvdvleuten/beancount/compare/v0.6.0...v0.7.0) (2026-01-07)
+
+
+### Features
+
+* add doctor lex command for token debugging ([163ac5b](https://github.com/robinvdvleuten/beancount/commit/163ac5b5c8939088e75b6d28498af2dea03b010e))
+* add Must* variants and refactor tests ([d8a788d](https://github.com/robinvdvleuten/beancount/commit/d8a788d28c5db105cf2ff3c8be713fe81b4d736d))
+* **ast:** add DirectiveKind with Kind() method, remove Directive() ([bf1442c](https://github.com/robinvdvleuten/beancount/commit/bf1442ca1e17a030433fc5478fee6fab1f59b2c1))
+* **ledger:** add ConvertBalance and GetBalanceInCurrency APIs ([56e874d](https://github.com/robinvdvleuten/beancount/commit/56e874d4b443e5890a4aed95596aba6614702ae8))
+* **ledger:** add GetAccountsByType() for filtering by account type ([be8c27c](https://github.com/robinvdvleuten/beancount/commit/be8c27cbf30649f5358b4d87c641d6934d8eb508))
+* **ledger:** add GetBalanceInCurrencyAsOf plus rename GetBalancesAsOfInCurrency ([ef4db35](https://github.com/robinvdvleuten/beancount/commit/ef4db35900d59016f172ad2172d723e90a16e359))
+* **ledger:** add GetBalancesAsOfInCurrency and consolidate account iteration ([ca980a5](https://github.com/robinvdvleuten/beancount/commit/ca980a5abbf44be4f6fb16f7731eae0870c9995a))
+* **ledger:** add graph abstraction with pathfinding ([66249ae](https://github.com/robinvdvleuten/beancount/commit/66249aec075d2759a480c28ebf84c82cc4a5ca34))
+* **ledger:** add reporting APIs with posting history ([0ea3f5b](https://github.com/robinvdvleuten/beancount/commit/0ea3f5b12e5c556abd901d00c629004270acac54))
+* **ledger:** implement account hierarchy with balance aggregation ([aa6a6f2](https://github.com/robinvdvleuten/beancount/commit/aa6a6f2f78db6d18fdceb2a521059789d74d29b2))
+* **ledger:** implement explicit commodity nodes in graph ([dcf0089](https://github.com/robinvdvleuten/beancount/commit/dcf0089b6f4c5ce9acfd48cc8313c91ab513723b))
+* **ledger:** implement temporal price index with forward-fill semantics ([a065b5e](https://github.com/robinvdvleuten/beancount/commit/a065b5ec794a346f4ff64cc5eef286ea430dbc4c))
+* **ledger:** support implicit posting amount inference ([598109d](https://github.com/robinvdvleuten/beancount/commit/598109d4cf7564ae55b093c2d81f75433ee7066d))
+* support and preserve comma thousands separators ([#114](https://github.com/robinvdvleuten/beancount/issues/114)) ([2e39fee](https://github.com/robinvdvleuten/beancount/commit/2e39fee1f9b2cf4d5d4ba024d931cd43625d8e98))
+* **web:** add read-only mode to UI and API ([bb390fe](https://github.com/robinvdvleuten/beancount/commit/bb390fe678a74506e8e61ad8fe8bde907dc9ea3a))
+
+
+### Bug Fixes
+
+* **parser:** handle blank lines between postings ([15c1063](https://github.com/robinvdvleuten/beancount/commit/15c1063a01a246588922351933553e35ea4e1992))
+* **parser:** preserve blank lines after transaction postings ([fab5930](https://github.com/robinvdvleuten/beancount/commit/fab5930f64bd2088d0e90f39ff197a2633f8bc6b))
+* **parser:** standardize token names to uppercase ([88dcb36](https://github.com/robinvdvleuten/beancount/commit/88dcb36280c219007c86e1c8c785a153be63b8a9))
+* **web:** check return value of Fprint ([7f7b638](https://github.com/robinvdvleuten/beancount/commit/7f7b6389a7d43f013d3750c03ef395adc3638c01))
+* **web:** correctly lowercase position properties when encoded to json ([310f47d](https://github.com/robinvdvleuten/beancount/commit/310f47dd1a6d72ae55caf3c525cbc044286a8f0a))
+* **web:** start error marker at beginning of line ([b177d81](https://github.com/robinvdvleuten/beancount/commit/b177d8143e8b33e37d6f839c41ee538b10730102))
+
 ## [0.6.0](https://github.com/robinvdvleuten/beancount/compare/v0.5.0...v0.6.0) (2025-12-18)
 
 
