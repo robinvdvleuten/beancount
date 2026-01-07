@@ -1,0 +1,13 @@
+{
+  "release-type": "go",
+  "packages": {
+    ".": {}
+  },
+  "extra-files": [
+    {
+      "type": "json",
+      "path": "assets/package.json",
+      "jsonpath": "$.version"
+    }
+  ]
+}

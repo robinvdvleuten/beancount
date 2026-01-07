@@ -44,6 +44,13 @@ gomod:
 
 sboms:
   - artifacts: archive
+  - id: assets
+    cmd: bash
+    args: 
+      - "-c"
+      - "npm sbom --prefix ../assets --sbom-format spdx --sbom-type application --omit dev > ${document}"
+    documents:
+      - "{{ .ArtifactName }}.sbom_assets.json"
 
 signs:
   - cmd: cosign
