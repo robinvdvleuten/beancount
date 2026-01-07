@@ -65,12 +65,12 @@ func (s *Server) mountAssets(mux *http.ServeMux) {
 
 	htmlContent := buf.String()
 
-	// Register index route
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
+	// Register static assets
+	mux.Handle("/assets/", http.FileServerFS(fsys))
+
+	// Register catch-all route for SPA (serves index.html for all unmatched paths)
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = fmt.Fprint(w, htmlContent)
 	})
-
-	// Register static assets
-	mux.Handle("/assets/", http.FileServerFS(fsys))
 }
