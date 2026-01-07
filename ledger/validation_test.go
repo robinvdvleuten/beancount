@@ -11,6 +11,12 @@ import (
 	"github.com/shopspring/decimal"
 )
 
+// newTestValidator is a helper for tests that need a validator with default config.
+func newTestValidator(accounts map[string]*Account) *validator {
+	cfg := &Config{Tolerance: NewToleranceConfig()}
+	return newValidator(accounts, cfg)
+}
+
 func TestValidateAccountsOpen(t *testing.T) {
 	// Setup test accounts
 	date2024, _ := ast.NewDate("2024-01-15")
@@ -124,7 +130,7 @@ func TestValidateAccountsOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(tt.accounts, nil)
+			v := newTestValidator(tt.accounts)
 			errs := v.validateAccountsOpen(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
@@ -190,7 +196,7 @@ func TestValidateAmounts(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(nil, nil) // validateAmounts doesn't need accounts
+			v := newTestValidator(nil) // validateAmounts doesn't need accounts
 			errs := v.validateAmounts(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
@@ -345,7 +351,7 @@ func TestCalculateBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(nil, nil) // calculateBalance doesn't need accounts
+			v := newTestValidator(nil) // calculateBalance doesn't need accounts
 			_, validation, errs := v.calculateBalance(tt.txn)
 
 			assert.Equal(t, 0, len(errs))
@@ -548,7 +554,7 @@ func TestValidateTransaction_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(accounts, nil)
+			v := newTestValidator(accounts)
 			errs, result := v.validateTransaction(context.Background(), tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
@@ -699,7 +705,7 @@ func TestImplicitPostings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(accounts, nil)
+			v := newTestValidator(accounts)
 			errs, result := v.validateTransaction(context.Background(), tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs), fmt.Sprintf("errors: %v", errs))
@@ -771,7 +777,7 @@ func BenchmarkValidateTransaction(b *testing.B) {
 		},
 	}
 
-	v := newValidator(accounts, nil)
+	v := newTestValidator(accounts)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -1520,7 +1526,7 @@ func TestValidateOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(tt.accounts, nil)
+			v := newTestValidator(tt.accounts)
 			errs, delta := v.validateOpen(context.Background(), tt.open)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
@@ -1613,7 +1619,7 @@ func TestValidateClose(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newValidator(tt.accounts, nil)
+			v := newTestValidator(tt.accounts)
 			errs, delta := v.validateClose(context.Background(), tt.close)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
@@ -1751,7 +1757,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 				Amount:  ast.NewAmount(tt.balanceAmount, tt.balanceCurrency),
 			}
 
-			v := newValidator(accounts, NewToleranceConfig())
+			cfg := &Config{Tolerance: NewToleranceConfig()}
+			v := newValidator(accounts, cfg)
 			delta, err := v.calculateBalanceDelta(balance, tt.padEntry)
 
 			if tt.wantErr {
@@ -1906,7 +1913,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 				},
 			}
 
-			v := newValidator(accounts, nil)
+			v := newTestValidator(accounts)
 			errs := v.validateInventoryOperations(tt.txn, tt.delta)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
@@ -2020,7 +2027,7 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 				}
 			}
 
-			v := newValidator(accounts, nil)
+			v := newTestValidator(accounts)
 			delta := &TransactionDelta{}
 			errs := v.validateConstraintCurrencies(tt.txn, delta)
 

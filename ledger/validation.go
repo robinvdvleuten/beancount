@@ -162,15 +162,15 @@ import (
 // validator provides transaction validation with read-only access to ledger state.
 // This is a separate type from Ledger to ensure validation cannot mutate state.
 type validator struct {
-	accounts        map[string]*Account
-	toleranceConfig *ToleranceConfig
+	accounts map[string]*Account
+	config   *Config
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account, toleranceConfig *ToleranceConfig) *validator {
+func newValidator(accounts map[string]*Account, config *Config) *validator {
 	return &validator{
-		accounts:        accounts,
-		toleranceConfig: toleranceConfig,
+		accounts: accounts,
+		config:   config,
 	}
 }
 
@@ -691,7 +691,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	residuals := make(map[string]decimal.Decimal)
 	for currency, residual := range balance {
 		amounts := amountsByCurrency[currency]
-		tolerance := InferTolerance(amounts, currency, v.toleranceConfig)
+		tolerance := InferTolerance(amounts, currency, v.config.Tolerance)
 
 		// Always check residuals against tolerance (even with inferred amounts)
 		if residual.Abs().GreaterThan(tolerance) {
@@ -1209,7 +1209,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 		}
 
 		difference := expectedAmount.Sub(actualAmount)
-		tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+		tolerance := v.config.Tolerance.GetDefaultTolerance(currency)
 
 		if difference.Abs().GreaterThan(tolerance) {
 			delta.PaddingAdjustments[currency] = difference
@@ -1243,7 +1243,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	}
 
 	// Check if amounts match within tolerance (after padding)
-	tolerance := v.toleranceConfig.GetDefaultTolerance(currency)
+	tolerance := v.config.Tolerance.GetDefaultTolerance(currency)
 	if !AmountEqual(delta.ExpectedAmount, actualAmountAfterPadding, tolerance) {
 		// Return error separately, not in delta
 		return nil, NewBalanceMismatchError(

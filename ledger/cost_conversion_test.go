@@ -153,7 +153,8 @@ func TestValidateTotalCost(t *testing.T) {
 				Postings:  []*ast.Posting{test.posting},
 			}
 
-			v := newValidator(make(map[string]*Account), NewToleranceConfig())
+			cfg := &Config{Tolerance: NewToleranceConfig()}
+			v := newValidator(make(map[string]*Account), cfg)
 			errs := v.validateCosts(txn)
 
 			if test.expectError {

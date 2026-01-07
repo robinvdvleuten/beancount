@@ -59,11 +59,9 @@ import (
 type Ledger struct {
 	graph                 *Graph // Unified graph of accounts, currencies, and relationships
 	errors                []error
-	options               map[string][]string
 	padEntries            map[string]*ast.Pad // account -> pad directive
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
-	toleranceConfig       *ToleranceConfig
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -96,41 +94,11 @@ func (e *ValidationErrors) Unwrap() []error {
 // New creates a new empty ledger
 func New() *Ledger {
 	return &Ledger{
-		graph:           NewGraph(),
-		errors:          make([]error, 0),
-		options:         make(map[string][]string),
-		padEntries:      make(map[string]*ast.Pad),
-		usedPads:        make(map[string]bool),
-		toleranceConfig: NewToleranceConfig(),
+		graph:      NewGraph(),
+		errors:     make([]error, 0),
+		padEntries: make(map[string]*ast.Pad),
+		usedPads:   make(map[string]bool),
 	}
-}
-
-// GetOption returns the first value for the option key, or empty string if not found.
-// For options that can have multiple values (e.g., inferred_tolerance_default),
-// use GetOptions instead.
-//
-// Options that typically have single values:
-//   - title
-//   - render_commas
-//   - booking_method
-//
-// Options that can have multiple values:
-//   - inferred_tolerance_default (per-currency: "USD:0.01", "EUR:0.01")
-//   - operating_currency (multiple currencies: "USD", "EUR")
-func (l *Ledger) GetOption(key string) (string, bool) {
-	values := l.options[key]
-	if len(values) == 0 {
-		return "", false
-	}
-	return values[0], true
-}
-
-// GetOptions returns all values for the option key.
-// Use this for options that can have multiple values like
-// inferred_tolerance_default (per-currency tolerances) or
-// operating_currency (multiple operating currencies).
-func (l *Ledger) GetOptions(key string) []string {
-	return l.options[key]
 }
 
 // Process processes an AST and builds the ledger state
@@ -147,16 +115,13 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		l.graph.AddNode(currency, "currency", nil)
 	}
 
-	// Process options first
-	for _, opt := range tree.Options {
-		l.options[opt.Name.Value] = append(l.options[opt.Name.Value], opt.Value.Value)
-	}
-
-	// Parse tolerance configuration from options
-	if config, err := ParseToleranceConfig(l.options); err != nil {
+	// Parse configuration from AST options
+	cfg, err := configFromAST(tree)
+	if err != nil {
 		l.errors = append(l.errors, err)
 	} else {
-		l.toleranceConfig = config
+		// Attach config to context for use throughout processing
+		ctx = cfg.WithContext(ctx)
 	}
 
 	// Process directives in order (they're already sorted by date)
