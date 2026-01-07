@@ -640,6 +640,20 @@ func (p *Parser) internIdent(tok Token) string {
 	return p.interner.InternBytes(tok.Bytes(p.source))
 }
 
+// finishDirective captures trailing inline comment and metadata for any directive.
+// This consolidates the common end-of-directive logic used by all directive parsers.
+func (p *Parser) finishDirective(d ast.Directive) {
+	pos := d.Position()
+
+	// Capture inline comment on same line as directive
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		d.SetComment(p.parseComment())
+	}
+
+	// Parse metadata entries on following lines
+	d.AddMetadata(p.parseMetadataFromLine(pos.Line)...)
+}
+
 // Error helpers
 
 func (p *Parser) errorAtToken(tok Token, format string, args ...any) error {

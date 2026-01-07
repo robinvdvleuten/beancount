@@ -25,19 +25,7 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 		Account: account,
 		Amount:  amount,
 	}
-
-	// Capture inline comment at end of balance line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		bal.InlineComment = p.parseComment()
-	}
-
-	// Capture inline comment at end of bal line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		bal.SetComment(p.parseComment())
-	}
-
-	bal.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(bal)
 	return bal, nil
 }
 
@@ -84,13 +72,7 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 		open.BookingMethod = method.Value
 	}
 
-	// Capture inline comment at end of open line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		open.SetComment(p.parseComment())
-	}
-
-	open.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(open)
 	return open, nil
 }
 
@@ -108,13 +90,7 @@ func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error
 		Date:    date,
 		Account: account,
 	}
-	// Capture inline comment at end of close line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		close.SetComment(p.parseComment())
-	}
-
-	close.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(close)
 	return close, nil
 }
 
@@ -132,13 +108,7 @@ func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodit
 		Date:     date,
 		Currency: currency,
 	}
-	// Capture inline comment at end of commodity line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		commodity.SetComment(p.parseComment())
-	}
-
-	commodity.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(commodity)
 	return commodity, nil
 }
 
@@ -162,13 +132,7 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 		Account:    account,
 		AccountPad: accountPad,
 	}
-	// Capture inline comment at end of pad line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		pad.SetComment(p.parseComment())
-	}
-
-	pad.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(pad)
 	return pad, nil
 }
 
@@ -192,13 +156,7 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 		Account:     account,
 		Description: description,
 	}
-	// Capture inline comment at end of note line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		note.SetComment(p.parseComment())
-	}
-
-	note.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(note)
 	return note, nil
 }
 
@@ -222,13 +180,7 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		Account:        account,
 		PathToDocument: path,
 	}
-	// Capture inline comment at end of doc line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		doc.SetComment(p.parseComment())
-	}
-
-	doc.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(doc)
 	return doc, nil
 }
 
@@ -252,13 +204,7 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 		Commodity: commodity,
 		Amount:    amount,
 	}
-	// Capture inline comment at end of price line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		price.SetComment(p.parseComment())
-	}
-
-	price.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(price)
 	return price, nil
 }
 
@@ -282,13 +228,7 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 		Name:  name,
 		Value: value,
 	}
-	// Capture inline comment at end of event line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		event.SetComment(p.parseComment())
-	}
-
-	event.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(event)
 	return event, nil
 }
 
@@ -378,12 +318,6 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		custom.Values = append(custom.Values, val)
 	}
 
-	// Capture inline comment at end of custom line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		custom.SetComment(p.parseComment())
-	}
-
-	custom.Metadata = p.parseMetadataFromLine(pos.Line)
-
+	p.finishDirective(custom)
 	return custom, nil
 }
