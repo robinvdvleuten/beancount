@@ -34,6 +34,11 @@ archives:
     files:
       - COPYING
       - README*
+
+dockers_v2:
+  - images:
+      - "ghcr.io/robinvdvleuten/beancount"
+
 gomod:
   proxy: true
 
