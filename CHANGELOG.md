@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0](https://github.com/robinvdvleuten/beancount/compare/v0.7.0...v0.8.0) (2026-01-07)
+
+
+### Features
+
+* add cosign signing and SBOM attestation ([bc56f30](https://github.com/robinvdvleuten/beancount/commit/bc56f309fb6343fba1030ff0d4a2049af81d1d88))
+* **web:** set up solidjs router ([fc8a20f](https://github.com/robinvdvleuten/beancount/commit/fc8a20fb6e026567760c328bab452d54f69020eb))
+
 ## [0.7.0](https://github.com/robinvdvleuten/beancount/compare/v0.6.0...v0.7.0) (2026-01-07)
 
 
