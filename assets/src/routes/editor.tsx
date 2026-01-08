@@ -1,4 +1,10 @@
-import { type Component, createSignal, onMount } from "solid-js";
+import {
+  type Component,
+  createResource,
+  createSignal,
+  Switch,
+  Match,
+} from "solid-js";
 import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid";
 import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid";
 import type { AccountInfo, EditorError } from "../types";
@@ -11,30 +17,44 @@ interface SourceResponse {
   errors: EditorError[] | null;
 }
 
+interface AccountsResponse {
+  accounts: AccountInfo[];
+}
+
+const fetchSource = async (): Promise<SourceResponse> => {
+  const response = await fetch("/api/source");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch source: ${response.statusText}`);
+  }
+  return (await response.json()) as SourceResponse;
+};
+
+const fetchAccounts = async (): Promise<AccountsResponse> => {
+  const response = await fetch("/api/accounts");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch accounts: ${response.statusText}`);
+  }
+  return (await response.json()) as AccountsResponse;
+};
+
 const Editor: Component = () => {
-  const [filepath, setFilepath] = createSignal<string | null>(null);
-  const [source, setSource] = createSignal<string>();
+  const [sourceData, { mutate: mutateSource }] = createResource(fetchSource);
+  const [accountsData, { refetch: refetchAccounts }] =
+    createResource(fetchAccounts);
+
+  // Local editing state - tracks unsaved changes
+  const [editedSource, setEditedSource] = createSignal<string | undefined>(
+    undefined,
+  );
+  // Local errors state - updated after save
   const [errors, setErrors] = createSignal<EditorError[] | null>(null);
-  const [accounts, setAccounts] = createSignal<AccountInfo[]>([]);
 
   const handleValueChange = (value: string) => {
-    setSource(value);
+    setEditedSource(value);
   };
 
-  const fetchAccounts = async () => {
-    try {
-      const response = await fetch("/api/accounts");
-      if (!response.ok) {
-        throw new Error(`Failed to fetch accounts: ${response.statusText}`);
-      }
-      const data = (await response.json()) as { accounts: AccountInfo[] };
-      // Keep full objects with type information
-      setAccounts(data.accounts);
-    } catch (error) {
-      console.error("Failed to fetch accounts:", error);
-      setAccounts([]);
-    }
-  };
+  // Use edited source if available, otherwise use fetched source
+  const currentSource = () => editedSource() ?? sourceData()?.source;
 
   const handleSaveClick = async () => {
     const response = await fetch("/api/source", {
@@ -43,7 +63,7 @@ const Editor: Component = () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        source: source(),
+        source: currentSource(),
       }),
     });
 
@@ -53,35 +73,20 @@ const Editor: Component = () => {
     }
 
     const result = (await response.json()) as SourceResponse;
-    setFilepath(result.filepath);
-    setSource(result.source);
+
+    // Update the resource with the saved data
+    mutateSource(result);
+    // Sync edited source with saved source
+    setEditedSource(result.source);
+    // Update errors from save response
     setErrors(result.errors);
 
     // Reload accounts to pick up new accounts from the saved file
-    await fetchAccounts();
+    await refetchAccounts();
   };
 
-  onMount(() => {
-    async function fetchSource() {
-      setSource(undefined);
-      setErrors(null);
-
-      const response = await fetch("/api/source");
-      if (!response.ok) {
-        console.error("Unable to loader ledger: ", response.status);
-        return;
-      }
-
-      const result = (await response.json()) as SourceResponse;
-
-      setFilepath(result.filepath);
-      setSource(result.source);
-      setErrors(result.errors);
-    }
-
-    void fetchSource();
-    void fetchAccounts();
-  });
+  // Sync errors from initial fetch
+  const currentErrors = () => errors() ?? sourceData()?.errors ?? null;
 
   return (
     <>
@@ -92,7 +97,9 @@ const Editor: Component = () => {
           </div>
           <div class="text-base-content">
             <h1 class="text-xl font-semibold">Beancount Editor</h1>
-            <p class="text-sm text-base-content/50">{filepath() ?? "..."}</p>
+            <p class="text-sm text-base-content/50">
+              {sourceData()?.filepath ?? "..."}
+            </p>
           </div>
         </div>
 
@@ -100,7 +107,7 @@ const Editor: Component = () => {
           <button
             class="btn"
             onClick={() => void handleSaveClick()}
-            disabled={meta.readOnly}
+            disabled={meta.readOnly || sourceData.loading}
           >
             <ArrowDownTrayIcon class="size-4" />
             Save
@@ -109,13 +116,31 @@ const Editor: Component = () => {
       </header>
 
       <div class="flex-1 overflow-auto">
-        <EditorComp
-          value={source()}
-          errors={errors()}
-          accounts={accounts()}
-          filepath={filepath()}
-          onChange={handleValueChange}
-        />
+        <Switch>
+          <Match when={sourceData.loading}>
+            <div class="flex items-center justify-center py-12">
+              <span class="loading loading-spinner loading-lg" />
+            </div>
+          </Match>
+
+          <Match when={sourceData.error as Error | undefined}>
+            {(error) => (
+              <div class="alert alert-error m-6" role="alert">
+                <span>Error: {error().message}</span>
+              </div>
+            )}
+          </Match>
+
+          <Match when={sourceData()}>
+            <EditorComp
+              value={currentSource()}
+              errors={currentErrors()}
+              accounts={accountsData()?.accounts ?? []}
+              filepath={sourceData()?.filepath ?? null}
+              onChange={handleValueChange}
+            />
+          </Match>
+        </Switch>
       </div>
     </>
   );
