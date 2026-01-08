@@ -32,6 +32,17 @@ import (
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
+// LoadResult contains the result of loading a beancount file.
+type LoadResult struct {
+	// AST is the parsed abstract syntax tree.
+	AST *ast.AST
+	// Root is the absolute path of the root file that was loaded.
+	Root string
+	// Includes contains the absolute paths of all included files (not including the root).
+	// This is only populated when FollowIncludes is enabled.
+	Includes []string
+}
+
 // Loader handles loading and parsing of Beancount files with optional include resolution.
 // It provides configurable behavior for handling include directives, supporting both simple
 // single-file parsing and recursive loading with file merging.
@@ -80,9 +91,15 @@ func New(opts ...Option) *Loader {
 }
 
 // Load parses a beancount file with optional recursive include resolution.
-func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
+func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error) {
 	// Extract telemetry collector from context
 	collector := telemetry.FromContext(ctx)
+
+	// Get absolute path for the root file
+	absPath, err := filepath.Abs(filename)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
+	}
 
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
@@ -98,7 +115,11 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 			// Wrap parser errors for consistent formatting
 			return nil, parser.NewParseErrorWithSource(filename, err, data)
 		}
-		return result, nil
+		return &LoadResult{
+			AST:      result,
+			Root:     absPath,
+			Includes: nil,
+		}, nil
 	}
 
 	// Recursive loading with include resolution
@@ -110,7 +131,24 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 		rootTimer: rootTimer,
 	}
 
-	return state.loadRecursive(ctx, filename)
+	ast, err := state.loadRecursive(ctx, filename)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract includes from visited map (excluding the root file)
+	var includes []string
+	for path := range state.visited {
+		if path != absPath {
+			includes = append(includes, path)
+		}
+	}
+
+	return &LoadResult{
+		AST:      ast,
+		Root:     absPath,
+		Includes: includes,
+	}, nil
 }
 
 // MustLoad loads a beancount file, panicking on error.
@@ -119,8 +157,8 @@ func (l *Loader) Load(ctx context.Context, filename string) (*ast.AST, error) {
 // Example:
 //
 //	loader := loader.New(loader.WithFollowIncludes())
-//	ast := loader.MustLoad(context.Background(), "main.beancount")
-func (l *Loader) MustLoad(ctx context.Context, filename string) *ast.AST {
+//	result := loader.MustLoad(context.Background(), "main.beancount")
+func (l *Loader) MustLoad(ctx context.Context, filename string) *LoadResult {
 	result, err := l.Load(ctx, filename)
 	if err != nil {
 		panic(err)

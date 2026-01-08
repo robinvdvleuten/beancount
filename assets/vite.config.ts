@@ -10,13 +10,18 @@ const metadataDevValue = {
   readOnly: false,
 };
 
-// Plugin to handle metadata: replaces Go template in HTML (dev only) and provides virtual module
-function metadataPlugin(): Plugin {
+const filesDevValue = {
+  root: "example.beancount",
+  includes: [],
+};
+
+// Plugin to handle globals: replaces Go templates in HTML (dev only) and provides virtual module
+function globalsPlugin(): Plugin {
   const virtualModuleId = "virtual:globals";
   const resolvedId = "\0" + virtualModuleId;
 
   return {
-    name: "metadata",
+    name: "globals",
     resolveId(id) {
       if (id === virtualModuleId) {
         return resolvedId;
@@ -25,28 +30,29 @@ function metadataPlugin(): Plugin {
     load(id) {
       if (id === resolvedId) {
         if (process.env.NODE_ENV === "development") {
-          // Dev mode: return actual metadata
-          return `export const meta = ${JSON.stringify(metadataDevValue)};`;
+          // Dev mode: return actual values
+          return `export const meta = ${JSON.stringify(metadataDevValue)};
+export const files = ${JSON.stringify(filesDevValue)};`;
         } else {
           // Production: read from window (set by Go at runtime)
-          return `export const meta = window.__metadata;`;
+          return `export const meta = window.__metadata;
+export const files = window.__files;`;
         }
       }
     },
     transformIndexHtml(html) {
-      // In dev server, replace Go template variable with actual metadata
+      // In dev server, replace Go template variables with actual values
       if (process.env.NODE_ENV === "development") {
-        return html.replace(
-          /\{\{ \.Metadata \}\}/g,
-          JSON.stringify(metadataDevValue),
-        );
+        return html
+          .replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadataDevValue))
+          .replace(/\{\{ \.Files \}\}/g, JSON.stringify(filesDevValue));
       }
     },
   };
 }
 
 export default defineConfig({
-  plugins: [solid(), solidSvg(), tailwindcss(), metadataPlugin()],
+  plugins: [solid(), solidSvg(), tailwindcss(), globalsPlugin()],
 
   server: {
     proxy: {

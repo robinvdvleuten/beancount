@@ -8,6 +8,7 @@ import { test, expect } from "@playwright/test";
  * - Content editing and saving
  * - Autocomplete functionality
  * - Syntax highlighting
+ * - File selector dropdown (when includes exist)
  */
 
 test.describe("Editor", () => {
@@ -91,9 +92,35 @@ test.describe("Editor", () => {
     const editor = page.locator(".cm-editor");
     await expect(editor).toBeVisible();
 
-    // Verify CodeMirror renders multiple lines (example.beancount has hundreds)
+    // Verify CodeMirror renders lines (virtualized, so only visible lines are in DOM)
+    // Check that at least some lines are rendered and content is present
     const lines = page.locator(".cm-line");
     const lineCount = await lines.count();
-    expect(lineCount).toBeGreaterThan(50);
+    expect(lineCount).toBeGreaterThan(10);
+
+    // Verify syntax highlighting is applied by checking for styled spans within content
+    // CodeMirror wraps highlighted tokens in spans with generated class names
+    const editorContent = page.locator(".cm-content");
+    const styledSpans = editorContent.locator("span[class]");
+    const spanCount = await styledSpans.count();
+    expect(spanCount).toBeGreaterThan(0);
+  });
+
+  test("shows static filepath when no includes", async ({ page }) => {
+    await page.goto("/editor", { waitUntil: "networkidle" });
+
+    // Wait for editor to be visible
+    const editor = page.locator(".cm-editor");
+    await expect(editor).toBeVisible();
+
+    // When there are no includes, should show static filepath text (not dropdown)
+    // The example.beancount file has no includes
+    const filepathText = page.locator("header p.text-base-content\\/50");
+    await expect(filepathText).toBeVisible();
+    await expect(filepathText).toContainText("example.beancount");
+
+    // Dropdown should not exist
+    const dropdown = page.locator("header details.dropdown");
+    await expect(dropdown).toHaveCount(0);
   });
 });

@@ -29,9 +29,11 @@ type Server struct {
 	CommitSHA string
 	ReadOnly  bool
 
-	mu         sync.RWMutex
-	ledger     *ledger.Ledger
-	ledgerFile string
+	mu           sync.RWMutex
+	ledger       *ledger.Ledger
+	ledgerFile   string
+	rootFile     string   // Absolute path of the root ledger file
+	includeFiles []string // Absolute paths of included files
 }
 
 func New(port int, ledgerFile string) *Server {
@@ -108,16 +110,18 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) reloadLedger(ctx context.Context) error {
 	ldr := loader.New(loader.WithFollowIncludes())
 
-	ast, err := ldr.Load(ctx, s.ledgerFile)
+	result, err := ldr.Load(ctx, s.ledgerFile)
 	if err != nil {
 		return err // I/O or parse error
 	}
 
 	l := ledger.New()
-	_ = l.Process(ctx, ast) // Validation errors in l.Errors()
+	_ = l.Process(ctx, result.AST) // Validation errors in l.Errors()
 
 	s.mu.Lock()
 	s.ledger = l
+	s.rootFile = result.Root
+	s.includeFiles = result.Includes
 	s.mu.Unlock()
 
 	return nil

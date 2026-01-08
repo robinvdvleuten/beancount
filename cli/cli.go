@@ -153,5 +153,9 @@ func (f *FileOrStdin) LoadAST(ctx context.Context, ldr *loader.Loader) (*ast.AST
 	if f.Filename == "<stdin>" {
 		return ldr.LoadBytes(ctx, absFilename, f.Contents)
 	}
-	return ldr.Load(ctx, absFilename)
+	result, err := ldr.Load(ctx, absFilename)
+	if err != nil {
+		return nil, err
+	}
+	return result.AST, nil
 }

@@ -22,6 +22,12 @@ type metadata struct {
 	ReadOnly  bool   `json:"readOnly"`
 }
 
+// filesData represents the loaded files injected into the HTML template.
+type filesData struct {
+	Root     string   `json:"root"`
+	Includes []string `json:"includes"`
+}
+
 // mountAssets registers all asset routes (index + static files) for production.
 // Replaces Go template variables in index.html at server startup.
 func (s *Server) mountAssets(mux *http.ServeMux) {
@@ -52,12 +58,32 @@ func (s *Server) mountAssets(mux *http.ServeMux) {
 		panic(fmt.Sprintf("failed to marshal metadata: %v", err))
 	}
 
-	// Execute template with JSON metadata
+	// Marshal files data to JSON
+	s.mu.RLock()
+	files := filesData{
+		Root:     s.rootFile,
+		Includes: s.includeFiles,
+	}
+	s.mu.RUnlock()
+
+	// Ensure includes is never null in JSON
+	if files.Includes == nil {
+		files.Includes = []string{}
+	}
+
+	filesJSON, err := json.Marshal(files)
+	if err != nil {
+		panic(fmt.Sprintf("failed to marshal files: %v", err))
+	}
+
+	// Execute template with JSON metadata and files
 	var buf bytes.Buffer
 	data := struct {
 		Metadata template.JS
+		Files    template.JS
 	}{
 		Metadata: template.JS(metadataJSON),
+		Files:    template.JS(filesJSON),
 	}
 	if err := tmpl.Execute(&buf, data); err != nil {
 		panic(fmt.Sprintf("failed to execute index.html template: %v", err))

@@ -4,12 +4,15 @@ import {
   createSignal,
   Switch,
   Match,
+  Show,
+  For,
 } from "solid-js";
 import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid";
 import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid";
+import ChevronDownIcon from "heroicons/24/solid/chevron-down.svg?component-solid";
 import type { AccountInfo, EditorError } from "../types";
 import EditorComp from "../components/editor";
-import { meta } from "virtual:globals";
+import { meta, files } from "virtual:globals";
 
 interface SourceResponse {
   filepath: string;
@@ -21,8 +24,13 @@ interface AccountsResponse {
   accounts: AccountInfo[];
 }
 
-const fetchSource = async (): Promise<SourceResponse> => {
-  const response = await fetch("/api/source");
+const fetchSourceForFile = async (
+  filepath?: string,
+): Promise<SourceResponse> => {
+  const url = filepath
+    ? `/api/source?filepath=${encodeURIComponent(filepath)}`
+    : "/api/source";
+  const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch source: ${response.statusText}`);
   }
@@ -38,7 +46,14 @@ const fetchAccounts = async (): Promise<AccountsResponse> => {
 };
 
 const Editor: Component = () => {
-  const [sourceData, { mutate: mutateSource }] = createResource(fetchSource);
+  // Track currently selected file
+  const [currentFile, setCurrentFile] = createSignal<string>(files.root);
+
+  // Fetch source for the current file
+  const [sourceData, { mutate: mutateSource }] = createResource(
+    currentFile,
+    fetchSourceForFile,
+  );
   const [accountsData, { refetch: refetchAccounts }] =
     createResource(fetchAccounts);
 
@@ -48,6 +63,18 @@ const Editor: Component = () => {
   );
   // Local errors state - updated after save
   const [errors, setErrors] = createSignal<EditorError[] | null>(null);
+
+  // All available files (root + includes)
+  const allFiles = () => [files.root, ...files.includes];
+
+  // Handle file selection from dropdown
+  const handleFileSelect = (filepath: string) => {
+    if (filepath !== currentFile()) {
+      setCurrentFile(filepath);
+      setEditedSource(undefined);
+      setErrors(null);
+    }
+  };
 
   const handleValueChange = (value: string) => {
     setEditedSource(value);
@@ -63,6 +90,7 @@ const Editor: Component = () => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
+        filepath: currentFile(),
         source: currentSource(),
       }),
     });
@@ -88,6 +116,12 @@ const Editor: Component = () => {
   // Sync errors from initial fetch
   const currentErrors = () => errors() ?? sourceData()?.errors ?? null;
 
+  // Extract just the filename from a path for display
+  const displayFilename = (filepath: string) => {
+    const parts = filepath.split("/");
+    return parts[parts.length - 1];
+  };
+
   return (
     <>
       <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
@@ -97,9 +131,35 @@ const Editor: Component = () => {
           </div>
           <div class="text-base-content">
             <h1 class="text-xl font-semibold">Beancount Editor</h1>
-            <p class="text-sm text-base-content/50">
-              {sourceData()?.filepath ?? "..."}
-            </p>
+            <Show
+              when={files.includes.length > 0}
+              fallback={
+                <p class="text-sm text-base-content/50">
+                  {sourceData()?.filepath ?? "..."}
+                </p>
+              }
+            >
+              <details class="dropdown">
+                <summary class="btn btn-ghost btn-sm gap-1 px-0 font-normal text-base-content/50">
+                  {displayFilename(currentFile())}
+                  <ChevronDownIcon class="size-3" />
+                </summary>
+                <ul class="menu dropdown-content bg-base-100 rounded-box z-10 w-64 p-2 shadow-lg">
+                  <For each={allFiles()}>
+                    {(filepath) => (
+                      <li>
+                        <a
+                          class={filepath === currentFile() ? "active" : ""}
+                          onClick={() => handleFileSelect(filepath)}
+                        >
+                          {displayFilename(filepath)}
+                        </a>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </details>
+            </Show>
           </div>
         </div>
 
