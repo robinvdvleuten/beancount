@@ -151,3 +151,48 @@ func (b *Balance) Copy() *Balance {
 	}
 	return &Balance{entries: entries}
 }
+
+// BalanceTree represents a hierarchical view of account balances.
+// Used for generating balance sheets, income statements, and trial balances.
+//
+// The tree is organized by account type (Assets, Liabilities, etc.) with
+// each type serving as a virtual root node. Balances are aggregated bottom-up
+// so parent nodes include the sum of all their descendants.
+type BalanceTree struct {
+	// Roots contains the top-level nodes (account type roots like "Assets", "Liabilities").
+	// Each root's Balance is the aggregated total of all accounts under that type.
+	Roots []*BalanceNode
+
+	// Currencies lists all currencies present in the tree, sorted alphabetically.
+	Currencies []string
+
+	// StartDate and EndDate define the period for the balance calculation.
+	// When StartDate == EndDate, this is a point-in-time balance (balance sheet).
+	// When StartDate < EndDate, this is a period change (income statement).
+	// When both are nil, this represents the current inventory state.
+	StartDate *string
+	EndDate   *string
+}
+
+// BalanceNode represents a single node in the balance tree hierarchy.
+// Can be either an account type root (e.g., "Assets") or an actual account.
+type BalanceNode struct {
+	// Name is the display name for this node.
+	// For account type roots: "Assets", "Liabilities", etc.
+	// For accounts: the full account name like "Assets:US:Checking".
+	Name string
+
+	// Account is the full account path, empty for virtual root nodes.
+	Account string
+
+	// Depth indicates the nesting level (0 for roots, 1+ for accounts).
+	Depth int
+
+	// Balance is the aggregated balance for this node and all descendants.
+	// For leaf accounts, this is the account's own balance.
+	// For parent accounts and roots, this includes all children's balances.
+	Balance *Balance
+
+	// Children contains direct child nodes, sorted by name.
+	Children []*BalanceNode
+}

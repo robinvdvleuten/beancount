@@ -84,6 +84,7 @@ func (s *Server) setupRouter() (*http.ServeMux, error) {
 	mux.HandleFunc("GET /api/source", s.handleGetSource)
 	mux.HandleFunc("PUT /api/source", s.requireWritable(s.handlePutSource))
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
+	mux.HandleFunc("GET /api/balances", s.handleGetBalances)
 
 	// Asset routes (prod: serves embedded files with template vars replaced, dev: no-op)
 	s.mountAssets(mux)

@@ -864,145 +864,6 @@ func TestMustProcessEmpty(t *testing.T) {
 	assert.Equal(t, len(accounts), 0)
 }
 
-func TestLedger_GetAccountsByType(t *testing.T) {
-	ctx := context.Background()
-	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Assets:Savings
-		2020-01-01 open Liabilities:CreditCard
-		2020-01-01 open Liabilities:Loan
-		2020-01-01 open Equity:OpeningBalances
-		2020-01-01 open Income:Salary
-		2020-01-01 open Expenses:Groceries
-		2020-01-01 open Expenses:Utilities
-	`
-
-	tree := parser.MustParseString(ctx, source)
-	ledger := New()
-	ledger.MustProcess(ctx, tree)
-
-	tests := []struct {
-		accountType ast.AccountType
-		expected    []string
-	}{
-		{
-			accountType: ast.AccountTypeAssets,
-			expected:    []string{"Assets:Checking", "Assets:Savings"},
-		},
-		{
-			accountType: ast.AccountTypeLiabilities,
-			expected:    []string{"Liabilities:CreditCard", "Liabilities:Loan"},
-		},
-		{
-			accountType: ast.AccountTypeEquity,
-			expected:    []string{"Equity:OpeningBalances"},
-		},
-		{
-			accountType: ast.AccountTypeIncome,
-			expected:    []string{"Income:Salary"},
-		},
-		{
-			accountType: ast.AccountTypeExpenses,
-			expected:    []string{"Expenses:Groceries", "Expenses:Utilities"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.accountType.String(), func(t *testing.T) {
-			accounts := ledger.GetAccountsByType(tt.accountType)
-			assert.Equal(t, len(accounts), len(tt.expected))
-
-			typeName := ledger.config.ToAccountTypeName(tt.accountType)
-			for i, account := range accounts {
-				assert.Equal(t, string(account.Name), tt.expected[i])
-				assert.Equal(t, account.Type, typeName)
-			}
-		})
-	}
-}
-
-func TestLedger_GetAccountsByTypeEmpty(t *testing.T) {
-	ctx := context.Background()
-	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Assets:Savings
-	`
-
-	tree := parser.MustParseString(ctx, source)
-	ledger := New()
-	ledger.MustProcess(ctx, tree)
-
-	// Query for account type with no accounts
-	expenses := ledger.GetAccountsByType(ast.AccountTypeExpenses)
-	assert.Equal(t, len(expenses), 0)
-}
-
-func TestLedger_GetAccountType(t *testing.T) {
-	ctx := context.Background()
-	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Liabilities:CreditCard
-		2020-01-01 open Equity:OpeningBalances
-		2020-01-01 open Income:Salary
-		2020-01-01 open Expenses:Groceries
-	`
-
-	tree := parser.MustParseString(ctx, source)
-	ledger := New()
-	ledger.MustProcess(ctx, tree)
-
-	tests := []struct {
-		accountName string
-		expected    ast.AccountType
-	}{
-		{"Assets:Checking", ast.AccountTypeAssets},
-		{"Liabilities:CreditCard", ast.AccountTypeLiabilities},
-		{"Equity:OpeningBalances", ast.AccountTypeEquity},
-		{"Income:Salary", ast.AccountTypeIncome},
-		{"Expenses:Groceries", ast.AccountTypeExpenses},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.accountName, func(t *testing.T) {
-			acc, ok := ledger.GetAccount(tt.accountName)
-			assert.True(t, ok, "account should exist")
-
-			enumType, found := ledger.GetAccountType(acc)
-			assert.True(t, found, "should find account type")
-			assert.Equal(t, enumType, tt.expected)
-		})
-	}
-}
-
-func TestLedger_GetAccountTypeCustomNames(t *testing.T) {
-	ctx := context.Background()
-	source := `
-		option "name_assets" "Vermoegen"
-		option "name_expenses" "Ausgaben"
-
-		2020-01-01 open Vermoegen:Checking
-		2020-01-01 open Ausgaben:Groceries
-	`
-
-	tree := parser.MustParseString(ctx, source)
-	ledger := New()
-	ledger.MustProcess(ctx, tree)
-
-	// Verify assets account with custom name
-	acc, ok := ledger.GetAccount("Vermoegen:Checking")
-	assert.True(t, ok)
-	enumType, found := ledger.GetAccountType(acc)
-	assert.True(t, found)
-	assert.Equal(t, enumType, ast.AccountTypeAssets)
-
-	// Verify expenses account with custom name
-	expAcc, ok := ledger.GetAccount("Ausgaben:Groceries")
-	assert.True(t, ok)
-	expType, found := ledger.GetAccountType(expAcc)
-	assert.True(t, found)
-	assert.Equal(t, expType, ast.AccountTypeExpenses)
-}
-
 // Price directive integration tests
 
 func TestLedger_PriceDirectiveProcessing(t *testing.T) {
@@ -1049,27 +910,6 @@ plugin "beancount.plugins.auto_accounts"
 	rate5, found5 := ledger.GetPrice(date125, "USD", "CAD")
 	assert.True(t, found5)
 	assert.True(t, rate5.Equal(mustParseDec("1.10")))
-}
-
-func TestLedger_HasPrice(t *testing.T) {
-	source := `
-2024-01-15 price USD 1.08 CAD
-`
-
-	ctx := context.Background()
-	tree := parser.MustParseString(ctx, source)
-
-	ledger := New()
-	err := ledger.Process(ctx, tree)
-	assert.NoError(t, err)
-
-	date := newTestDate("2024-01-15")
-
-	assert.True(t, ledger.HasPrice(date, "USD", "CAD"))
-	assert.True(t, ledger.HasPrice(date, "CAD", "USD"))
-	assert.False(t, ledger.HasPrice(date, "USD", "EUR"))
-	// Same currency always exists
-	assert.True(t, ledger.HasPrice(date, "USD", "USD"))
 }
 
 func TestLedger_GetPriceSameCurrency(t *testing.T) {
@@ -1186,6 +1026,8 @@ func TestLedger_PricesWithAccounts(t *testing.T) {
 
 	// Verify prices were indexed
 	date := newTestDate("2024-01-15")
-	assert.True(t, ledger.HasPrice(date, "USD", "CAD"))
-	assert.True(t, ledger.HasPrice(date, "EUR", "USD"))
+	_, found1 := ledger.GetPrice(date, "USD", "CAD")
+	assert.True(t, found1)
+	_, found2 := ledger.GetPrice(date, "EUR", "USD")
+	assert.True(t, found2)
 }
