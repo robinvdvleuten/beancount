@@ -13,6 +13,7 @@ interface EditorProps {
   value?: string;
   errors?: EditorError[] | null;
   accounts: AccountInfo[];
+  filepath?: string | null;
   onChange?: (value: string) => void;
 }
 
@@ -22,9 +23,12 @@ const Editor = (props: EditorProps) => {
 
   const linter = createMemo(
     () => {
-      // Track errors dependency to recreate linter when errors change
+      // Track errors and filepath dependencies to recreate linter when they change
       const _errors = props.errors;
-      return linterExt((view) => errorsToDiagnostics(_errors ?? null, view));
+      const _filepath = props.filepath;
+      return linterExt((view) =>
+        errorsToDiagnostics(_errors ?? null, view, _filepath ?? null),
+      );
     },
     undefined,
     { equals: false },

@@ -5,12 +5,18 @@ import type { EditorError } from "../types";
 export function errorsToDiagnostics(
   errors: EditorError[] | null,
   view: EditorView,
+  filepath: string | null,
 ): Diagnostic[] {
   if (!errors || errors.length === 0) {
     return [];
   }
 
-  return errors.map((error) => {
+  // Filter to only errors from the current file
+  const fileErrors = filepath
+    ? errors.filter((e) => e.position?.filename === filepath)
+    : errors;
+
+  return fileErrors.map((error) => {
     const messageParts = error.message.split(": ");
     const cleanMessage =
       messageParts.length >= 2

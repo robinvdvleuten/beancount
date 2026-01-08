@@ -113,6 +113,7 @@ const Editor: Component = () => {
           value={source()}
           errors={errors()}
           accounts={accounts()}
+          filepath={filepath()}
           onChange={handleValueChange}
         />
       </div>
