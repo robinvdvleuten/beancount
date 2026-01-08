@@ -259,8 +259,17 @@ func (d *Date) IsZero() bool {
 // String returns the date formatted as an ISO 8601 date string (YYYY-MM-DD).
 // This is the canonical string representation used throughout Beancount for
 // human-readable output in error messages, formatted files, and logs.
+// Returns empty string for nil dates or year 0 (which Beancount rejects as invalid).
+//
+// Note: 0001-01-01 is a valid Beancount date. The lexer validates dates at lex time,
+// so invalid dates (year 0, invalid month/day) won't make it into the AST.
 func (d *Date) String() string {
-	if d == nil || d.IsZero() {
+	if d == nil {
+		return ""
+	}
+	// Year 0 is invalid in Beancount (year must be 1..9999)
+	// This also handles uninitialized Date{} structs since Go's zero time is year 1
+	if d.Year() == 0 {
 		return ""
 	}
 	return d.Format("2006-01-02")

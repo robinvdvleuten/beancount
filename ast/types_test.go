@@ -19,8 +19,9 @@ func TestDate_String(t *testing.T) {
 	})
 
 	t.Run("ZeroDate", func(t *testing.T) {
+		// Go's zero time is 0001-01-01, which is a valid Beancount date
 		date := &Date{}
-		assert.Equal(t, "", date.String())
+		assert.Equal(t, "0001-01-01", date.String())
 	})
 
 	t.Run("RoundTrip", func(t *testing.T) {

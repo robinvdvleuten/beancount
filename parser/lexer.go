@@ -319,13 +319,76 @@ func (l *Lexer) isDatePattern(start int) bool {
 }
 
 // scanDate scans a date: YYYY-MM-DD
+// Returns ILLEGAL token if the date is invalid (year 0, invalid month/day).
+// This matches Beancount's lexer behavior which validates dates at lex time.
 func (l *Lexer) scanDate(start, line, col int) Token {
 	// Date pattern is exactly 10 characters
 	// First digit already consumed, consume remaining 9
 	for i := 0; i < 9; i++ {
 		l.advance()
 	}
+
+	// Validate the date - extract YYYY-MM-DD components
+	src := l.source[start:l.pos]
+	if !isValidDate(src) {
+		return Token{ILLEGAL, start, l.pos, line, col}
+	}
+
 	return Token{DATE, start, l.pos, line, col}
+}
+
+// isValidDate validates a date string in YYYY-MM-DD format.
+// Returns false for:
+// - Year 0 (Beancount requires year 1-9999)
+// - Invalid month (must be 01-12)
+// - Invalid day for the given month (accounts for leap years)
+func isValidDate(date []byte) bool {
+	if len(date) != 10 {
+		return false
+	}
+
+	// Parse year (YYYY)
+	year := int(date[0]-'0')*1000 + int(date[1]-'0')*100 + int(date[2]-'0')*10 + int(date[3]-'0')
+	if year == 0 {
+		return false // Year 0 is invalid in Beancount
+	}
+
+	// Parse month (MM)
+	month := int(date[5]-'0')*10 + int(date[6]-'0')
+	if month < 1 || month > 12 {
+		return false
+	}
+
+	// Parse day (DD)
+	day := int(date[8]-'0')*10 + int(date[9]-'0')
+	if day < 1 {
+		return false
+	}
+
+	// Check day against month (with leap year handling)
+	maxDay := daysInMonth(year, month)
+	return day <= maxDay
+}
+
+// daysInMonth returns the number of days in the given month.
+func daysInMonth(year, month int) int {
+	switch month {
+	case 1, 3, 5, 7, 8, 10, 12:
+		return 31
+	case 4, 6, 9, 11:
+		return 30
+	case 2:
+		if isLeapYear(year) {
+			return 29
+		}
+		return 28
+	}
+	return 0
+}
+
+// isLeapYear returns true if the year is a leap year.
+func isLeapYear(year int) bool {
+	return year%4 == 0 && (year%100 != 0 || year%400 == 0)
 }
 
 // scanNumber scans a number: [-+]?[0-9]+(,[0-9]{3})*(\.[0-9]+)?

@@ -92,6 +92,11 @@ context7_get_library_docs(context7CompatibleLibraryID: "/shopspring/decimal", to
 Always validate against official tools: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`.
 
 ```bash
+# Debug parser / lexer issues or inconsistencies
+bean-doctor lex input.beancount
+beancount doctor lex input.beancount
+echo '0001-01-01 open Assets:Test' | bean-doctor lex /dev/stdin
+
 # Compare formatter output
 bean-format input.beancount > /tmp/official.beancount
 beancount format input.beancount > /tmp/our.beancount
@@ -99,10 +104,6 @@ diff /tmp/official.beancount /tmp/our.beancount
 
 # Validate round-trip
 beancount format input.beancount | bean-check /dev/stdin
-
-# Debug lexer issues
-beancount doctor lex input.beancount
-bean-doctor lex input.beancount
 ```
 
 ## Error Handling
