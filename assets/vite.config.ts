@@ -10,11 +10,6 @@ const metadataDevValue = {
   readOnly: false,
 };
 
-const filesDevValue = {
-  root: "example.beancount",
-  includes: [],
-};
-
 // Plugin to handle globals: replaces Go templates in HTML (dev only) and provides virtual module
 function globalsPlugin(): Plugin {
   const virtualModuleId = "virtual:globals";
@@ -31,21 +26,20 @@ function globalsPlugin(): Plugin {
       if (id === resolvedId) {
         if (process.env.NODE_ENV === "development") {
           // Dev mode: return actual values
-          return `export const meta = ${JSON.stringify(metadataDevValue)};
-export const files = ${JSON.stringify(filesDevValue)};`;
+          return `export const meta = ${JSON.stringify(metadataDevValue)};`;
         } else {
           // Production: read from window (set by Go at runtime)
-          return `export const meta = window.__metadata;
-export const files = window.__files;`;
+          return `export const meta = window.__metadata;`;
         }
       }
     },
     transformIndexHtml(html) {
       // In dev server, replace Go template variables with actual values
       if (process.env.NODE_ENV === "development") {
-        return html
-          .replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadataDevValue))
-          .replace(/\{\{ \.Files \}\}/g, JSON.stringify(filesDevValue));
+        return html.replace(
+          /\{\{ \.Metadata \}\}/g,
+          JSON.stringify(metadataDevValue),
+        );
       }
     },
   };

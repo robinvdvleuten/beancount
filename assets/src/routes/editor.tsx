@@ -2,6 +2,7 @@ import {
   type Component,
   createResource,
   createSignal,
+  createEffect,
   Switch,
   Match,
   Show,
@@ -12,24 +13,35 @@ import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dol
 import ChevronDownIcon from "heroicons/24/solid/chevron-down.svg?component-solid";
 import type { AccountInfo, EditorError } from "../types";
 import EditorComp from "../components/editor";
-import { meta, files } from "virtual:globals";
+import { meta } from "virtual:globals";
+
+interface Files {
+  root: string;
+  includes: string[];
+}
 
 interface SourceResponse {
-  filepath: string;
   source: string;
   errors: EditorError[] | null;
+  files: Files;
 }
 
 interface AccountsResponse {
   accounts: AccountInfo[];
 }
 
+const fetchSource = async (): Promise<SourceResponse> => {
+  const response = await fetch("/api/source");
+  if (!response.ok) {
+    throw new Error(`Failed to fetch source: ${response.statusText}`);
+  }
+  return (await response.json()) as SourceResponse;
+};
+
 const fetchSourceForFile = async (
-  filepath?: string,
+  filepath: string,
 ): Promise<SourceResponse> => {
-  const url = filepath
-    ? `/api/source?filepath=${encodeURIComponent(filepath)}`
-    : "/api/source";
+  const url = `/api/source?filepath=${encodeURIComponent(filepath)}`;
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(`Failed to fetch source: ${response.statusText}`);
@@ -46,14 +58,42 @@ const fetchAccounts = async (): Promise<AccountsResponse> => {
 };
 
 const Editor: Component = () => {
-  // Track currently selected file
-  const [currentFile, setCurrentFile] = createSignal<string>(files.root);
+  // Initial fetch to get root file and files list
+  const [initialData] = createResource(fetchSource);
 
-  // Fetch source for the current file
-  const [sourceData, { mutate: mutateSource }] = createResource(
-    currentFile,
+  // Track currently selected file (initialized from initial fetch)
+  const [currentFile, setCurrentFile] = createSignal<string | undefined>(
+    undefined,
+  );
+
+  // Track available files (updated from API responses)
+  const [currentFiles, setCurrentFiles] = createSignal<Files | undefined>(
+    undefined,
+  );
+
+  // Initialize currentFile and currentFiles from initial fetch
+  createEffect(() => {
+    const data = initialData();
+    if (data && currentFile() === undefined) {
+      setCurrentFile(data.files.root);
+      setCurrentFiles(data.files);
+    }
+  });
+
+  // Fetch source for a specific file (used when switching files)
+  const [fileData, { mutate: mutateFileData }] = createResource(
+    // Only fetch when currentFile changes AND it's different from initial root
+    () => {
+      const file = currentFile();
+      const initial = initialData();
+      if (!file || !initial) return undefined;
+      // Don't refetch if it's the initial root file we already have
+      if (file === initial.files.root) return undefined;
+      return file;
+    },
     fetchSourceForFile,
   );
+
   const [accountsData, { refetch: refetchAccounts }] =
     createResource(fetchAccounts);
 
@@ -64,8 +104,28 @@ const Editor: Component = () => {
   // Local errors state - updated after save
   const [errors, setErrors] = createSignal<EditorError[] | null>(null);
 
+  // Get the current source data (from file fetch or initial fetch)
+  const sourceData = () => {
+    const file = currentFile();
+    const initial = initialData();
+    if (!file || !initial) return undefined;
+
+    // If we fetched a specific file, use that data
+    const fetched = fileData();
+    if (fetched && file !== initial.files.root) {
+      return fetched;
+    }
+
+    // Otherwise use initial data
+    return initial;
+  };
+
   // All available files (root + includes)
-  const allFiles = () => [files.root, ...files.includes];
+  const allFiles = () => {
+    const files = currentFiles();
+    if (!files) return [];
+    return [files.root, ...files.includes];
+  };
 
   // Handle file selection from dropdown
   const handleFileSelect = (filepath: string) => {
@@ -102,12 +162,14 @@ const Editor: Component = () => {
 
     const result = (await response.json()) as SourceResponse;
 
-    // Update the resource with the saved data
-    mutateSource(result);
+    // Update the file data with the saved data
+    mutateFileData(result);
     // Sync edited source with saved source
     setEditedSource(result.source);
     // Update errors from save response
     setErrors(result.errors);
+    // Update files list (may have changed if includes were added/removed)
+    setCurrentFiles(result.files);
 
     // Reload accounts to pick up new accounts from the saved file
     await refetchAccounts();
@@ -122,6 +184,14 @@ const Editor: Component = () => {
     return parts[parts.length - 1];
   };
 
+  // Loading state
+  const isLoading = () => initialData.loading || fileData.loading;
+
+  // Error state
+  const loadError = () =>
+    (initialData.error as Error | undefined) ??
+    (fileData.error as Error | undefined);
+
   return (
     <>
       <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
@@ -132,16 +202,16 @@ const Editor: Component = () => {
           <div class="text-base-content">
             <h1 class="text-xl font-semibold">Beancount Editor</h1>
             <Show
-              when={files.includes.length > 0}
+              when={currentFiles() && currentFiles()!.includes.length > 0}
               fallback={
                 <p class="text-sm text-base-content/50">
-                  {sourceData()?.filepath ?? "..."}
+                  {currentFile() ? displayFilename(currentFile()!) : "..."}
                 </p>
               }
             >
               <details class="dropdown">
                 <summary class="btn btn-ghost btn-sm gap-1 px-0 font-normal text-base-content/50">
-                  {displayFilename(currentFile())}
+                  {currentFile() ? displayFilename(currentFile()!) : "..."}
                   <ChevronDownIcon class="size-3" />
                 </summary>
                 <ul class="menu dropdown-content bg-base-100 rounded-box z-10 w-64 p-2 shadow-lg">
@@ -167,7 +237,7 @@ const Editor: Component = () => {
           <button
             class="btn"
             onClick={() => void handleSaveClick()}
-            disabled={meta.readOnly || sourceData.loading}
+            disabled={meta.readOnly || isLoading()}
           >
             <ArrowDownTrayIcon class="size-4" />
             Save
@@ -177,13 +247,13 @@ const Editor: Component = () => {
 
       <div class="flex-1 overflow-auto">
         <Switch>
-          <Match when={sourceData.loading}>
+          <Match when={isLoading()}>
             <div class="flex items-center justify-center py-12">
               <span class="loading loading-spinner loading-lg" />
             </div>
           </Match>
 
-          <Match when={sourceData.error as Error | undefined}>
+          <Match when={loadError()}>
             {(error) => (
               <div class="alert alert-error m-6" role="alert">
                 <span>Error: {error().message}</span>
@@ -196,7 +266,7 @@ const Editor: Component = () => {
               value={currentSource()}
               errors={currentErrors()}
               accounts={accountsData()?.accounts ?? []}
-              filepath={sourceData()?.filepath ?? null}
+              filepath={currentFile() ?? null}
               onChange={handleValueChange}
             />
           </Match>

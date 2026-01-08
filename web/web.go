@@ -6,8 +6,7 @@
 //
 // SECURITY WARNING: This server has no authentication and should only be
 // bound to localhost (127.0.0.1). Do not expose it to untrusted networks.
-// File access is restricted to the directory containing the configured
-// ledger file.
+// File access is restricted to the root file and its includes.
 package web
 
 import (
@@ -31,9 +30,12 @@ type Server struct {
 
 	mu           sync.RWMutex
 	ledger       *ledger.Ledger
-	ledgerFile   string
 	rootFile     string   // Absolute path of the root ledger file
 	includeFiles []string // Absolute paths of included files
+
+	// inputFile is the file path passed to New(), used only for initial loading.
+	// After loading, rootFile contains the resolved absolute path.
+	inputFile string
 }
 
 func New(port int, ledgerFile string) *Server {
@@ -42,11 +44,11 @@ func New(port int, ledgerFile string) *Server {
 
 func NewWithVersion(port int, ledgerFile, version, commitSHA string) *Server {
 	return &Server{
-		Port:       port,
-		Host:       "127.0.0.1",
-		Version:    version,
-		CommitSHA:  commitSHA,
-		ledgerFile: ledgerFile,
+		Port:      port,
+		Host:      "127.0.0.1",
+		Version:   version,
+		CommitSHA: commitSHA,
+		inputFile: ledgerFile,
 	}
 }
 
@@ -56,11 +58,11 @@ func (s *Server) Start(ctx context.Context) error {
 	defer timer.End()
 
 	// Require ledger file
-	if s.ledgerFile == "" {
+	if s.inputFile == "" {
 		return fmt.Errorf("ledger file is required")
 	}
 
-	loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.ledgerFile)))
+	loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.inputFile)))
 	if err := s.reloadLedger(ctx); err != nil {
 		loadTimer.End()
 		return fmt.Errorf("failed to load ledger: %w", err)
@@ -110,7 +112,7 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) reloadLedger(ctx context.Context) error {
 	ldr := loader.New(loader.WithFollowIncludes())
 
-	result, err := ldr.Load(ctx, s.ledgerFile)
+	result, err := ldr.Load(ctx, s.inputFile)
 	if err != nil {
 		return err // I/O or parse error
 	}

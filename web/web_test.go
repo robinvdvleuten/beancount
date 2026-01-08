@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -43,8 +42,11 @@ func TestAPISource(t *testing.T) {
 		err := json.NewDecoder(rec.Body).Decode(&response)
 		assert.NoError(t, err)
 		assert.Equal(t, testContent, response["source"].(string))
-		assert.True(t, strings.HasSuffix(response["filepath"].(string), tmpFile.Name()))
 		assert.NotEqual(t, nil, response["errors"])
+		// Verify files are included in response
+		files := response["files"].(map[string]interface{})
+		assert.True(t, strings.HasSuffix(files["root"].(string), tmpFile.Name()))
+		assert.NotEqual(t, nil, files["includes"])
 	})
 
 	t.Run("WithQueryParameter", func(t *testing.T) {
@@ -61,14 +63,20 @@ func TestAPISource(t *testing.T) {
 		assert.Equal(t, testContent, response["source"].(string))
 	})
 
-	t.Run("FileNotFound", func(t *testing.T) {
-		nonexistentPath := filepath.Join(filepath.Dir(tmpFile.Name()), "nonexistent.beancount")
-		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath="+nonexistentPath, nil)
+	t.Run("FileNotInAllowlist", func(t *testing.T) {
+		// Create a file that exists but is not in the allowlist
+		otherFile, err := os.CreateTemp("", "other-*.beancount")
+		assert.NoError(t, err)
+		defer func() { _ = os.Remove(otherFile.Name()) }()
+		_ = otherFile.Close()
+
+		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath="+otherFile.Name(), nil)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusNotFound, rec.Code)
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
 	})
 
 	t.Run("NoFilepathNoDefault", func(t *testing.T) {
@@ -103,23 +111,25 @@ func TestAPISource(t *testing.T) {
 		err = json.NewDecoder(rec.Body).Decode(&response)
 		assert.NoError(t, err)
 		assert.Equal(t, updatedContent, response["source"].(string))
-		assert.Equal(t, tmpFile.Name(), response["filepath"].(string))
+		// Verify files are included in PUT response
+		files := response["files"].(map[string]interface{})
+		assert.True(t, strings.HasSuffix(files["root"].(string), tmpFile.Name()))
 
 		content, err := os.ReadFile(tmpFile.Name())
 		assert.NoError(t, err)
 		assert.Equal(t, updatedContent, string(content))
 	})
 
-	t.Run("PutWithFilepath", func(t *testing.T) {
-		tmpFile2, err := os.CreateTemp("", "test2-*.beancount")
+	t.Run("PutToFileNotInAllowlist", func(t *testing.T) {
+		// Try to write to a file that's not in the allowlist
+		otherFile, err := os.CreateTemp("", "other-*.beancount")
 		assert.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFile2.Name()) }()
-		_ = tmpFile2.Close()
+		defer func() { _ = os.Remove(otherFile.Name()) }()
+		_ = otherFile.Close()
 
-		updatedContent := "2024-01-03 * \"New file content\"\n  Assets:Bank  300 USD"
 		requestBody := map[string]string{
-			"filepath": tmpFile2.Name(),
-			"source":   updatedContent,
+			"filepath": otherFile.Name(),
+			"source":   "malicious content",
 		}
 		bodyBytes, err := json.Marshal(requestBody)
 		assert.NoError(t, err)
@@ -130,11 +140,8 @@ func TestAPISource(t *testing.T) {
 
 		mux.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusOK, rec.Code)
-
-		content, err := os.ReadFile(tmpFile2.Name())
-		assert.NoError(t, err)
-		assert.Equal(t, updatedContent, string(content))
+		assert.Equal(t, http.StatusBadRequest, rec.Code)
+		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
 	})
 
 	t.Run("PutInvalidJSON", func(t *testing.T) {
@@ -148,34 +155,8 @@ func TestAPISource(t *testing.T) {
 		assert.Equal(t, http.StatusBadRequest, rec.Code)
 	})
 
-	t.Run("GetWithParseError", func(t *testing.T) {
-		tmpFileErr, err := os.CreateTemp("", "test-error-*.beancount")
-		assert.NoError(t, err)
-		defer func() { _ = os.Remove(tmpFileErr.Name()) }()
-
-		invalidContent := "2024-13-99 * \"Invalid date\""
-		_, err = tmpFileErr.WriteString(invalidContent)
-		assert.NoError(t, err)
-		_ = tmpFileErr.Close()
-
-		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath="+tmpFileErr.Name(), nil)
-		rec := httptest.NewRecorder()
-
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusOK, rec.Code)
-
-		var response map[string]interface{}
-		err = json.NewDecoder(rec.Body).Decode(&response)
-		assert.NoError(t, err)
-		assert.Equal(t, invalidContent, response["source"].(string))
-
-		errors, ok := response["errors"].([]interface{})
-		assert.True(t, ok)
-		assert.True(t, len(errors) > 0, "Expected at least one parse error")
-	})
-
 	t.Run("GetWithValidationError", func(t *testing.T) {
+		// Create a new server with a file containing validation errors
 		tmpFileErr, err := os.CreateTemp("", "test-validation-*.beancount")
 		assert.NoError(t, err)
 		defer func() { _ = os.Remove(tmpFileErr.Name()) }()
@@ -185,58 +166,24 @@ func TestAPISource(t *testing.T) {
 		assert.NoError(t, err)
 		_ = tmpFileErr.Close()
 
-		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath="+tmpFileErr.Name(), nil)
+		serverErr := New(8080, tmpFileErr.Name())
+		err = serverErr.reloadLedger(context.Background())
+		assert.NoError(t, err)
+		muxErr, err := serverErr.setupRouter()
+		assert.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/source", nil)
 		rec := httptest.NewRecorder()
 
-		mux.ServeHTTP(rec, req)
+		muxErr.ServeHTTP(rec, req)
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
 		var response map[string]interface{}
 		err = json.NewDecoder(rec.Body).Decode(&response)
 		assert.NoError(t, err)
-
-		errors, ok := response["errors"].([]interface{})
-		assert.True(t, ok)
+		errors := response["errors"].([]interface{})
 		assert.True(t, len(errors) > 0, "Expected validation errors for unopened accounts")
-	})
-
-	t.Run("RejectPathTraversal", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath=../../../etc/passwd", nil)
-		rec := httptest.NewRecorder()
-
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
-	})
-
-	t.Run("RejectAbsolutePathOutsideAllowedDir", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath=/etc/passwd", nil)
-		rec := httptest.NewRecorder()
-
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
-	})
-
-	t.Run("RejectSymlinkToSensitiveDir", func(t *testing.T) {
-		symlinkPath := filepath.Join(filepath.Dir(tmpFile.Name()), "evil_link")
-		err := os.Symlink("/etc", symlinkPath)
-		if err != nil {
-			t.Skip("Cannot create symlink, skipping test")
-		}
-		defer func() { _ = os.Remove(symlinkPath) }()
-
-		evilPath := filepath.Join(symlinkPath, "passwd")
-		req := httptest.NewRequest(http.MethodGet, "/api/source?filepath="+evilPath, nil)
-		rec := httptest.NewRecorder()
-
-		mux.ServeHTTP(rec, req)
-
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
 	})
 }
 
