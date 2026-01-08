@@ -164,7 +164,8 @@ var handlerRegistry = map[ast.DirectiveKind]Handler{
 
 type TransactionHandler struct{}
 func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
-    v := newValidator(l.Accounts(), l.toleranceConfig)
+    cfg := ConfigFromContext(ctx)
+    v := newValidator(l.Accounts(), cfg)
     return v.validateTransaction(ctx, d.(*ast.Transaction))
 }
 func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
