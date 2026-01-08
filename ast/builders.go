@@ -149,7 +149,7 @@ type TransactionOption func(*Transaction)
 //	)
 func NewTransaction(date *Date, narration string, opts ...TransactionOption) *Transaction {
 	txn := &Transaction{
-		Date:      date,
+		date:      date,
 		Narration: NewRawString(narration),
 		Flag:      "", // Default to no flag (will be 'txn' in output)
 	}
@@ -379,7 +379,7 @@ func NewPendingTransaction(date *Date, narration string, postings ...*Posting) *
 //	open := ast.NewOpen(date, account, []string{"USD"}, "")
 func NewOpen(date *Date, account Account, constraintCurrencies []string, bookingMethod string) *Open {
 	return &Open{
-		Date:                 date,
+		date:                 date,
 		Account:              account,
 		ConstraintCurrencies: constraintCurrencies,
 		BookingMethod:        bookingMethod,
@@ -395,7 +395,7 @@ func NewOpen(date *Date, account Account, constraintCurrencies []string, booking
 //	close := ast.NewClose(date, account)
 func NewClose(date *Date, account Account) *Close {
 	return &Close{
-		Date:    date,
+		date:    date,
 		Account: account,
 	}
 }
@@ -409,7 +409,7 @@ func NewClose(date *Date, account Account) *Close {
 //	balance := ast.NewBalance(date, account, ast.NewAmount("1250.00", "USD"))
 func NewBalance(date *Date, account Account, amount *Amount) *Balance {
 	return &Balance{
-		Date:    date,
+		date:    date,
 		Account: account,
 		Amount:  amount,
 	}
@@ -425,7 +425,7 @@ func NewBalance(date *Date, account Account, amount *Amount) *Balance {
 //	pad := ast.NewPad(date, account, padAccount)
 func NewPad(date *Date, account, padAccount Account) *Pad {
 	return &Pad{
-		Date:       date,
+		date:       date,
 		Account:    account,
 		AccountPad: padAccount,
 	}
@@ -440,7 +440,7 @@ func NewPad(date *Date, account, padAccount Account) *Pad {
 //	note := ast.NewNote(date, account, "Opened new checking account")
 func NewNote(date *Date, account Account, description string) *Note {
 	return &Note{
-		Date:        date,
+		date:        date,
 		Account:     account,
 		Description: NewRawString(description),
 	}
@@ -455,7 +455,7 @@ func NewNote(date *Date, account Account, description string) *Note {
 //	doc := ast.NewDocument(date, account, "/path/to/statement.pdf")
 func NewDocument(date *Date, account Account, pathToDocument string) *Document {
 	return &Document{
-		Date:           date,
+		date:           date,
 		Account:        account,
 		PathToDocument: NewRawString(pathToDocument),
 	}
@@ -469,7 +469,7 @@ func NewDocument(date *Date, account Account, pathToDocument string) *Document {
 //	commodity := ast.NewCommodity(date, "USD")
 func NewCommodity(date *Date, currency string) *Commodity {
 	return &Commodity{
-		Date:     date,
+		date:     date,
 		Currency: currency,
 	}
 }
@@ -482,7 +482,7 @@ func NewCommodity(date *Date, currency string) *Commodity {
 //	price := ast.NewPrice(date, "HOOL", ast.NewAmount("520.50", "USD"))
 func NewPrice(date *Date, commodity string, amount *Amount) *Price {
 	return &Price{
-		Date:      date,
+		date:      date,
 		Commodity: commodity,
 		Amount:    amount,
 	}
@@ -496,8 +496,22 @@ func NewPrice(date *Date, commodity string, amount *Amount) *Price {
 //	event := ast.NewEvent(date, "location", "New York, USA")
 func NewEvent(date *Date, name, value string) *Event {
 	return &Event{
-		Date:  date,
+		date:  date,
 		Name:  NewRawString(name),
 		Value: NewRawString(value),
+	}
+}
+
+// NewCustom creates a Custom directive.
+//
+// Example:
+//
+//	date, _ := ast.NewDate("2024-01-01")
+//	custom := ast.NewCustom(date, "fava-option", nil)
+func NewCustom(date *Date, typeName string, values []*CustomValue) *Custom {
+	return &Custom{
+		date:   date,
+		Type:   RawString{Value: typeName},
+		Values: values,
 	}
 }

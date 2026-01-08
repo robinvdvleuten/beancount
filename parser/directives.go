@@ -20,11 +20,11 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 	}
 
 	bal := &ast.Balance{
-		Pos:     pos,
-		Date:    date,
 		Account: account,
 		Amount:  amount,
 	}
+	bal.SetPosition(pos)
+	bal.SetDate(date)
 	p.finishDirective(bal)
 	return bal, nil
 }
@@ -39,10 +39,10 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 	}
 
 	open := &ast.Open{
-		Pos:     pos,
-		Date:    date,
 		Account: account,
 	}
+	open.SetPosition(pos)
+	open.SetDate(date)
 
 	// Optional constraint currencies
 	if p.check(IDENT) {
@@ -86,10 +86,10 @@ func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error
 	}
 
 	close := &ast.Close{
-		Pos:     pos,
-		Date:    date,
 		Account: account,
 	}
+	close.SetPosition(pos)
+	close.SetDate(date)
 	p.finishDirective(close)
 	return close, nil
 }
@@ -104,10 +104,10 @@ func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodit
 	}
 
 	commodity := &ast.Commodity{
-		Pos:      pos,
-		Date:     date,
 		Currency: currency,
 	}
+	commodity.SetPosition(pos)
+	commodity.SetDate(date)
 	p.finishDirective(commodity)
 	return commodity, nil
 }
@@ -127,11 +127,11 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 	}
 
 	pad := &ast.Pad{
-		Pos:        pos,
-		Date:       date,
 		Account:    account,
 		AccountPad: accountPad,
 	}
+	pad.SetPosition(pos)
+	pad.SetDate(date)
 	p.finishDirective(pad)
 	return pad, nil
 }
@@ -151,11 +151,11 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 	}
 
 	note := &ast.Note{
-		Pos:         pos,
-		Date:        date,
 		Account:     account,
 		Description: description,
 	}
+	note.SetPosition(pos)
+	note.SetDate(date)
 	p.finishDirective(note)
 	return note, nil
 }
@@ -175,11 +175,11 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 	}
 
 	doc := &ast.Document{
-		Pos:            pos,
-		Date:           date,
 		Account:        account,
 		PathToDocument: path,
 	}
+	doc.SetPosition(pos)
+	doc.SetDate(date)
 	p.finishDirective(doc)
 	return doc, nil
 }
@@ -199,11 +199,11 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 	}
 
 	price := &ast.Price{
-		Pos:       pos,
-		Date:      date,
 		Commodity: commodity,
 		Amount:    amount,
 	}
+	price.SetPosition(pos)
+	price.SetDate(date)
 	p.finishDirective(price)
 	return price, nil
 }
@@ -223,11 +223,11 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 	}
 
 	event := &ast.Event{
-		Pos:   pos,
-		Date:  date,
 		Name:  name,
 		Value: value,
 	}
+	event.SetPosition(pos)
+	event.SetDate(date)
 	p.finishDirective(event)
 	return event, nil
 }
@@ -243,11 +243,11 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 	}
 
 	custom := &ast.Custom{
-		Pos:    pos,
-		Date:   date,
 		Type:   customType,
 		Values: make([]*ast.CustomValue, 0, 4),
 	}
+	custom.SetPosition(pos)
+	custom.SetDate(date)
 
 	// Parse custom values until we hit metadata or end of line
 	startLine := p.peek().Line

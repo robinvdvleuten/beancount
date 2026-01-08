@@ -12,32 +12,7 @@ import (
 
 // getDirectiveLine extracts the line number from a directive.
 func getDirectiveLine(directive ast.Directive) int {
-	switch v := directive.(type) {
-	case *ast.Commodity:
-		return v.Pos.Line
-	case *ast.Open:
-		return v.Pos.Line
-	case *ast.Close:
-		return v.Pos.Line
-	case *ast.Balance:
-		return v.Pos.Line
-	case *ast.Pad:
-		return v.Pos.Line
-	case *ast.Note:
-		return v.Pos.Line
-	case *ast.Document:
-		return v.Pos.Line
-	case *ast.Price:
-		return v.Pos.Line
-	case *ast.Event:
-		return v.Pos.Line
-	case *ast.Custom:
-		return v.Pos.Line
-	case *ast.Transaction:
-		return v.Pos.Line
-	default:
-		return 0
-	}
+	return directive.Position().Line
 }
 
 // TestErrorPositioning verifies that parse errors are reported at the correct

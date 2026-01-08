@@ -194,7 +194,7 @@ func (h *CommodityHandler) Validate(ctx context.Context, l *Ledger, d ast.Direct
 	// Create delta with commodity metadata for graph node creation
 	delta := &CommodityDelta{
 		CommodityID: commodity.Currency,
-		Date:        commodity.Date,
+		Date:        commodity.Date(),
 		Metadata:    commodity.Metadata,
 	}
 

@@ -29,9 +29,9 @@ func (d Directives) Less(i, j int) bool { return compareDirectives(d[i], d[j]) <
 //  4. Within same type, sort by line number (preserves source order)
 func compareDirectives(a, b Directive) int {
 	// First compare by date
-	if a.GetDate().Before(b.GetDate().Time) {
+	if a.Date().Before(b.Date().Time) {
 		return -1
-	} else if a.GetDate().After(b.GetDate().Time) {
+	} else if a.Date().After(b.Date().Time) {
 		return 1
 	}
 
@@ -132,7 +132,7 @@ type Directive interface {
 	WithComment
 	Positioned
 
-	GetDate() *Date
+	Date() *Date
 	Kind() DirectiveKind
 }
 
@@ -160,19 +160,19 @@ func ApplyPushPopDirectives(ast *AST) error {
 	}
 
 	for _, pt := range ast.Pushtags {
-		items = append(items, positionedItem{pos: pt.Pos, pushtag: pt})
+		items = append(items, positionedItem{pos: pt.Position(), pushtag: pt})
 	}
 
 	for _, pt := range ast.Poptags {
-		items = append(items, positionedItem{pos: pt.Pos, poptag: pt})
+		items = append(items, positionedItem{pos: pt.Position(), poptag: pt})
 	}
 
 	for _, pm := range ast.Pushmetas {
-		items = append(items, positionedItem{pos: pm.Pos, pushmeta: pm})
+		items = append(items, positionedItem{pos: pm.Position(), pushmeta: pm})
 	}
 
 	for _, pm := range ast.Popmetas {
-		items = append(items, positionedItem{pos: pm.Pos, popmeta: pm})
+		items = append(items, positionedItem{pos: pm.Position(), popmeta: pm})
 	}
 
 	// Sort by file position

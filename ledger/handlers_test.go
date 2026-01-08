@@ -323,11 +323,7 @@ func TestCustomHandler(t *testing.T) {
 
 	customHandler := &CustomHandler{}
 	date := newTestDate("2024-01-01")
-	custom := &ast.Custom{
-		Pos:  ast.Position{Line: 1},
-		Date: date,
-		Type: ast.RawString{Value: "test"},
-	}
+	custom := ast.NewCustom(date, "test", nil)
 
 	errs, _ := customHandler.Validate(ctx, ledger, custom)
 	assert.Equal(t, len(errs), 0, "should have no errors")

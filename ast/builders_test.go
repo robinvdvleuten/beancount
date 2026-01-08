@@ -169,7 +169,7 @@ func TestNewTransaction(t *testing.T) {
 
 	t.Run("MinimalTransaction", func(t *testing.T) {
 		txn := NewTransaction(date, "Test transaction")
-		assert.Equal(t, date, txn.Date)
+		assert.Equal(t, date, txn.Date())
 		assert.Equal(t, "Test transaction", txn.Narration.Value)
 		assert.Equal(t, "", txn.Flag)
 		assert.Equal(t, "", txn.Payee.Value)
@@ -370,7 +370,7 @@ func TestNewOpen(t *testing.T) {
 
 	t.Run("WithCurrencies", func(t *testing.T) {
 		open := NewOpen(date, account, []string{"USD"}, "")
-		assert.Equal(t, date, open.Date)
+		assert.Equal(t, date, open.Date())
 		assert.Equal(t, account, open.Account)
 		assert.Equal(t, []string{"USD"}, open.ConstraintCurrencies)
 		assert.Equal(t, "", open.BookingMethod)
@@ -387,7 +387,7 @@ func TestNewClose(t *testing.T) {
 	account, _ := NewAccount("Liabilities:CreditCard:OldCard")
 
 	close := NewClose(date, account)
-	assert.Equal(t, date, close.Date)
+	assert.Equal(t, date, close.Date())
 	assert.Equal(t, account, close.Account)
 }
 
@@ -397,7 +397,7 @@ func TestNewBalance(t *testing.T) {
 	amount := NewAmount("1250.00", "USD")
 
 	balance := NewBalance(date, account, amount)
-	assert.Equal(t, date, balance.Date)
+	assert.Equal(t, date, balance.Date())
 	assert.Equal(t, account, balance.Account)
 	assert.Equal(t, amount, balance.Amount)
 }
@@ -408,7 +408,7 @@ func TestNewPad(t *testing.T) {
 	padAccount, _ := NewAccount("Equity:Opening-Balances")
 
 	pad := NewPad(date, account, padAccount)
-	assert.Equal(t, date, pad.Date)
+	assert.Equal(t, date, pad.Date())
 	assert.Equal(t, account, pad.Account)
 	assert.Equal(t, padAccount, pad.AccountPad)
 }
@@ -418,7 +418,7 @@ func TestNewNote(t *testing.T) {
 	account, _ := NewAccount("Assets:Checking")
 
 	note := NewNote(date, account, "Opened new checking account")
-	assert.Equal(t, date, note.Date)
+	assert.Equal(t, date, note.Date())
 	assert.Equal(t, account, note.Account)
 	assert.Equal(t, "Opened new checking account", note.Description.Value)
 }
@@ -428,7 +428,7 @@ func TestNewDocument(t *testing.T) {
 	account, _ := NewAccount("Assets:Checking")
 
 	doc := NewDocument(date, account, "/path/to/statement.pdf")
-	assert.Equal(t, date, doc.Date)
+	assert.Equal(t, date, doc.Date())
 	assert.Equal(t, account, doc.Account)
 	assert.Equal(t, "/path/to/statement.pdf", doc.PathToDocument.Value)
 }
@@ -436,7 +436,7 @@ func TestNewDocument(t *testing.T) {
 func TestNewCommodity(t *testing.T) {
 	date, _ := NewDate("2024-01-01")
 	commodity := NewCommodity(date, "USD")
-	assert.Equal(t, date, commodity.Date)
+	assert.Equal(t, date, commodity.Date())
 	assert.Equal(t, "USD", commodity.Currency)
 }
 
@@ -445,7 +445,7 @@ func TestNewPrice(t *testing.T) {
 	amount := NewAmount("520.50", "USD")
 
 	price := NewPrice(date, "HOOL", amount)
-	assert.Equal(t, date, price.Date)
+	assert.Equal(t, date, price.Date())
 	assert.Equal(t, "HOOL", price.Commodity)
 	assert.Equal(t, amount, price.Amount)
 }
@@ -453,7 +453,7 @@ func TestNewPrice(t *testing.T) {
 func TestNewEvent(t *testing.T) {
 	date, _ := NewDate("2024-01-01")
 	event := NewEvent(date, "location", "New York, USA")
-	assert.Equal(t, date, event.Date)
+	assert.Equal(t, date, event.Date())
 	assert.Equal(t, "location", event.Name.Value)
 	assert.Equal(t, "New York, USA", event.Value.Value)
 }

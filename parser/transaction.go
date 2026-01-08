@@ -10,10 +10,9 @@ import "github.com/robinvdvleuten/beancount/ast"
 //
 //	POSTING*
 func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transaction, error) {
-	txn := &ast.Transaction{
-		Pos:  pos,
-		Date: date,
-	}
+	txn := &ast.Transaction{}
+	txn.SetPosition(pos)
+	txn.SetDate(date)
 
 	// Handle optional 'txn' keyword and flag
 	// Valid forms:
@@ -91,17 +90,17 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	}
 
 	// Capture inline comment at end of transaction header line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == txn.Pos.Line {
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == txn.Position().Line {
 		txn.SetComment(p.parseComment())
 	}
 
 	// Parse transaction-level metadata (only if on new line and properly indented)
-	if !p.isAtEnd() && p.peek().Line > txn.Pos.Line && p.peek().Column > 1 {
-		txn.Metadata = p.parseMetadataFromLine(txn.Pos.Line)
+	if !p.isAtEnd() && p.peek().Line > txn.Position().Line && p.peek().Column > 1 {
+		txn.Metadata = p.parseMetadataFromLine(txn.Position().Line)
 	}
 
 	// Parse postings (indented lines)
-	postings, err := p.parsePostings(txn.Pos.Line)
+	postings, err := p.parsePostings(txn.Position().Line)
 	if err != nil {
 		return nil, err
 	}

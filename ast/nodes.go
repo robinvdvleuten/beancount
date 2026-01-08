@@ -10,12 +10,15 @@ package ast
 //	option "operating_currency" "USD"
 //	option "booking_method" "STRICT"
 type Option struct {
-	Pos   Position
+	pos   Position
 	Name  RawString
 	Value RawString
 }
 
-func (o *Option) Position() Position { return o.Pos }
+func (o *Option) Position() Position { return o.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (o *Option) SetPosition(pos Position) { o.pos = pos }
 
 // Include imports and processes directives from another Beancount file, allowing you
 // to split your ledger across multiple files for better organization. The path can be
@@ -28,11 +31,14 @@ func (o *Option) Position() Position { return o.Pos }
 //	include "prices/2014.beancount"
 //	include "transactions/2014-expenses.beancount"
 type Include struct {
-	Pos      Position
+	pos      Position
 	Filename RawString
 }
 
-func (i *Include) Position() Position { return i.Pos }
+func (i *Include) Position() Position { return i.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (i *Include) SetPosition(pos Position) { i.pos = pos }
 
 // Plugin loads a processing plugin that can transform or validate the ledger data.
 // Plugins are Python modules that run after parsing and can add new directives, check
@@ -44,12 +50,15 @@ func (i *Include) Position() Position { return i.Pos }
 //	plugin "beancount.plugins.auto_accounts"
 //	plugin "beancount.plugins.check_commodity" "USD,EUR,GBP"
 type Plugin struct {
-	Pos    Position
+	pos    Position
 	Name   RawString
 	Config RawString
 }
 
-func (p *Plugin) Position() Position { return p.Pos }
+func (p *Plugin) Position() Position { return p.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Plugin) SetPosition(pos Position) { p.pos = pos }
 
 // Pushtag pushes a tag onto the tag stack, causing all subsequent transactions in the
 // file to automatically receive this tag until a corresponding poptag is encountered.
@@ -64,11 +73,14 @@ func (p *Plugin) Position() Position { return p.Pos }
 //	  Liabilities:CreditCard
 //	poptag #trip-europe
 type Pushtag struct {
-	Pos Position
+	pos Position
 	Tag Tag
 }
 
-func (p *Pushtag) Position() Position { return p.Pos }
+func (p *Pushtag) Position() Position { return p.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Pushtag) SetPosition(pos Position) { p.pos = pos }
 
 // Poptag removes a tag from the tag stack, ending the automatic application of that tag
 // to subsequent transactions. It must match a previously pushed tag. Transactions appearing
@@ -78,11 +90,14 @@ func (p *Pushtag) Position() Position { return p.Pos }
 //
 //	poptag #trip-europe
 type Poptag struct {
-	Pos Position
+	pos Position
 	Tag Tag
 }
 
-func (p *Poptag) Position() Position { return p.Pos }
+func (p *Poptag) Position() Position { return p.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Poptag) SetPosition(pos Position) { p.pos = pos }
 
 // Pushmeta pushes a metadata key-value pair onto the metadata stack, causing all
 // subsequent directives in the file to automatically receive this metadata entry until
@@ -97,12 +112,15 @@ func (p *Poptag) Position() Position { return p.Pos }
 //	  Liabilities:CreditCard
 //	popmeta location:
 type Pushmeta struct {
-	Pos   Position
+	pos   Position
 	Key   string
 	Value string
 }
 
-func (p *Pushmeta) Position() Position { return p.Pos }
+func (p *Pushmeta) Position() Position { return p.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Pushmeta) SetPosition(pos Position) { p.pos = pos }
 
 // Popmeta removes a metadata key from the metadata stack, ending the automatic application
 // of that metadata to subsequent directives. It must match a previously pushed metadata key.
@@ -113,8 +131,11 @@ func (p *Pushmeta) Position() Position { return p.Pos }
 //
 //	popmeta location:
 type Popmeta struct {
-	Pos Position
+	pos Position
 	Key string
 }
 
-func (p *Popmeta) Position() Position { return p.Pos }
+func (p *Popmeta) Position() Position { return p.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Popmeta) SetPosition(pos Position) { p.pos = pos }

@@ -375,10 +375,7 @@ func TestGraph_EdgeMetadata(t *testing.T) {
 	g := NewGraph()
 	date := newTestDate("2024-01-15")
 
-	price := &ast.Price{
-		Date:      date,
-		Commodity: "USD",
-	}
+	price := ast.NewPrice(date, "USD", nil)
 
 	edge := &Edge{
 		From:   "USD",

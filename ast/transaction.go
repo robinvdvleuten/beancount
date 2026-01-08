@@ -17,8 +17,8 @@ package ast
 //	  Assets:US:BofA:Checking                  -100.00 USD
 //	  Assets:US:BofA:Savings                    100.00 USD
 type Transaction struct {
-	Pos       Position
-	Date      *Date
+	pos       Position
+	date      *Date
 	Flag      string
 	Payee     RawString
 	Narration RawString
@@ -33,8 +33,8 @@ type Transaction struct {
 
 var _ Directive = &Transaction{}
 
-func (t *Transaction) Position() Position  { return t.Pos }
-func (t *Transaction) GetDate() *Date      { return t.Date }
+func (t *Transaction) Position() Position  { return t.pos }
+func (t *Transaction) Date() *Date         { return t.date }
 func (t *Transaction) Kind() DirectiveKind { return KindTransaction }
 func (t *Transaction) AffectedNodes() []string {
 	nodes := make([]string, 0, len(t.Postings))
@@ -53,6 +53,12 @@ func (t *Transaction) AffectedNodes() []string {
 	return nodes
 }
 
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (t *Transaction) SetPosition(pos Position) { t.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (t *Transaction) SetDate(date *Date) { t.date = date }
+
 // Posting represents a single leg of a transaction, specifying an account and optional
 // amount, cost, and price. Each transaction must have at least two postings that balance
 // to zero. One posting may omit its amount, which will be automatically inferred. Cost
@@ -66,7 +72,7 @@ func (t *Transaction) AffectedNodes() []string {
 //	Expenses:Groceries              45.60 USD              ; Simple posting
 //	Assets:Checking                                        ; Inferred amount
 type Posting struct {
-	Pos         Position
+	pos         Position
 	Flag        string
 	Account     Account
 	Amount      *Amount
@@ -79,3 +85,9 @@ type Posting struct {
 	withComment
 	withMetadata
 }
+
+// Position returns the position of the posting in the source file.
+func (p *Posting) Position() Position { return p.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Posting) SetPosition(pos Position) { p.pos = pos }

@@ -180,7 +180,7 @@ func (a *Account) GetSubtreeBalance(l *Ledger) *Balance {
 func (a *Account) GetPostingsBefore(date *ast.Date) []*AccountPosting {
 	var result []*AccountPosting
 	for _, posting := range a.Postings {
-		if !posting.Transaction.Date.After(date.Time) {
+		if !posting.Transaction.Date().After(date.Time) {
 			result = append(result, posting)
 		}
 	}
@@ -192,7 +192,7 @@ func (a *Account) GetPostingsBefore(date *ast.Date) []*AccountPosting {
 func (a *Account) GetPostingsInPeriod(start, end *ast.Date) []*AccountPosting {
 	var result []*AccountPosting
 	for _, posting := range a.Postings {
-		txnDate := posting.Transaction.Date
+		txnDate := posting.Transaction.Date()
 		if !txnDate.Before(start.Time) && !txnDate.After(end.Time) {
 			result = append(result, posting)
 		}

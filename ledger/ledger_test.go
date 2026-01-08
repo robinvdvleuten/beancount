@@ -1149,12 +1149,7 @@ func TestLedger_InvalidPriceMissingAmount(t *testing.T) {
 	// Test validatePrice directly with a manually constructed price
 	date := newTestDate("2024-01-15")
 
-	price := &ast.Price{
-		Pos:       ast.Position{Line: 1},
-		Date:      date,
-		Commodity: "USD",
-		Amount:    nil,
-	}
+	price := ast.NewPrice(date, "USD", nil)
 
 	errs := validatePrice(price)
 	assert.True(t, len(errs) > 0)

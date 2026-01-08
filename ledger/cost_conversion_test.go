@@ -147,11 +147,11 @@ func TestValidateTotalCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			txn := &ast.Transaction{
-				Date:      &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
-				Narration: ast.NewRawString("Test transaction"),
-				Postings:  []*ast.Posting{test.posting},
-			}
+		txn := ast.NewTransaction(
+			&ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+			"Test transaction",
+			ast.WithPostings(test.posting),
+		)
 
 			cfg := &Config{Tolerance: NewToleranceConfig()}
 			v := newValidator(make(map[string]*Account), cfg)

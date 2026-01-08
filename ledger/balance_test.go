@@ -19,8 +19,8 @@ func TestAccountPostings_SimpleTransaction(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-01")
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening balance",
 				ast.WithPostings(
 					ast.NewPosting(assets, ast.WithAmount("100", "USD")),
@@ -51,8 +51,8 @@ func TestGetPostingsBefore_NoPostings(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -77,8 +77,8 @@ func TestGetPostingsBefore_BeforeEarliestDate(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -105,9 +105,9 @@ func TestGetPostingsInPeriod_MultipleTransactions(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
-			&ast.Open{Date: date1, Account: expenses},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
+			ast.NewOpen(date1, expenses, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("1000", "USD")),
 				ast.NewPosting(equity),
@@ -132,7 +132,7 @@ func TestGetPostingsInPeriod_MultipleTransactions(t *testing.T) {
 	periodEnd, _ := ast.NewDate("2024-02-28")
 	postings := expensesAccount.GetPostingsInPeriod(periodStart, periodEnd)
 	assert.Equal(t, len(postings), 1)
-	assert.Equal(t, postings[0].Transaction.Date, date2)
+	assert.Equal(t, postings[0].Transaction.Date(), date2)
 }
 
 // TestGetBalancesAsOf_SimpleCase verifies balance calculation for a single account.
@@ -146,8 +146,8 @@ func TestGetBalancesAsOf_SimpleCase(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -187,8 +187,8 @@ func TestGetBalancesAsOf_MultiCurrency(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -235,9 +235,9 @@ func TestGetBalancesInPeriod_IncomeExpenses(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: income},
-			&ast.Open{Date: date1, Account: expenses},
-			&ast.Open{Date: date1, Account: assets},
+			ast.NewOpen(date1, income, nil, ""),
+			ast.NewOpen(date1, expenses, nil, ""),
+			ast.NewOpen(date1, assets, nil, ""),
 			// Income posting
 			ast.NewTransaction(date2, "Salary", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("1000", "USD")),
@@ -291,9 +291,9 @@ func TestCloseBooks_SimpleIncome(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: income},
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, income, nil, ""),
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date2, "Salary", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("1000", "USD")),
 				ast.NewPosting(income),
@@ -308,7 +308,7 @@ func TestCloseBooks_SimpleIncome(t *testing.T) {
 	assert.Equal(t, len(closingTxns), 1)
 
 	txn := closingTxns[0]
-	assert.Equal(t, txn.Date, closingDate)
+	assert.Equal(t, txn.Date(), closingDate)
 	assert.Equal(t, txn.Flag, "P") // Synthetic/padding flag
 	assert.Equal(t, len(txn.Postings), 2)
 }
@@ -323,7 +323,7 @@ func TestCloseBooks_Empty(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
+			ast.NewOpen(date1, assets, nil, ""),
 		},
 	})
 
@@ -399,8 +399,8 @@ func TestConvertBalance_TwoCurrencies_DirectRate(t *testing.T) {
 	// Setup: EUR 1 = USD 1.10 on 2024-02-01
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			// USD 100
 			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
@@ -440,8 +440,8 @@ func TestConvertBalance_TwoCurrencies_InversePrice(t *testing.T) {
 	// Setup: USD 1 = EUR 0.91 on 2024-02-01
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			// Single currency transaction - will balance correctly
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
@@ -482,8 +482,8 @@ func TestConvertBalance_ThreeCurrencies_MultiHop(t *testing.T) {
 	// So: USD → GBP = 0.91 * 0.86 = 0.7826
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -551,8 +551,8 @@ func TestConvertBalance_ForwardFillPrice(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -601,8 +601,8 @@ func TestConvertBalance_ComplexScenario(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			// Portfolio: $1000 USD
 			ast.NewTransaction(date1, "Opening USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("1000", "USD")),
@@ -666,8 +666,8 @@ func TestGetBalancesAsOfInCurrency_SingleAccount(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -708,9 +708,9 @@ func TestGetBalancesAsOfInCurrency_MultiAccount(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: expenses},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, expenses, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("1000", "USD")),
 				ast.NewPosting(equity),
@@ -748,8 +748,8 @@ func TestGetBalancesAsOfInCurrency_MultiCurrency(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -791,8 +791,8 @@ func TestGetBalancesAsOfInCurrency_MissingPrice(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -822,9 +822,9 @@ func TestGetBalancesAsOfInCurrency_PartialMissingPrice(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: other},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, other, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			// Assets:Cash has both USD and EUR
 			ast.NewTransaction(date1, "USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
@@ -863,8 +863,8 @@ func TestGetBalancesAsOfInCurrency_BeforeFirstTransaction(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -890,8 +890,8 @@ func TestAccount_GetBalanceInCurrencyAsOf_SingleCurrency(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "Opening", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -918,8 +918,8 @@ func TestAccount_GetBalanceInCurrencyAsOf_MultiCurrency(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -953,8 +953,8 @@ func TestAccount_GetBalanceInCurrencyAsOf_MissingPrice(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "USD", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
 				ast.NewPosting(equity),
@@ -984,7 +984,7 @@ func TestAccount_GetBalanceInCurrencyAsOf_ZeroBalance(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
+			ast.NewOpen(date1, assets, nil, ""),
 		},
 	})
 
@@ -1007,8 +1007,8 @@ func TestAccount_GetBalanceInCurrencyAsOf_MultiPath(t *testing.T) {
 
 	l.MustProcess(context.Background(), &ast.AST{
 		Directives: []ast.Directive{
-			&ast.Open{Date: date1, Account: assets},
-			&ast.Open{Date: date1, Account: equity},
+			ast.NewOpen(date1, assets, nil, ""),
+			ast.NewOpen(date1, equity, nil, ""),
 			ast.NewTransaction(date1, "GBP", ast.WithPostings(
 				ast.NewPosting(assets, ast.WithAmount("100", "GBP")),
 				ast.NewPosting(equity),

@@ -14,6 +14,7 @@ import (
 // directive interface, eliminating redundant field extraction in constructors.
 type directiveError struct {
 	pos       ast.Position
+	date      *ast.Date
 	directive ast.Directive
 }
 
@@ -22,13 +23,14 @@ type directiveError struct {
 func newDirectiveError(d ast.Directive) directiveError {
 	return directiveError{
 		pos:       d.Position(),
+		date:      d.Date(),
 		directive: d,
 	}
 }
 
-func (e *directiveError) GetPosition() ast.Position   { return e.pos }
-func (e *directiveError) GetDirective() ast.Directive { return e.directive }
-func (e *directiveError) GetDate() *ast.Date          { return e.directive.GetDate() }
+func (e *directiveError) Position() ast.Position   { return e.pos }
+func (e *directiveError) Directive() ast.Directive { return e.directive }
+func (e *directiveError) Date() *ast.Date          { return e.date }
 
 // formatLocation returns a standard location string for error messages.
 // Uses filename:line if available, falls back to date string.
@@ -36,8 +38,8 @@ func (e *directiveError) formatLocation() string {
 	if e.pos.Filename != "" {
 		return fmt.Sprintf("%s:%d", e.pos.Filename, e.pos.Line)
 	}
-	if date := e.directive.GetDate(); date != nil {
-		return date.String()
+	if e.date != nil {
+		return e.date.String()
 	}
 	return "unknown"
 }
@@ -64,7 +66,7 @@ func (e *AccountNotOpenError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.GetDate().String(),
+		"date":     e.Date().String(),
 	})
 }
 
@@ -90,7 +92,7 @@ func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
 		"message":     e.Error(),
 		"position":    e.pos,
 		"account":     string(e.Account),
-		"date":        e.GetDate().String(),
+		"date":        e.Date().String(),
 		"opened_date": e.OpenedDate.String(),
 	})
 }
@@ -158,7 +160,7 @@ func (e *AccountAlreadyClosedError) MarshalJSON() ([]byte, error) {
 		"message":     e.Error(),
 		"position":    e.pos,
 		"account":     string(e.Account),
-		"date":        e.GetDate().String(),
+		"date":        e.Date().String(),
 		"closed_date": e.ClosedDate.String(),
 	})
 }
@@ -184,7 +186,7 @@ func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.GetDate().String(),
+		"date":     e.Date().String(),
 	})
 }
 
@@ -234,7 +236,7 @@ func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
 		"type":      "TransactionNotBalancedError",
 		"message":   e.Error(),
 		"position":  e.pos,
-		"date":      e.GetDate().String(),
+		"date":      e.Date().String(),
 		"narration": e.Narration,
 		"residuals": e.Residuals,
 	})
@@ -263,7 +265,7 @@ func (e *InvalidAmountError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.GetDate().String(),
+		"date":     e.Date().String(),
 		"value":    e.Value,
 	})
 }
@@ -294,7 +296,7 @@ func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.GetDate().String(),
+		"date":     e.Date().String(),
 		"expected": e.Expected,
 		"actual":   e.Actual,
 	})
@@ -410,7 +412,7 @@ func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
 		"message":       e.Error(),
 		"position":      e.pos,
 		"account":       string(e.Account),
-		"date":          e.GetDate().String(),
+		"date":          e.Date().String(),
 		"cost_spec":     e.CostSpec,
 		"posting_index": e.PostingIndex,
 	})
@@ -464,7 +466,7 @@ func (e *TotalCostError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.pos,
 	}
-	if date := e.GetDate(); date != nil {
+	if date := e.Date(); date != nil {
 		data["date"] = date.String()
 	}
 	if e.Posting != nil {
@@ -513,7 +515,7 @@ func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
 		"message":       e.Error(),
 		"position":      e.pos,
 		"account":       string(e.Account),
-		"date":          e.GetDate().String(),
+		"date":          e.Date().String(),
 		"price_spec":    e.PriceSpec,
 		"posting_index": e.PostingIndex,
 	})
@@ -579,7 +581,7 @@ func (e *InvalidMetadataError) MarshalJSON() ([]byte, error) {
 		"key":      e.Key,
 		"reason":   e.Reason,
 	}
-	if date := e.GetDate(); date != nil {
+	if date := e.Date(); date != nil {
 		data["date"] = date.String()
 	}
 	return json.Marshal(data)
@@ -620,7 +622,7 @@ func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
 		"message":  e.Error(),
 		"position": e.pos,
 		"account":  string(e.Account),
-		"date":     e.GetDate().String(),
+		"date":     e.Date().String(),
 		"payee":    e.Payee,
 	})
 }
@@ -659,7 +661,7 @@ func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
 		"message":            e.Error(),
 		"position":           e.pos,
 		"account":            string(e.Account),
-		"date":               e.GetDate().String(),
+		"date":               e.Date().String(),
 		"currency":           e.Currency,
 		"allowed_currencies": e.AllowedCurrencies,
 	})
@@ -684,21 +686,22 @@ type UnusedPadWarning struct {
 }
 
 func (e *UnusedPadWarning) Error() string {
-	location := fmt.Sprintf("%s:%d", e.Pad.Pos.Filename, e.Pad.Pos.Line)
-	if e.Pad.Pos.Filename == "" {
-		location = e.Pad.Date.String()
+	pos := e.Pad.Position()
+	location := fmt.Sprintf("%s:%d", pos.Filename, pos.Line)
+	if pos.Filename == "" {
+		location = e.Pad.Date().String()
 	}
 
 	return fmt.Sprintf("%s: Unused Pad entry\n\n   %s pad %s %s",
 		location,
-		e.Pad.Date.String(),
+		e.Pad.Date().String(),
 		e.Pad.Account,
 		e.Pad.AccountPad,
 	)
 }
 
 func (e *UnusedPadWarning) GetPosition() ast.Position {
-	return e.Pad.Pos
+	return e.Pad.Position()
 }
 
 func (e *UnusedPadWarning) GetDirective() ast.Directive {
@@ -710,16 +713,16 @@ func (e *UnusedPadWarning) GetAccount() ast.Account {
 }
 
 func (e *UnusedPadWarning) GetDate() *ast.Date {
-	return e.Pad.Date
+	return e.Pad.Date()
 }
 
 func (e *UnusedPadWarning) MarshalJSON() ([]byte, error) {
 	return json.Marshal(map[string]any{
 		"type":     "UnusedPadWarning",
 		"message":  e.Error(),
-		"position": e.Pad.Pos,
+		"position": e.Pad.Position(),
 		"account":  e.Account,
-		"date":     e.Pad.Date.String(),
+		"date":     e.Pad.Date().String(),
 	})
 }
 
@@ -766,7 +769,7 @@ func (e *InvalidDirectivePriceError) GetPosition() ast.Position {
 func NewInvalidDirectivePriceError(message string, price *ast.Price) *InvalidDirectivePriceError {
 	return &InvalidDirectivePriceError{
 		Message:   message,
-		Pos:       price.Pos,
+		Pos:       price.Position(),
 		Directive: price,
 	}
 }

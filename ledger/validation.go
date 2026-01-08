@@ -227,7 +227,7 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 			errs = append(errs, NewAccountNotOpenError(txn, posting.Account))
 			continue
 		}
-		if !acc.IsOpen(txn.Date) {
+		if !acc.IsOpen(txn.Date()) {
 			errs = append(errs, NewAccountNotOpenError(txn, posting.Account))
 		}
 	}
@@ -742,7 +742,7 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	var allErrors []error
 
 	// 0. Validate transaction date is in valid range
-	if err := validateDateRange(txn.Date); err != nil {
+	if err := validateDateRange(txn.Date()); err != nil {
 		allErrors = append(allErrors, err)
 		return allErrors, nil
 	}
@@ -845,7 +845,7 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 	var errs []error
 
 	// 0. Validate balance date is in valid range
-	if err := validateDateRange(balance.Date); err != nil {
+	if err := validateDateRange(balance.Date()); err != nil {
 		errs = append(errs, err)
 		return errs
 	}
@@ -858,7 +858,7 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 		return errs
 	}
 
-	if !acc.IsOpen(balance.Date) {
+	if !acc.IsOpen(balance.Date()) {
 		errs = append(errs, NewAccountNotOpenError(balance, balance.Account))
 		return errs
 	}
@@ -899,18 +899,18 @@ func (v *validator) validatePad(pad *ast.Pad) []error {
 	var errs []error
 
 	// 0. Validate pad date is in valid range
-	if err := validateDateRange(pad.Date); err != nil {
+	if err := validateDateRange(pad.Date()); err != nil {
 		errs = append(errs, err)
 		return errs
 	}
 
 	// 1. Validate main account is open
-	if !v.isAccountOpen(pad.Account, pad.Date) {
+	if !v.isAccountOpen(pad.Account, pad.Date()) {
 		errs = append(errs, NewAccountNotOpenError(pad, pad.Account))
 	}
 
 	// 2. Validate pad account is open
-	if !v.isAccountOpen(pad.AccountPad, pad.Date) {
+	if !v.isAccountOpen(pad.AccountPad, pad.Date()) {
 		errs = append(errs, NewAccountNotOpenError(pad, pad.AccountPad))
 	}
 
@@ -942,13 +942,13 @@ func (v *validator) validateNote(note *ast.Note) []error {
 	var errs []error
 
 	// 0. Validate note date is in valid range
-	if err := validateDateRange(note.Date); err != nil {
+	if err := validateDateRange(note.Date()); err != nil {
 		errs = append(errs, err)
 		return errs
 	}
 
 	// 1. Validate account is open
-	if !v.isAccountOpen(note.Account, note.Date) {
+	if !v.isAccountOpen(note.Account, note.Date()) {
 		errs = append(errs, NewAccountNotOpenError(note, note.Account))
 	}
 
@@ -969,13 +969,13 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 	var errs []error
 
 	// 0. Validate document date is in valid range
-	if err := validateDateRange(doc.Date); err != nil {
+	if err := validateDateRange(doc.Date()); err != nil {
 		errs = append(errs, err)
 		return errs
 	}
 
 	// 1. Validate account is open
-	if !v.isAccountOpen(doc.Account, doc.Date) {
+	if !v.isAccountOpen(doc.Account, doc.Date()) {
 		errs = append(errs, NewAccountNotOpenError(doc, doc.Account))
 	}
 
@@ -1023,7 +1023,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	accountName := string(open.Account)
 
 	// 0. Validate open date is in valid range
-	if err := validateDateRange(open.Date); err != nil {
+	if err := validateDateRange(open.Date()); err != nil {
 		errs = append(errs, err)
 		return errs, nil
 	}
@@ -1050,7 +1050,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	// Build delta with account properties (avoid allocating Inventory during validation)
 	delta := &OpenDelta{
 		Account:              open.Account,
-		OpenDate:             open.Date,
+		OpenDate:             open.Date(),
 		ConstraintCurrencies: constraintCurrenciesCopy,
 		BookingMethod:        open.BookingMethod,
 		Metadata:             metadataCopy,
@@ -1079,7 +1079,7 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	accountName := string(close.Account)
 
 	// 0. Validate close date is in valid range
-	if err := validateDateRange(close.Date); err != nil {
+	if err := validateDateRange(close.Date()); err != nil {
 		errs = append(errs, err)
 		return errs, nil
 	}
@@ -1099,7 +1099,7 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 
 	delta := &CloseDelta{
 		AccountName: accountName,
-		CloseDate:   close.Date,
+		CloseDate:   close.Date(),
 	}
 
 	return errs, delta
@@ -1204,9 +1204,9 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	// Calculate padding if pad directive exists
 	if padEntry != nil {
 		// BEANCOUNT COMPLIANCE: Pad must come chronologically BEFORE balance
-		if !padEntry.Date.Time.Before(balance.Date.Time) { //nolint:staticcheck
+		if !padEntry.Date().Time.Before(balance.Date().Time) { //nolint:staticcheck
 			return nil, fmt.Errorf("pad directive dated %s must come before balance assertion dated %s",
-				padEntry.Date.String(), balance.Date.String())
+				padEntry.Date().String(), balance.Date().String())
 		}
 
 		difference := expectedAmount.Sub(actualAmount)
@@ -1224,7 +1224,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 			}
 
 			delta.SyntheticTransaction = createPaddingTransaction(
-				padEntry.Date,                         // Use pad date, not balance date
+				padEntry.Date(),                       // Use pad date, not balance date
 				balance.Account,                       // Account being padded
 				padEntry.AccountPad,                   // Source of padding
 				difference,                            // Amount to pad

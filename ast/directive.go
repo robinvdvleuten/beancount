@@ -37,8 +37,8 @@ const (
 //	  name: "US Dollar"
 //	  asset-class: "cash"
 type Commodity struct {
-	Pos      Position
-	Date     *Date
+	pos      Position
+	date     *Date
 	Currency string
 
 	withComment
@@ -47,8 +47,8 @@ type Commodity struct {
 
 var _ Directive = &Commodity{}
 
-func (c *Commodity) Position() Position  { return c.Pos }
-func (c *Commodity) GetDate() *Date      { return c.Date }
+func (c *Commodity) Position() Position  { return c.pos }
+func (c *Commodity) Date() *Date         { return c.date }
 func (c *Commodity) Kind() DirectiveKind { return KindCommodity }
 func (c *Commodity) AffectedNodes() []string {
 	if c.Currency == "" {
@@ -56,6 +56,12 @@ func (c *Commodity) AffectedNodes() []string {
 	}
 	return []string{c.Currency}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (c *Commodity) SetPosition(pos Position) { c.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (c *Commodity) SetDate(date *Date) { c.date = date }
 
 // Open declares the opening of an account at a specific date, marking the beginning
 // of its lifetime in the ledger. You can optionally constrain which currencies the
@@ -67,8 +73,8 @@ func (c *Commodity) AffectedNodes() []string {
 //	2014-05-01 open Assets:US:BofA:Checking USD
 //	2014-05-01 open Assets:Investments:Brokerage USD,EUR "FIFO"
 type Open struct {
-	Pos                  Position
-	Date                 *Date
+	pos                  Position
+	date                 *Date
 	Account              Account
 	ConstraintCurrencies []string
 	BookingMethod        string
@@ -79,14 +85,20 @@ type Open struct {
 
 var _ Directive = &Open{}
 
-func (o *Open) Position() Position  { return o.Pos }
-func (o *Open) GetDate() *Date      { return o.Date }
+func (o *Open) Position() Position  { return o.pos }
+func (o *Open) Date() *Date         { return o.date }
 func (o *Open) Kind() DirectiveKind { return KindOpen }
 func (o *Open) AffectedNodes() []string {
 	nodes := []string{string(o.Account)}
 	nodes = append(nodes, o.ConstraintCurrencies...)
 	return nodes
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (o *Open) SetPosition(pos Position) { o.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (o *Open) SetDate(date *Date) { o.date = date }
 
 // Close declares the closing of an account at a specific date, marking the end of
 // its lifetime in the ledger. After this date, the account should have a zero balance
@@ -97,8 +109,8 @@ func (o *Open) AffectedNodes() []string {
 //
 //	2015-09-23 close Assets:US:BofA:Checking
 type Close struct {
-	Pos     Position
-	Date    *Date
+	pos     Position
+	date    *Date
 	Account Account
 
 	withComment
@@ -107,12 +119,18 @@ type Close struct {
 
 var _ Directive = &Close{}
 
-func (c *Close) Position() Position  { return c.Pos }
-func (c *Close) GetDate() *Date      { return c.Date }
+func (c *Close) Position() Position  { return c.pos }
+func (c *Close) Date() *Date         { return c.date }
 func (c *Close) Kind() DirectiveKind { return KindClose }
 func (c *Close) AffectedNodes() []string {
 	return []string{string(c.Account)}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (c *Close) SetPosition(pos Position) { c.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (c *Close) SetDate(date *Date) { c.date = date }
 
 // Balance asserts that an account should have a specific balance at the beginning
 // of a given date. This directive is used to verify the integrity of your ledger
@@ -124,8 +142,8 @@ func (c *Close) AffectedNodes() []string {
 //	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
 //	2014-08-09 balance Assets:Investments:Brokerage 10.00 HOOL {518.73 USD}
 type Balance struct {
-	Pos     Position
-	Date    *Date
+	pos     Position
+	date    *Date
 	Account Account
 	Amount  *Amount
 
@@ -135,8 +153,8 @@ type Balance struct {
 
 var _ Directive = &Balance{}
 
-func (b *Balance) Position() Position  { return b.Pos }
-func (b *Balance) GetDate() *Date      { return b.Date }
+func (b *Balance) Position() Position  { return b.pos }
+func (b *Balance) Date() *Date         { return b.date }
 func (b *Balance) Kind() DirectiveKind { return KindBalance }
 func (b *Balance) AffectedNodes() []string {
 	nodes := []string{string(b.Account)}
@@ -145,6 +163,12 @@ func (b *Balance) AffectedNodes() []string {
 	}
 	return nodes
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (b *Balance) SetPosition(pos Position) { b.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (b *Balance) SetDate(date *Date) { b.date = date }
 
 // Pad automatically inserts a transaction to bring an account to a specific balance
 // determined by the next balance assertion. The padding amount is calculated from the
@@ -156,8 +180,8 @@ func (b *Balance) AffectedNodes() []string {
 //	2014-01-01 pad Assets:US:BofA:Checking Equity:Opening-Balances
 //	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
 type Pad struct {
-	Pos        Position
-	Date       *Date
+	pos        Position
+	date       *Date
 	Account    Account
 	AccountPad Account
 
@@ -167,12 +191,18 @@ type Pad struct {
 
 var _ Directive = &Pad{}
 
-func (p *Pad) Position() Position  { return p.Pos }
-func (p *Pad) GetDate() *Date      { return p.Date }
+func (p *Pad) Position() Position  { return p.pos }
+func (p *Pad) Date() *Date         { return p.date }
 func (p *Pad) Kind() DirectiveKind { return KindPad }
 func (p *Pad) AffectedNodes() []string {
 	return []string{string(p.Account), string(p.AccountPad)}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Pad) SetPosition(pos Position) { p.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (p *Pad) SetDate(date *Date) { p.date = date }
 
 // Note attaches a dated comment or note to an account, allowing you to record
 // important information about an account at a specific point in time. These notes
@@ -183,8 +213,8 @@ func (p *Pad) AffectedNodes() []string {
 //
 //	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
 type Note struct {
-	Pos         Position
-	Date        *Date
+	pos         Position
+	date        *Date
 	Account     Account
 	Description RawString
 
@@ -194,12 +224,18 @@ type Note struct {
 
 var _ Directive = &Note{}
 
-func (n *Note) Position() Position  { return n.Pos }
-func (n *Note) GetDate() *Date      { return n.Date }
+func (n *Note) Position() Position  { return n.pos }
+func (n *Note) Date() *Date         { return n.date }
 func (n *Note) Kind() DirectiveKind { return KindNote }
 func (n *Note) AffectedNodes() []string {
 	return []string{string(n.Account)}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (n *Note) SetPosition(pos Position) { n.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (n *Note) SetDate(date *Date) { n.date = date }
 
 // Document associates an external file (such as a receipt, invoice, statement, or
 // contract) with an account at a specific date. The path can be absolute or relative
@@ -211,8 +247,8 @@ func (n *Note) AffectedNodes() []string {
 //	2014-07-09 document Assets:US:BofA:Checking "/documents/bank-statements/2014-07.pdf"
 //	2014-11-02 document Liabilities:CreditCard "receipts/amazon-invoice-2014-11-02.pdf"
 type Document struct {
-	Pos            Position
-	Date           *Date
+	pos            Position
+	date           *Date
 	Account        Account
 	PathToDocument RawString
 
@@ -222,12 +258,18 @@ type Document struct {
 
 var _ Directive = &Document{}
 
-func (d *Document) Position() Position  { return d.Pos }
-func (d *Document) GetDate() *Date      { return d.Date }
+func (d *Document) Position() Position  { return d.pos }
+func (d *Document) Date() *Date         { return d.date }
 func (d *Document) Kind() DirectiveKind { return KindDocument }
 func (d *Document) AffectedNodes() []string {
 	return []string{string(d.Account)}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (d *Document) SetPosition(pos Position) { d.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (d *Document) SetDate(date *Date) { d.date = date }
 
 // Price declares the price of a commodity in terms of another currency at a specific
 // date. These entries are used to track exchange rates, stock prices, and other market
@@ -239,8 +281,8 @@ func (d *Document) AffectedNodes() []string {
 //	2014-07-09 price USD 1.08 CAD
 //	2015-04-30 price HOOL 582.26 USD
 type Price struct {
-	Pos       Position
-	Date      *Date
+	pos       Position
+	date      *Date
 	Commodity string
 	Amount    *Amount
 
@@ -250,8 +292,8 @@ type Price struct {
 
 var _ Directive = &Price{}
 
-func (p *Price) Position() Position  { return p.Pos }
-func (p *Price) GetDate() *Date      { return p.Date }
+func (p *Price) Position() Position  { return p.pos }
+func (p *Price) Date() *Date         { return p.date }
 func (p *Price) Kind() DirectiveKind { return KindPrice }
 func (p *Price) AffectedNodes() []string {
 	nodes := []string{p.Commodity}
@@ -260,6 +302,12 @@ func (p *Price) AffectedNodes() []string {
 	}
 	return nodes
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (p *Price) SetPosition(pos Position) { p.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (p *Price) SetDate(date *Date) { p.date = date }
 
 // Event records a named event with a value at a specific date, allowing you to track
 // important life events, location changes, employment history, or other time-based
@@ -271,8 +319,8 @@ func (p *Price) AffectedNodes() []string {
 //	2014-07-09 event "location" "New York, USA"
 //	2014-09-01 event "employer" "Hooli Inc."
 type Event struct {
-	Pos   Position
-	Date  *Date
+	pos   Position
+	date  *Date
 	Name  RawString
 	Value RawString
 
@@ -282,12 +330,18 @@ type Event struct {
 
 var _ Directive = &Event{}
 
-func (e *Event) Position() Position  { return e.Pos }
-func (e *Event) GetDate() *Date      { return e.Date }
+func (e *Event) Position() Position  { return e.pos }
+func (e *Event) Date() *Date         { return e.date }
 func (e *Event) Kind() DirectiveKind { return KindEvent }
 func (e *Event) AffectedNodes() []string {
 	return []string{}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (e *Event) SetPosition(pos Position) { e.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (e *Event) SetDate(date *Date) { e.date = date }
 
 // Custom is a prototype directive for plugin development, allowing arbitrary typed values
 // after the directive name. This provides a flexible extension mechanism for plugins to
@@ -299,8 +353,8 @@ func (e *Event) AffectedNodes() []string {
 //	2014-07-09 custom "budget" "..." TRUE 45.30 USD
 //	2015-01-01 custom "forecast" 100.00 USD FALSE "monthly"
 type Custom struct {
-	Pos    Position
-	Date   *Date
+	pos    Position
+	date   *Date
 	Type   RawString
 	Values []*CustomValue
 
@@ -310,12 +364,18 @@ type Custom struct {
 
 var _ Directive = &Custom{}
 
-func (c *Custom) Position() Position  { return c.Pos }
-func (c *Custom) GetDate() *Date      { return c.Date }
+func (c *Custom) Position() Position  { return c.pos }
+func (c *Custom) Date() *Date         { return c.date }
 func (c *Custom) Kind() DirectiveKind { return KindCustom }
 func (c *Custom) AffectedNodes() []string {
 	return []string{}
 }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (c *Custom) SetPosition(pos Position) { c.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (c *Custom) SetDate(date *Date) { c.date = date }
 
 // CustomValue represents a single value in a custom directive, which can be a string,
 // number, boolean, or amount. Only one field will be non-nil/non-zero for each value.

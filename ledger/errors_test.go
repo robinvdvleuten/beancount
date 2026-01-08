@@ -19,7 +19,7 @@ func TestInsufficientInventoryError(t *testing.T) {
 			ast.NewPosting(account, ast.WithAmount("-100", "USD")),
 		),
 	)
-	txn.Pos = ast.Position{Filename: "test.bean", Line: 10}
+	txn.SetPosition(ast.Position{Filename: "test.bean", Line: 10})
 
 	// Create the error
 	details := errors.New("needed -100 USD but only have 50 USD")
@@ -34,23 +34,23 @@ func TestInsufficientInventoryError(t *testing.T) {
 	})
 
 	t.Run("All fields populated correctly", func(t *testing.T) {
-		assert.Equal(t, date, err.GetDate())
+		assert.Equal(t, date, err.Date())
 		assert.Equal(t, "Broker Inc", err.Payee)
 		assert.Equal(t, account, err.Account)
 		assert.Equal(t, details, err.Details)
-		assert.Equal(t, "test.bean", err.GetPosition().Filename)
-		assert.Equal(t, 10, err.GetPosition().Line)
-		assert.Equal(t, ast.Directive(txn), err.GetDirective())
+		assert.Equal(t, "test.bean", err.Position().Filename)
+		assert.Equal(t, 10, err.Position().Line)
+		assert.Equal(t, ast.Directive(txn), err.Directive())
 	})
 
 	t.Run("GetPosition method", func(t *testing.T) {
-		pos := err.GetPosition()
+		pos := err.Position()
 		assert.Equal(t, "test.bean", pos.Filename)
 		assert.Equal(t, 10, pos.Line)
 	})
 
 	t.Run("GetDirective method", func(t *testing.T) {
-		dir := err.GetDirective()
+		dir := err.Directive()
 		assert.Equal(t, ast.Directive(txn), dir)
 	})
 
@@ -60,7 +60,7 @@ func TestInsufficientInventoryError(t *testing.T) {
 	})
 
 	t.Run("GetDate method", func(t *testing.T) {
-		d := err.GetDate()
+		d := err.Date()
 		assert.Equal(t, date, d)
 	})
 
@@ -90,7 +90,7 @@ func TestCurrencyConstraintError(t *testing.T) {
 			ast.NewPosting(account, ast.WithAmount("100", "EUR")),
 		),
 	)
-	txn.Pos = ast.Position{Filename: "ledger.bean", Line: 25}
+	txn.SetPosition(ast.Position{Filename: "ledger.bean", Line: 25})
 
 	// Create the error
 	allowedCurrencies := []string{"USD", "GBP"}
@@ -105,24 +105,24 @@ func TestCurrencyConstraintError(t *testing.T) {
 	})
 
 	t.Run("All fields populated correctly", func(t *testing.T) {
-		assert.Equal(t, date, err.GetDate())
+		assert.Equal(t, date, err.Date())
 		assert.Equal(t, "Foreign Broker", err.Payee)
 		assert.Equal(t, account, err.Account)
 		assert.Equal(t, "EUR", err.Currency)
 		assert.Equal(t, allowedCurrencies, err.AllowedCurrencies)
-		assert.Equal(t, "ledger.bean", err.GetPosition().Filename)
-		assert.Equal(t, 25, err.GetPosition().Line)
-		assert.Equal(t, ast.Directive(txn), err.GetDirective())
+		assert.Equal(t, "ledger.bean", err.Position().Filename)
+		assert.Equal(t, 25, err.Position().Line)
+		assert.Equal(t, ast.Directive(txn), err.Directive())
 	})
 
 	t.Run("GetPosition method", func(t *testing.T) {
-		pos := err.GetPosition()
+		pos := err.Position()
 		assert.Equal(t, "ledger.bean", pos.Filename)
 		assert.Equal(t, 25, pos.Line)
 	})
 
 	t.Run("GetDirective method", func(t *testing.T) {
-		dir := err.GetDirective()
+		dir := err.Directive()
 		assert.Equal(t, ast.Directive(txn), dir)
 	})
 
@@ -132,7 +132,7 @@ func TestCurrencyConstraintError(t *testing.T) {
 	})
 
 	t.Run("GetDate method", func(t *testing.T) {
-		d := err.GetDate()
+		d := err.Date()
 		assert.Equal(t, date, d)
 	})
 

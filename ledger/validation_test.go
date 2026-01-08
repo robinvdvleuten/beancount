@@ -1529,14 +1529,11 @@ func TestValidateOpen(t *testing.T) {
 		{
 			name:     "valid open directive",
 			accounts: map[string]*Account{},
-			open: &ast.Open{
-				Date:    date2024,
-				Account: checking,
-			},
-			wantErrCount: 0,
-		},
-		{
-			name: "account already open",
+		open:        ast.NewOpen(date2024, checking, nil, ""),
+		wantErrCount: 0,
+	},
+	{
+		name: "account already open",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
 					Name:      checking,
@@ -1544,14 +1541,11 @@ func TestValidateOpen(t *testing.T) {
 					Inventory: NewInventory(),
 				},
 			},
-			open: &ast.Open{
-				Date:    date2025,
-				Account: checking,
-			},
-			wantErrCount: 1,
-		},
-		{
-			name: "reopening closed account - error (duplicate open)",
+		open:        ast.NewOpen(date2025, checking, nil, ""),
+		wantErrCount: 1,
+	},
+	{
+		name: "reopening closed account - error (duplicate open)",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
 					Name:      checking,
@@ -1560,37 +1554,27 @@ func TestValidateOpen(t *testing.T) {
 					Inventory: NewInventory(),
 				},
 			},
-			open: &ast.Open{
-				Date:    date2025,
-				Account: checking,
-			},
-			wantErrCount: 1, // Beancount does NOT allow reopening - duplicate open is an error
+		open:        ast.NewOpen(date2025, checking, nil, ""),
+		wantErrCount: 1, // Beancount does NOT allow reopening - duplicate open is an error
 		},
 		{
 			name:     "metadata copying",
 			accounts: map[string]*Account{},
-			open: func() *ast.Open {
-				open := &ast.Open{
-					Date:    date2024,
-					Account: checking,
-				}
-				note := ast.NewRawString("Test account")
-				open.Metadata = []*ast.Metadata{
-					{Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
-				}
-				return open
-			}(),
+	open: func() *ast.Open {
+			open := ast.NewOpen(date2024, checking, nil, "")
+			note := ast.NewRawString("Test account")
+			open.Metadata = []*ast.Metadata{
+				{Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
+			}
+			return open
+		}(),
 			wantErrCount:     0,
 			wantMetadataCopy: true,
 		},
 		{
 			name:     "constraint currencies copying",
 			accounts: map[string]*Account{},
-			open: &ast.Open{
-				Date:                 date2024,
-				Account:              checking,
-				ConstraintCurrencies: []string{"USD", "EUR"},
-			},
+		open: ast.NewOpen(date2024, checking, []string{"USD", "EUR"}, ""),
 			wantErrCount:      0,
 			wantConstraintLen: 2,
 		},
@@ -1643,10 +1627,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 		cfg.AccountNames.Assets = "Vermoegen"
 
 		v := newValidator(map[string]*Account{}, cfg)
-		errs, delta := v.validateOpen(context.Background(), &ast.Open{
-			Date:    date2024,
-			Account: customAccount,
-		})
+		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
 
 		assert.Equal(t, 0, len(errs))
 		assert.True(t, delta != nil)
@@ -1658,10 +1639,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 		// Don't set custom Vermoegen - should reject it
 
 		v := newValidator(map[string]*Account{}, cfg)
-		errs, delta := v.validateOpen(context.Background(), &ast.Open{
-			Date:    date2024,
-			Account: customAccount,
-		})
+		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
 
 		assert.Equal(t, 1, len(errs))
 		assert.True(t, delta == nil)
@@ -1683,12 +1661,9 @@ func TestValidateClose(t *testing.T) {
 		wantErrType  string
 	}{
 		{
-			name:     "closing non-existent account",
-			accounts: map[string]*Account{},
-			close: &ast.Close{
-				Date:    date2024,
-				Account: checking,
-			},
+			name:         "closing non-existent account",
+			accounts:     map[string]*Account{},
+			close:        ast.NewClose(date2024, checking),
 			wantErrCount: 1,
 			wantErrType:  "*ledger.AccountNotClosedError",
 		},
@@ -1702,10 +1677,7 @@ func TestValidateClose(t *testing.T) {
 					Inventory: NewInventory(),
 				},
 			},
-			close: &ast.Close{
-				Date:    date2025,
-				Account: checking,
-			},
+			close:        ast.NewClose(date2025, checking),
 			wantErrCount: 1,
 			wantErrType:  "*ledger.AccountAlreadyClosedError",
 		},
@@ -1718,10 +1690,7 @@ func TestValidateClose(t *testing.T) {
 					Inventory: NewInventory(),
 				},
 			},
-			close: &ast.Close{
-				Date:    date2025,
-				Account: checking,
-			},
+			close:        ast.NewClose(date2025, checking),
 			wantErrCount: 0,
 		},
 	}
@@ -1804,11 +1773,7 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			},
 			balanceAmount:   "1000.00",
 			balanceCurrency: "USD",
-			padEntry: &ast.Pad{
-				Date:       date2024Jan,
-				Account:    checking,
-				AccountPad: equity,
-			},
+			padEntry:            ast.NewPad(date2024Jan, checking, equity),
 			wantErr:             false,
 			wantPadding:         true,
 			wantShouldRemovePad: false, // Pads are now tracked separately and removed at end of processing
@@ -1820,12 +1785,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			},
 			balanceAmount:   "1000.00",
 			balanceCurrency: "USD",
-			padEntry: &ast.Pad{
-				Date:       date2024Mar, // After balance date
-				Account:    checking,
-				AccountPad: equity,
-			},
-			wantErr: true, // Pad after balance should error
+			padEntry: ast.NewPad(date2024Mar, checking, equity), // After balance date
+			wantErr:  true,                                        // Pad after balance should error
 		},
 		{
 			name: "pad on same date as balance",
@@ -1834,12 +1795,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			},
 			balanceAmount:   "1000.00",
 			balanceCurrency: "USD",
-			padEntry: &ast.Pad{
-				Date:       date2024Feb, // Same as balance date
-				Account:    checking,
-				AccountPad: equity,
-			},
-			wantErr: true, // Pad on same date should error
+			padEntry: ast.NewPad(date2024Feb, checking, equity), // Same as balance date
+			wantErr:  true,                                        // Pad on same date should error
 		},
 	}
 
@@ -1860,11 +1817,7 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			}
 
 			// Create balance directive
-			balance := &ast.Balance{
-				Date:    date2024Feb,
-				Account: checking,
-				Amount:  ast.NewAmount(tt.balanceAmount, tt.balanceCurrency),
-			}
+			balance := ast.NewBalance(date2024Feb, checking, ast.NewAmount(tt.balanceAmount, tt.balanceCurrency))
 
 			cfg := &Config{Tolerance: NewToleranceConfig()}
 			v := newValidator(accounts, cfg)

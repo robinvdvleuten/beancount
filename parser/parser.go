@@ -136,29 +136,30 @@ func (p *Parser) parseComment() *ast.Comment {
 		commentType = ast.SectionComment
 	}
 
-	return &ast.Comment{
-		Pos: ast.Position{
-			Filename: p.filename,
-			Offset:   tok.Start,
-			Line:     tok.Line,
-			Column:   tok.Column,
-		},
+	comment := &ast.Comment{
 		Content: content,
 		Type:    commentType,
 	}
+	comment.SetPosition(ast.Position{
+		Filename: p.filename,
+		Offset:   tok.Start,
+		Line:     tok.Line,
+		Column:   tok.Column,
+	})
+	return comment
 }
 
 // parseBlankLine parses a newline token into a BlankLine AST node.
 func (p *Parser) parseBlankLine() *ast.BlankLine {
 	tok := p.advance()
-	return &ast.BlankLine{
-		Pos: ast.Position{
-			Filename: p.filename,
-			Offset:   tok.Start,
-			Line:     tok.Line,
-			Column:   tok.Column,
-		},
-	}
+	blankLine := &ast.BlankLine{}
+	blankLine.SetPosition(ast.Position{
+		Filename: p.filename,
+		Offset:   tok.Start,
+		Line:     tok.Line,
+		Column:   tok.Column,
+	})
+	return blankLine
 }
 
 // parseOption parses: option "key" "value"
@@ -176,11 +177,12 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 		return nil, err
 	}
 
-	return &ast.Option{
-		Pos:   pos,
+	opt := &ast.Option{
 		Name:  name,
 		Value: value,
-	}, nil
+	}
+	opt.SetPosition(pos)
+	return opt, nil
 }
 
 // parseInclude parses: include "filename"
@@ -193,10 +195,11 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 		return nil, err
 	}
 
-	return &ast.Include{
-		Pos:      pos,
+	inc := &ast.Include{
 		Filename: filename,
-	}, nil
+	}
+	inc.SetPosition(pos)
+	return inc, nil
 }
 
 // parsePlugin parses: plugin "name" ["config"]
@@ -210,9 +213,9 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 	}
 
 	plugin := &ast.Plugin{
-		Pos:  pos,
 		Name: name,
 	}
+	plugin.SetPosition(pos)
 
 	// Optional config string
 	if p.check(STRING) {
@@ -236,10 +239,11 @@ func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
 		return nil, err
 	}
 
-	return &ast.Pushtag{
-		Pos: pos,
+	pt := &ast.Pushtag{
 		Tag: tag,
-	}, nil
+	}
+	pt.SetPosition(pos)
+	return pt, nil
 }
 
 // parsePoptag parses: poptag #tag
@@ -252,10 +256,11 @@ func (p *Parser) parsePoptag() (*ast.Poptag, error) {
 		return nil, err
 	}
 
-	return &ast.Poptag{
-		Pos: pos,
+	pt := &ast.Poptag{
 		Tag: tag,
-	}, nil
+	}
+	pt.SetPosition(pos)
+	return pt, nil
 }
 
 // parsePushmeta parses: pushmeta key: value
@@ -270,11 +275,12 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 
 	p.consume(COLON, "expected ':'")
 
-	return &ast.Pushmeta{
-		Pos:   pos,
+	pm := &ast.Pushmeta{
 		Key:   key,
 		Value: p.parseRestOfLine(),
-	}, nil
+	}
+	pm.SetPosition(pos)
+	return pm, nil
 }
 
 // parsePopmeta parses: popmeta key:
@@ -289,10 +295,11 @@ func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 
 	p.consume(COLON, "expected ':'")
 
-	return &ast.Popmeta{
-		Pos: pos,
+	pm := &ast.Popmeta{
 		Key: key,
-	}, nil
+	}
+	pm.SetPosition(pos)
+	return pm, nil
 }
 
 // parseDirective dispatches to specific directive parsers based on the keyword.

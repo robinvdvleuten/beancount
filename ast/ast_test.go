@@ -6,6 +6,85 @@ import (
 	"github.com/alecthomas/assert/v2"
 )
 
+// newOpenForTest creates an Open directive for testing.
+func newOpenForTest(line int, date *Date, account Account) *Open {
+	open := &Open{Account: account}
+	open.SetPosition(Position{Line: line})
+	open.SetDate(date)
+	return open
+}
+
+// newCloseForTest creates a Close directive for testing.
+func newCloseForTest(line int, date *Date, account Account) *Close {
+	close := &Close{Account: account}
+	close.SetPosition(Position{Line: line})
+	close.SetDate(date)
+	return close
+}
+
+// newOptionForTest creates an Option for testing.
+func newOptionForTest(line int, name, value RawString) *Option {
+	opt := &Option{Name: name, Value: value}
+	opt.SetPosition(Position{Line: line})
+	return opt
+}
+
+// newIncludeForTest creates an Include for testing.
+func newIncludeForTest(line int, filename RawString) *Include {
+	inc := &Include{Filename: filename}
+	inc.SetPosition(Position{Line: line})
+	return inc
+}
+
+// newPluginForTest creates a Plugin for testing.
+func newPluginForTest(line int, name RawString) *Plugin {
+	plugin := &Plugin{Name: name}
+	plugin.SetPosition(Position{Line: line})
+	return plugin
+}
+
+// newPushtagForTest creates a Pushtag for testing.
+func newPushtagForTest(line int, tag Tag) *Pushtag {
+	pt := &Pushtag{Tag: tag}
+	pt.SetPosition(Position{Line: line})
+	return pt
+}
+
+// newPoptagForTest creates a Poptag for testing.
+func newPoptagForTest(line int, tag Tag) *Poptag {
+	pt := &Poptag{Tag: tag}
+	pt.SetPosition(Position{Line: line})
+	return pt
+}
+
+// newPushmetaForTest creates a Pushmeta for testing.
+func newPushmetaForTest(line int, key, value string) *Pushmeta {
+	pm := &Pushmeta{Key: key, Value: value}
+	pm.SetPosition(Position{Line: line})
+	return pm
+}
+
+// newPopmetaForTest creates a Popmeta for testing.
+func newPopmetaForTest(line int, key string) *Popmeta {
+	pm := &Popmeta{Key: key}
+	pm.SetPosition(Position{Line: line})
+	return pm
+}
+
+// newCommentForTest creates a Comment for testing.
+func newCommentForTest(line int, content string) *Comment {
+	c := &Comment{Content: content}
+	c.SetPosition(Position{Line: line})
+	return c
+}
+
+// newBlankLineForTest creates a BlankLine for testing.
+func newBlankLineForTest(line int) *BlankLine {
+	bl := &BlankLine{}
+	bl.SetPosition(Position{Line: line})
+	return bl
+}
+
 func TestLinesWithMultipleItems(t *testing.T) {
 	t.Run("EmptyAST", func(t *testing.T) {
 		tree := &AST{}
@@ -19,16 +98,8 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Directives: []Directive{
-				&Open{
-					Pos:     Position{Line: 1},
-					Date:    date,
-					Account: account,
-				},
-				&Open{
-					Pos:     Position{Line: 2},
-					Date:    date,
-					Account: account,
-				},
+				newOpenForTest(1, date, account),
+				newOpenForTest(2, date, account),
 			},
 		}
 
@@ -42,16 +113,8 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Directives: []Directive{
-				&Open{
-					Pos:     Position{Line: 1},
-					Date:    date,
-					Account: account,
-				},
-				&Close{
-					Pos:     Position{Line: 1}, // Same line as Open
-					Date:    date,
-					Account: account,
-				},
+				newOpenForTest(1, date, account),
+				newCloseForTest(1, date, account), // Same line as Open
 			},
 		}
 
@@ -66,17 +129,10 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Directives: []Directive{
-				&Open{
-					Pos:     Position{Line: 1},
-					Date:    date,
-					Account: account,
-				},
+				newOpenForTest(1, date, account),
 			},
 			Comments: []*Comment{
-				{
-					Pos:     Position{Line: 1}, // Same line as Open
-					Content: "; This is a comment",
-				},
+				newCommentForTest(1, "; This is a comment"), // Same line as Open
 			},
 		}
 
@@ -91,14 +147,10 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Directives: []Directive{
-				&Open{
-					Pos:     Position{Line: 1},
-					Date:    date,
-					Account: account,
-				},
+				newOpenForTest(1, date, account),
 			},
 			BlankLines: []*BlankLine{
-				{Pos: Position{Line: 2}}, // Different line
+				newBlankLineForTest(2), // Different line
 			},
 		}
 
@@ -112,24 +164,13 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Options: []*Option{
-				{
-					Pos:   Position{Line: 5},
-					Name:  NewRawString("title"),
-					Value: NewRawString("My Ledger"),
-				},
+				newOptionForTest(5, NewRawString("title"), NewRawString("My Ledger")),
 			},
 			Includes: []*Include{
-				{
-					Pos:      Position{Line: 5}, // Same line as Option
-					Filename: NewRawString("accounts.beancount"),
-				},
+				newIncludeForTest(5, NewRawString("accounts.beancount")), // Same line as Option
 			},
 			Directives: []Directive{
-				&Open{
-					Pos:     Position{Line: 5}, // Same line as Option and Include
-					Date:    date,
-					Account: account,
-				},
+				newOpenForTest(5, date, account), // Same line as Option and Include
 			},
 		}
 
@@ -144,17 +185,10 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Pushtags: []*Pushtag{
-				{
-					Pos: Position{Line: 10},
-					Tag: NewTag("vacation"),
-				},
+				newPushtagForTest(10, NewTag("vacation")),
 			},
 			Directives: []Directive{
-				&Open{
-					Pos:     Position{Line: 10}, // Same line as Pushtag
-					Date:    date,
-					Account: account,
-				},
+				newOpenForTest(10, date, account), // Same line as Pushtag
 			},
 		}
 
@@ -169,11 +203,11 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Directives: []Directive{
-				&Open{Pos: Position{Line: 1}, Date: date, Account: account},
-				&Close{Pos: Position{Line: 1}, Date: date, Account: account}, // Line 1 has 2 items
-				&Open{Pos: Position{Line: 2}, Date: date, Account: account},  // Line 2 has 1 item
-				&Open{Pos: Position{Line: 3}, Date: date, Account: account},
-				&Close{Pos: Position{Line: 3}, Date: date, Account: account}, // Line 3 has 2 items
+				newOpenForTest(1, date, account),
+				newCloseForTest(1, date, account), // Line 1 has 2 items
+				newOpenForTest(2, date, account),  // Line 2 has 1 item
+				newOpenForTest(3, date, account),
+				newCloseForTest(3, date, account), // Line 3 has 2 items
 			},
 		}
 
@@ -190,34 +224,34 @@ func TestLinesWithMultipleItems(t *testing.T) {
 
 		tree := &AST{
 			Options: []*Option{
-				{Pos: Position{Line: 1}, Name: NewRawString("title"), Value: NewRawString("Test")},
+				newOptionForTest(1, NewRawString("title"), NewRawString("Test")),
 			},
 			Includes: []*Include{
-				{Pos: Position{Line: 2}, Filename: NewRawString("test.beancount")},
+				newIncludeForTest(2, NewRawString("test.beancount")),
 			},
 			Plugins: []*Plugin{
-				{Pos: Position{Line: 3}, Name: NewRawString("test_plugin")},
+				newPluginForTest(3, NewRawString("test_plugin")),
 			},
 			Pushtags: []*Pushtag{
-				{Pos: Position{Line: 4}, Tag: NewTag("test")},
+				newPushtagForTest(4, NewTag("test")),
 			},
 			Poptags: []*Poptag{
-				{Pos: Position{Line: 5}, Tag: NewTag("test")},
+				newPoptagForTest(5, NewTag("test")),
 			},
 			Pushmetas: []*Pushmeta{
-				{Pos: Position{Line: 6}, Key: "key", Value: "value"},
+				newPushmetaForTest(6, "key", "value"),
 			},
 			Popmetas: []*Popmeta{
-				{Pos: Position{Line: 7}, Key: "key"},
+				newPopmetaForTest(7, "key"),
 			},
 			Directives: []Directive{
-				&Open{Pos: Position{Line: 8}, Date: date, Account: account},
+				newOpenForTest(8, date, account),
 			},
 			Comments: []*Comment{
-				{Pos: Position{Line: 9}, Content: "; comment"},
+				newCommentForTest(9, "; comment"),
 			},
 			BlankLines: []*BlankLine{
-				{Pos: Position{Line: 10}},
+				newBlankLineForTest(10),
 			},
 		}
 

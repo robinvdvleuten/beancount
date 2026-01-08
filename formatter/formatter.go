@@ -27,7 +27,6 @@ import (
 	"cmp"
 	"context"
 	"io"
-	"reflect"
 	"slices"
 	"strings"
 
@@ -203,24 +202,13 @@ func isValidDirective(d ast.Directive) bool {
 		return len(txn.Postings) >= 2
 	}
 
-	// Check dated directives for valid dates
-	val := reflect.ValueOf(d)
-	if val.Kind() == reflect.Ptr {
-		val = val.Elem()
-	}
-
-	dateField := val.FieldByName("Date")
-	if !dateField.IsValid() {
-		return true // Not a dated directive, so it's valid
-	}
-
-	// Get the Date pointer and check its string representation
-	datePtr, ok := dateField.Interface().(*ast.Date)
-	if !ok || datePtr == nil {
+	// All directives implement Date() method, check if date is valid
+	date := d.Date()
+	if date == nil {
 		return false
 	}
 
-	return datePtr.String() != ""
+	return date.String() != ""
 }
 
 // widthMetrics holds calculated width information for formatting.
@@ -645,7 +633,7 @@ func (f *Formatter) formatDirective(d ast.Directive, buf *strings.Builder) {
 
 // formatOption formats an option directive.
 func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(opt.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(opt.Position().Line, buf) {
 		return
 	}
 
@@ -658,7 +646,7 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 
 // formatInclude formats an include directive.
 func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(inc.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(inc.Position().Line, buf) {
 		return
 	}
 
@@ -669,14 +657,14 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 
 // formatCommodity formats a commodity directive.
 func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
-		if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) {
+		if f.tryPreserveOriginalLine(c.Position().Line, buf) {
 			f.formatMetadata(c.Metadata, buf)
 			return
 		}
 	}
 
-	buf.WriteString(c.Date.String())
+	buf.WriteString(c.Date().String())
 	buf.WriteString(" commodity ")
 	buf.WriteString(c.Currency)
 	// Append inline comment if present
@@ -688,17 +676,17 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 	// Only try to preserve the line if it contains the complete directive
 	// (no constraint currencies or booking method on separate lines)
-	if f.canPreserveDirectiveLine(o.Pos.Line, o.Date) && len(o.ConstraintCurrencies) == 0 && o.BookingMethod == "" {
-		originalLine := f.getOriginalLine(o.Pos.Line)
+	if f.canPreserveDirectiveLine(o.Position().Line, o.Date()) && len(o.ConstraintCurrencies) == 0 && o.BookingMethod == "" {
+		originalLine := f.getOriginalLine(o.Position().Line)
 		if strings.Contains(originalLine, string(o.Account)) {
-			if f.tryPreserveOriginalLine(o.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(o.Position().Line, buf) {
 				f.formatMetadata(o.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(o.Date.String())
+	buf.WriteString(o.Date().String())
 	buf.WriteString(" open ")
 	buf.WriteString(string(o.Account))
 
@@ -724,17 +712,17 @@ func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 
 // formatClose formats a close directive.
 func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) {
-		originalLine := f.getOriginalLine(c.Pos.Line)
+	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) {
+		originalLine := f.getOriginalLine(c.Position().Line)
 		if strings.Contains(originalLine, string(c.Account)) {
-			if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(c.Position().Line, buf) {
 				f.formatMetadata(c.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(c.Date.String())
+	buf.WriteString(c.Date().String())
 	buf.WriteString(" close ")
 	buf.WriteString(string(c.Account))
 	// Append inline comment if present
@@ -744,7 +732,7 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 
 // formatBalance formats a balance directive.
 func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
-	buf.WriteString(b.Date.String())
+	buf.WriteString(b.Date().String())
 	buf.WriteString(" balance ")
 	buf.WriteString(string(b.Account))
 
@@ -766,17 +754,17 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 
 // formatPad formats a pad directive.
 func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(p.Pos.Line, p.Date) {
-		originalLine := f.getOriginalLine(p.Pos.Line)
+	if f.canPreserveDirectiveLine(p.Position().Line, p.Date()) {
+		originalLine := f.getOriginalLine(p.Position().Line)
 		if strings.Contains(originalLine, string(p.Account)) && strings.Contains(originalLine, string(p.AccountPad)) {
-			if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(p.Position().Line, buf) {
 				f.formatMetadata(p.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(p.Date.String())
+	buf.WriteString(p.Date().String())
 	buf.WriteString(" pad ")
 	buf.WriteString(string(p.Account))
 	buf.WriteByte(' ')
@@ -788,17 +776,17 @@ func (f *Formatter) formatPad(p *ast.Pad, buf *strings.Builder) {
 
 // formatNote formats a note directive.
 func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(n.Pos.Line, n.Date) && !hasAnyInlineMetadata(n.Metadata) {
-		originalLine := f.getOriginalLine(n.Pos.Line)
+	if f.canPreserveDirectiveLine(n.Position().Line, n.Date()) && !hasAnyInlineMetadata(n.Metadata) {
+		originalLine := f.getOriginalLine(n.Position().Line)
 		if strings.Contains(originalLine, string(n.Account)) && strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(n.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(n.Position().Line, buf) {
 				f.formatMetadata(n.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(n.Date.String())
+	buf.WriteString(n.Date().String())
 	buf.WriteString(" note ")
 	buf.WriteString(string(n.Account))
 	buf.WriteByte(' ')
@@ -810,17 +798,17 @@ func (f *Formatter) formatNote(n *ast.Note, buf *strings.Builder) {
 
 // formatDocument formats a document directive.
 func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(d.Pos.Line, d.Date) && !hasAnyInlineMetadata(d.Metadata) {
-		originalLine := f.getOriginalLine(d.Pos.Line)
+	if f.canPreserveDirectiveLine(d.Position().Line, d.Date()) && !hasAnyInlineMetadata(d.Metadata) {
+		originalLine := f.getOriginalLine(d.Position().Line)
 		if strings.Contains(originalLine, string(d.Account)) && strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(d.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(d.Position().Line, buf) {
 				f.formatMetadata(d.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(d.Date.String())
+	buf.WriteString(d.Date().String())
 	buf.WriteString(" document ")
 	buf.WriteString(string(d.Account))
 	buf.WriteByte(' ')
@@ -832,7 +820,7 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 
 // formatPrice formats a price directive.
 func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
-	buf.WriteString(p.Date.String())
+	buf.WriteString(p.Date().String())
 	buf.WriteString(" price ")
 	buf.WriteString(p.Commodity)
 
@@ -848,17 +836,17 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 
 // formatEvent formats an event directive.
 func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(e.Pos.Line, e.Date) && !hasAnyInlineMetadata(e.Metadata) {
-		originalLine := f.getOriginalLine(e.Pos.Line)
+	if f.canPreserveDirectiveLine(e.Position().Line, e.Date()) && !hasAnyInlineMetadata(e.Metadata) {
+		originalLine := f.getOriginalLine(e.Position().Line)
 		if strings.Count(originalLine, "\"") >= 4 {
-			if f.tryPreserveOriginalLine(e.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(e.Position().Line, buf) {
 				f.formatMetadata(e.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(e.Date.String())
+	buf.WriteString(e.Date().String())
 	buf.WriteString(" event ")
 	f.formatRawString(e.Name, buf)
 	buf.WriteByte(' ')
@@ -870,17 +858,17 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 
 // formatCustom formats a custom directive.
 func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Pos.Line, c.Date) && !hasAnyInlineMetadata(c.Metadata) {
-		originalLine := f.getOriginalLine(c.Pos.Line)
+	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) && !hasAnyInlineMetadata(c.Metadata) {
+		originalLine := f.getOriginalLine(c.Position().Line)
 		if strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(c.Pos.Line, buf) {
+			if f.tryPreserveOriginalLine(c.Position().Line, buf) {
 				f.formatMetadata(c.Metadata, buf)
 				return
 			}
 		}
 	}
 
-	buf.WriteString(c.Date.String())
+	buf.WriteString(c.Date().String())
 	buf.WriteString(" custom ")
 	f.formatRawString(c.Type, buf)
 
@@ -910,7 +898,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 
 // formatPlugin formats a plugin directive.
 func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
 		return
 	}
 
@@ -925,7 +913,7 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 
 // formatPushtag formats a pushtag directive.
 func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
 		return
 	}
 
@@ -936,7 +924,7 @@ func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
 
 // formatPoptag formats a poptag directive.
 func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
 		return
 	}
 
@@ -947,7 +935,7 @@ func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
 
 // formatPushmeta formats a pushmeta directive.
 func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
 		return
 	}
 
@@ -960,7 +948,7 @@ func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
 
 // formatPopmeta formats a popmeta directive.
 func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Pos.Line, buf) {
+	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
 		return
 	}
 
@@ -975,7 +963,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 		return
 	}
 
-	buf.WriteString(t.Date.String())
+	buf.WriteString(t.Date().String())
 	buf.WriteByte(' ')
 	buf.WriteString(t.Flag)
 
