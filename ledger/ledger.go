@@ -102,6 +102,16 @@ func New() *Ledger {
 	}
 }
 
+// GetAccountTypeFromName converts an account type name to its enum value.
+// Returns (0, false) if the name doesn't match any configured account type.
+func (l *Ledger) GetAccountTypeFromName(name string) (ast.AccountType, bool) {
+	cfg := l.config
+	if cfg == nil {
+		cfg = NewConfig()
+	}
+	return cfg.GetAccountTypeFromName(name)
+}
+
 // Process processes an AST and builds the ledger state
 func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	// Extract telemetry collector from context
@@ -255,33 +265,6 @@ func (l *Ledger) Accounts() map[string]*Account {
 	return result
 }
 
-// GetAccountsByType returns all accounts of the specified type, sorted by name.
-func (l *Ledger) GetAccountsByType(accountType ast.AccountType) []*Account {
-	typeName := l.config.ToAccountTypeName(accountType)
-	var accounts []*Account
-
-	l.forEachAccount(func(acc *Account) bool {
-		if acc.Type == typeName {
-			accounts = append(accounts, acc)
-		}
-		return true
-	})
-
-	// Sort by name for deterministic output
-	sort.Slice(accounts, func(i, j int) bool {
-		return accounts[i].Name < accounts[j].Name
-	})
-
-	return accounts
-}
-
-// GetAccountType returns the AccountType enum for an account.
-// Looks up the account's configured root name and converts it to the enum.
-// Returns (0, false) if the account's type name is not a valid configured account type.
-func (l *Ledger) GetAccountType(account *Account) (ast.AccountType, bool) {
-	return l.config.GetAccountTypeFromName(account.Type)
-}
-
 // GetPrice returns the exchange rate from one currency to another at a given date,
 // using forward-fill semantics (most recent price on or before the date).
 // Returns (rate, found) where found is false if no price exists.
@@ -351,85 +334,6 @@ func (l *Ledger) buildForwardFillGraph(date *ast.Date) *Graph {
 	return tempGraph
 }
 
-// HasPrice returns true if a price exists for the given currency pair on or before the date.
-func (l *Ledger) HasPrice(date *ast.Date, fromCurrency, toCurrency string) bool {
-	_, found := l.GetPrice(date, fromCurrency, toCurrency)
-	return found
-}
-
-// ConvertAmount converts an amount from one currency to another at a given date.
-// Uses pathfinding to find a conversion route if a direct edge doesn't exist.
-// Returns (converted amount, error). Same-currency conversions always return 1.0.
-func (l *Ledger) ConvertAmount(amount decimal.Decimal, fromCurrency, toCurrency string, date *ast.Date) (decimal.Decimal, error) {
-	if fromCurrency == toCurrency {
-		return amount, nil
-	}
-
-	rate, found := l.GetPrice(date, fromCurrency, toCurrency)
-	if !found {
-		return decimal.Zero, fmt.Errorf("no price found for %s→%s on %s", fromCurrency, toCurrency, date.String())
-	}
-
-	return amount.Mul(rate), nil
-}
-
-// ConvertBalance converts a multi-currency balance map to a single currency by summing all amounts
-// using the exchange rates on the given date. Uses forward-fill semantics for price lookups.
-//
-// Returns the consolidated amount, or an error if any currency conversion fails.
-// Same-currency amounts are added directly without conversion overhead.
-//
-// Example: ConvertBalance({"USD": 100, "EUR": 50}, "USD", date) returns
-// 100 + (50 * EUR→USD rate) = consolidated USD amount
-func (l *Ledger) ConvertBalance(balance map[string]decimal.Decimal, targetCurrency string, date *ast.Date) (decimal.Decimal, error) {
-	if len(balance) == 0 {
-		return decimal.Zero, nil
-	}
-
-	// If only one currency and it's the target, return directly
-	if len(balance) == 1 {
-		if amount, ok := balance[targetCurrency]; ok {
-			return amount, nil
-		}
-	}
-
-	result := decimal.Zero
-
-	// Sum amounts, converting each currency to target
-	for currency, amount := range balance {
-		if amount.IsZero() {
-			continue
-		}
-
-		// Same currency - add directly
-		if currency == targetCurrency {
-			result = result.Add(amount)
-			continue
-		}
-
-		// Convert currency to target currency
-		rate, found := l.GetPrice(date, currency, targetCurrency)
-		if !found {
-			return decimal.Zero, fmt.Errorf(
-				"no price found to convert %s to %s on %s",
-				currency, targetCurrency, date.String(),
-			)
-		}
-
-		converted := amount.Mul(rate)
-		result = result.Add(converted)
-	}
-
-	return result, nil
-}
-
-// FindPath finds a path of price edges from one currency to another at a given date.
-// Returns the edges in order, or an error if no path exists.
-// Useful for debugging or understanding currency conversion routes.
-func (l *Ledger) FindPath(fromCurrency, toCurrency string, date *ast.Date) ([]*Edge, error) {
-	return l.graph.FindPath(fromCurrency, toCurrency, date)
-}
-
 // Graph returns the underlying graph for advanced queries.
 func (l *Ledger) Graph() *Graph {
 	return l.graph
@@ -447,148 +351,259 @@ func (l *Ledger) forEachAccount(fn func(*Account) bool) {
 	}
 }
 
-// GetBalancesAsOf returns the balance of every account as of a given date.
-// Accounts with no postings before the date are omitted from the result.
-// Balances are returned in no particular order.
-func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
-	var result []AccountBalance
-	l.forEachAccount(func(account *Account) bool {
-		acctBalance := account.GetBalanceAsOf(date)
-		if !acctBalance.IsZero() {
-			result = append(result, *acctBalance)
-		}
-		return true
-	})
-	return result
-}
-
-// GetBalancesAsOfInCurrency returns all accounts consolidated to a single
-// currency as of a given date. Accounts with no postings before the date are
-// omitted from the result.
+// GetBalanceTree returns a hierarchical view of account balances for reporting.
 //
-// Returns an error if any currency conversion fails (e.g., missing price).
-// Balances are returned in no particular order.
-func (l *Ledger) GetBalancesAsOfInCurrency(
-	currency string,
-	date *ast.Date,
-) ([]AccountBalance, error) {
-	var result []AccountBalance
-	var errs []error
-
-	l.forEachAccount(func(account *Account) bool {
-		acctBalance := account.GetBalanceAsOf(date)
-		if acctBalance.IsZero() {
-			return true // continue to next account
-		}
-
-		// Convert to target currency
-		amount, err := l.ConvertBalance(acctBalance.Balance.ToMap(), currency, date)
-		if err != nil {
-			errs = append(errs, err)
-			return true // collect error and continue
-		}
-
-		converted := NewBalance()
-		converted.Set(currency, amount)
-
-		result = append(result, AccountBalance{
-			Account: acctBalance.Account,
-			Balance: converted,
-		})
-		return true
-	})
-
-	if len(errs) > 0 {
-		return nil, &ValidationErrors{Errors: errs}
+// Parameters:
+//   - types: Account types to include (e.g., Assets, Liabilities). Empty means all types (trial balance).
+//   - startDate, endDate: Date range for balance calculation.
+//   - Both nil: Current inventory state (all postings).
+//   - startDate == endDate: Point-in-time balance (balance sheet).
+//   - startDate < endDate: Period change (income statement).
+//
+// Returns error if startDate > endDate.
+//
+// The tree is organized with account types as virtual root nodes. Balances are
+// aggregated bottom-up so parent nodes include the sum of all their descendants.
+func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast.Date) (*BalanceTree, error) {
+	// Validate date range
+	if startDate != nil && endDate != nil && startDate.After(endDate.Time) {
+		return nil, fmt.Errorf("startDate %s is after endDate %s", startDate.String(), endDate.String())
 	}
 
-	return result, nil
-}
-
-// GetBalancesInPeriod returns net balance changes for accounts within a date range [start, end].
-// Optionally filters by account type (e.g., Income, Expenses for income statement).
-// Accounts with no postings in the period are omitted from the result.
-// Balances are returned in no particular order.
-func (l *Ledger) GetBalancesInPeriod(
-	start, end *ast.Date,
-	accountTypes ...ast.AccountType,
-) []AccountBalance {
-	var result []AccountBalance
-
-	// Build type filter if specified (convert enums to configured names)
+	// Build type filter from enum to configured names
 	typeFilter := make(map[string]bool)
-	for _, t := range accountTypes {
+	for _, t := range types {
 		typeFilter[l.config.ToAccountTypeName(t)] = true
 	}
 
+	// Collect all accounts with their balances
+	var entries []balanceTreeEntry
+	currencySet := make(map[string]bool)
+
 	l.forEachAccount(func(account *Account) bool {
 		// Skip if type filter is set and account doesn't match
-		if len(accountTypes) > 0 && !typeFilter[account.Type] {
+		if len(typeFilter) > 0 && !typeFilter[account.Type] {
 			return true
 		}
 
-		acctBalance := account.GetBalanceInPeriod(start, end)
-		if !acctBalance.IsZero() {
-			result = append(result, *acctBalance)
+		// Calculate balance for the period
+		var balance *Balance
+		if startDate == nil && endDate == nil {
+			// Current inventory state
+			balance = l.getAccountCurrentBalance(account)
+		} else {
+			// Use GetBalanceInPeriod with the dates
+			start := *startDate
+			end := *endDate
+			balance = account.GetBalanceInPeriod(start, end)
 		}
+
+		entries = append(entries, balanceTreeEntry{account: account, balance: balance})
+
+		// Track currencies
+		for _, currency := range balance.Currencies() {
+			currencySet[currency] = true
+		}
+
 		return true
 	})
 
-	return result
+	// Build sorted currency list
+	currencies := make([]string, 0, len(currencySet))
+	for currency := range currencySet {
+		currencies = append(currencies, currency)
+	}
+	sort.Strings(currencies)
+
+	// Build the tree structure
+	tree := l.buildBalanceTree(entries, typeFilter)
+
+	// Set metadata
+	if startDate != nil {
+		s := startDate.String()
+		tree.StartDate = &s
+	}
+	if endDate != nil {
+		e := endDate.String()
+		tree.EndDate = &e
+	}
+	tree.Currencies = currencies
+
+	return tree, nil
 }
 
-// CloseBooks moves Income and Expense balances to Equity:Earnings:Current.
-// Returns synthetic transactions created for closing (for audit trail/AST insertion).
-// The closingDate is typically the last day of the accounting period.
-func (l *Ledger) CloseBooks(closingDate *ast.Date) []*ast.Transaction {
-	var syntheticTxns []*ast.Transaction
-
-	// Get all Income and Expense balances accumulated up to closing date
-	incomeExpenses := l.GetBalancesInPeriod(
-		&ast.Date{}, // Dummy start date (will use zero)
-		closingDate,
-		ast.AccountTypeIncome, ast.AccountTypeExpenses,
-	)
-
-	// If no activity, nothing to close
-	if len(incomeExpenses) == 0 {
-		return syntheticTxns
+// getAccountCurrentBalance returns the current inventory balance for an account.
+func (l *Ledger) getAccountCurrentBalance(account *Account) *Balance {
+	if account.Inventory == nil {
+		return NewBalance()
 	}
 
-	// Build closing transactions: each account → Equity:Earnings:Current
-	earningsAccount, err := ast.NewAccount("Equity:Earnings:Current")
-	if err != nil {
-		// Should never happen for hardcoded account name
-		return syntheticTxns
+	balance := NewBalance()
+	for _, currency := range account.Inventory.Currencies() {
+		balance.Set(currency, account.Inventory.Get(currency))
+	}
+	return balance
+}
+
+// buildBalanceTree constructs the hierarchical tree structure from account entries.
+// balanceTreeEntry is used internally by GetBalanceTree.
+type balanceTreeEntry struct {
+	account *Account
+	balance *Balance
+}
+
+func (l *Ledger) buildBalanceTree(entries []balanceTreeEntry, typeFilter map[string]bool) *BalanceTree {
+	// Group accounts by type
+	accountsByType := make(map[string][]balanceTreeEntry)
+	for _, entry := range entries {
+		accountsByType[entry.account.Type] = append(accountsByType[entry.account.Type], entry)
 	}
 
-	for _, accBal := range incomeExpenses {
-		accountName, err := ast.NewAccount(accBal.Account)
-		if err != nil {
-			// Skip malformed account names (shouldn't happen)
+	// Determine which types to include
+	var typeOrder []ast.AccountType
+	if len(typeFilter) > 0 {
+		// Use filtered types in standard order
+		for _, t := range []ast.AccountType{
+			ast.AccountTypeAssets,
+			ast.AccountTypeLiabilities,
+			ast.AccountTypeEquity,
+			ast.AccountTypeIncome,
+			ast.AccountTypeExpenses,
+		} {
+			typeName := l.config.ToAccountTypeName(t)
+			if typeFilter[typeName] {
+				typeOrder = append(typeOrder, t)
+			}
+		}
+	} else {
+		// All types in standard order
+		typeOrder = []ast.AccountType{
+			ast.AccountTypeAssets,
+			ast.AccountTypeLiabilities,
+			ast.AccountTypeEquity,
+			ast.AccountTypeIncome,
+			ast.AccountTypeExpenses,
+		}
+	}
+
+	// Build root nodes for each type
+	var roots []*BalanceNode
+	for _, accountType := range typeOrder {
+		typeName := l.config.ToAccountTypeName(accountType)
+		typeEntries := accountsByType[typeName]
+
+		if len(typeEntries) == 0 {
 			continue
 		}
 
-		// Create postings for each currency in the balance
-		for _, currencyAmount := range accBal.Balance.Entries() {
-			if currencyAmount.Amount.IsZero() {
-				continue
-			}
+		// Build subtree for this type
+		root := l.buildTypeSubtree(typeName, typeEntries)
+		roots = append(roots, root)
+	}
 
-			// Create synthetic transaction: close to equity
-			txn := ast.NewTransaction(closingDate, "Period closing",
-				ast.WithFlag("P"), // Mark as padding/synthetic
-				ast.WithPostings(
-					ast.NewPosting(accountName, ast.WithAmount(currencyAmount.Amount.Neg().String(), currencyAmount.Currency)),
-					ast.NewPosting(earningsAccount), // Inferred amount
-				),
-			)
+	return &BalanceTree{Roots: roots}
+}
 
-			syntheticTxns = append(syntheticTxns, txn)
+// buildTypeSubtree builds a subtree for a single account type.
+func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode {
+	// Create a map of account name to node for quick lookup
+	nodeMap := make(map[string]*BalanceNode)
+
+	// Create leaf nodes for all accounts
+	for _, entry := range entries {
+		accountName := string(entry.account.Name)
+		nodeMap[accountName] = &BalanceNode{
+			Name:     accountName,
+			Account:  accountName,
+			Depth:    strings.Count(accountName, ":"),
+			Balance:  entry.balance.Copy(),
+			Children: nil,
 		}
 	}
 
-	return syntheticTxns
+	// Build parent-child relationships and create intermediate nodes
+	for _, entry := range entries {
+		accountName := string(entry.account.Name)
+		parts := strings.Split(accountName, ":")
+
+		// Ensure all parent nodes exist
+		for i := 1; i < len(parts); i++ {
+			parentPath := strings.Join(parts[:i], ":")
+			childPath := strings.Join(parts[:i+1], ":")
+
+			// Create parent node if it doesn't exist
+			if _, exists := nodeMap[parentPath]; !exists {
+				nodeMap[parentPath] = &BalanceNode{
+					Name:     parentPath,
+					Account:  parentPath,
+					Depth:    i - 1,
+					Balance:  NewBalance(),
+					Children: nil,
+				}
+			}
+
+			// Add child to parent if not already added
+			parent := nodeMap[parentPath]
+			child := nodeMap[childPath]
+			if child != nil {
+				found := false
+				for _, c := range parent.Children {
+					if c.Name == child.Name {
+						found = true
+						break
+					}
+				}
+				if !found {
+					parent.Children = append(parent.Children, child)
+				}
+			}
+		}
+	}
+
+	// Sort children at each level
+	for _, node := range nodeMap {
+		sort.Slice(node.Children, func(i, j int) bool {
+			return node.Children[i].Name < node.Children[j].Name
+		})
+	}
+
+	// Aggregate balances bottom-up using post-order traversal
+	var aggregate func(node *BalanceNode)
+	aggregate = func(node *BalanceNode) {
+		for _, child := range node.Children {
+			aggregate(child)
+			node.Balance.Merge(child.Balance)
+		}
+	}
+
+	// Create the type root node
+	root := &BalanceNode{
+		Name:     typeName,
+		Account:  "", // Virtual root, not an actual account
+		Depth:    0,
+		Balance:  NewBalance(),
+		Children: nil,
+	}
+
+	// Find direct children of the type root (depth 1 nodes)
+	for name, node := range nodeMap {
+		if node.Depth == 1 && strings.HasPrefix(name, typeName+":") {
+			root.Children = append(root.Children, node)
+		}
+	}
+
+	// Sort root's children
+	sort.Slice(root.Children, func(i, j int) bool {
+		return root.Children[i].Name < root.Children[j].Name
+	})
+
+	// Aggregate balances from children to root
+	for _, child := range root.Children {
+		aggregate(child)
+		root.Balance.Merge(child.Balance)
+	}
+
+	return root
 }
 
 // processDirective processes a single directive

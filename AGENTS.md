@@ -122,35 +122,33 @@ beancount format input.beancount | bean-check /dev/stdin
 
 ```go
 // ✓ CORRECT: Owner computes, coordinator delegates
-func (a *Account) GetBalanceAsOf(date *ast.Date) map[string]decimal.Decimal {
-    balance := make(map[string]decimal.Decimal)
-    for _, posting := range a.GetPostingsBefore(date) {
+func (a *Account) GetBalanceInPeriod(start, end ast.Date) *Balance {
+    balance := NewBalance()
+    for _, posting := range a.GetPostingsInPeriod(start, end) {
         // Account computes on its data
     }
     return balance
 }
 
-func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
-    var result []AccountBalance
+func (l *Ledger) GetBalanceTree(types []ast.AccountType, start, end *ast.Date) *BalanceTree {
+    // Ledger coordinates: iterates accounts, calls Account methods, aggregates results
     for _, account := range l.Accounts() {
-        balance := account.GetBalanceAsOf(date)  // Delegate, don't recompute
-        if hasBalance(balance) {
-            result = append(result, AccountBalance{...})
-        }
+        balance := account.GetBalanceInPeriod(*start, *end)  // Delegate, don't recompute
+        // ... build tree structure ...
     }
-    return result
+    return tree
 }
 
 // ✗ WRONG: Coordinator reimplements owner's logic
-func (l *Ledger) GetBalancesAsOf(date *ast.Date) []AccountBalance {
+func (l *Ledger) GetBalanceTree(types []ast.AccountType, start, end *ast.Date) *BalanceTree {
     for _, account := range l.Accounts() {
-        postings := account.GetPostingsBefore(date)  // Coordinator now owns posting logic
-        balance := make(map[string]decimal.Decimal)
+        postings := account.GetPostingsInPeriod(*start, *end)  // Coordinator now owns posting logic
+        balance := NewBalance()
         for _, posting := range postings {
             // ... duplicates Account's computation ...
         }
     }
-    return result
+    return tree
 }
 ```
 

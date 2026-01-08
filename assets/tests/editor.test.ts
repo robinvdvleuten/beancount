@@ -1,135 +1,99 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Beancount Web Editor tests.
+ * Editor page tests.
  *
- * This test suite verifies the core functionality of the Beancount web editor:
- * - File content loading and rendering
+ * Verifies the core functionality of the Beancount web editor:
+ * - Page loading and rendering
  * - Content editing and saving
  * - Autocomplete functionality
  * - Syntax highlighting
  */
 
-test.describe("Beancount Web Editor", () => {
-  test("loads and renders editor with file content", async ({ page }) => {
+test.describe("Editor", () => {
+  test("renders page with file content", async ({ page }) => {
     const errors: string[] = [];
+    page.on("pageerror", (error) => errors.push(error.message));
 
-    // Capture console errors
-    page.on("pageerror", (error) => {
-      errors.push(error.message);
-    });
+    await page.goto("/editor", { waitUntil: "networkidle" });
 
-    // Navigate to the page
-    await page.goto("/", {
-      waitUntil: "networkidle",
-    });
-
-    // Wait for editor to be visible
+    // Verify editor is visible
     const editor = page.locator(".cm-editor");
-    await expect(editor).toBeVisible({ timeout: 5000 });
+    await expect(editor).toBeVisible();
 
-    // Get editor text content and verify it contains expected content from example.beancount
+    // Verify file content is loaded (example.beancount contains commodity directive)
     const editorContent = page.locator(".cm-content");
-    const text = await editorContent.textContent();
-
-    // example.beancount should contain commodity directive
-    expect(text).toContain("commodity USD");
+    await expect(editorContent).toContainText("commodity USD");
 
     // Verify no JavaScript errors occurred
     expect(errors).toEqual([]);
   });
 
-  test("saves file content changes", async ({ page }) => {
-    // Navigate to the page
-    await page.goto("/", {
-      waitUntil: "networkidle",
-    });
+  test("saves and restores file content", async ({ page }) => {
+    await page.goto("/editor", { waitUntil: "networkidle" });
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
-    await expect(editor).toBeVisible({ timeout: 5000 });
+    await expect(editor).toBeVisible();
 
-    // Click into the editor content area
+    // Get original content
     const editorContent = page.locator(".cm-content");
-    await editorContent.click();
+    const originalText = await editorContent.textContent();
 
-    // Type some new content (a comment)
+    // Click into the editor and add a comment
+    await editorContent.click();
     await page.keyboard.type("\n; Test comment added by Playwright");
 
-    // Click the save button
-    const saveButton = page.locator('button:has-text("Save")');
-    await saveButton.click();
-
-    // Wait for network to be idle (save request completed)
+    // Save the file
+    await page.getByRole("button", { name: "Save" }).click();
     await page.waitForLoadState("networkidle");
 
     // Verify no error state appeared
-    // If save fails, typically an error message or error class would appear
-    const errorIndicator = page.locator(
-      '.error, [role="alert"], .cm-error-message',
-    );
+    const errorIndicator = page.locator('[role="alert"]');
     await expect(errorIndicator).toHaveCount(0);
+
+    // Restore original content by selecting all and replacing
+    await editorContent.click();
+    await page.keyboard.press("ControlOrMeta+a");
+    await page.keyboard.type(originalText ?? "");
+
+    // Save the restored content
+    await page.getByRole("button", { name: "Save" }).click();
+    await page.waitForLoadState("networkidle");
   });
 
-  test("autocomplete is context-aware", async ({ page }) => {
-    // Navigate to the page
-    await page.goto("/", {
-      waitUntil: "networkidle",
-    });
+  test("shows context-aware autocomplete", async ({ page }) => {
+    await page.goto("/editor", { waitUntil: "networkidle" });
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
-    await expect(editor).toBeVisible({ timeout: 5000 });
+    await expect(editor).toBeVisible();
 
-    // Click into the editor at the end
+    // Click into the editor and move to end of file
     const editorContent = page.locator(".cm-content");
     await editorContent.click();
+    await page.keyboard.press("ControlOrMeta+End");
 
-    // Move to end of file (platform-specific shortcuts)
-    const isMac = process.platform === "darwin";
-    if (isMac) {
-      await page.keyboard.press("Meta+ArrowDown");
-    } else {
-      await page.keyboard.press("Control+End");
-    }
-
-    // Add a new transaction that should allow autocomplete
-    // Type "Assets:U" which should trigger autocomplete for Assets:US:* accounts
-    // Autocomplete activates on typing when activateOnTyping is true
+    // Type a transaction that triggers autocomplete
     await page.keyboard.type('\n\n2024-01-01 * "Test transaction"\n  Assets:U');
 
-    // Verify autocomplete tooltip appears with account suggestions
-    // The tooltip should contain account names matching "Assets:U*" from example.beancount
+    // Verify autocomplete tooltip appears
     const autocompleteTooltip = page.locator(".cm-tooltip-autocomplete");
-
-    // Wait for autocomplete to appear automatically (activates on typing)
     await expect(autocompleteTooltip).toBeVisible({ timeout: 2000 });
 
-    // Press Escape to close autocomplete
     await page.keyboard.press("Escape");
   });
 
-  test("supports syntax highlighting", async ({ page }) => {
-    // Navigate to the page
-    await page.goto("/", {
-      waitUntil: "networkidle",
-    });
+  test("renders syntax highlighting", async ({ page }) => {
+    await page.goto("/editor", { waitUntil: "networkidle" });
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
-    await expect(editor).toBeVisible({ timeout: 5000 });
+    await expect(editor).toBeVisible();
 
-    // Verify that CodeMirror is rendering content with syntax highlighting
-    // CodeMirror applies various styling classes to tokens
-    const editorContent = page.locator(".cm-content");
-    await expect(editorContent).toBeVisible();
-
-    // Check that the editor has some styled content
-    // CodeMirror typically adds .cm-line elements for each line
+    // Verify CodeMirror renders multiple lines (example.beancount has hundreds)
     const lines = page.locator(".cm-line");
     const lineCount = await lines.count();
-
-    // example.beancount has hundreds of lines, so we should see many .cm-line elements
     expect(lineCount).toBeGreaterThan(50);
   });
 });
