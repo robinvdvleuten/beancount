@@ -15,7 +15,7 @@
     "@codemirror/language": "^6.12.1",
     "@codemirror/lint": "^6.9.2",
     "@codemirror/state": "^6.5.3",
-    "@codemirror/view": "^6.39.7",
+    "@codemirror/view": "^6.39.8",
     "@solidjs/router": "^0.15.4",
     "codemirror": "^6.0.2",
     "daisyui": "^5.5.14",
