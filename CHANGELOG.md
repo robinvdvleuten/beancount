@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.0](https://github.com/robinvdvleuten/beancount/compare/v0.7.0...v0.8.0) (2026-01-13)
+
+
+### Features
+
+* add cosign signing and SBOM attestation ([bc56f30](https://github.com/robinvdvleuten/beancount/commit/bc56f309fb6343fba1030ff0d4a2049af81d1d88))
+* **cli:** add --host flag to web command ([457a0d7](https://github.com/robinvdvleuten/beancount/commit/457a0d71d8cd3205ec095d38e0f5a397f5b5b9c3))
+* generate SBOM for included assets ([96d4f91](https://github.com/robinvdvleuten/beancount/commit/96d4f9180aef907e8286bbfa0f1bc6f67095527f))
+* **ledger:** add generic GetBalanceTree API for financial reports ([#117](https://github.com/robinvdvleuten/beancount/issues/117)) ([fe1ce75](https://github.com/robinvdvleuten/beancount/commit/fe1ce75bdc9ed6b87ab8f35e16d82541157e9ca9))
+* **ledger:** support custom account names ([67a54ed](https://github.com/robinvdvleuten/beancount/commit/67a54eda7cb7a7347eea42407673b3b3bf250b47))
+* release docker image alongside executables ([5ee77dd](https://github.com/robinvdvleuten/beancount/commit/5ee77ddceebd0233dade3a0e192c8431310e9b01))
+* serve index.html for all unmatched paths ([551362f](https://github.com/robinvdvleuten/beancount/commit/551362f63e8920c986fe2f92af1c3c48b9f7d27e))
+* sign docker manifests upon releases ([4a106b9](https://github.com/robinvdvleuten/beancount/commit/4a106b96110841cb6171887439e342241d05f8d0))
+* **web:** add file selector dropdown for included files ([4c5150c](https://github.com/robinvdvleuten/beancount/commit/4c5150c8944b5d14228e17d8440089cfabd3aa52))
+* **web:** add sidebar navigation ([2c2b50a](https://github.com/robinvdvleuten/beancount/commit/2c2b50a69c51bba697601fa8929e03cb9bc8f9c3))
+* **web:** set up solidjs router ([fc8a20f](https://github.com/robinvdvleuten/beancount/commit/fc8a20fb6e026567760c328bab452d54f69020eb))
+
+
+### Bug Fixes
+
+* **ledger:** make implicit parent accounts accessible via GetParent/GetChildren ([f6291b9](https://github.com/robinvdvleuten/beancount/commit/f6291b9907e810d1b71e52f4ed59aa64955a31d7))
+* **parser:** validate dates at lex time to match beancount behavior ([5e0b8c1](https://github.com/robinvdvleuten/beancount/commit/5e0b8c16c5431b454fa9fcc6823fcd2462590395))
+* **web:** filter errors to only show current file ([639ac05](https://github.com/robinvdvleuten/beancount/commit/639ac057faa6f681fbcdc65d76f4f291d6aa10d5))
+
 ## [0.7.0](https://github.com/robinvdvleuten/beancount/compare/v0.6.0...v0.7.0) (2026-01-07)
 
 
