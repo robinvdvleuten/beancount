@@ -11,12 +11,19 @@ import { test, expect } from "@playwright/test";
  * - File selector dropdown (when includes exist)
  */
 
+/** Navigate to Editor page via sidebar */
+async function navigateToEditor(page: import("@playwright/test").Page) {
+  await page.goto("/", { waitUntil: "networkidle" });
+  await page.getByRole("link", { name: "Editor" }).click();
+  await page.waitForURL("/editor");
+}
+
 test.describe("Editor", () => {
   test("renders page with file content", async ({ page }) => {
     const errors: string[] = [];
     page.on("pageerror", (error) => errors.push(error.message));
 
-    await page.goto("/editor", { waitUntil: "networkidle" });
+    await navigateToEditor(page);
 
     // Verify editor is visible
     const editor = page.locator(".cm-editor");
@@ -31,7 +38,7 @@ test.describe("Editor", () => {
   });
 
   test("saves and restores file content", async ({ page }) => {
-    await page.goto("/editor", { waitUntil: "networkidle" });
+    await navigateToEditor(page);
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
@@ -64,7 +71,7 @@ test.describe("Editor", () => {
   });
 
   test("shows context-aware autocomplete", async ({ page }) => {
-    await page.goto("/editor", { waitUntil: "networkidle" });
+    await navigateToEditor(page);
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
@@ -86,7 +93,7 @@ test.describe("Editor", () => {
   });
 
   test("renders syntax highlighting", async ({ page }) => {
-    await page.goto("/editor", { waitUntil: "networkidle" });
+    await navigateToEditor(page);
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
@@ -107,7 +114,7 @@ test.describe("Editor", () => {
   });
 
   test("shows static filepath when no includes", async ({ page }) => {
-    await page.goto("/editor", { waitUntil: "networkidle" });
+    await navigateToEditor(page);
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
@@ -115,12 +122,12 @@ test.describe("Editor", () => {
 
     // When there are no includes, should show static filepath text (not dropdown)
     // The example.beancount file has no includes
-    const filepathText = page.locator("header p.text-base-content\\/50");
+    const filepathText = page.getByLabel("Current file");
     await expect(filepathText).toBeVisible();
     await expect(filepathText).toContainText("example.beancount");
 
-    // Dropdown should not exist
-    const dropdown = page.locator("header details.dropdown");
-    await expect(dropdown).toHaveCount(0);
+    // File selector dropdown should not exist (only shown when includes exist)
+    const fileSelector = page.getByLabel("Select file");
+    await expect(fileSelector).toHaveCount(0);
   });
 });

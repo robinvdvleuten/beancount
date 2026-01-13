@@ -10,10 +10,16 @@ const routes = [
   {
     path: "/income-statement",
     component: IncomeStatement,
+    info: {
+      title: "Income Statement",
+    },
   },
   {
     path: "/editor",
     component: Editor,
+    info: {
+      title: "Editor",
+    },
   },
 ];
 

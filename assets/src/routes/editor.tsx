@@ -9,7 +9,6 @@ import {
   For,
 } from "solid-js";
 import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid";
-import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid";
 import ChevronDownIcon from "heroicons/24/solid/chevron-down.svg?component-solid";
 import type { AccountInfo, EditorError } from "../types";
 import EditorComp from "../components/editor";
@@ -194,48 +193,48 @@ const Editor: Component = () => {
 
   return (
     <>
-      <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
-        <div class="flex items-center gap-3">
-          <div class="text-primary">
-            <DocumentCurrencyDollarIcon class="size-8" />
-          </div>
-          <div class="text-base-content">
-            <h1 class="text-xl font-semibold">Beancount Editor</h1>
-            <Show
-              when={currentFiles() && currentFiles()!.includes.length > 0}
-              fallback={
-                <p class="text-sm text-base-content/50">
-                  {currentFile() ? displayFilename(currentFile()!) : "..."}
-                </p>
-              }
-            >
-              <details class="dropdown">
-                <summary class="btn btn-ghost btn-sm gap-1 px-0 font-normal text-base-content/50">
-                  {currentFile() ? displayFilename(currentFile()!) : "..."}
-                  <ChevronDownIcon class="size-3" />
-                </summary>
-                <ul class="menu dropdown-content bg-base-100 rounded-box z-10 w-64 p-2 shadow-lg">
-                  <For each={allFiles()}>
-                    {(filepath) => (
-                      <li>
-                        <a
-                          class={filepath === currentFile() ? "active" : ""}
-                          onClick={() => handleFileSelect(filepath)}
-                        >
-                          {displayFilename(filepath)}
-                        </a>
-                      </li>
-                    )}
-                  </For>
-                </ul>
-              </details>
-            </Show>
-          </div>
+      <div class="navbar bg-base-100 border-b border-base-300 min-h-0 px-4 py-2">
+        <div class="navbar-start">
+          <Show
+            when={currentFiles() && currentFiles()!.includes.length > 0}
+            fallback={
+              <span
+                class="text-sm text-base-content/70"
+                aria-label="Current file"
+              >
+                {currentFile() ? displayFilename(currentFile()!) : "..."}
+              </span>
+            }
+          >
+            <details class="dropdown">
+              <summary
+                class="btn btn-ghost btn-sm gap-1 px-2"
+                aria-label="Select file"
+              >
+                {currentFile() ? displayFilename(currentFile()!) : "..."}
+                <ChevronDownIcon class="size-3" />
+              </summary>
+              <ul class="menu dropdown-content bg-base-100 rounded-box z-10 w-64 p-2 shadow-lg">
+                <For each={allFiles()}>
+                  {(filepath) => (
+                    <li>
+                      <a
+                        class={filepath === currentFile() ? "active" : ""}
+                        onClick={() => handleFileSelect(filepath)}
+                      >
+                        {displayFilename(filepath)}
+                      </a>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </details>
+          </Show>
         </div>
 
-        <div class="flex items-center gap-2">
+        <div class="navbar-end">
           <button
-            class="btn"
+            class="btn btn-sm"
             onClick={() => void handleSaveClick()}
             disabled={meta.readOnly || isLoading()}
           >
@@ -243,7 +242,7 @@ const Editor: Component = () => {
             Save
           </button>
         </div>
-      </header>
+      </div>
 
       <div class="flex-1 overflow-auto">
         <Switch>
