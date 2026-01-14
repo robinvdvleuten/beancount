@@ -38,6 +38,9 @@ archives:
 dockers_v2:
   - images:
       - "ghcr.io/robinvdvleuten/beancount"
+    tags:
+      - "v{{ .Version }}"
+      - latest
 
 gomod:
   # Build from local source to include frontend assets built in before hooks
