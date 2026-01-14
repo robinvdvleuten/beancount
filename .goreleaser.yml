@@ -66,6 +66,12 @@ signs:
 
 docker_signs:
   - artifacts: manifests
+    output: true
+    cmd: cosign
+    args:
+      - sign
+      - "${artifact}@${digest}"
+      - --yes
 
 nfpms:
   - vendor: robinvdvleuten
