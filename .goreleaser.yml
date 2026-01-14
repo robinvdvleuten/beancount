@@ -40,7 +40,8 @@ dockers_v2:
       - "ghcr.io/robinvdvleuten/beancount"
 
 gomod:
-  proxy: true
+  # Build from local source to include frontend assets built in before hooks
+  proxy: false  
 
 sboms:
   - artifacts: archive
