@@ -41,6 +41,13 @@ dockers_v2:
     tags:
       - "v{{ .Version }}"
       - latest
+    labels:
+      "org.opencontainers.image.description": "Fast, lightweight Beancount parser, formatter and editor"
+      "org.opencontainers.image.created": "{{.Date}}"
+      "org.opencontainers.image.name": "{{.ProjectName}}"
+      "org.opencontainers.image.revision": "{{.FullCommit}}"
+      "org.opencontainers.image.version": "{{.Version}}"
+      "org.opencontainers.image.source": "{{.GitURL}}"
 
 gomod:
   # Build from local source to include frontend assets built in before hooks
