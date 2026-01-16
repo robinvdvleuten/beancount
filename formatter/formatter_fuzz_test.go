@@ -45,6 +45,14 @@ func FuzzFormatter(f *testing.F) {
 
 		// Multiple transactions
 		"2014-01-01 * \"A\"\n  Assets:Cash  10 USD\n  Income:Salary\n\n2014-01-02 * \"B\"\n  Expenses:Food  5 USD\n  Assets:Cash",
+
+		// Blank lines between directives (regression test for idempotency bug)
+		"2020-01-01 open Assets:Test\n\n2020-01-02 close Assets:Test",
+		"0001-01-01 open A:Test\n\n0001-01-01 balance A:Test 0 USD",
+
+		// Malformed string with blank line after (regression test for lexer token consumption)
+		// The string has a literal newline which forces the lexer to handle blank lines correctly
+		"0001-01-01 open A:0!\"\n\n0001-01-01 balance A:0 0 A",
 	}
 
 	for _, seed := range seeds {

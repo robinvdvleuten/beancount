@@ -445,8 +445,11 @@ func (l *Lexer) scanString(start, line, col int) Token {
 			break
 		}
 		// Reject literal newlines in strings (must use escape sequences)
+		// IMPORTANT: Do NOT consume the newline. Leave it for scanToken/scanNextToken
+		// to handle, so blank lines are properly tracked and NEWLINE tokens are emitted.
+		// This maintains the invariant that content tokens own their line, but the
+		// line-ending newline belongs to scanNextToken for blank line detection.
 		if ch == '\n' {
-			l.advance() // still advance to keep position tracking
 			break
 		}
 		// Handle escape sequences
