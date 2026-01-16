@@ -13,6 +13,8 @@ import ChevronDownIcon from "heroicons/24/solid/chevron-down.svg?component-solid
 import type { AccountInfo, EditorError } from "../types";
 import EditorComp from "../components/editor";
 import { meta } from "virtual:globals";
+import { useFileChange } from "../hooks/useFileChange";
+import { useToast } from "../hooks/useToast";
 
 interface Files {
   root: string;
@@ -21,6 +23,7 @@ interface Files {
 
 interface SourceResponse {
   source: string;
+  fingerprint: string;
   errors: EditorError[] | null;
   files: Files;
 }
@@ -58,7 +61,8 @@ const fetchAccounts = async (): Promise<AccountsResponse> => {
 
 const Editor: Component = () => {
   // Initial fetch to get root file and files list
-  const [initialData] = createResource(fetchSource);
+  const [initialData, { refetch: refetchInitial }] =
+    createResource(fetchSource);
 
   // Track currently selected file (initialized from initial fetch)
   const [currentFile, setCurrentFile] = createSignal<string | undefined>(
@@ -70,12 +74,22 @@ const Editor: Component = () => {
     undefined,
   );
 
-  // Initialize currentFile and currentFiles from initial fetch
+  // Track last known fingerprint for conflict detection
+  const [fingerprint, setFingerprint] = createSignal<string | undefined>(
+    undefined,
+  );
+
+  // Conflict modal state
+  const [showConflictModal, setShowConflictModal] = createSignal(false);
+  let conflictModalRef: HTMLDialogElement | undefined;
+
+  // Initialize currentFile, currentFiles, and fingerprint from initial fetch
   createEffect(() => {
     const data = initialData();
     if (data && currentFile() === undefined) {
       setCurrentFile(data.files.root);
       setCurrentFiles(data.files);
+      setFingerprint(data.fingerprint);
     }
   });
 
@@ -93,8 +107,30 @@ const Editor: Component = () => {
     fetchSourceForFile,
   );
 
+  // Update fingerprint when fileData changes
+  createEffect(() => {
+    const data = fileData();
+    if (data) {
+      setFingerprint(data.fingerprint);
+    }
+  });
+
   const [accountsData, { refetch: refetchAccounts }] =
     createResource(fetchAccounts);
+
+  // Success toast for save
+  const saveToast = useToast();
+
+  // File change detection via SSE
+  const fileChange = useFileChange({
+    getLastFingerprint: () => fingerprint(),
+    onReload: () => {
+      void refetchInitial();
+      void refetchAccounts();
+      setEditedSource(undefined);
+      setErrors(null);
+    },
+  });
 
   // Local editing state - tracks unsaved changes
   const [editedSource, setEditedSource] = createSignal<string | undefined>(
@@ -142,7 +178,8 @@ const Editor: Component = () => {
   // Use edited source if available, otherwise use fetched source
   const currentSource = () => editedSource() ?? sourceData()?.source;
 
-  const handleSaveClick = async () => {
+  // Save with optional force flag (to overwrite conflicts)
+  const doSave = async (force: boolean) => {
     const response = await fetch("/api/source", {
       method: "PUT",
       headers: {
@@ -151,8 +188,17 @@ const Editor: Component = () => {
       body: JSON.stringify({
         filepath: currentFile(),
         source: currentSource(),
+        fingerprint: fingerprint(),
+        force,
       }),
     });
+
+    // Handle conflict
+    if (response.status === 409) {
+      setShowConflictModal(true);
+      conflictModalRef?.showModal();
+      return;
+    }
 
     if (!response.ok) {
       console.error("Unable to save ledger: ", response.status);
@@ -169,9 +215,29 @@ const Editor: Component = () => {
     setErrors(result.errors);
     // Update files list (may have changed if includes were added/removed)
     setCurrentFiles(result.files);
+    // Update fingerprint
+    setFingerprint(result.fingerprint);
+    // Mark as saved so SSE event with this fingerprint is ignored
+    fileChange.markSaved(result.fingerprint);
+
+    // Show success toast
+    void saveToast.show();
 
     // Reload accounts to pick up new accounts from the saved file
     await refetchAccounts();
+  };
+
+  const handleSaveClick = () => void doSave(false);
+
+  const handleForceOverwrite = () => {
+    conflictModalRef?.close();
+    setShowConflictModal(false);
+    void doSave(true);
+  };
+
+  const handleCancelOverwrite = () => {
+    conflictModalRef?.close();
+    setShowConflictModal(false);
   };
 
   // Sync errors from initial fetch
@@ -235,7 +301,7 @@ const Editor: Component = () => {
         <div class="navbar-end">
           <button
             class="btn btn-sm"
-            onClick={() => void handleSaveClick()}
+            onClick={handleSaveClick}
             disabled={meta.readOnly || isLoading()}
           >
             <ArrowDownTrayIcon class="size-4" />
@@ -271,6 +337,60 @@ const Editor: Component = () => {
           </Match>
         </Switch>
       </div>
+
+      {/* Save success toast */}
+      <Show when={saveToast.visible()}>
+        <div class="toast toast-end">
+          <div ref={saveToast.setToastRef} class="alert alert-success hidden">
+            <span>File saved</span>
+          </div>
+        </div>
+      </Show>
+
+      {/* External file change toast - click to reload */}
+      <Show when={fileChange.pendingReload()}>
+        <div class="toast toast-end">
+          <div
+            ref={fileChange.setToastRef}
+            class="alert alert-info hidden cursor-pointer"
+            onClick={fileChange.handleReloadClick}
+          >
+            <span>File changed — click to reload</span>
+          </div>
+        </div>
+      </Show>
+
+      {/* Offline indicator */}
+      <Show when={fileChange.connectionLost()}>
+        <div class="toast toast-end toast-bottom">
+          <div class="alert alert-warning">
+            <span>Connection lost. Reconnecting...</span>
+          </div>
+        </div>
+      </Show>
+
+      {/* Conflict confirmation modal */}
+      <Show when={showConflictModal()}>
+        <dialog ref={(el) => (conflictModalRef = el)} class="modal">
+          <div class="modal-box">
+            <h3 class="font-bold text-lg">File Changed</h3>
+            <p class="py-4">
+              This file was modified externally. Overwrite with your changes?
+            </p>
+            <div class="modal-action">
+              <button class="btn" onClick={handleCancelOverwrite}>
+                Cancel
+              </button>
+              <button class="btn btn-warning" onClick={handleForceOverwrite}>
+                Overwrite
+              </button>
+            </div>
+          </div>
+          <form method="dialog" class="modal-backdrop">
+            <button onClick={handleCancelOverwrite}>close</button>
+          </form>
+        </dialog>
+      </Show>
     </>
   );
 };

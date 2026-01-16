@@ -7,11 +7,7 @@ import { beancount } from "../codemirror/language";
 import { editorTheme, beancountSyntaxHighlighting } from "../codemirror/theme";
 import { errorsToDiagnostics } from "../codemirror/error-diagnostics";
 import { createAccountCompletion } from "../codemirror/autocomplete";
-import {
-  createEditorView,
-  createUpdateListener,
-  type OnChangeRef,
-} from "../codemirror/setup";
+import { createEditorView, createUpdateListener } from "../codemirror/setup";
 
 interface EditorProps {
   value?: string;
@@ -24,9 +20,6 @@ interface EditorProps {
 const Editor = (props: EditorProps) => {
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
-  const onChangeRef: OnChangeRef = {
-    current: props.onChange,
-  };
 
   const linter = createMemo(
     () => {
@@ -45,11 +38,6 @@ const Editor = (props: EditorProps) => {
     return createAccountCompletion(props.accounts);
   });
 
-  // Keep onChange ref in sync with prop
-  createEffect(() => {
-    onChangeRef.current = props.onChange;
-  });
-
   // Create editor view once on mount
   onMount(() => {
     if (!editorRef) return;
@@ -66,7 +54,7 @@ const Editor = (props: EditorProps) => {
         lintGutter(),
         accountCompletion(),
       ],
-      onChangeRef,
+      onChange: (value) => props.onChange?.(value),
     });
 
     viewRef = view;
@@ -90,25 +78,29 @@ const Editor = (props: EditorProps) => {
     }
   });
 
-  // Reconfigure extensions when linter or completion changes
+  // Reconfigure extensions when linter, completion or onChange changes
   createEffect(
-    on([linter, accountCompletion], () => {
-      const view = viewRef;
-      if (!view) return;
+    on(
+      [linter, accountCompletion, () => props.onChange],
+      () => {
+        const view = viewRef;
+        if (!view) return;
 
-      view.dispatch({
-        effects: StateEffect.reconfigure.of([
-          lineNumbers(),
-          beancount(),
-          beancountSyntaxHighlighting,
-          editorTheme,
-          linter(),
-          lintGutter(),
-          accountCompletion(),
-          createUpdateListener(onChangeRef),
-        ]),
-      });
-    }),
+        view.dispatch({
+          effects: StateEffect.reconfigure.of([
+            lineNumbers(),
+            beancount(),
+            beancountSyntaxHighlighting,
+            editorTheme,
+            linter(),
+            lintGutter(),
+            accountCompletion(),
+            createUpdateListener((value) => props.onChange?.(value)),
+          ]),
+        });
+      },
+      { defer: true },
+    ),
   );
 
   return <div ref={editorRef} class="h-full" />;

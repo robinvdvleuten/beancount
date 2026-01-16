@@ -18,6 +18,7 @@ type WebCmd struct {
 	Port     int    `help:"Port to listen on." default:"8080"`
 	Create   bool   `help:"Automatically create file if it doesn't exist (no confirmation prompt)." short:"c"`
 	ReadOnly bool   `help:"Enable read-only mode (no write operations allowed)." short:"r"`
+	Watch    bool   `help:"Watch files for changes and auto-reload." short:"w"`
 }
 
 func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
@@ -81,12 +82,17 @@ func (cmd *WebCmd) Run(ctx *kong.Context, globals *Globals) error {
 	server := web.NewWithVersion(cmd.Port, ledgerFile, version, commitSHA)
 	server.Host = cmd.Host
 	server.ReadOnly = cmd.ReadOnly
+	server.WatchEnabled = cmd.Watch
 
 	printInfof(ctx.Stdout, "Starting server on %s:%d", server.Host, cmd.Port)
 	printInfof(ctx.Stdout, "Serving ledger: %s", pathStyle.Render(ledgerFile))
 
 	if cmd.ReadOnly {
 		printInfof(ctx.Stdout, "Server running in READ-ONLY mode")
+	}
+
+	if cmd.Watch {
+		printInfof(ctx.Stdout, "Watching for file changes")
 	}
 
 	return server.Start(runCtx)
