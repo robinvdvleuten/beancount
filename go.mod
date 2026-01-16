@@ -2,7 +2,7 @@ module github.com/robinvdvleuten/beancount
 
 go 1.24.0
 
-toolchain go1.24.9
+toolchain go1.24.11
 
 require (
 	github.com/alecthomas/assert/v2 v2.11.0
