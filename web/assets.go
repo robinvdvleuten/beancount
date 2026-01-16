@@ -20,6 +20,7 @@ type metadata struct {
 	Version   string `json:"version"`
 	CommitSHA string `json:"commitSHA"`
 	ReadOnly  bool   `json:"readOnly"`
+	Watching  bool   `json:"watching"`
 }
 
 // mountAssets registers all asset routes (index + static files) for production.
@@ -46,6 +47,7 @@ func (s *Server) mountAssets(mux *http.ServeMux) {
 		Version:   s.Version,
 		CommitSHA: s.CommitSHA,
 		ReadOnly:  s.ReadOnly,
+		Watching:  s.WatchEnabled,
 	}
 	metadataJSON, err := json.Marshal(meta)
 	if err != nil {

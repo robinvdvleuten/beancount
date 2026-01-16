@@ -8,11 +8,7 @@ import { beancount } from "../codemirror/language";
 import { editorTheme, beancountSyntaxHighlighting } from "../codemirror/theme";
 import { errorsToDiagnostics } from "../codemirror/error-diagnostics";
 import { createAccountCompletion } from "../codemirror/autocomplete";
-import {
-  createEditorView,
-  createUpdateListener,
-  type OnChangeRef,
-} from "../codemirror/setup";
+import { createEditorView, createUpdateListener } from "../codemirror/setup";
 
 interface EditorProps {
   value?: string;
@@ -25,38 +21,27 @@ interface EditorProps {
 const Editor = (props: EditorProps) => {
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
-  const onChangeRef: OnChangeRef = {
-    current: undefined,
-  };
 
   const linter = createMemo(
-  () => {
-    // Track errors and filepath dependencies to recreate linter when they change
-    const _errors = props.errors;
-    const _filepath = props.filepath;
-    return linterExt((view) =>
-      errorsToDiagnostics(_errors ?? null, view, _filepath ?? null),
-    );
-  },
-  undefined,
-  { equals: false },
-);
+    () => {
+      // Track errors and filepath dependencies to recreate linter when they change
+      const _errors = props.errors;
+      const _filepath = props.filepath;
+      return linterExt((view) =>
+        errorsToDiagnostics(_errors ?? null, view, _filepath ?? null),
+      );
+    },
+    undefined,
+    { equals: false },
+  );
 
   const accountCompletion = createMemo(() => {
     return createAccountCompletion(props.accounts);
   });
 
-  // Keep onChange ref in sync with prop
-  createEffect(() => {
-    onChangeRef.current = props.onChange;
-  });
-
   // Create editor view once on mount
   onMount(() => {
     if (!editorRef) return;
-
-    // Set onChange ref before creating editor (onMount runs before createEffect)
-    onChangeRef.current = props.onChange;
 
     const view = createEditorView({
       parent: editorRef,
@@ -70,7 +55,7 @@ const Editor = (props: EditorProps) => {
         lintGutter(),
         accountCompletion(),
       ],
-      onChangeRef,
+      onChange: (value) => props.onChange?.(value),
     });
 
     viewRef = view;
@@ -94,11 +79,11 @@ const Editor = (props: EditorProps) => {
     }
   });
 
-  // Reconfigure extensions when linter or completion changes
+  // Reconfigure extensions when linter, completion or onChange changes
   // Use defer: true to skip the initial run - the editor is created with all extensions in onMount
   createEffect(
     on(
-      [linter, accountCompletion],
+      [linter, accountCompletion, () => props.onChange],
       () => {
         const view = viewRef;
         if (!view) return;
@@ -113,7 +98,7 @@ const Editor = (props: EditorProps) => {
             lintGutter(),
             accountCompletion(),
             keymap.of([indentWithTab]),
-            createUpdateListener(onChangeRef),
+            createUpdateListener((value) => props.onChange?.(value)),
           ]),
         });
       },
