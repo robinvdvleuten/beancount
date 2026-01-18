@@ -1,13 +1,18 @@
 import { createEffect, createMemo, onCleanup, onMount, on } from "solid-js";
 import { linter as linterExt, lintGutter } from "@codemirror/lint";
 import { StateEffect } from "@codemirror/state";
-import { lineNumbers, type EditorView } from "@codemirror/view";
+import { lineNumbers, EditorView, keymap } from "@codemirror/view";
+import { indentWithTab } from "@codemirror/commands";
 import type { AccountInfo, EditorError } from "../types";
 import { beancount } from "../codemirror/language";
 import { editorTheme, beancountSyntaxHighlighting } from "../codemirror/theme";
 import { errorsToDiagnostics } from "../codemirror/error-diagnostics";
 import { createAccountCompletion } from "../codemirror/autocomplete";
-import { createEditorView } from "../codemirror/setup";
+import {
+  createEditorView,
+  createUpdateListener,
+  type OnChangeRef,
+} from "../codemirror/setup";
 
 interface EditorProps {
   value?: string;
@@ -20,6 +25,9 @@ interface EditorProps {
 const Editor = (props: EditorProps) => {
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
+  const onChangeRef: OnChangeRef = {
+    current: undefined,
+  };
 
   const linter = createMemo(
     () => {
@@ -38,9 +46,17 @@ const Editor = (props: EditorProps) => {
     return createAccountCompletion(props.accounts);
   });
 
+  // Keep onChange ref in sync with prop
+  createEffect(() => {
+    onChangeRef.current = props.onChange;
+  });
+
   // Create editor view once on mount
   onMount(() => {
     if (!editorRef) return;
+
+    // Set onChange ref before creating editor (onMount runs before createEffect)
+    onChangeRef.current = props.onChange;
 
     const view = createEditorView({
       parent: editorRef,
@@ -54,7 +70,7 @@ const Editor = (props: EditorProps) => {
         lintGutter(),
         accountCompletion(),
       ],
-      onChange: props.onChange,
+      onChangeRef,
     });
 
     viewRef = view;
@@ -79,23 +95,30 @@ const Editor = (props: EditorProps) => {
   });
 
   // Reconfigure extensions when linter or completion changes
+  // Use defer: true to skip the initial run - the editor is created with all extensions in onMount
   createEffect(
-    on([linter, accountCompletion], () => {
-      const view = viewRef;
-      if (!view) return;
+    on(
+      [linter, accountCompletion],
+      () => {
+        const view = viewRef;
+        if (!view) return;
 
-      view.dispatch({
-        effects: StateEffect.reconfigure.of([
-          lineNumbers(),
-          beancount(),
-          beancountSyntaxHighlighting,
-          editorTheme,
-          linter(),
-          lintGutter(),
-          accountCompletion(),
-        ]),
-      });
-    }),
+        view.dispatch({
+          effects: StateEffect.reconfigure.of([
+            lineNumbers(),
+            beancount(),
+            beancountSyntaxHighlighting,
+            editorTheme,
+            linter(),
+            lintGutter(),
+            accountCompletion(),
+            keymap.of([indentWithTab]),
+            createUpdateListener(onChangeRef),
+          ]),
+        });
+      },
+      { defer: true },
+    ),
   );
 
   return <div ref={editorRef} class="h-full" />;
