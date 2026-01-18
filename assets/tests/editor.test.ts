@@ -49,12 +49,26 @@ test.describe("Editor", () => {
     const originalText = await editorContent.textContent();
 
     // Click into the editor and add a comment
+    const testComment = "; Test comment added by Playwright";
     await editorContent.click();
-    await page.keyboard.type("\n; Test comment added by Playwright");
+    await page.keyboard.type(`\n${testComment}`);
+
+    // Capture the save request to verify the payload
+    let savedSource: string | undefined;
+    page.on("request", (request) => {
+      if (request.url().includes("/api/source") && request.method() === "PUT") {
+        const body = request.postDataJSON() as { source?: string };
+        savedSource = body.source;
+      }
+    });
 
     // Save the file
     await page.getByRole("button", { name: "Save" }).click();
     await page.waitForLoadState("networkidle");
+
+    // Verify the saved content includes our typed comment
+    expect(savedSource).toBeDefined();
+    expect(savedSource).toContain(testComment);
 
     // Verify no error state appeared
     const errorIndicator = page.locator('[role="alert"]');

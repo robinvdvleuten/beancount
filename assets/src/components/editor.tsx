@@ -1,13 +1,17 @@
 import { createEffect, createMemo, onCleanup, onMount, on } from "solid-js";
 import { linter as linterExt, lintGutter } from "@codemirror/lint";
 import { StateEffect } from "@codemirror/state";
-import { lineNumbers, type EditorView } from "@codemirror/view";
+import { lineNumbers, EditorView } from "@codemirror/view";
 import type { AccountInfo, EditorError } from "../types";
 import { beancount } from "../codemirror/language";
 import { editorTheme, beancountSyntaxHighlighting } from "../codemirror/theme";
 import { errorsToDiagnostics } from "../codemirror/error-diagnostics";
 import { createAccountCompletion } from "../codemirror/autocomplete";
-import { createEditorView } from "../codemirror/setup";
+import {
+  createEditorView,
+  createUpdateListener,
+  type OnChangeRef,
+} from "../codemirror/setup";
 
 interface EditorProps {
   value?: string;
@@ -20,6 +24,9 @@ interface EditorProps {
 const Editor = (props: EditorProps) => {
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
+  const onChangeRef: OnChangeRef = {
+    current: props.onChange,
+  };
 
   const linter = createMemo(
     () => {
@@ -38,6 +45,11 @@ const Editor = (props: EditorProps) => {
     return createAccountCompletion(props.accounts);
   });
 
+  // Keep onChange ref in sync with prop
+  createEffect(() => {
+    onChangeRef.current = props.onChange;
+  });
+
   // Create editor view once on mount
   onMount(() => {
     if (!editorRef) return;
@@ -54,7 +66,7 @@ const Editor = (props: EditorProps) => {
         lintGutter(),
         accountCompletion(),
       ],
-      onChange: props.onChange,
+      onChangeRef,
     });
 
     viewRef = view;
@@ -93,6 +105,7 @@ const Editor = (props: EditorProps) => {
           linter(),
           lintGutter(),
           accountCompletion(),
+          createUpdateListener(onChangeRef),
         ]),
       });
     }),
