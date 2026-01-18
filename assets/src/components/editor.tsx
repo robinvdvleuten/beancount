@@ -30,17 +30,17 @@ const Editor = (props: EditorProps) => {
   };
 
   const linter = createMemo(
-    () => {
-      // Track errors and filepath dependencies to recreate linter when they change
-      const _errors = props.errors;
-      const _filepath = props.filepath;
-      return linterExt((view) =>
-        errorsToDiagnostics(_errors ?? null, view, _filepath ?? null),
-      );
-    },
-    undefined,
-    { equals: false },
-  );
+  () => {
+    // Track errors and filepath dependencies to recreate linter when they change
+    const _errors = props.errors;
+    const _filepath = props.filepath;
+    return linterExt((view) =>
+      errorsToDiagnostics(_errors ?? null, view, _filepath ?? null),
+    );
+  },
+  undefined,
+  { equals: false },
+);
 
   const accountCompletion = createMemo(() => {
     return createAccountCompletion(props.accounts);
