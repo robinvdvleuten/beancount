@@ -9,6 +9,7 @@ require (
 	github.com/alecthomas/kong v1.13.0
 	github.com/charmbracelet/huh v0.8.0
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/fsnotify/fsnotify v1.9.0
 	github.com/mattn/go-runewidth v0.0.19
 	github.com/shopspring/decimal v1.4.0
 	golang.org/x/exp v0.0.0-20231006140011-7918f672742d

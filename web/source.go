@@ -1,6 +1,8 @@
 package web
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,9 +29,16 @@ type Files struct {
 
 // SourceResponse is the response for GET and PUT /api/source.
 type SourceResponse struct {
-	Source string  `json:"source"`
-	Errors []error `json:"errors"`
-	Files  Files   `json:"files"`
+	Source      string  `json:"source"`
+	Fingerprint string  `json:"fingerprint"`
+	Errors      []error `json:"errors"`
+	Files       Files   `json:"files"`
+}
+
+// computeFingerprint returns a short hash of content for change detection.
+func computeFingerprint(content []byte) string {
+	hash := sha256.Sum256(content)
+	return hex.EncodeToString(hash[:])[:8]
 }
 
 // isAllowedFile checks if the given path is in the allowlist (root or includes).
@@ -85,8 +94,9 @@ func (s *Server) buildResponse(source []byte) *SourceResponse {
 		includes = []string{}
 	}
 	return &SourceResponse{
-		Source: string(source),
-		Errors: s.ledger.Errors(),
+		Source:      string(source),
+		Fingerprint: computeFingerprint(source),
+		Errors:      s.ledger.Errors(),
 		Files: Files{
 			Root:     s.rootFile,
 			Includes: includes,
@@ -123,10 +133,13 @@ func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 
 // handlePutSource handles PUT requests to /api/source.
 // Writes the provided content to the file and returns validation errors and updated files list.
+// If fingerprint is provided and doesn't match current file, returns 409 Conflict (unless force=true).
 func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 	var request struct {
-		Filepath string `json:"filepath"`
-		Source   string `json:"source"`
+		Filepath    string `json:"filepath"`
+		Source      string `json:"source"`
+		Fingerprint string `json:"fingerprint,omitempty"`
+		Force       bool   `json:"force,omitempty"`
 	}
 
 	if err := json.NewDecoder(r.Body).Decode(&request); err != nil {
@@ -140,7 +153,23 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Write file first (outside lock)
+	// Conflict detection: compare fingerprints if provided
+	if request.Fingerprint != "" && !request.Force {
+		currentContent, err := os.ReadFile(filename)
+		if err == nil {
+			currentFingerprint := computeFingerprint(currentContent)
+			if request.Fingerprint != currentFingerprint {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusConflict)
+				_ = json.NewEncoder(w).Encode(map[string]string{
+					"error": "File changed since last load",
+				})
+				return
+			}
+		}
+	}
+
+	// Write file (outside lock)
 	if err := os.WriteFile(filename, []byte(request.Source), 0600); err != nil {
 		http.Error(w, "Failed to write file", http.StatusInternalServerError)
 		return
