@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0](https://github.com/robinvdvleuten/beancount/compare/v0.8.0...v0.9.0) (2026-01-19)
+
+
+### Features
+
+* **web:** auto reload on changes through --watch flag ([#121](https://github.com/robinvdvleuten/beancount/issues/121)) ([4e28b10](https://github.com/robinvdvleuten/beancount/commit/4e28b1007d8e40b976466f01e6a5b0e9eaad20d2))
+
+
+### Bug Fixes
+
+* **editor:** preserve updateListener in reconfigure to fix empty save ([f52d0ba](https://github.com/robinvdvleuten/beancount/commit/f52d0badceedc83e1b7fbc7361694b1e5625aa6d))
+* **lexer:** prevent newline consumption in malformed strings ([913b29e](https://github.com/robinvdvleuten/beancount/commit/913b29e1277bdf522dbcf452924c0dc0bfa0b49a))
+* upgrade Go toolchain to 1.24.11 for crypto/x509 security fixes ([2e55c43](https://github.com/robinvdvleuten/beancount/commit/2e55c43abb897e1962a0878d4a28f7bb98c61806))
+
 ## [0.8.0](https://github.com/robinvdvleuten/beancount/compare/v0.7.0...v0.8.0) (2026-01-13)
 
 
