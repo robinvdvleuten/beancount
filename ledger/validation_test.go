@@ -325,6 +325,19 @@ func TestCalculateBalance(t *testing.T) {
 			wantInferred: 1,
 		},
 		{
+			name: "inferred amount counted once in tolerance calculation",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("33.33", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("33.33", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("33.34", "USD")),
+					ast.NewPosting(checking), // Will be inferred as -100.00
+				),
+			),
+			wantBalanced: true,
+			wantInferred: 1,
+		},
+		{
 			name: "multi-currency balanced",
 			txn: ast.NewTransaction(date, "Test",
 				ast.WithPostings(

@@ -661,22 +661,13 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// Check if balanced (within tolerance) after inference
 	amountsByCurrency := make(map[string][]decimal.Decimal)
 
-	// Collect explicit amounts
+	// Collect all amounts (explicit and inferred) for tolerance calculation
 	for _, posting := range txn.Postings {
 		if posting.Amount != nil {
 			amount, err := ParseAmount(posting.Amount)
 			if err != nil {
 				continue
 			}
-			currency := posting.Amount.Currency
-			amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
-		}
-	}
-
-	// Include inferred amounts for tolerance calculation
-	for _, posting := range txn.Postings {
-		if posting.Inferred && posting.Amount != nil {
-			amount, _ := ParseAmount(posting.Amount)
 			currency := posting.Amount.Currency
 			amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
 		}
