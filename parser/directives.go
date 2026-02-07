@@ -294,7 +294,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 			val = &ast.CustomValue{String: &s}
 
 		case IDENT:
-			// Could be TRUE, FALSE, or a currency in an amount
+			// Could be TRUE, FALSE, or a currency identifier
 			p.advance()
 			ident := tok.String(p.source)
 
@@ -306,9 +306,8 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 				boolStr := "FALSE"
 				val = &ast.CustomValue{BooleanValue: &boolStr}
 			default:
-				// This might be part of an amount, but we already consumed it
-				// For simplicity, treat it as a number string
-				val = &ast.CustomValue{Number: &ident}
+				// Non-boolean identifier (e.g., a currency like USD or HOOL)
+				val = &ast.CustomValue{String: &ident}
 			}
 
 		case NUMBER:

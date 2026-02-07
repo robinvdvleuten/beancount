@@ -224,6 +224,23 @@ func TestParseCustom(t *testing.T) {
 	assert.Equal(t, "budget", custom.Type.Value)
 }
 
+func TestParseCustomIdentAsString(t *testing.T) {
+	input := `2024-01-01 custom "ticker" HOOL`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	custom, ok := result.Directives[0].(*ast.Custom)
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(custom.Values))
+
+	// A lone IDENT (not TRUE/FALSE) should be stored as String, not Number
+	assert.NotEqual(t, (*string)(nil), custom.Values[0].String)
+	assert.Equal(t, "HOOL", *custom.Values[0].String)
+	assert.Equal(t, (*string)(nil), custom.Values[0].Number)
+}
+
 // Option tests
 
 func TestParseOption(t *testing.T) {
