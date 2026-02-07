@@ -319,14 +319,17 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		p.advance()
 	}
 
+	// After skipping newlines, check for EOF
+	if p.isAtEnd() {
+		return nil, p.errorAtToken(dateTok, "unexpected end of file after date")
+	}
+
 	// Check that next token is properly separated from date (whitespace required)
 	// This check runs after NEWLINE skipping to ensure we're checking the actual
 	// directive keyword token, not a trailing NEWLINE from the date line
-	if !p.isAtEnd() {
-		nextTok := p.peek()
-		if nextTok.Line == dateTok.Line && nextTok.Column == dateTok.Column+dateTok.Len() {
-			return nil, p.errorAtToken(nextTok, "whitespace required between date and directive")
-		}
+	nextTok := p.peek()
+	if nextTok.Line == dateTok.Line && nextTok.Column == dateTok.Column+dateTok.Len() {
+		return nil, p.errorAtToken(nextTok, "whitespace required between date and directive")
 	}
 
 	// Capture position from directive keyword token

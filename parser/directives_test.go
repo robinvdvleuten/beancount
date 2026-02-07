@@ -386,6 +386,22 @@ func TestParsePoptag(t *testing.T) {
 	assert.Equal(t, "trip", string(result.Poptags[0].Tag))
 }
 
+func TestParseDateAtEOFReturnsError(t *testing.T) {
+	input := `2024-01-01`
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected end of file after date")
+}
+
+func TestParseDateFollowedByNewlineAtEOFReturnsError(t *testing.T) {
+	input := "2024-01-01\n"
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected end of file after date")
+}
+
 // Error cases
 
 func TestParseTransactionRequiresNarration(t *testing.T) {
