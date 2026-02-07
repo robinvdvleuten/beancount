@@ -438,10 +438,12 @@ func (l *Lexer) scanString(start, line, col int) Token {
 	// Opening quote already consumed
 
 	// Scan until closing quote or end of source
+	closed := false
 	for l.pos < len(l.source) {
 		ch := l.source[l.pos]
 		if ch == '"' {
 			l.advance() // consume closing quote
+			closed = true
 			break
 		}
 		// Reject literal newlines in strings (must use escape sequences)
@@ -459,6 +461,10 @@ func (l *Lexer) scanString(start, line, col int) Token {
 		} else {
 			l.advance()
 		}
+	}
+
+	if !closed {
+		return Token{ILLEGAL, start, l.pos, line, col}
 	}
 
 	return Token{STRING, start, l.pos, line, col}

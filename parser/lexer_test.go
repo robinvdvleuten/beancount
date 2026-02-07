@@ -128,6 +128,27 @@ func TestLexerStrings(t *testing.T) {
 	}
 }
 
+func TestLexerUnterminatedString(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"unterminated at EOF", `"hello`},
+		{"unterminated at newline", "\"hello\nworld"},
+		{"single quote at EOF", `"`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer([]byte(tt.input), "test")
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
+			assert.True(t, len(tokens) >= 1)
+			assert.Equal(t, ILLEGAL, tokens[0].Type, "unterminated string should produce ILLEGAL token")
+		})
+	}
+}
+
 func TestLexerAccounts(t *testing.T) {
 	tests := []struct {
 		input string

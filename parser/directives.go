@@ -70,6 +70,9 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 			return nil, err
 		}
 		open.BookingMethod = method.Value
+	} else if !p.isAtEnd() && p.peek().Type == ILLEGAL && p.pos < len(p.source) && p.source[p.peek().Start] == '"' {
+		tok := p.advance()
+		return nil, p.errorAtToken(tok, "unterminated string")
 	}
 
 	p.finishDirective(open)
