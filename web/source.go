@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -175,13 +176,13 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Reload ledger after save
+	// Reload ledger after save. Parse/validation errors are expected and
+	// returned to the client — only log unexpected failures.
 	if err := s.reloadLedger(r.Context()); err != nil {
-		http.Error(w, "Failed to reload ledger", http.StatusInternalServerError)
-		return
+		log.Printf("Warning: ledger reload after save: %v", err)
 	}
 
-	// Build response from reloaded state
+	// Build response from reloaded state (includes any validation errors)
 	s.mu.RLock()
 	response := s.buildResponse([]byte(request.Source))
 	s.mu.RUnlock()

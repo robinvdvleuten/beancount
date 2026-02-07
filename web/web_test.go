@@ -144,6 +144,35 @@ func TestAPISource(t *testing.T) {
 		assert.True(t, strings.Contains(rec.Body.String(), "access denied"))
 	})
 
+	t.Run("PutWithParseErrorStillSavesFile", func(t *testing.T) {
+		invalidContent := "this is not valid beancount syntax @@@"
+		requestBody := map[string]string{
+			"source": invalidContent,
+		}
+		bodyBytes, err := json.Marshal(requestBody)
+		assert.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodPut, "/api/source", strings.NewReader(string(bodyBytes)))
+		req.Header.Set("Content-Type", "application/json")
+		rec := httptest.NewRecorder()
+
+		mux.ServeHTTP(rec, req)
+
+		// Should still return 200 — file was saved even if parse fails
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		// File should contain the new content
+		content, err := os.ReadFile(tmpFile.Name())
+		assert.NoError(t, err)
+		assert.Equal(t, invalidContent, string(content))
+
+		// Response should still be valid JSON with source
+		var response map[string]interface{}
+		err = json.NewDecoder(rec.Body).Decode(&response)
+		assert.NoError(t, err)
+		assert.Equal(t, invalidContent, response["source"].(string))
+	})
+
 	t.Run("PutInvalidJSON", func(t *testing.T) {
 		body := strings.NewReader(`invalid json`)
 		req := httptest.NewRequest(http.MethodPut, "/api/source", body)
