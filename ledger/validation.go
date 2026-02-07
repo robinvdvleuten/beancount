@@ -626,7 +626,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			}
 
 			// Only infer cost for augmentations (positive amounts)
-			if amount.IsNegative() {
+			if amount.IsNegative() || amount.IsZero() {
 				continue
 			}
 

@@ -1168,6 +1168,18 @@ func TestEmptyCostBehavior(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "zero amount with {} does not panic on cost inference",
+			input: `
+				2020-01-01 open Assets:Brokerage
+				2020-01-01 open Assets:Cash USD
+
+				2020-01-02 * "Zero amount with empty cost"
+				  Assets:Brokerage    0 STOCK {}
+				  Assets:Cash        0 USD
+			`,
+			wantErr: false,
+		},
+		{
 			name: "multiple empty costs - cannot infer costs unambiguously",
 			input: `
 				2020-01-01 open Assets:Brokerage

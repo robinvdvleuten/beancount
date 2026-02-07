@@ -741,7 +741,9 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 				panic(fmt.Sprintf("BUG: lot spec normalization failed after validation: %v", err))
 			}
 
-			if amount.GreaterThan(decimal.Zero) {
+			if amount.IsZero() {
+				// Zero amount with cost spec is a no-op for inventory
+			} else if amount.GreaterThan(decimal.Zero) {
 				account.Inventory.AddLot(currency, amount, lotSpec)
 			} else {
 				bookingMethod := account.BookingMethod
