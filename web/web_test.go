@@ -24,7 +24,7 @@ func TestAPISource(t *testing.T) {
 	_ = tmpFile.Close()
 
 	server := New(8080, tmpFile.Name())
-	err = server.reloadLedger(context.Background())
+	_, err = server.reloadLedger(context.Background())
 	assert.NoError(t, err)
 	mux, err := server.setupRouter()
 	assert.NoError(t, err)
@@ -196,7 +196,7 @@ func TestAPISource(t *testing.T) {
 		_ = tmpFileErr.Close()
 
 		serverErr := New(8080, tmpFileErr.Name())
-		err = serverErr.reloadLedger(context.Background())
+		_, err = serverErr.reloadLedger(context.Background())
 		assert.NoError(t, err)
 		muxErr, err := serverErr.setupRouter()
 		assert.NoError(t, err)
@@ -216,6 +216,40 @@ func TestAPISource(t *testing.T) {
 	})
 }
 
+func TestConcurrentReloadLedger(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "test-*.beancount")
+	assert.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
+	testContent := "2024-01-01 open Assets:Checking\n"
+	_, err = tmpFile.WriteString(testContent)
+	assert.NoError(t, err)
+	_ = tmpFile.Close()
+
+	server := New(8080, tmpFile.Name())
+	_, err = server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+
+	// Run concurrent reloads — with -race flag this catches data races
+	done := make(chan struct{})
+	for i := 0; i < 5; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			for j := 0; j < 10; j++ {
+				oldIncludes, err := server.reloadLedger(context.Background())
+				if err != nil {
+					return
+				}
+				// oldIncludes should be a valid snapshot, not a partially updated slice
+				_ = oldIncludes
+			}
+		}()
+	}
+	for i := 0; i < 5; i++ {
+		<-done
+	}
+}
+
 func TestAPIAccounts(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-*.beancount")
 	assert.NoError(t, err)
@@ -232,7 +266,7 @@ func TestAPIAccounts(t *testing.T) {
 	_ = tmpFile.Close()
 
 	server := New(8080, tmpFile.Name())
-	err = server.reloadLedger(context.Background())
+	_, err = server.reloadLedger(context.Background())
 	assert.NoError(t, err)
 	mux, err := server.setupRouter()
 	assert.NoError(t, err)

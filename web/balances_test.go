@@ -46,7 +46,7 @@ func TestAPIBalances(t *testing.T) {
 	_ = tmpFile.Close()
 
 	server := New(8080, tmpFile.Name())
-	err = server.reloadLedger(context.Background())
+	_, err = server.reloadLedger(context.Background())
 	assert.NoError(t, err)
 	mux, err := server.setupRouter()
 	assert.NoError(t, err)
@@ -245,7 +245,7 @@ func TestAPIBalances(t *testing.T) {
 		_ = tmpFileEmpty.Close()
 
 		serverEmpty := New(8080, tmpFileEmpty.Name())
-		err = serverEmpty.reloadLedger(context.Background())
+		_, err = serverEmpty.reloadLedger(context.Background())
 		assert.NoError(t, err)
 		muxEmpty, err := serverEmpty.setupRouter()
 		assert.NoError(t, err)

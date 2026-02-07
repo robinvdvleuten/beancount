@@ -75,7 +75,7 @@ func (s *Server) Start(ctx context.Context) error {
 	s.sseClients = make(map[chan string]struct{})
 
 	loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.inputFile)))
-	if err := s.reloadLedger(ctx); err != nil {
+	if _, err := s.reloadLedger(ctx); err != nil {
 		loadTimer.End()
 		return fmt.Errorf("failed to load ledger: %w", err)
 	}
@@ -129,24 +129,26 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 
 // reloadLedger loads or reloads the ledger from disk.
 // Caller must NOT hold the mutex - this method acquires it internally.
-func (s *Server) reloadLedger(ctx context.Context) error {
+// Returns the old include files for comparison by the caller.
+func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err error) {
 	ldr := loader.New(loader.WithFollowIncludes())
 
 	result, err := ldr.Load(ctx, s.inputFile)
 	if err != nil {
-		return err // I/O or parse error
+		return nil, err // I/O or parse error
 	}
 
 	l := ledger.New()
 	_ = l.Process(ctx, result.AST) // Validation errors in l.Errors()
 
 	s.mu.Lock()
+	oldIncludes = s.includeFiles
 	s.ledger = l
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes
 	s.mu.Unlock()
 
-	return nil
+	return oldIncludes, nil
 }
 
 // startWatcher starts a file watcher for the root file and all includes.
@@ -223,21 +225,19 @@ func (s *Server) runWatcher(ctx context.Context, watcher *fsnotify.Watcher) {
 
 // handleFileChange reloads the ledger and updates the watch list.
 func (s *Server) handleFileChange(ctx context.Context, watcher *fsnotify.Watcher) {
-	// Get old include files for comparison
-	s.mu.RLock()
-	oldIncludes := make(map[string]bool)
-	for _, f := range s.includeFiles {
-		oldIncludes[f] = true
-	}
-	s.mu.RUnlock()
-
-	// Reload ledger
-	if err := s.reloadLedger(ctx); err != nil {
+	// Reload ledger — returns old includes atomically captured under the write lock
+	prevIncludes, err := s.reloadLedger(ctx)
+	if err != nil {
 		log.Printf("Failed to reload ledger: %v", err)
 		return
 	}
 
-	// Update watch list (includes may have changed)
+	oldIncludes := make(map[string]bool)
+	for _, f := range prevIncludes {
+		oldIncludes[f] = true
+	}
+
+	// Read new state under lock
 	s.mu.RLock()
 	newIncludes := make(map[string]bool)
 	for _, f := range s.includeFiles {

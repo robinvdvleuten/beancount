@@ -178,7 +178,7 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 
 	// Reload ledger after save. Parse/validation errors are expected and
 	// returned to the client — only log unexpected failures.
-	if err := s.reloadLedger(r.Context()); err != nil {
+	if _, err := s.reloadLedger(r.Context()); err != nil {
 		log.Printf("Warning: ledger reload after save: %v", err)
 	}
 
