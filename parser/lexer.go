@@ -9,7 +9,6 @@ package parser
 // - Pre-allocated token buffer
 
 import (
-	"bytes"
 	"fmt"
 	"unicode/utf8"
 )
@@ -529,48 +528,35 @@ func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 }
 
 // keywordType returns the token type for a keyword, or IDENT if not a keyword.
+// keywordMap maps keyword strings to their token types.
+// Using a map allows O(1) lookup instead of sequential comparisons.
+// Go optimizes map[string] lookups with []byte keys to avoid allocation.
+var keywordMap = map[string]TokenType{
+	"txn":       TXN,
+	"balance":   BALANCE,
+	"open":      OPEN,
+	"close":     CLOSE,
+	"commodity": COMMODITY,
+	"pad":       PAD,
+	"note":      NOTE,
+	"document":  DOCUMENT,
+	"price":     PRICE,
+	"event":     EVENT,
+	"custom":    CUSTOM,
+	"option":    OPTION,
+	"include":   INCLUDE,
+	"plugin":    PLUGIN,
+	"pushtag":   PUSHTAG,
+	"poptag":    POPTAG,
+	"pushmeta":  PUSHMETA,
+	"popmeta":   POPMETA,
+}
+
 func (l *Lexer) keywordType(word []byte) TokenType {
-	// Use byte comparison to avoid allocating strings
-	switch {
-	case bytes.Equal(word, []byte("txn")):
-		return TXN
-	case bytes.Equal(word, []byte("balance")):
-		return BALANCE
-	case bytes.Equal(word, []byte("open")):
-		return OPEN
-	case bytes.Equal(word, []byte("close")):
-		return CLOSE
-	case bytes.Equal(word, []byte("commodity")):
-		return COMMODITY
-	case bytes.Equal(word, []byte("pad")):
-		return PAD
-	case bytes.Equal(word, []byte("note")):
-		return NOTE
-	case bytes.Equal(word, []byte("document")):
-		return DOCUMENT
-	case bytes.Equal(word, []byte("price")):
-		return PRICE
-	case bytes.Equal(word, []byte("event")):
-		return EVENT
-	case bytes.Equal(word, []byte("custom")):
-		return CUSTOM
-	case bytes.Equal(word, []byte("option")):
-		return OPTION
-	case bytes.Equal(word, []byte("include")):
-		return INCLUDE
-	case bytes.Equal(word, []byte("plugin")):
-		return PLUGIN
-	case bytes.Equal(word, []byte("pushtag")):
-		return PUSHTAG
-	case bytes.Equal(word, []byte("poptag")):
-		return POPTAG
-	case bytes.Equal(word, []byte("pushmeta")):
-		return PUSHMETA
-	case bytes.Equal(word, []byte("popmeta")):
-		return POPMETA
-	default:
-		return IDENT
+	if tt, ok := keywordMap[string(word)]; ok {
+		return tt
 	}
+	return IDENT
 }
 
 // scanComment scans a comment line (;...) and returns a COMMENT token

@@ -440,6 +440,28 @@ func BenchmarkLexer(b *testing.B) {
 	}
 }
 
+func TestKeywordMapLookup(t *testing.T) {
+	// Verify all keywords are recognized correctly via map lookup
+	keywords := map[string]TokenType{
+		"txn": TXN, "balance": BALANCE, "open": OPEN, "close": CLOSE,
+		"commodity": COMMODITY, "pad": PAD, "note": NOTE, "document": DOCUMENT,
+		"price": PRICE, "event": EVENT, "custom": CUSTOM, "option": OPTION,
+		"include": INCLUDE, "plugin": PLUGIN, "pushtag": PUSHTAG,
+		"poptag": POPTAG, "pushmeta": PUSHMETA, "popmeta": POPMETA,
+	}
+
+	lexer := NewLexer(nil, "test")
+	for word, expected := range keywords {
+		got := lexer.keywordType([]byte(word))
+		assert.Equal(t, expected, got, "keyword %q should map to %v", word, expected)
+	}
+
+	// Non-keywords should return IDENT
+	assert.Equal(t, IDENT, lexer.keywordType([]byte("Assets")))
+	assert.Equal(t, IDENT, lexer.keywordType([]byte("USD")))
+	assert.Equal(t, IDENT, lexer.keywordType([]byte("notakeyword")))
+}
+
 func TestInvalidUTF8(t *testing.T) {
 	tests := []struct {
 		name     string
