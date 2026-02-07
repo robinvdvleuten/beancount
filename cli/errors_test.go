@@ -109,6 +109,47 @@ func TestErrorRenderer_RenderWithSourceContext(t *testing.T) {
 	assert.True(t, len(lines) >= 5, "Expected at least 5 lines in output")
 }
 
+func TestErrorRenderer_RenderWithContext_AllDirectiveTypes(t *testing.T) {
+	renderer := NewErrorRenderer(nil)
+	pos := ast.Position{Filename: "test.beancount", Line: 1, Column: 1}
+
+	date, _ := ast.NewDate("2024-01-15")
+
+	tests := []struct {
+		name      string
+		directive ast.Directive
+		contains  string
+	}{
+		{
+			name:      "commodity",
+			directive: ast.NewCommodity(date, "USD"),
+			contains:  "commodity USD",
+		},
+		{
+			name:      "price",
+			directive: ast.NewPrice(date, "HOOL", ast.NewAmount("500.00", "USD")),
+			contains:  "price HOOL",
+		},
+		{
+			name:      "event",
+			directive: ast.NewEvent(date, "location", "New York"),
+			contains:  "event",
+		},
+		{
+			name:      "custom",
+			directive: ast.NewCustom(date, "budget", nil),
+			contains:  "custom",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			output := renderer.renderWithContext(pos, "test error", tt.directive)
+			assert.Contains(t, output, tt.contains, "directive context should be rendered")
+		})
+	}
+}
+
 func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {
 	// Test with error at the beginning of file
 	sourceContent := `2024-01-15 * "Test" "Description"

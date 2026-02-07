@@ -188,6 +188,30 @@ func (r *ErrorRenderer) renderWithContext(pos ast.Position, message string, dire
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')
+
+	case *ast.Commodity:
+		line := fmt.Sprintf("%s commodity %s", d.Date().String(), d.Currency)
+		buf.WriteString("   ")
+		buf.WriteString(errContextStyle.Render(line))
+		buf.WriteByte('\n')
+
+	case *ast.Price:
+		line := fmt.Sprintf("%s price %s  %s %s", d.Date().String(), d.Commodity, d.Amount.Value, d.Amount.Currency)
+		buf.WriteString("   ")
+		buf.WriteString(errContextStyle.Render(line))
+		buf.WriteByte('\n')
+
+	case *ast.Event:
+		line := fmt.Sprintf("%s event %q %q", d.Date().String(), d.Name.Value, d.Value.Value)
+		buf.WriteString("   ")
+		buf.WriteString(errContextStyle.Render(line))
+		buf.WriteByte('\n')
+
+	case *ast.Custom:
+		line := fmt.Sprintf("%s custom %q", d.Date().String(), d.Type.Value)
+		buf.WriteString("   ")
+		buf.WriteString(errContextStyle.Render(line))
+		buf.WriteByte('\n')
 	}
 
 	return buf.String()
