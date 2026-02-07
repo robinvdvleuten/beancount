@@ -241,6 +241,33 @@ func TestParseCustomIdentAsString(t *testing.T) {
 	assert.Equal(t, (*string)(nil), custom.Values[0].Number)
 }
 
+func TestParseCustomAccountValue(t *testing.T) {
+	input := `2024-01-01 custom "budget" Expenses:Food "monthly" 500.00 USD`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	custom, ok := result.Directives[0].(*ast.Custom)
+	assert.True(t, ok)
+
+	// Should have 3 values: account, string, amount
+	assert.Equal(t, 3, len(custom.Values))
+
+	// First value: Expenses:Food (ACCOUNT token stored as String)
+	assert.NotEqual(t, (*string)(nil), custom.Values[0].String)
+	assert.Equal(t, "Expenses:Food", *custom.Values[0].String)
+
+	// Second value: "monthly" (STRING token)
+	assert.NotEqual(t, (*string)(nil), custom.Values[1].String)
+	assert.Equal(t, "monthly", *custom.Values[1].String)
+
+	// Third value: 500.00 USD (Amount)
+	assert.NotEqual(t, (*ast.Amount)(nil), custom.Values[2].Amount)
+	assert.Equal(t, "500.00", custom.Values[2].Amount.Value)
+	assert.Equal(t, "USD", custom.Values[2].Amount.Currency)
+}
+
 // Option tests
 
 func TestParseOption(t *testing.T) {

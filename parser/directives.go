@@ -328,13 +328,22 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 				val = &ast.CustomValue{Number: &numStr}
 			}
 
-		default:
-			// Unknown token, skip
+		case ACCOUNT:
+			// Account value (e.g., Expenses:Food)
 			p.advance()
-			continue
+			acct := tok.String(p.source)
+			val = &ast.CustomValue{String: &acct}
+
+		default:
+			// Stop on unexpected tokens (COMMENT, TAG, etc.)
+			break
 		}
 
-		// val is always non-nil here since all cases set it (default continues)
+		if val == nil {
+			// Default case: stop parsing values on unexpected tokens
+			break
+		}
+
 		custom.Values = append(custom.Values, val)
 	}
 
