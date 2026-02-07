@@ -830,6 +830,11 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 	}
 
 	// Append inline comment if present
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
+	}
+
 	buf.WriteByte('\n')
 	f.formatMetadata(p.Metadata, buf)
 }

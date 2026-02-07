@@ -48,6 +48,23 @@ func TestFormatDirectiveWithInlineComment(t *testing.T) {
 	assert.True(t, bytes.Contains([]byte(result), []byte("; test comment")), "output should contain test comment")
 }
 
+func TestFormatPriceWithInlineComment(t *testing.T) {
+	source := `2024-01-01 commodity USD
+
+2024-06-15 price HOOL 500.00 USD ; market close
+`
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	f := New()
+	output := bytes.NewBufferString("")
+	err := f.Format(context.Background(), tree, []byte(source), output)
+	assert.NoError(t, err)
+
+	result := output.String()
+	assert.True(t, bytes.Contains([]byte(result), []byte("; market close")), "output should contain price inline comment")
+}
+
 func TestFormatPreservesCommentPosition(t *testing.T) {
 	source := `2024-01-01 open Assets:Checking
 
