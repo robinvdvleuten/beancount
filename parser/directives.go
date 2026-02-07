@@ -336,7 +336,7 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 
 		default:
 			// Stop on unexpected tokens (COMMENT, TAG, etc.)
-			break
+			// val remains nil, causing the loop to exit below
 		}
 
 		if val == nil {
