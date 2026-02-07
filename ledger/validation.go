@@ -366,7 +366,7 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 
 		// Validate cost label if present
 		if posting.Cost.Label != "" {
-			if len(posting.Cost.Label) == 0 {
+			if strings.TrimSpace(posting.Cost.Label) == "" {
 				costSpec := "{...}"
 				if posting.Cost.Amount != nil {
 					costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)

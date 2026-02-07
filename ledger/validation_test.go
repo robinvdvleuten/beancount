@@ -925,6 +925,26 @@ func TestValidateCosts(t *testing.T) {
 			),
 			wantErrCount: 0,
 		},
+		{
+			name: "valid cost label",
+			txn: ast.NewTransaction(date, "Buy stock with label",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("500.00", "USD"), nil, "lot-1"))),
+					ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "whitespace-only cost label rejected",
+			txn: ast.NewTransaction(date, "Buy stock with bad label",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("500.00", "USD"), nil, "   "))),
+					ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+				),
+			),
+			wantErrCount: 1,
+		},
 	}
 
 	for _, tt := range tests {
