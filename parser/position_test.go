@@ -285,6 +285,32 @@ balance Assets:Checking 100.00 USD
 	assert.Equal(t, 6, getDirectiveLine(tree.Directives[1]))
 }
 
+// TestCalculateSourceRangeIncludesContext verifies that parse errors include
+// surrounding source lines for context display.
+func TestCalculateSourceRangeIncludesContext(t *testing.T) {
+	source := `2024-01-01 open Assets:Checking USD
+2024-01-02 open Expenses:Food
+2024-01-03 open Expenses:Transport
+2024-01-04 balance Assets:Checking INVALID
+2024-01-05 open Income:Salary
+`
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+
+	parseErr, ok := err.(*ParseError)
+	assert.True(t, ok)
+
+	// Error should be on line 4
+	assert.Equal(t, 4, parseErr.Pos.Line)
+
+	// Source range should include context (lines before/after the error)
+	rangeStr := string(parseErr.SourceRange.Source)
+	assert.Contains(t, rangeStr, "Expenses:Food")      // line 2 (context before)
+	assert.Contains(t, rangeStr, "Expenses:Transport")  // line 3 (context before)
+	assert.Contains(t, rangeStr, "INVALID")             // line 4 (error line)
+	assert.Contains(t, rangeStr, "Income:Salary")       // line 5 (context after)
+}
+
 // TestPositionTrackingComplexScenario tests complex scenarios with mixed formatting.
 func TestPositionTrackingComplexScenario(t *testing.T) {
 	source := `option "title" "Test Ledger"

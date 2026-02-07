@@ -728,40 +728,37 @@ func (p *Parser) errorAtEndOfPrevious(format string, args ...any) error {
 // calculateSourceRange determines the byte range in source that contains context lines around the error position.
 // This includes 2 lines before and 2 lines after the error line for context display.
 func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
-	// Split source into lines to find line boundaries
-	sourceStr := string(p.source)
-	lines := strings.Split(sourceStr, "\n")
-
 	// Determine line range to include (2 lines before and after error line)
-	startLine := pos.Line - 3 // 0-based, show 2 lines before
-	endLine := pos.Line + 1   // show 1 line after (inclusive)
-
-	// Ensure bounds
-	if startLine < 0 {
-		startLine = 0
+	// pos.Line is 1-based
+	wantStart := pos.Line - 2 // show 2 lines before (1-based)
+	if wantStart < 1 {
+		wantStart = 1
 	}
-	if endLine >= len(lines) {
-		endLine = len(lines) - 1
-	}
+	wantEnd := pos.Line + 1 // show 1 line after (1-based, inclusive)
 
-	// Calculate byte offsets for the line range
+	// Single pass through source bytes to find line boundaries
+	// This avoids string(p.source) conversion and strings.Split allocation
+	currentLine := 1
 	startOffset := 0
-	if startLine > 0 {
-		// Sum lengths of all lines before startLine, plus newline characters
-		for i := 0; i < startLine; i++ {
-			startOffset += len(lines[i]) + 1 // +1 for newline
-		}
-	}
+	endOffset := len(p.source)
+	foundStart := wantStart == 1
+	foundEnd := false
 
-	endOffset := startOffset
-	for i := startLine; i <= endLine; i++ {
-		if i < len(lines) {
-			endOffset += len(lines[i])
-			if i < endLine { // Don't add newline after last line
-				endOffset += 1
+	for i, b := range p.source {
+		if b == '\n' {
+			currentLine++
+			if !foundStart && currentLine == wantStart {
+				startOffset = i + 1
+				foundStart = true
+			}
+			if currentLine > wantEnd {
+				endOffset = i // exclude this newline
+				foundEnd = true
+				break
 			}
 		}
 	}
+	_ = foundEnd
 
 	// Ensure we don't exceed source bounds
 	if endOffset > len(p.source) {
