@@ -187,9 +187,9 @@ func TestUnquoteString(t *testing.T) {
 			expected: "\\n\n\\t\t",
 		},
 		{
-			name:     "escaped backslash then n should be literal backslash and n",
-			input:    `"\\\n"`, // This is: \\ followed by \n (escaped backslash, then backslash-n)
-			expected: "\\\\n",  // Should be: literal \ followed by literal \ and n
+			name:     "escaped backslash then newline escape",
+			input:    `"\\\n"`, // raw bytes: \ \ \ n -> \\ is escaped backslash, \n is newline escape
+			expected: "\\\n",   // literal backslash + newline character
 		},
 		{
 			name:     "double escaped backslash with n",

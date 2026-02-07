@@ -293,24 +293,14 @@ func (p *Parser) processEscapeSequences(inner string) (string, error) {
 			case '\\':
 				buf.WriteByte('\\')
 				i += 2
-			case 'n', 't', 'r':
-				// Process escape sequence unless preceded by another backslash
-				isEscaped := i > 0 && inner[i-1] == '\\'
-				if !isEscaped {
-					// Convert to actual control character
-					switch inner[i+1] {
-					case 'n':
-						buf.WriteByte('\n')
-					case 't':
-						buf.WriteByte('\t')
-					case 'r':
-						buf.WriteByte('\r')
-					}
-				} else {
-					// This is an escaped backslash followed by the char
-					buf.WriteByte('\\')
-					buf.WriteByte(inner[i+1])
-				}
+			case 'n':
+				buf.WriteByte('\n')
+				i += 2
+			case 't':
+				buf.WriteByte('\t')
+				i += 2
+			case 'r':
+				buf.WriteByte('\r')
 				i += 2
 			default:
 				return "", &StringLiteralError{
