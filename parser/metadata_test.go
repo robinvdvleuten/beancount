@@ -271,6 +271,14 @@ func TestParseMetadataEdgeCases(t *testing.T) {
 	})
 }
 
+func TestParseMetadataInvalidStringReturnsError(t *testing.T) {
+	source := "2024-01-01 commodity USD\n  name: \"bad\\qescape\"\n"
+
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid string literal")
+}
+
 func TestParseMetadataWithPrecision(t *testing.T) {
 	source := `
 2024-01-01 * "High precision test"

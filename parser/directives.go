@@ -25,7 +25,9 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 	}
 	bal.SetPosition(pos)
 	bal.SetDate(date)
-	p.finishDirective(bal)
+	if err := p.finishDirective(bal); err != nil {
+		return nil, err
+	}
 	return bal, nil
 }
 
@@ -75,7 +77,9 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 		return nil, p.errorAtToken(tok, "unterminated string")
 	}
 
-	p.finishDirective(open)
+	if err := p.finishDirective(open); err != nil {
+		return nil, err
+	}
 	return open, nil
 }
 
@@ -93,7 +97,9 @@ func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error
 	}
 	close.SetPosition(pos)
 	close.SetDate(date)
-	p.finishDirective(close)
+	if err := p.finishDirective(close); err != nil {
+		return nil, err
+	}
 	return close, nil
 }
 
@@ -111,7 +117,9 @@ func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodit
 	}
 	commodity.SetPosition(pos)
 	commodity.SetDate(date)
-	p.finishDirective(commodity)
+	if err := p.finishDirective(commodity); err != nil {
+		return nil, err
+	}
 	return commodity, nil
 }
 
@@ -135,7 +143,9 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 	}
 	pad.SetPosition(pos)
 	pad.SetDate(date)
-	p.finishDirective(pad)
+	if err := p.finishDirective(pad); err != nil {
+		return nil, err
+	}
 	return pad, nil
 }
 
@@ -159,7 +169,9 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 	}
 	note.SetPosition(pos)
 	note.SetDate(date)
-	p.finishDirective(note)
+	if err := p.finishDirective(note); err != nil {
+		return nil, err
+	}
 	return note, nil
 }
 
@@ -183,7 +195,9 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 	}
 	doc.SetPosition(pos)
 	doc.SetDate(date)
-	p.finishDirective(doc)
+	if err := p.finishDirective(doc); err != nil {
+		return nil, err
+	}
 	return doc, nil
 }
 
@@ -207,7 +221,9 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 	}
 	price.SetPosition(pos)
 	price.SetDate(date)
-	p.finishDirective(price)
+	if err := p.finishDirective(price); err != nil {
+		return nil, err
+	}
 	return price, nil
 }
 
@@ -231,7 +247,9 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 	}
 	event.SetPosition(pos)
 	event.SetDate(date)
-	p.finishDirective(event)
+	if err := p.finishDirective(event); err != nil {
+		return nil, err
+	}
 	return event, nil
 }
 
@@ -321,6 +339,8 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 		custom.Values = append(custom.Values, val)
 	}
 
-	p.finishDirective(custom)
+	if err := p.finishDirective(custom); err != nil {
+		return nil, err
+	}
 	return custom, nil
 }

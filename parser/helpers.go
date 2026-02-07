@@ -361,7 +361,7 @@ func (p *Parser) parseLink() (ast.Link, error) {
 
 // parseMetadataFromLine parses metadata entries with tracking of whether they are inline.
 // If ownerLine > 0, metadata on that same line will be marked as Inline=true.
-func (p *Parser) parseMetadataFromLine(ownerLine int) []*ast.Metadata {
+func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 	var metadata []*ast.Metadata
 
 	// Metadata lines are key: value where key can be IDENT or any keyword
@@ -382,7 +382,10 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) []*ast.Metadata {
 		p.consume(COLON, "expected ':'")
 
 		// Parse the metadata value based on token type
-		value := p.parseMetadataValue()
+		value, err := p.parseMetadataValue()
+		if err != nil {
+			return nil, err
+		}
 
 		// Skip metadata entries with no value (incomplete metadata like "key:")
 		if value == nil {
@@ -399,12 +402,12 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) []*ast.Metadata {
 		})
 	}
 
-	return metadata
+	return metadata, nil
 }
 
 // parseMetadataValue parses a typed metadata value. Beancount supports 8 value types:
 // strings, dates, accounts, currencies, tags, links, numbers, amounts, and booleans.
-func (p *Parser) parseMetadataValue() *ast.MetadataValue {
+func (p *Parser) parseMetadataValue() (*ast.MetadataValue, error) {
 	tok := p.peek()
 
 	// Parse based on token type with specific-to-general order
@@ -412,37 +415,42 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 	case STRING:
 		// String (quoted) - most specific
 		str, err := p.parseString()
-		if err == nil {
-			return &ast.MetadataValue{StringValue: &str}
+		if err != nil {
+			return nil, err
 		}
+		return &ast.MetadataValue{StringValue: &str}, nil
 
 	case DATE:
 		// Date (ISO format)
 		date, err := p.parseDate()
-		if err == nil {
-			return &ast.MetadataValue{Date: date}
+		if err != nil {
+			return nil, err
 		}
+		return &ast.MetadataValue{Date: date}, nil
 
 	case TAG:
 		// Tag (with # prefix)
 		tag, err := p.parseTag()
-		if err == nil {
-			return &ast.MetadataValue{Tag: &tag}
+		if err != nil {
+			return nil, err
 		}
+		return &ast.MetadataValue{Tag: &tag}, nil
 
 	case LINK:
 		// Link (with ^ prefix)
 		link, err := p.parseLink()
-		if err == nil {
-			return &ast.MetadataValue{Link: &link}
+		if err != nil {
+			return nil, err
 		}
+		return &ast.MetadataValue{Link: &link}, nil
 
 	case ACCOUNT:
 		// Account (colon-separated)
 		account, err := p.parseAccount()
-		if err == nil {
-			return &ast.MetadataValue{Account: &account}
+		if err != nil {
+			return nil, err
 		}
+		return &ast.MetadataValue{Account: &account}, nil
 
 	case NUMBER:
 		// Could be Number or Amount - need LL(2) lookahead
@@ -450,15 +458,15 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 		if nextTok.Type == IDENT && nextTok.Line == tok.Line {
 			// Amount (number + currency) - both must be on same line
 			amount, err := p.parseAmount()
-			if err == nil {
-				return &ast.MetadataValue{Amount: amount}
+			if err != nil {
+				return nil, err
 			}
-		} else {
-			// Just a number - remove commas from thousands separators
-			numStr := strings.ReplaceAll(tok.String(p.source), ",", "")
-			p.advance()
-			return &ast.MetadataValue{Number: &numStr}
+			return &ast.MetadataValue{Amount: amount}, nil
 		}
+		// Just a number - remove commas from thousands separators
+		numStr := strings.ReplaceAll(tok.String(p.source), ",", "")
+		p.advance()
+		return &ast.MetadataValue{Number: &numStr}, nil
 
 	case IDENT:
 		// Could be Account, Currency, or Boolean
@@ -468,25 +476,26 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 		if identStr == "TRUE" {
 			p.advance()
 			trueVal := true
-			return &ast.MetadataValue{Boolean: &trueVal}
+			return &ast.MetadataValue{Boolean: &trueVal}, nil
 		}
 		if identStr == "FALSE" {
 			p.advance()
 			falseVal := false
-			return &ast.MetadataValue{Boolean: &falseVal}
+			return &ast.MetadataValue{Boolean: &falseVal}, nil
 		}
 
 		// Check for Account (contains colon)
 		if strings.Contains(identStr, ":") {
 			account, err := p.parseAccount()
-			if err == nil {
-				return &ast.MetadataValue{Account: &account}
+			if err != nil {
+				return nil, err
 			}
+			return &ast.MetadataValue{Account: &account}, nil
 		}
 
 		// Otherwise treat as Currency
 		p.advance()
-		return &ast.MetadataValue{Currency: &identStr}
+		return &ast.MetadataValue{Currency: &identStr}, nil
 	}
 
 	// Fallback: read rest of line as string
@@ -494,17 +503,17 @@ func (p *Parser) parseMetadataValue() *ast.MetadataValue {
 	if value == "" {
 		// Empty metadata values are invalid (e.g., "key:" with no value)
 		// Reject this rather than creating a malformed entry
-		return nil
+		return nil, nil
 	}
 	unquoted, err := p.unquoteString(value)
 	if err != nil {
 		// For fallback metadata, if unquoting fails, keep original value
 		// This maintains compatibility with existing behavior
 		rawStr := ast.NewRawString(value)
-		return &ast.MetadataValue{StringValue: &rawStr}
+		return &ast.MetadataValue{StringValue: &rawStr}, nil
 	}
 	rawStr := ast.NewRawString(unquoted)
-	return &ast.MetadataValue{StringValue: &rawStr}
+	return &ast.MetadataValue{StringValue: &rawStr}, nil
 }
 
 // isKeyword returns true if the token type is a keyword.
@@ -635,7 +644,7 @@ func (p *Parser) internIdent(tok Token) string {
 
 // finishDirective captures trailing inline comment and metadata for any directive.
 // This consolidates the common end-of-directive logic used by all directive parsers.
-func (p *Parser) finishDirective(d ast.Directive) {
+func (p *Parser) finishDirective(d ast.Directive) error {
 	pos := d.Position()
 
 	// Capture inline comment on same line as directive
@@ -644,7 +653,12 @@ func (p *Parser) finishDirective(d ast.Directive) {
 	}
 
 	// Parse metadata entries on following lines
-	d.AddMetadata(p.parseMetadataFromLine(pos.Line)...)
+	metadata, err := p.parseMetadataFromLine(pos.Line)
+	if err != nil {
+		return err
+	}
+	d.AddMetadata(metadata...)
+	return nil
 }
 
 // Error helpers
