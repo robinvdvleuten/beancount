@@ -279,6 +279,30 @@ func TestParseMetadataInvalidStringReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid string literal")
 }
 
+func TestParseRestOfLineOptimization(t *testing.T) {
+	// pushmeta uses parseRestOfLine; verify it still works with builder
+	source := `pushmeta key: some value here
+2024-01-01 open Assets:Checking
+popmeta key:
+`
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Pushmetas))
+	assert.Equal(t, "some value here", result.Pushmetas[0].Value)
+}
+
+func BenchmarkParseRestOfLine(b *testing.B) {
+	source := `pushmeta key: some value with multiple tokens here
+2024-01-01 open Assets:Checking
+popmeta key:
+`
+	ctx := context.Background()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, _ = ParseString(ctx, source)
+	}
+}
+
 func TestParseMetadataWithPrecision(t *testing.T) {
 	source := `
 2024-01-01 * "High precision test"

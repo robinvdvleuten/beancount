@@ -532,13 +532,16 @@ func (p *Parser) isKeyword(typ TokenType) bool {
 func (p *Parser) parseRestOfLine() string {
 	currentLine := p.peek().Line
 
-	var parts []string
+	var buf strings.Builder
 	for !p.isAtEnd() && p.peek().Line == currentLine {
+		if buf.Len() > 0 {
+			buf.WriteByte(' ')
+		}
 		tok := p.advance()
-		parts = append(parts, tok.String(p.source))
+		buf.WriteString(tok.String(p.source))
 	}
 
-	return strings.TrimSpace(strings.Join(parts, " "))
+	return strings.TrimSpace(buf.String())
 }
 
 // skipLine skips all tokens on the current line.
