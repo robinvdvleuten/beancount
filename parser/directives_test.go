@@ -293,6 +293,26 @@ func TestParseCustomNumberNotGrabbingNextLineCurrency(t *testing.T) {
 	assert.Equal(t, "note", custom.Metadata[0].Key)
 }
 
+func TestParseCustomStopsAtInlineComment(t *testing.T) {
+	input := `2024-01-01 custom "test" 42 ; inline comment`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	custom, ok := result.Directives[0].(*ast.Custom)
+	assert.True(t, ok)
+
+	// Should have 1 value (42) and not try to parse the comment as a value
+	assert.Equal(t, 1, len(custom.Values))
+	assert.NotEqual(t, (*string)(nil), custom.Values[0].Number)
+	assert.Equal(t, "42", *custom.Values[0].Number)
+
+	// The inline comment should be captured by finishDirective
+	assert.NotEqual(t, (*ast.Comment)(nil), custom.GetComment())
+	assert.Contains(t, custom.GetComment().Content, "inline comment")
+}
+
 // Option tests
 
 func TestParseOption(t *testing.T) {
