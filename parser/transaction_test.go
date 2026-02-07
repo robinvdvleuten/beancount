@@ -397,3 +397,13 @@ func TestParseTransactionWithLargeCommaSeparatedAmounts(t *testing.T) {
 	assert.Equal(t, "1234567.89", txn.Postings[0].Amount.Value)
 	assert.Equal(t, "-1234567.89", txn.Postings[1].Amount.Value)
 }
+
+func TestParseUnmatchedParenthesisInExpression(t *testing.T) {
+	source := `2024-01-01 * "Test"
+  Assets:Checking  (100 + 200 USD
+  Expenses:Food
+`
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unmatched parentheses")
+}

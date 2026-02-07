@@ -58,7 +58,11 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	tok := p.peek()
 	if tok.Start < len(p.source) && p.source[tok.Start] == '(' {
 		// Capture expression text without evaluating
-		value = p.parseExpression()
+		var err error
+		value, err = p.parseExpression()
+		if err != nil {
+			return nil, err
+		}
 		isExpression = true
 	} else {
 		// Plain number
@@ -97,14 +101,14 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 // parseExpression captures an expression's text from source without evaluating it.
 // Scans the source starting from current position to find matching parentheses.
 // Returns the full expression text including parentheses: "(5 + 3)"
-func (p *Parser) parseExpression() string {
-	startPos := p.peek().Start
+func (p *Parser) parseExpression() (string, error) {
+	tok := p.peek()
+	startPos := tok.Start
 
 	// Scan through source to find matching closing paren
 	pos := startPos
 	if pos >= len(p.source) || p.source[pos] != '(' {
-		// Should not happen, but return empty string
-		return ""
+		return "", p.errorAtToken(tok, "expected '('")
 	}
 
 	depth := 0
@@ -126,14 +130,13 @@ func (p *Parser) parseExpression() string {
 					p.advance()
 				}
 
-				return exprText
+				return exprText, nil
 			}
 		}
 		pos++
 	}
 
-	// Unmatched parentheses - return what we have
-	return string(p.source[startPos:pos])
+	return "", p.errorAtToken(tok, "unmatched parentheses in expression")
 }
 
 // parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] } or {{ AMOUNT [, DATE] [, LABEL] }}
