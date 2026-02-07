@@ -268,6 +268,31 @@ func TestParseCustomAccountValue(t *testing.T) {
 	assert.Equal(t, "USD", custom.Values[2].Amount.Currency)
 }
 
+func TestParseCustomNumberNotGrabbingNextLineCurrency(t *testing.T) {
+	// The number 42 is the last token on its line. The next line has metadata
+	// starting with an IDENT. The parser must not consume that IDENT as a
+	// currency for the number.
+	input := `2024-01-01 custom "test" 42
+  note: "hello"
+`
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	custom, ok := result.Directives[0].(*ast.Custom)
+	assert.True(t, ok)
+
+	// 42 should be a standalone number, not an amount
+	assert.Equal(t, 1, len(custom.Values))
+	assert.NotEqual(t, (*string)(nil), custom.Values[0].Number)
+	assert.Equal(t, "42", *custom.Values[0].Number)
+	assert.Equal(t, (*ast.Amount)(nil), custom.Values[0].Amount)
+
+	// Metadata should still be parsed
+	assert.Equal(t, 1, len(custom.Metadata))
+	assert.Equal(t, "note", custom.Metadata[0].Key)
+}
+
 // Option tests
 
 func TestParseOption(t *testing.T) {

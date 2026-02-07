@@ -315,8 +315,8 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 			p.advance()
 			numStr := tok.String(p.source)
 
-			// Check if followed by currency
-			if p.check(IDENT) {
+			// Check if followed by currency on the same line
+			if p.check(IDENT) && p.peek().Line == startLine {
 				currTok := p.advance()
 				currency := p.internCurrency(currTok)
 				amt := &ast.Amount{
