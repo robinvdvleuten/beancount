@@ -93,11 +93,6 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 	accountName := string(balance.Account)
 	padEntry := l.padEntries[accountName]
 
-	// Mark pad as used if it existed (even if validation fails)
-	if padEntry != nil {
-		l.usedPads[accountName] = true
-	}
-
 	// Calculate delta (returns error separately, not in delta)
 	delta, err := v.calculateBalanceDelta(balance, padEntry)
 	if err != nil {
@@ -110,6 +105,11 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 func (h *BalanceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	balanceDelta := delta.(*BalanceDelta)
 	l.applyBalance(balanceDelta)
+
+	// Mark pad as used only after successful validation
+	if _, hasPad := l.padEntries[balanceDelta.AccountName]; hasPad {
+		l.usedPads[balanceDelta.AccountName] = true
+	}
 
 	// Store synthetic transaction for AST insertion if it exists
 	if balanceDelta.SyntheticTransaction != nil {

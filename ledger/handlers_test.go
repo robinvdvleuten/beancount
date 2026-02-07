@@ -164,6 +164,39 @@ func TestBalanceHandler(t *testing.T) {
 	// Balance handler stores synthetic transaction
 }
 
+func TestBalanceHandler_PadNotMarkedUsedOnFailure(t *testing.T) {
+	ctx := context.Background()
+	openHandler := &OpenHandler{}
+	padHandler := &PadHandler{}
+	balanceHandler := &BalanceHandler{}
+
+	ledger := New()
+
+	// Open accounts
+	tree := parser.MustParseString(ctx, "2020-01-01 open Assets:Checking")
+	_, delta := openHandler.Validate(ctx, ledger, tree.Directives[0])
+	openHandler.Apply(ctx, ledger, tree.Directives[0], delta)
+
+	tree2 := parser.MustParseString(ctx, "2020-01-01 open Equity:Opening-Balances")
+	_, delta = openHandler.Validate(ctx, ledger, tree2.Directives[0])
+	openHandler.Apply(ctx, ledger, tree2.Directives[0], delta)
+
+	// Add pad
+	tree3 := parser.MustParseString(ctx, "2020-01-01 pad Assets:Checking Equity:Opening-Balances")
+	_, delta = padHandler.Validate(ctx, ledger, tree3.Directives[0])
+	padHandler.Apply(ctx, ledger, tree3.Directives[0], delta)
+
+	// Balance assertion that will fail: pad is dated 2020-01-01 but balance
+	// is also 2020-01-01 — pad must be strictly before balance
+	tree4 := parser.MustParseString(ctx, "2020-01-01 balance Assets:Checking 1000.00 USD")
+	errs, _ := balanceHandler.Validate(ctx, ledger, tree4.Directives[0])
+
+	// Validation should fail (pad date not before balance date)
+	assert.True(t, len(errs) > 0, "validation should fail")
+	// Pad should NOT be marked as used since validation failed
+	assert.False(t, ledger.usedPads["Assets:Checking"], "pad should not be marked used on validation failure")
+}
+
 func TestPadHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
