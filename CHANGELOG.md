@@ -2,6 +2,45 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0](https://github.com/robinvdvleuten/beancount/compare/v0.8.0...v0.9.0) (2026-02-07)
+
+
+### Features
+
+* **web:** auto reload on changes through --watch flag ([#121](https://github.com/robinvdvleuten/beancount/issues/121)) ([4e28b10](https://github.com/robinvdvleuten/beancount/commit/4e28b1007d8e40b976466f01e6a5b0e9eaad20d2))
+
+
+### Bug Fixes
+
+* **ci:** remove duplicate govulncheck tags ([15542bd](https://github.com/robinvdvleuten/beancount/commit/15542bda91f21412c7b4be115a57712a165d667c))
+* **cli:** add missing error context for Price/Event/Custom/Commodity ([41a55c7](https://github.com/robinvdvleuten/beancount/commit/41a55c7589db36fc3186f325679b55565bcc6f36))
+* **editor:** preserve updateListener in reconfigure to fix empty save ([f52d0ba](https://github.com/robinvdvleuten/beancount/commit/f52d0badceedc83e1b7fbc7361694b1e5625aa6d))
+* **formatter:** preserve inline comments on price directives ([60185bc](https://github.com/robinvdvleuten/beancount/commit/60185bca6b4ef9ebefcf33ab9982bc5ec1c9be24))
+* **ledger:** move pad-used marking from Validate to Apply ([bbab4f2](https://github.com/robinvdvleuten/beancount/commit/bbab4f247a50a0a3e2b8cf8a602620429c8bb3c7))
+* **ledger:** prevent division by zero in empty cost inference ([05104b5](https://github.com/robinvdvleuten/beancount/commit/05104b5c78d323f23a30dae99cb1b748f7cfc62a))
+* **ledger:** remove double counting of inferred amounts in tolerance ([d664b1a](https://github.com/robinvdvleuten/beancount/commit/d664b1a8e670230151af0847a9aaed164fc64f29))
+* **ledger:** replace dead code in cost label validation ([25179ce](https://github.com/robinvdvleuten/beancount/commit/25179cefa3bc87dcd3408dc6174026265374ec52))
+* **lexer:** prevent newline consumption in malformed strings ([913b29e](https://github.com/robinvdvleuten/beancount/commit/913b29e1277bdf522dbcf452924c0dc0bfa0b49a))
+* **parser:** add same-line check for currency in custom amounts ([f54ff07](https://github.com/robinvdvleuten/beancount/commit/f54ff0764e1ce5a2e1bb869f008c294c41cad2e4))
+* **parser:** handle ACCOUNT tokens in custom directive values ([a3e4ff7](https://github.com/robinvdvleuten/beancount/commit/a3e4ff7e5628c35ccc5c71d5c239834fe1b3ac27))
+* **parser:** propagate errors from parseMetadataValue ([7b369de](https://github.com/robinvdvleuten/beancount/commit/7b369de91ec2145196d7f4dcb070f083c6ae8b60))
+* **parser:** remove incorrect look-back in escape sequences ([ebb8f65](https://github.com/robinvdvleuten/beancount/commit/ebb8f6535f12cb1c73b498d1c27724632175ce8f))
+* **parser:** remove ineffective break in custom value switch ([098eca5](https://github.com/robinvdvleuten/beancount/commit/098eca56ecfe962c13a29916996d2e2e8ac11400))
+* **parser:** return clear error on EOF after date token ([f9d867b](https://github.com/robinvdvleuten/beancount/commit/f9d867beb5e7f3a591d12837b22628c3fe24732d))
+* **parser:** return error on unmatched parentheses in expressions ([78be9d5](https://github.com/robinvdvleuten/beancount/commit/78be9d51f3d36e0a10377ea7b035f5885254447c))
+* **parser:** return ILLEGAL token for unterminated strings ([82a14c9](https://github.com/robinvdvleuten/beancount/commit/82a14c96e47708ef0f954efd2aa767a6673cf161))
+* **parser:** store non-boolean IDENTs as string in custom values ([ed09117](https://github.com/robinvdvleuten/beancount/commit/ed09117ca4256897fbc4413f3aa49a768b580965))
+* upgrade Go toolchain to 1.24.11 for crypto/x509 security fixes ([2e55c43](https://github.com/robinvdvleuten/beancount/commit/2e55c43abb897e1962a0878d4a28f7bb98c61806))
+* **web:** eliminate race condition in handleFileChange ([742b09e](https://github.com/robinvdvleuten/beancount/commit/742b09ef511d8b55ef615f5b110457dccaccb0ef))
+* **web:** return response instead of 500 when reload fails after save ([88867ec](https://github.com/robinvdvleuten/beancount/commit/88867ecbe22557d9bec612c880b660af629b101f))
+
+
+### Performance Improvements
+
+* **lexer:** use map lookup for keyword type resolution ([94458eb](https://github.com/robinvdvleuten/beancount/commit/94458ebb10df404190062550d3ee925daf3aa045))
+* **parser:** avoid string conversion in calculateSourceRange ([2d5a35d](https://github.com/robinvdvleuten/beancount/commit/2d5a35d92755f1788e1b33207d73663f06d7c8b8))
+* **parser:** use strings.Builder in parseRestOfLine ([b24a5ec](https://github.com/robinvdvleuten/beancount/commit/b24a5ec59a15c0a05b9bc45c4d17be890e267ddb))
+
 ## [0.8.0](https://github.com/robinvdvleuten/beancount/compare/v0.7.0...v0.8.0) (2026-01-13)
 
 
