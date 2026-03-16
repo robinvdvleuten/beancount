@@ -643,32 +643,49 @@ func (p *Parser) internIdent(tok Token) string {
 // finishDirective captures trailing inline comment and metadata for any directive.
 // This consolidates the common end-of-directive logic used by all directive parsers.
 func (p *Parser) finishDirective(d ast.Directive) error {
-	pos := d.Position()
-
-	// Capture inline comment on same line as directive
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		d.SetComment(p.parseComment())
-	}
-
-	// Parse metadata entries on following lines
-	metadata, err := p.parseMetadataFromLine(pos.Line)
+	metadata, err := p.finishMetadataLine(d, d.Position().Line)
 	if err != nil {
 		return err
 	}
 	d.AddMetadata(metadata...)
-
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		d.SetComment(p.parseComment())
-	}
-
-	if !p.isAtEnd() && p.peek().Line == pos.Line {
-		tok := p.peek()
-		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
-	}
 	return nil
 }
 
-func (p *Parser) ensureLineConsumed(line int) error {
+func (p *Parser) consumeInlineComment(line int) *ast.Comment {
+	if p.isAtEnd() || p.peek().Line != line || p.peek().Type != COMMENT {
+		return nil
+	}
+	return p.parseComment()
+}
+
+func (p *Parser) attachInlineComment(target ast.WithComment, line int) {
+	if comment := p.consumeInlineComment(line); comment != nil {
+		target.SetComment(comment)
+	}
+}
+
+func (p *Parser) finishLine(target ast.WithComment, line int) error {
+	p.attachInlineComment(target, line)
+	return p.expectLineEnd(line)
+}
+
+func (p *Parser) finishMetadataLine(target ast.WithComment, line int) ([]*ast.Metadata, error) {
+	p.attachInlineComment(target, line)
+
+	metadata, err := p.parseMetadataFromLine(line)
+	if err != nil {
+		return nil, err
+	}
+
+	p.attachInlineComment(target, line)
+	if err := p.expectLineEnd(line); err != nil {
+		return nil, err
+	}
+
+	return metadata, nil
+}
+
+func (p *Parser) expectLineEnd(line int) error {
 	if !p.isAtEnd() && p.peek().Line == line {
 		tok := p.peek()
 		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))

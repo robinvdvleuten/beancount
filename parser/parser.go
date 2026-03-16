@@ -254,10 +254,7 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 		Value: value,
 	}
 	opt.SetPosition(pos)
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		opt.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(opt, pos.Line); err != nil {
 		return nil, err
 	}
 	return opt, nil
@@ -279,10 +276,7 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 		Filename: filename,
 	}
 	inc.SetPosition(pos)
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		inc.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(inc, pos.Line); err != nil {
 		return nil, err
 	}
 	return inc, nil
@@ -314,10 +308,7 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 		plugin.Config = config
 	}
 
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		plugin.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(plugin, pos.Line); err != nil {
 		return nil, err
 	}
 	return plugin, nil
@@ -339,10 +330,7 @@ func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
 		Tag: tag,
 	}
 	pt.SetPosition(pos)
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		pt.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(pt, pos.Line); err != nil {
 		return nil, err
 	}
 	return pt, nil
@@ -364,10 +352,7 @@ func (p *Parser) parsePoptag() (*ast.Poptag, error) {
 		Tag: tag,
 	}
 	pt.SetPosition(pos)
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		pt.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(pt, pos.Line); err != nil {
 		return nil, err
 	}
 	return pt, nil
@@ -394,10 +379,7 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		Value: p.parseRestOfLineUntilComment(),
 	}
 	pm.SetPosition(pos)
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		pm.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(pm, pos.Line); err != nil {
 		return nil, err
 	}
 	return pm, nil
@@ -423,10 +405,7 @@ func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 		Key: key,
 	}
 	pm.SetPosition(pos)
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
-		pm.SetComment(p.parseComment())
-	}
-	if err := p.ensureLineConsumed(pos.Line); err != nil {
+	if err := p.finishLine(pm, pos.Line); err != nil {
 		return nil, err
 	}
 	return pm, nil

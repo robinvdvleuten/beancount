@@ -89,14 +89,8 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
-	// Capture inline comment at end of transaction header line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == txn.Position().Line {
-		txn.SetComment(p.parseComment())
-	}
-
-	if !p.isAtEnd() && p.peek().Line == txn.Position().Line {
-		tok := p.peek()
-		return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	if err := p.finishLine(txn, txn.Position().Line); err != nil {
+		return nil, err
 	}
 
 	// Parse transaction-level metadata (only if on new line and properly indented)
@@ -250,26 +244,11 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 		posting.Price = amount
 	}
 
-	// Capture inline comment at end of posting line
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == postingLine {
-		posting.SetComment(p.parseComment())
-	}
-
-	// Parse posting-level metadata
-	metadata, err := p.parseMetadataFromLine(postingLine)
+	metadata, err := p.finishMetadataLine(posting, postingLine)
 	if err != nil {
 		return nil, err
 	}
 	posting.Metadata = metadata
-
-	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == postingLine {
-		posting.SetComment(p.parseComment())
-	}
-
-	if !p.isAtEnd() && p.peek().Line == postingLine {
-		tok := p.peek()
-		return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
-	}
 
 	return posting, nil
 }
