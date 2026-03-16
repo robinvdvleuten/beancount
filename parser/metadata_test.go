@@ -279,12 +279,32 @@ func TestParseMetadataInvalidStringReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid string literal")
 }
 
-func TestParseIncompleteMetadataReturnsError(t *testing.T) {
+func TestParseMetadataAllowsOmittedValue(t *testing.T) {
 	source := "2024-01-01 commodity USD\n  name:\n"
 
-	_, err := ParseString(context.Background(), source)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "expected metadata value")
+	parsed, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(parsed.Directives))
+
+	commodity, ok := parsed.Directives[0].(*ast.Commodity)
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(commodity.Metadata))
+	assert.Equal(t, "name", commodity.Metadata[0].Key)
+	assert.Equal(t, (*ast.MetadataValue)(nil), commodity.Metadata[0].Value)
+}
+
+func TestParseMetadataAllowsOmittedValueBeforeInlineComment(t *testing.T) {
+	source := "2024-01-01 commodity USD\n  name: ; pending value\n"
+
+	parsed, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(parsed.Directives))
+
+	commodity, ok := parsed.Directives[0].(*ast.Commodity)
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(commodity.Metadata))
+	assert.Equal(t, "name", commodity.Metadata[0].Key)
+	assert.Equal(t, (*ast.MetadataValue)(nil), commodity.Metadata[0].Value)
 }
 
 func TestParseRestOfLineOptimization(t *testing.T) {

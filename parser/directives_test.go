@@ -336,6 +336,20 @@ func TestParseCustomNumberNotGrabbingNextLineCurrency(t *testing.T) {
 	assert.Equal(t, "note", custom.Metadata[0].Key)
 }
 
+func TestParseCustomDateValue(t *testing.T) {
+	input := `2024-01-01 custom "schedule" 2024-01-15`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	custom, ok := result.Directives[0].(*ast.Custom)
+	assert.True(t, ok)
+	assert.Equal(t, 1, len(custom.Values))
+	assert.NotEqual(t, (*ast.Date)(nil), custom.Values[0].Date)
+	assert.Equal(t, "2024-01-15", custom.Values[0].Date.String())
+}
+
 func TestParseCustomStopsAtInlineComment(t *testing.T) {
 	input := `2024-01-01 custom "test" 42 ; inline comment`
 

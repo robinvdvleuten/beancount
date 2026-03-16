@@ -356,8 +356,8 @@ func (p *Parser) isMetadataKeyStart(tok Token) bool {
 // strings, dates, accounts, currencies, tags, links, numbers, amounts, and booleans.
 func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 	tok := p.peek()
-	if tok.Type == EOF || tok.Line != line {
-		return nil, p.errorAtEndOfPrevious("expected metadata value")
+	if tok.Type == EOF || tok.Line != line || tok.Type == COMMENT {
+		return nil, nil
 	}
 
 	// Parse based on token type with specific-to-general order
@@ -459,6 +459,58 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 	}
 	rawStr := ast.NewRawString(unquoted)
 	return &ast.MetadataValue{StringValue: &rawStr}, nil
+}
+
+func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
+	tok := p.peek()
+	if tok.Type == EOF || tok.Line != line || tok.Type == COMMENT {
+		return nil, nil
+	}
+
+	switch tok.Type {
+	case STRING:
+		str, err := p.parseString()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.CustomValue{String: &str.Value}, nil
+
+	case DATE:
+		date, err := p.parseDate()
+		if err != nil {
+			return nil, err
+		}
+		return &ast.CustomValue{Date: date}, nil
+
+	case IDENT:
+		ident := p.internIdent(tok)
+		p.advance()
+		switch ident {
+		case "TRUE", "FALSE":
+			return &ast.CustomValue{BooleanValue: &ident}, nil
+		default:
+			return &ast.CustomValue{String: &ident}, nil
+		}
+
+	case ACCOUNT:
+		account := p.internIdent(tok)
+		p.advance()
+		return &ast.CustomValue{String: &account}, nil
+
+	case NUMBER:
+		if nextTok := p.peekAhead(1); nextTok.Type == IDENT && nextTok.Line == line {
+			amount, err := p.parseAmount()
+			if err != nil {
+				return nil, err
+			}
+			return &ast.CustomValue{Amount: amount}, nil
+		}
+		number := strings.ReplaceAll(tok.String(p.source), ",", "")
+		p.advance()
+		return &ast.CustomValue{Number: &number}, nil
+	}
+
+	return nil, nil
 }
 
 // isKeyword returns true if the token type is a keyword.

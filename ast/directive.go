@@ -409,13 +409,14 @@ func (c *Custom) SetPosition(pos Position) { c.pos = pos }
 // SetDate sets the date (for use by parser/builders in ast package)
 func (c *Custom) SetDate(date *Date) { c.date = date }
 
-// CustomValue represents a single value in a custom directive, which can be a string,
-// number, boolean, or amount. Only one field will be non-nil/non-zero for each value.
+// CustomValue represents a single value in a custom directive. Only one field will be
+// non-nil/non-zero for each value.
 type CustomValue struct {
 	String       *string
 	BooleanValue *string
 	Amount       *Amount
 	Number       *string
+	Date         *Date
 }
 
 // GetValue returns the actual value stored in this CustomValue.
@@ -429,6 +430,8 @@ func (cv *CustomValue) GetValue() any {
 		return cv.Amount
 	case cv.Number != nil:
 		return *cv.Number
+	case cv.Date != nil:
+		return cv.Date
 	default:
 		return nil
 	}

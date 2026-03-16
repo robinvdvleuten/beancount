@@ -918,6 +918,8 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 			buf.WriteByte('"')
 			buf.WriteString(f.escapeString(*val.String))
 			buf.WriteByte('"')
+		} else if val.Date != nil {
+			buf.WriteString(val.Date.String())
 		} else if val.BooleanValue != nil {
 			buf.WriteString(*val.BooleanValue)
 		} else if val.Amount != nil {
@@ -1104,7 +1106,10 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 		if m.Inline {
 			buf.WriteString("  ")
 			buf.WriteString(m.Key)
-			buf.WriteString(": ")
+			buf.WriteByte(':')
+			if m.Value != nil {
+				buf.WriteByte(' ')
+			}
 			f.formatMetadataValue(m.Value, buf)
 		}
 	}
@@ -1122,7 +1127,10 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 		if !m.Inline {
 			buf.WriteString(strings.Repeat(" ", f.Indentation))
 			buf.WriteString(m.Key)
-			buf.WriteString(": ")
+			buf.WriteByte(':')
+			if m.Value != nil {
+				buf.WriteByte(' ')
+			}
 			f.formatMetadataValue(m.Value, buf)
 			buf.WriteByte('\n')
 		}
@@ -1288,7 +1296,10 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 		}
 		buf.WriteString(strings.Repeat(" ", f.Indentation))
 		buf.WriteString(m.Key)
-		buf.WriteString(": ")
+		buf.WriteByte(':')
+		if m.Value != nil {
+			buf.WriteByte(' ')
+		}
 		f.formatMetadataValue(m.Value, buf)
 		buf.WriteByte('\n')
 	}

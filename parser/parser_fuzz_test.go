@@ -44,6 +44,7 @@ func FuzzParser(f *testing.F) {
 
 		// Metadata
 		"2014-01-01 open Assets:Checking USD\n  description: \"Primary checking account\"",
+		"2014-01-01 open Assets:Checking USD\n  note:",
 
 		// Price directive
 		"2014-07-09 price HOOL 579.18 USD",
@@ -72,6 +73,7 @@ func FuzzParser(f *testing.F) {
 
 		// Custom directive
 		"2014-07-09 custom \"budget\" Expenses:Food \"monthly\" 500.00 USD",
+		"2014-07-09 custom \"schedule\" 2014-07-15",
 
 		// Regression test for position tracking bug
 		"2000-01-01 open Assets:0",

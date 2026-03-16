@@ -301,7 +301,6 @@ func (p *Parser) parseQuery(pos ast.Position, date *ast.Date) (*ast.Query, error
 }
 
 // parseCustom parses: DATE custom STRING VALUE*
-// where VALUE can be STRING | BOOL | AMOUNT | NUMBER
 func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, error) {
 	if err := p.consume(CUSTOM, "expected 'custom'"); err != nil {
 		return nil, err
@@ -329,67 +328,12 @@ func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, err
 			break
 		}
 
-		var val *ast.CustomValue
-
-		switch tok.Type {
-		case STRING:
-			p.advance()
-			rawValue := tok.String(p.source)
-			unquoted, err := p.unquoteString(rawValue)
-			if err != nil {
-				return nil, p.errorAtToken(tok, "invalid string literal: %v", err)
-			}
-			s := p.internString(unquoted)
-			val = &ast.CustomValue{String: &s}
-
-		case IDENT:
-			// Could be TRUE, FALSE, or a currency identifier
-			p.advance()
-			ident := tok.String(p.source)
-
-			switch ident {
-			case "TRUE":
-				boolStr := "TRUE"
-				val = &ast.CustomValue{BooleanValue: &boolStr}
-			case "FALSE":
-				boolStr := "FALSE"
-				val = &ast.CustomValue{BooleanValue: &boolStr}
-			default:
-				// Non-boolean identifier (e.g., a currency like USD or HOOL)
-				val = &ast.CustomValue{String: &ident}
-			}
-
-		case NUMBER:
-			// Could be standalone number or part of amount
-			p.advance()
-			numStr := tok.String(p.source)
-
-			// Check if followed by currency on the same line
-			if p.check(IDENT) && p.peek().Line == startLine {
-				currTok := p.advance()
-				currency := p.internCurrency(currTok)
-				amt := &ast.Amount{
-					Value:    numStr,
-					Currency: currency,
-				}
-				val = &ast.CustomValue{Amount: amt}
-			} else {
-				val = &ast.CustomValue{Number: &numStr}
-			}
-
-		case ACCOUNT:
-			// Account value (e.g., Expenses:Food)
-			p.advance()
-			acct := tok.String(p.source)
-			val = &ast.CustomValue{String: &acct}
-
-		default:
-			// Stop on unexpected tokens (COMMENT, TAG, etc.)
-			// val remains nil, causing the loop to exit below
+		val, err := p.parseCustomValue(startLine)
+		if err != nil {
+			return nil, err
 		}
 
 		if val == nil {
-			// Default case: stop parsing values on unexpected tokens
 			break
 		}
 
