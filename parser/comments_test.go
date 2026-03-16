@@ -160,6 +160,28 @@ func TestParseCommentCROnlyDoesNotKeepCarriageReturn(t *testing.T) {
 	assert.Equal(t, "; header comment", tree.Comments[0].Content)
 }
 
+func TestParseOrgStyleSectionHeaders(t *testing.T) {
+	source := `* Options
+
+option "title" "Ledger"
+
+* Banking
+
+2024-01-01 open Assets:Checking USD
+`
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+
+	assert.Equal(t, 2, len(tree.Comments))
+	assert.Equal(t, "* Options", tree.Comments[0].Content)
+	assert.Equal(t, ast.SectionComment, tree.Comments[0].Type)
+	assert.Equal(t, "* Banking", tree.Comments[1].Content)
+	assert.Equal(t, ast.SectionComment, tree.Comments[1].Type)
+	assert.Equal(t, 1, len(tree.Options))
+	assert.Equal(t, 1, len(tree.Directives))
+}
+
 func TestParseTopLevelPragmasWithInlineComments(t *testing.T) {
 	source := `option "title" "Ledger" ; option comment
 plugin "beancount.plugins.auto_accounts" ; plugin comment

@@ -65,6 +65,21 @@ func TestParseOpenWithMetadata(t *testing.T) {
 	assert.Equal(t, "account-number", open.Metadata[0].Key)
 }
 
+func TestParseOpenMetadataOnFollowingLineIsNotConstraintCurrency(t *testing.T) {
+	input := `2014-01-01 open Assets:Checking
+  address: "123 America Street"
+`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+
+	open, ok := result.Directives[0].(*ast.Open)
+	assert.True(t, ok)
+	assert.Equal(t, 0, len(open.ConstraintCurrencies))
+	assert.Equal(t, 1, len(open.Metadata))
+	assert.Equal(t, "address", open.Metadata[0].Key)
+}
+
 // Close directive tests
 
 func TestParseClose(t *testing.T) {

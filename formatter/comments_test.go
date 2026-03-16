@@ -151,3 +151,18 @@ func TestFormatWithoutInlineComments(t *testing.T) {
 	assert.True(t, bytes.Contains([]byte(result), []byte("2024-01-01 open Assets:Checking")), "output should contain open directive")
 	assert.True(t, bytes.Contains([]byte(result), []byte("2024-01-15 * \"Test\"")), "output should contain transaction")
 }
+
+func TestFormatPreservesOrgStyleSectionHeaders(t *testing.T) {
+	source := `* Options
+
+option "title" "Ledger"
+`
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	f := New()
+	output := bytes.NewBufferString("")
+	err := f.Format(context.Background(), tree, []byte(source), output)
+	assert.NoError(t, err)
+	assert.Equal(t, source, output.String())
+}

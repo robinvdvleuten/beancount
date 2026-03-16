@@ -49,9 +49,10 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 	}
 	open.SetPosition(pos)
 	open.SetDate(date)
+	line := pos.Line
 
 	// Optional constraint currencies
-	if p.check(IDENT) {
+	if !p.isAtEnd() && p.peek().Line == line && p.check(IDENT) {
 		open.ConstraintCurrencies = make([]string, 0, 2)
 		currency, err := p.parseIdent()
 		if err != nil {
@@ -60,7 +61,7 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 		open.ConstraintCurrencies = append(open.ConstraintCurrencies, currency)
 
 		// Additional currencies separated by commas
-		for p.match(COMMA) {
+		for !p.isAtEnd() && p.peek().Line == line && p.match(COMMA) {
 			currency, err := p.parseIdent()
 			if err != nil {
 				return nil, err
@@ -70,13 +71,13 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 	}
 
 	// Optional booking method
-	if p.check(STRING) {
+	if !p.isAtEnd() && p.peek().Line == line && p.check(STRING) {
 		method, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
 		open.BookingMethod = method.Value
-	} else if !p.isAtEnd() && p.peek().Type == ILLEGAL && p.pos < len(p.source) && p.source[p.peek().Start] == '"' {
+	} else if !p.isAtEnd() && p.peek().Line == line && p.peek().Type == ILLEGAL && p.pos < len(p.source) && p.source[p.peek().Start] == '"' {
 		tok := p.advance()
 		return nil, p.errorAtToken(tok, "unterminated string")
 	}

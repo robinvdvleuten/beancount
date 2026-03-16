@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -171,4 +172,14 @@ func TestParseDirectivesWithMetadata(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 1, len(txn.Metadata))
 	assert.Equal(t, 1, len(txn.Postings[0].Metadata))
+}
+
+func TestParseExampleFixtureWithOrgHeaders(t *testing.T) {
+	data, err := os.ReadFile("../testdata/example.beancount")
+	assert.NoError(t, err)
+
+	result, err := ParseBytesWithFilename(context.Background(), "../testdata/example.beancount", data)
+	assert.NoError(t, err)
+	assert.True(t, len(result.Comments) > 0)
+	assert.True(t, len(result.Directives) > 0)
 }

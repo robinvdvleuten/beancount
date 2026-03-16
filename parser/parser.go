@@ -52,6 +52,15 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			blankLine := p.parseBlankLine()
 			tree.BlankLines = append(tree.BlankLines, blankLine)
 
+		case ASTERISK:
+			if p.isOrgHeaderStart() {
+				header := p.parseOrgHeader()
+				tree.Comments = append(tree.Comments, header)
+				continue
+			}
+			tok := p.peek()
+			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+
 		case OPTION:
 			opt, err := p.parseOption()
 			if err != nil {
@@ -161,6 +170,66 @@ func (p *Parser) parseBlankLine() *ast.BlankLine {
 		Column:   tok.Column,
 	})
 	return blankLine
+}
+
+// parseOrgHeader parses an org-style top-level header like "* Options" as trivia.
+func (p *Parser) parseOrgHeader() *ast.Comment {
+	tok := p.peek()
+	start := tok.Start
+	end := start
+	for end < len(p.source) && p.source[end] != '\n' && p.source[end] != '\r' {
+		end++
+	}
+
+	line := tok.Line
+	column := tok.Column
+	for !p.isAtEnd() && p.peek().Line == line {
+		p.advance()
+	}
+
+	commentType := ast.StandaloneComment
+	if !p.isAtEnd() && p.peek().Type == NEWLINE {
+		commentType = ast.SectionComment
+	}
+
+	header := &ast.Comment{
+		Content: string(p.source[start:end]),
+		Type:    commentType,
+	}
+	header.SetPosition(ast.Position{
+		Filename: p.filename,
+		Offset:   start,
+		Line:     line,
+		Column:   column,
+	})
+	return header
+}
+
+func (p *Parser) isOrgHeaderStart() bool {
+	tok := p.peek()
+	if tok.Type != ASTERISK || tok.Column != 1 {
+		return false
+	}
+	if p.isAtEnd() {
+		return false
+	}
+
+	end := tok.Start
+	for end < len(p.source) && p.source[end] != '\n' && p.source[end] != '\r' {
+		end++
+	}
+
+	line := strings.TrimSpace(string(p.source[tok.Start:end]))
+	if line == "" {
+		return false
+	}
+
+	trimmed := strings.TrimLeft(line, "*")
+	if trimmed == "" {
+		return true
+	}
+
+	return len(trimmed) < len(line) && trimmed[0] == ' '
 }
 
 // parseOption parses: option "key" "value"
