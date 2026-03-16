@@ -238,11 +238,18 @@ type Date struct {
 }
 
 func (d *Date) Capture(values []string) error {
-	t, err := time.Parse("2006-01-02", values[0])
+	var t time.Time
+	var err error
+	for _, layout := range []string{"2006-01-02", "2006/01/02"} {
+		t, err = time.Parse(layout, values[0])
+		if err == nil {
+			d.Time = t
+			return nil
+		}
+	}
 	if err != nil {
 		return fmt.Errorf("invalid date: %s", values[0])
 	}
-	d.Time = t
 	return nil
 }
 

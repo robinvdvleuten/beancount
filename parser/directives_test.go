@@ -50,6 +50,19 @@ func TestParseOpenNoCurrency(t *testing.T) {
 	assert.Equal(t, 0, len(open.ConstraintCurrencies))
 }
 
+func TestParseOpenWithSlashDate(t *testing.T) {
+	input := `2014/01/01 open Assets:Checking USD`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	open, ok := result.Directives[0].(*ast.Open)
+	assert.True(t, ok)
+	assert.Equal(t, "2014-01-01", open.Date().String())
+	assert.Equal(t, "Assets:Checking", string(open.Account))
+}
+
 func TestParseOpenWithMetadata(t *testing.T) {
 	input := `2014-01-01 open Assets:Checking USD
   account-number: "123456"

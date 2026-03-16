@@ -112,6 +112,7 @@ func TestLexerStrings(t *testing.T) {
 		{`"hello world"`, `"hello world"`},
 		{`""`, `""`},
 		{`"with \"quotes\""`, `"with \"quotes\""`},
+		{"\"line1\nline2\"", "\"line1\nline2\""},
 	}
 
 	for _, tt := range tests {
@@ -179,6 +180,7 @@ func TestLexerAccounts(t *testing.T) {
 func TestLexerDates(t *testing.T) {
 	tests := []string{
 		"2014-01-01",
+		"2014/01/01",
 		"2023-12-31",
 		"2024-06-15",
 	}
@@ -196,6 +198,19 @@ func TestLexerDates(t *testing.T) {
 			assert.Equal(t, input, got)
 		})
 	}
+}
+
+func TestLexerMultilineStringTracksFollowingLine(t *testing.T) {
+	input := "\"line1\nline2\"\n2024-01-01 open Assets:Bank"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	assert.True(t, len(tokens) >= 2)
+	assert.Equal(t, STRING, tokens[0].Type)
+	assert.Equal(t, 3, tokens[1].Line)
+	assert.Equal(t, DATE, tokens[1].Type)
 }
 
 func TestLexerKeywords(t *testing.T) {

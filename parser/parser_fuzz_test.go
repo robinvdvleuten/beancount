@@ -31,6 +31,7 @@ func FuzzParser(f *testing.F) {
 		// Comments and pragmas
 		"; This is a comment",
 		"option \"title\" \"Example\" ; comment",
+		"option \"title\" \"line1\nline2\"",
 		"plugin \"beancount.plugins.auto_accounts\" ; comment",
 		"2024-01-01 query \"cash\" \"SELECT 1\" ; comment",
 		"pushtag #trip",
@@ -61,6 +62,7 @@ func FuzzParser(f *testing.F) {
 
 		// Compatibility edge cases
 		"2014-01-01 open Assets:Checking USD\r\n2014-01-02 close Assets:Checking\r\n",
+		"2014/01/01 open Assets:Checking USD",
 		"junk\n2014-01-01 open Assets:Checking USD",
 		"2014-01-01 open Assets:Checking USD garbage",
 		"2014-01-01\nopen Assets:Checking USD",

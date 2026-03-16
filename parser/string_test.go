@@ -241,6 +241,11 @@ func TestParseString(t *testing.T) {
 			expected: "line1\nline2",
 		},
 		{
+			name:     "multiline string literal",
+			input:    "\"line1\nline2\"",
+			expected: "line1\nline2",
+		},
+		{
 			name:        "invalid string literal",
 			input:       `"hello\world"`,
 			expectError: true,
@@ -415,6 +420,18 @@ func TestStringRoundTrip(t *testing.T) {
 
 	assert.True(t, opt.Value.HasRaw())
 	assert.Equal(t, `"hello\nworld"`, opt.Value.Raw)
+	assert.Equal(t, "hello\nworld", opt.Value.Value)
+}
+
+func TestMultilineStringRoundTrip(t *testing.T) {
+	source := "option \"title\" \"hello\nworld\""
+
+	tree, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	opt := tree.Options[0]
+	assert.True(t, opt.Value.HasRaw())
+	assert.Equal(t, "\"hello\nworld\"", opt.Value.Raw)
 	assert.Equal(t, "hello\nworld", opt.Value.Value)
 }
 

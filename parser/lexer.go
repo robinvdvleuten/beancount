@@ -325,28 +325,29 @@ func (l *Lexer) scanToken() Token {
 	return tok
 }
 
-// isDatePattern checks if the position starts a date pattern YYYY-MM-DD
+// isDatePattern checks if the position starts a date pattern YYYY-MM-DD or YYYY/MM/DD.
 func (l *Lexer) isDatePattern(start int) bool {
-	// Need at least 10 characters: YYYY-MM-DD
+	// Need at least 10 characters: YYYY-MM-DD or YYYY/MM/DD
 	if start+10 > len(l.source) {
 		return false
 	}
 
-	// Check pattern: digit{4}-digit{2}-digit{2}
+	// Check pattern: digit{4}[-/]digit{2}[-/]digit{2}
 	src := l.source[start:]
+	sep := src[4]
 	return isDigit(src[0]) && isDigit(src[1]) && isDigit(src[2]) && isDigit(src[3]) &&
-		src[4] == '-' &&
+		(sep == '-' || sep == '/') &&
 		isDigit(src[5]) && isDigit(src[6]) &&
-		src[7] == '-' &&
+		src[7] == sep &&
 		isDigit(src[8]) && isDigit(src[9])
 }
 
-// scanDate scans a date: YYYY-MM-DD
+// scanDate scans a date: YYYY-MM-DD or YYYY/MM/DD
 // Returns ILLEGAL token if the date is invalid (year 0, invalid month/day).
 // This matches Beancount's lexer behavior which validates dates at lex time.
 func (l *Lexer) scanDate(start, line, col int) Token {
-	// Date pattern is exactly 10 characters
-	// First digit already consumed, consume remaining 9
+	// Date pattern is exactly 10 characters.
+	// First digit already consumed, consume remaining 9.
 	for i := 0; i < 9; i++ {
 		l.advance()
 	}
@@ -360,13 +361,18 @@ func (l *Lexer) scanDate(start, line, col int) Token {
 	return Token{DATE, start, l.pos, line, col}
 }
 
-// isValidDate validates a date string in YYYY-MM-DD format.
+// isValidDate validates a date string in YYYY-MM-DD or YYYY/MM/DD format.
 // Returns false for:
 // - Year 0 (Beancount requires year 1-9999)
 // - Invalid month (must be 01-12)
 // - Invalid day for the given month (accounts for leap years)
 func isValidDate(date []byte) bool {
 	if len(date) != 10 {
+		return false
+	}
+
+	sep := date[4]
+	if (sep != '-' && sep != '/') || date[7] != sep {
 		return false
 	}
 
@@ -489,7 +495,7 @@ func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
 }
 
 // scanString scans a quoted string: "..."
-// Strings must not contain literal newlines. Use escape sequences like \n instead.
+// Strings may span multiple physical lines.
 func (l *Lexer) scanString(start, line, col int) Token {
 	// Opening quote already consumed
 
@@ -497,7 +503,8 @@ func (l *Lexer) scanString(start, line, col int) Token {
 	closed := false
 	for l.pos < len(l.source) {
 		if l.lineBreakLenAt(l.pos) > 0 {
-			break
+			l.consumeLineBreak()
+			continue
 		}
 		ch := l.source[l.pos]
 		if ch == '"' {
@@ -508,7 +515,11 @@ func (l *Lexer) scanString(start, line, col int) Token {
 		// Handle escape sequences
 		if ch == '\\' && l.pos+1 < len(l.source) {
 			l.advance() // skip backslash
-			l.advance() // skip escaped char
+			if l.lineBreakLenAt(l.pos) > 0 {
+				l.consumeLineBreak()
+			} else {
+				l.advance() // skip escaped char
+			}
 		} else {
 			l.advance()
 		}
