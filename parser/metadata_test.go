@@ -279,6 +279,14 @@ func TestParseMetadataInvalidStringReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid string literal")
 }
 
+func TestParseIncompleteMetadataReturnsError(t *testing.T) {
+	source := "2024-01-01 commodity USD\n  name:\n"
+
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected metadata value")
+}
+
 func TestParseRestOfLineOptimization(t *testing.T) {
 	// pushmeta uses parseRestOfLine; verify it still works with builder
 	source := `pushmeta key: some value here

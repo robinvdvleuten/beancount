@@ -207,6 +207,12 @@ func (r *ErrorRenderer) renderWithContext(pos ast.Position, message string, dire
 		buf.WriteString(errContextStyle.Render(line))
 		buf.WriteByte('\n')
 
+	case *ast.Query:
+		line := fmt.Sprintf("%s query %q %q", d.Date().String(), d.Name.Value, d.QueryString.Value)
+		buf.WriteString("   ")
+		buf.WriteString(errContextStyle.Render(line))
+		buf.WriteByte('\n')
+
 	case *ast.Custom:
 		line := fmt.Sprintf("%s custom %q", d.Date().String(), d.Type.Value)
 		buf.WriteString("   ")

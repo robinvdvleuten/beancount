@@ -12,10 +12,10 @@ import (
 
 // parseDate parses a DATE token and converts it to *ast.Date.
 func (p *Parser) parseDate() (*ast.Date, error) {
-	tok := p.expect(DATE, "expected date")
-	if tok.Type == ILLEGAL {
-		return nil, p.errorAtToken(tok, "expected date")
+	if !p.check(DATE) {
+		return nil, p.errorAtToken(p.peek(), "expected date")
 	}
+	tok := p.advance()
 
 	var date ast.Date
 	if err := date.Capture([]string{tok.String(p.source)}); err != nil {
@@ -28,11 +28,11 @@ func (p *Parser) parseDate() (*ast.Date, error) {
 // parseAccount parses an ACCOUNT token and converts it to ast.Account.
 // The account name is interned to save memory.
 func (p *Parser) parseAccount() (ast.Account, error) {
-	tok := p.expect(ACCOUNT, "expected account")
-	if tok.Type == ILLEGAL {
+	if !p.check(ACCOUNT) {
 		actualTok := p.peek()
 		return "", p.errorAtEndOfPrevious("expected account but got %s %q", actualTok.Type, actualTok.String(p.source))
 	}
+	tok := p.advance()
 
 	// Intern account name for memory efficiency
 	accountStr := p.internIdent(tok)
@@ -53,11 +53,8 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	var numTok Token
 	isExpression := false
 
-	// Check if next character in source is '(' (start of expression)
-	// We need to look at the raw source since '(' is not tokenized
 	tok := p.peek()
-	if tok.Start < len(p.source) && p.source[tok.Start] == '(' {
-		// Capture expression text without evaluating
+	if p.startsParenthesizedExpression(tok) {
 		var err error
 		value, err = p.parseExpression()
 		if err != nil {
@@ -65,25 +62,18 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 		}
 		isExpression = true
 	} else {
-		// Plain number
-		numTok = p.peek()
-		if numTok.Type == NUMBER {
-			p.advance()
-		} else {
-			numTok = p.expect(NUMBER, "expected number")
-			if numTok.Type == ILLEGAL {
-				return nil, p.errorAtToken(numTok, "expected number or expression")
-			}
+		if !p.check(NUMBER) {
+			return nil, p.errorAtToken(p.peek(), "expected number or expression")
 		}
+		numTok = p.advance()
 		// Remove commas from number (e.g., "1,000" -> "1000")
 		value = strings.ReplaceAll(numTok.String(p.source), ",", "")
 	}
 
-	// Parse currency (same for both plain and expression)
-	currTok := p.expect(IDENT, "expected currency")
-	if currTok.Type == ILLEGAL {
+	if !p.check(IDENT) {
 		return nil, p.errorAtEndOfPrevious("expected currency")
 	}
+	currTok := p.advance()
 
 	// Intern currency code (USD, EUR, etc.)
 	currency := p.internCurrency(currTok)
@@ -104,9 +94,14 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 func (p *Parser) parseExpression() (string, error) {
 	tok := p.peek()
 	startPos := tok.Start
-
-	// Scan through source to find matching closing paren
 	pos := startPos
+
+	if pos >= len(p.source) {
+		return "", p.errorAtToken(tok, "expected '('")
+	}
+	if p.source[pos] == '+' || p.source[pos] == '-' {
+		pos++
+	}
 	if pos >= len(p.source) || p.source[pos] != '(' {
 		return "", p.errorAtToken(tok, "expected '('")
 	}
@@ -147,7 +142,9 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		p.advance() // consume {{
 		isTotal = true
 	} else {
-		p.consume(LBRACE, "expected '{' or '{{'")
+		if err := p.consume(LBRACE, "expected '{' or '{{'"); err != nil {
+			return nil, err
+		}
 	}
 
 	cost := &ast.Cost{IsTotal: isTotal}
@@ -158,7 +155,9 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 			return nil, p.error("merge cost {*} cannot use total cost syntax {{}}")
 		}
 		cost.IsMerge = true
-		p.consume(RBRACE, "expected '}'")
+		if err := p.consume(RBRACE, "expected '}'"); err != nil {
+			return nil, err
+		}
 		return cost, nil
 	}
 
@@ -222,9 +221,13 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 
 	// Consume closing brace(s)
 	if isTotal {
-		p.consume(RDBRACE, "expected '}}'")
+		if err := p.consume(RDBRACE, "expected '}}'"); err != nil {
+			return nil, err
+		}
 	} else {
-		p.consume(RBRACE, "expected '}'")
+		if err := p.consume(RBRACE, "expected '}'"); err != nil {
+			return nil, err
+		}
 	}
 
 	return cost, nil
@@ -233,10 +236,10 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 // parseString parses a STRING token and returns a RawString with both
 // the raw token (for round-trip formatting) and the unquoted value.
 func (p *Parser) parseString() (ast.RawString, error) {
-	tok := p.expect(STRING, "expected string")
-	if tok.Type == ILLEGAL {
+	if !p.check(STRING) {
 		return ast.RawString{}, p.errorAtEndOfPrevious("expected string")
 	}
+	tok := p.advance()
 
 	rawValue := tok.String(p.source)
 	unquoted, err := p.unquoteString(rawValue)
@@ -321,20 +324,20 @@ func (p *Parser) processEscapeSequences(inner string) (string, error) {
 
 // parseIdent parses an IDENT token.
 func (p *Parser) parseIdent() (string, error) {
-	tok := p.expect(IDENT, "expected identifier")
-	if tok.Type == ILLEGAL {
+	if !p.check(IDENT) {
 		return "", p.errorAtEndOfPrevious("expected identifier")
 	}
+	tok := p.advance()
 
 	return tok.String(p.source), nil
 }
 
 // parseTag parses a TAG token and returns the tag without the # prefix.
 func (p *Parser) parseTag() (ast.Tag, error) {
-	tok := p.expect(TAG, "expected tag")
-	if tok.Type == ILLEGAL {
+	if !p.check(TAG) {
 		return "", p.errorAtEndOfPrevious("expected tag")
 	}
+	tok := p.advance()
 
 	var tag ast.Tag
 	if err := tag.Capture([]string{tok.String(p.source)}); err != nil {
@@ -346,10 +349,10 @@ func (p *Parser) parseTag() (ast.Tag, error) {
 
 // parseLink parses a LINK token and returns the link without the ^ prefix.
 func (p *Parser) parseLink() (ast.Link, error) {
-	tok := p.expect(LINK, "expected link")
-	if tok.Type == ILLEGAL {
+	if !p.check(LINK) {
 		return "", p.errorAtEndOfPrevious("expected link")
 	}
+	tok := p.advance()
 
 	var link ast.Link
 	if err := link.Capture([]string{tok.String(p.source)}); err != nil {
@@ -379,17 +382,14 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 		}
 
 		p.advance() // consume key
-		p.consume(COLON, "expected ':'")
-
-		// Parse the metadata value based on token type
-		value, err := p.parseMetadataValue()
-		if err != nil {
+		if err := p.consume(COLON, "expected ':'"); err != nil {
 			return nil, err
 		}
 
-		// Skip metadata entries with no value (incomplete metadata like "key:")
-		if value == nil {
-			break
+		// Parse the metadata value based on token type
+		value, err := p.parseMetadataValue(keyTok.Line)
+		if err != nil {
+			return nil, err
 		}
 
 		// Determine if this metadata is inline (on the same line as owner)
@@ -407,8 +407,11 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 
 // parseMetadataValue parses a typed metadata value. Beancount supports 8 value types:
 // strings, dates, accounts, currencies, tags, links, numbers, amounts, and booleans.
-func (p *Parser) parseMetadataValue() (*ast.MetadataValue, error) {
+func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 	tok := p.peek()
+	if tok.Type == EOF || tok.Line != line {
+		return nil, p.errorAtEndOfPrevious("expected metadata value")
+	}
 
 	// Parse based on token type with specific-to-general order
 	switch tok.Type {
@@ -500,11 +503,6 @@ func (p *Parser) parseMetadataValue() (*ast.MetadataValue, error) {
 
 	// Fallback: read rest of line as string
 	value := p.parseRestOfLine()
-	if value == "" {
-		// Empty metadata values are invalid (e.g., "key:" with no value)
-		// Reject this rather than creating a malformed entry
-		return nil, nil
-	}
 	unquoted, err := p.unquoteString(value)
 	if err != nil {
 		// For fallback metadata, if unquoting fails, keep original value
@@ -520,7 +518,7 @@ func (p *Parser) parseMetadataValue() (*ast.MetadataValue, error) {
 func (p *Parser) isKeyword(typ TokenType) bool {
 	switch typ {
 	case TXN, BALANCE, OPEN, CLOSE, COMMODITY, PAD, NOTE, DOCUMENT,
-		PRICE, EVENT, CUSTOM, OPTION, INCLUDE, PLUGIN,
+		PRICE, EVENT, QUERY, CUSTOM, OPTION, INCLUDE, PLUGIN,
 		PUSHTAG, POPTAG, PUSHMETA, POPMETA:
 		return true
 	default:
@@ -544,12 +542,23 @@ func (p *Parser) parseRestOfLine() string {
 	return strings.TrimSpace(buf.String())
 }
 
-// skipLine skips all tokens on the current line.
-func (p *Parser) skipLine() {
-	line := p.peek().Line
-	for !p.isAtEnd() && p.peek().Line == line {
-		p.advance()
+// parseRestOfLineUntilComment reads tokens until end of line or an inline comment.
+func (p *Parser) parseRestOfLineUntilComment() string {
+	currentLine := p.peek().Line
+
+	var buf strings.Builder
+	for !p.isAtEnd() && p.peek().Line == currentLine {
+		if p.peek().Type == COMMENT {
+			break
+		}
+		if buf.Len() > 0 {
+			buf.WriteByte(' ')
+		}
+		tok := p.advance()
+		buf.WriteString(tok.String(p.source))
 	}
+
+	return strings.TrimSpace(buf.String())
 }
 
 // Helper methods for token navigation
@@ -601,26 +610,12 @@ func (p *Parser) advance() Token {
 	return p.previous()
 }
 
-func (p *Parser) consume(typ TokenType, message string) Token {
+func (p *Parser) consume(typ TokenType, message string) error {
 	if p.check(typ) {
-		return p.advance()
+		p.advance()
+		return nil
 	}
-
-	// Return illegal token and record error
-	tok := p.peek()
-	_ = p.errorAtToken(tok, "%s", message) // Error recorded, return handled by ILLEGAL token
-	// Return the peeked token but marked as illegal, preserving position info
-	return Token{
-		Type:   ILLEGAL,
-		Start:  tok.Start,
-		End:    tok.End,
-		Line:   tok.Line,
-		Column: tok.Column,
-	}
-}
-
-func (p *Parser) expect(typ TokenType, message string) Token {
-	return p.consume(typ, message)
+	return p.errorAtToken(p.peek(), "%s", message)
 }
 
 // String interning helpers - deduplicate repeated strings for memory efficiency
@@ -661,7 +656,39 @@ func (p *Parser) finishDirective(d ast.Directive) error {
 		return err
 	}
 	d.AddMetadata(metadata...)
+
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		d.SetComment(p.parseComment())
+	}
+
+	if !p.isAtEnd() && p.peek().Line == pos.Line {
+		tok := p.peek()
+		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
 	return nil
+}
+
+func (p *Parser) ensureLineConsumed(line int) error {
+	if !p.isAtEnd() && p.peek().Line == line {
+		tok := p.peek()
+		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
+	return nil
+}
+
+func (p *Parser) startsParenthesizedExpression(tok Token) bool {
+	if tok.Start >= len(p.source) {
+		return false
+	}
+	if p.source[tok.Start] == '(' {
+		return true
+	}
+	if (p.source[tok.Start] == '+' || p.source[tok.Start] == '-') &&
+		tok.Start+1 < len(p.source) &&
+		p.source[tok.Start+1] == '(' {
+		return true
+	}
+	return false
 }
 
 // Error helpers

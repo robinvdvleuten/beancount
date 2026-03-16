@@ -220,6 +220,18 @@ func (h *EventHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, de
 	// Event directives don't mutate state
 }
 
+// QueryHandler processes Query directives.
+// Query directives are informational and don't affect ledger state.
+type QueryHandler struct{}
+
+func (h *QueryHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+	return nil, nil
+}
+
+func (h *QueryHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+	// Query directives don't mutate state
+}
+
 // CustomHandler processes Custom directives.
 // Currently, custom directives are not validated or stored - they're informational only.
 type CustomHandler struct{}
@@ -245,6 +257,7 @@ var handlerRegistry = map[ast.DirectiveKind]Handler{
 	ast.KindPrice:       &PriceHandler{},
 	ast.KindCommodity:   &CommodityHandler{},
 	ast.KindEvent:       &EventHandler{},
+	ast.KindQuery:       &QueryHandler{},
 	ast.KindCustom:      &CustomHandler{},
 }
 

@@ -7,7 +7,9 @@ import "github.com/robinvdvleuten/beancount/ast"
 
 // parseBalance parses: DATE balance ACCOUNT AMOUNT
 func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, error) {
-	p.consume(BALANCE, "expected 'balance'")
+	if err := p.consume(BALANCE, "expected 'balance'"); err != nil {
+		return nil, err
+	}
 
 	account, err := p.parseAccount()
 	if err != nil {
@@ -33,7 +35,9 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 
 // parseOpen parses: DATE open ACCOUNT [CURRENCY[,CURRENCY]*] ["BOOKING_METHOD"]
 func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) {
-	p.consume(OPEN, "expected 'open'")
+	if err := p.consume(OPEN, "expected 'open'"); err != nil {
+		return nil, err
+	}
 
 	account, err := p.parseAccount()
 	if err != nil {
@@ -85,7 +89,9 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 
 // parseClose parses: DATE close ACCOUNT
 func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error) {
-	p.consume(CLOSE, "expected 'close'")
+	if err := p.consume(CLOSE, "expected 'close'"); err != nil {
+		return nil, err
+	}
 
 	account, err := p.parseAccount()
 	if err != nil {
@@ -105,7 +111,9 @@ func (p *Parser) parseClose(pos ast.Position, date *ast.Date) (*ast.Close, error
 
 // parseCommodity parses: DATE commodity CURRENCY
 func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodity, error) {
-	p.consume(COMMODITY, "expected 'commodity'")
+	if err := p.consume(COMMODITY, "expected 'commodity'"); err != nil {
+		return nil, err
+	}
 
 	currency, err := p.parseIdent()
 	if err != nil {
@@ -125,7 +133,9 @@ func (p *Parser) parseCommodity(pos ast.Position, date *ast.Date) (*ast.Commodit
 
 // parsePad parses: DATE pad ACCOUNT ACCOUNT_PAD
 func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
-	p.consume(PAD, "expected 'pad'")
+	if err := p.consume(PAD, "expected 'pad'"); err != nil {
+		return nil, err
+	}
 
 	account, err := p.parseAccount()
 	if err != nil {
@@ -151,7 +161,9 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 
 // parseNote parses: DATE note ACCOUNT STRING
 func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) {
-	p.consume(NOTE, "expected 'note'")
+	if err := p.consume(NOTE, "expected 'note'"); err != nil {
+		return nil, err
+	}
 
 	account, err := p.parseAccount()
 	if err != nil {
@@ -177,7 +189,9 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 
 // parseDocument parses: DATE document ACCOUNT STRING
 func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document, error) {
-	p.consume(DOCUMENT, "expected 'document'")
+	if err := p.consume(DOCUMENT, "expected 'document'"); err != nil {
+		return nil, err
+	}
 
 	account, err := p.parseAccount()
 	if err != nil {
@@ -203,7 +217,9 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 
 // parsePrice parses: DATE price CURRENCY AMOUNT
 func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error) {
-	p.consume(PRICE, "expected 'price'")
+	if err := p.consume(PRICE, "expected 'price'"); err != nil {
+		return nil, err
+	}
 
 	commodity, err := p.parseIdent()
 	if err != nil {
@@ -229,7 +245,9 @@ func (p *Parser) parsePrice(pos ast.Position, date *ast.Date) (*ast.Price, error
 
 // parseEvent parses: DATE event STRING STRING
 func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error) {
-	p.consume(EVENT, "expected 'event'")
+	if err := p.consume(EVENT, "expected 'event'"); err != nil {
+		return nil, err
+	}
 
 	name, err := p.parseString()
 	if err != nil {
@@ -253,10 +271,40 @@ func (p *Parser) parseEvent(pos ast.Position, date *ast.Date) (*ast.Event, error
 	return event, nil
 }
 
+// parseQuery parses: DATE query STRING STRING
+func (p *Parser) parseQuery(pos ast.Position, date *ast.Date) (*ast.Query, error) {
+	if err := p.consume(QUERY, "expected 'query'"); err != nil {
+		return nil, err
+	}
+
+	name, err := p.parseString()
+	if err != nil {
+		return nil, err
+	}
+
+	queryString, err := p.parseString()
+	if err != nil {
+		return nil, err
+	}
+
+	query := &ast.Query{
+		Name:        name,
+		QueryString: queryString,
+	}
+	query.SetPosition(pos)
+	query.SetDate(date)
+	if err := p.finishDirective(query); err != nil {
+		return nil, err
+	}
+	return query, nil
+}
+
 // parseCustom parses: DATE custom STRING VALUE*
 // where VALUE can be STRING | BOOL | AMOUNT | NUMBER
 func (p *Parser) parseCustom(pos ast.Position, date *ast.Date) (*ast.Custom, error) {
-	p.consume(CUSTOM, "expected 'custom'")
+	if err := p.consume(CUSTOM, "expected 'custom'"); err != nil {
+		return nil, err
+	}
 
 	customType, err := p.parseString()
 	if err != nil {

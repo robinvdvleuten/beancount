@@ -22,6 +22,7 @@ const (
 	KindDocument    DirectiveKind = "document"
 	KindPrice       DirectiveKind = "price"
 	KindEvent       DirectiveKind = "event"
+	KindQuery       DirectiveKind = "query"
 	KindCustom      DirectiveKind = "custom"
 	KindTransaction DirectiveKind = "transaction"
 )
@@ -342,6 +343,37 @@ func (e *Event) SetPosition(pos Position) { e.pos = pos }
 
 // SetDate sets the date (for use by parser/builders in ast package)
 func (e *Event) SetDate(date *Date) { e.date = date }
+
+// Query defines a named Beancount query that can be referenced by reporting tools.
+// It stores a user-provided name and the query string itself.
+//
+// Example:
+//
+//	2014-07-09 query "cash" "SELECT * FROM accounts WHERE account ~ 'Cash'"
+type Query struct {
+	pos         Position
+	date        *Date
+	Name        RawString
+	QueryString RawString
+
+	withComment
+	withMetadata
+}
+
+var _ Directive = &Query{}
+
+func (q *Query) Position() Position  { return q.pos }
+func (q *Query) Date() *Date         { return q.date }
+func (q *Query) Kind() DirectiveKind { return KindQuery }
+func (q *Query) AffectedNodes() []string {
+	return []string{}
+}
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (q *Query) SetPosition(pos Position) { q.pos = pos }
+
+// SetDate sets the date (for use by parser/builders in ast package)
+func (q *Query) SetDate(date *Date) { q.date = date }
 
 // Custom is a prototype directive for plugin development, allowing arbitrary typed values
 // after the directive name. This provides a flexible extension mechanism for plugins to

@@ -21,6 +21,7 @@ const (
 	DOCUMENT  // document
 	PRICE     // price
 	EVENT     // event
+	QUERY     // query
 	CUSTOM    // custom
 	OPTION    // option
 	INCLUDE   // include
@@ -71,6 +72,7 @@ var tokenNames = map[TokenType]string{
 	DOCUMENT:  "DOCUMENT",
 	PRICE:     "PRICE",
 	EVENT:     "EVENT",
+	QUERY:     "QUERY",
 	CUSTOM:    "CUSTOM",
 	OPTION:    "OPTION",
 	INCLUDE:   "INCLUDE",

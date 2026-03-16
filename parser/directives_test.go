@@ -182,6 +182,21 @@ func TestParseEvent(t *testing.T) {
 	assert.Equal(t, "New York, USA", event.Value.Value)
 }
 
+// Query directive tests
+
+func TestParseQuery(t *testing.T) {
+	input := `2014-07-09 query "cash" "SELECT * FROM accounts WHERE account ~ 'Cash'"`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	query, ok := result.Directives[0].(*ast.Query)
+	assert.True(t, ok)
+	assert.Equal(t, "cash", query.Name.Value)
+	assert.Equal(t, "SELECT * FROM accounts WHERE account ~ 'Cash'", query.QueryString.Value)
+}
+
 // Commodity directive tests
 
 func TestParseCommodity(t *testing.T) {
@@ -400,6 +415,38 @@ func TestParseDateFollowedByNewlineAtEOFReturnsError(t *testing.T) {
 	_, err := ParseString(context.Background(), input)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected end of file after date")
+}
+
+func TestParseRejectsUnknownTopLevelLine(t *testing.T) {
+	input := "junk\n2024-01-01 open Assets:Checking USD\n"
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected token")
+}
+
+func TestParseRejectsTrailingJunkAfterDirective(t *testing.T) {
+	input := "2024-01-01 open Assets:Checking USD garbage\n"
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected token")
+}
+
+func TestParseRejectsSplitDateDirectiveSyntax(t *testing.T) {
+	input := "2024-01-01\nopen Assets:Checking USD\n"
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected end of line after date")
+}
+
+func TestParsePushmetaRequiresColon(t *testing.T) {
+	input := "pushmeta location \"NY\"\n2024-01-01 open Assets:Checking USD\n"
+
+	_, err := ParseString(context.Background(), input)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected ':'")
 }
 
 // Error cases

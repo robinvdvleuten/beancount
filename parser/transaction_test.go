@@ -360,6 +360,25 @@ func TestParseTransactionWithExpressions(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, 2, len(txn.Postings))
 	assert.True(t, txn.Postings[0].Amount != nil)
+	assert.True(t, txn.Postings[1].Amount != nil)
+	assert.Equal(t, "-(100 + 50)", txn.Postings[1].Amount.Value)
+}
+
+func TestParseTransactionWithPlusAmounts(t *testing.T) {
+	source := `2024-01-15 * "With plus amounts"
+  Assets:Checking      +100.00 USD
+  Income:Salary
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	txn, ok := result.Directives[0].(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(txn.Postings))
+	assert.True(t, txn.Postings[0].Amount != nil)
+	assert.Equal(t, "+100.00", txn.Postings[0].Amount.Value)
+	assert.Equal(t, "+100.00", txn.Postings[0].Amount.Raw)
 }
 
 // TestParseTransactionWithCommaSeparatedAmounts tests parsing numbers with comma thousands separators
@@ -406,4 +425,15 @@ func TestParseUnmatchedParenthesisInExpression(t *testing.T) {
 	_, err := ParseString(context.Background(), source)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unmatched parentheses")
+}
+
+func TestParseTransactionRejectsMalformedCost(t *testing.T) {
+	source := `2024-01-15 * "Bad cost"
+  Assets:Stocks        10 GOOG {100.00 USD
+  Assets:Cash      -1000.00 USD
+`
+
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "expected '}'")
 }

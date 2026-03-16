@@ -13,6 +13,8 @@ type Option struct {
 	pos   Position
 	Name  RawString
 	Value RawString
+
+	withComment
 }
 
 func (o *Option) Position() Position { return o.pos }
@@ -33,6 +35,8 @@ func (o *Option) SetPosition(pos Position) { o.pos = pos }
 type Include struct {
 	pos      Position
 	Filename RawString
+
+	withComment
 }
 
 func (i *Include) Position() Position { return i.pos }
@@ -53,6 +57,8 @@ type Plugin struct {
 	pos    Position
 	Name   RawString
 	Config RawString
+
+	withComment
 }
 
 func (p *Plugin) Position() Position { return p.pos }
@@ -75,6 +81,8 @@ func (p *Plugin) SetPosition(pos Position) { p.pos = pos }
 type Pushtag struct {
 	pos Position
 	Tag Tag
+
+	withComment
 }
 
 func (p *Pushtag) Position() Position { return p.pos }
@@ -92,6 +100,8 @@ func (p *Pushtag) SetPosition(pos Position) { p.pos = pos }
 type Poptag struct {
 	pos Position
 	Tag Tag
+
+	withComment
 }
 
 func (p *Poptag) Position() Position { return p.pos }
@@ -115,6 +125,8 @@ type Pushmeta struct {
 	pos   Position
 	Key   string
 	Value string
+
+	withComment
 }
 
 func (p *Pushmeta) Position() Position { return p.pos }
@@ -133,6 +145,8 @@ func (p *Pushmeta) SetPosition(pos Position) { p.pos = pos }
 type Popmeta struct {
 	pos Position
 	Key string
+
+	withComment
 }
 
 func (p *Popmeta) Position() Position { return p.pos }

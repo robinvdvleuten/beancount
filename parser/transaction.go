@@ -94,6 +94,11 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		txn.SetComment(p.parseComment())
 	}
 
+	if !p.isAtEnd() && p.peek().Line == txn.Position().Line {
+		tok := p.peek()
+		return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
+
 	// Parse transaction-level metadata (only if on new line and properly indented)
 	if !p.isAtEnd() && p.peek().Line > txn.Position().Line && p.peek().Column > 1 {
 		metadata, err := p.parseMetadataFromLine(txn.Position().Line)
@@ -202,9 +207,9 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	}
 	posting.Account = account
 
-	// Optional amount (either NUMBER or expression starting with '(')
+	// Optional amount (either NUMBER or parenthesized expression)
 	tok := p.peek()
-	hasAmount := p.check(NUMBER) || (tok.Start < len(p.source) && p.source[tok.Start] == '(')
+	hasAmount := p.check(NUMBER) || p.startsParenthesizedExpression(tok)
 	if hasAmount {
 		amount, err := p.parseAmount()
 		if err != nil {
@@ -256,6 +261,15 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 		return nil, err
 	}
 	posting.Metadata = metadata
+
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == postingLine {
+		posting.SetComment(p.parseComment())
+	}
+
+	if !p.isAtEnd() && p.peek().Line == postingLine {
+		tok := p.peek()
+		return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
 
 	return posting, nil
 }

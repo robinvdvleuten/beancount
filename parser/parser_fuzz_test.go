@@ -18,6 +18,8 @@ func FuzzParser(f *testing.F) {
 
 		// Transaction with inferred amounts
 		"2014-05-06 * \"Store\"\n  Expenses:Shopping  50.00 USD\n  Assets:Checking",
+		"2014-05-06 * \"Store\"\n  Assets:Checking  +50.00 USD\n  Income:Salary",
+		"2014-05-06 * \"Store\"\n  Assets:Checking  -(20 + 30) USD\n  Expenses:Shopping",
 
 		// Options and includes
 		"option \"title\" \"Example\"",
@@ -26,6 +28,9 @@ func FuzzParser(f *testing.F) {
 
 		// Comments and pragmas
 		"; This is a comment",
+		"option \"title\" \"Example\" ; comment",
+		"plugin \"beancount.plugins.auto_accounts\" ; comment",
+		"2024-01-01 query \"cash\" \"SELECT 1\" ; comment",
 		"pushtag #trip",
 		"poptag #trip",
 
@@ -51,6 +56,12 @@ func FuzzParser(f *testing.F) {
 
 		// Query directive
 		"2014-07-09 query \"cash\" \"SELECT * FROM accounts WHERE account ~ 'Cash'\"",
+
+		// Compatibility edge cases
+		"2014-01-01 open Assets:Checking USD\r\n2014-01-02 close Assets:Checking\r\n",
+		"junk\n2014-01-01 open Assets:Checking USD",
+		"2014-01-01 open Assets:Checking USD garbage",
+		"2014-01-01\nopen Assets:Checking USD",
 
 		// Pad directive
 		"2014-07-09 pad Assets:Checking Equity:Opening-Balances",

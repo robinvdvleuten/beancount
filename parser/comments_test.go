@@ -142,6 +142,45 @@ func TestParseWithNoInlineComments(t *testing.T) {
 	assert.True(t, txn.Postings[1].GetComment() == nil, "second posting should not have comment")
 }
 
+func TestParseCommentCRLFDoesNotKeepCarriageReturn(t *testing.T) {
+	source := "; header comment\r\n2024-01-01 open Assets:Checking USD\r\n"
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(tree.Comments))
+	assert.Equal(t, "; header comment", tree.Comments[0].Content)
+}
+
+func TestParseCommentCROnlyDoesNotKeepCarriageReturn(t *testing.T) {
+	source := "; header comment\r2024-01-01 open Assets:Checking USD\r"
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(tree.Comments))
+	assert.Equal(t, "; header comment", tree.Comments[0].Content)
+}
+
+func TestParseTopLevelPragmasWithInlineComments(t *testing.T) {
+	source := `option "title" "Ledger" ; option comment
+plugin "beancount.plugins.auto_accounts" ; plugin comment
+pushtag #trip ; pushtag comment
+poptag #trip ; poptag comment
+pushmeta location: "NYC" ; pushmeta comment
+popmeta location: ; popmeta comment
+`
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+
+	assert.Equal(t, "; option comment", tree.Options[0].GetComment().Content)
+	assert.Equal(t, "; plugin comment", tree.Plugins[0].GetComment().Content)
+	assert.Equal(t, "; pushtag comment", tree.Pushtags[0].GetComment().Content)
+	assert.Equal(t, "; poptag comment", tree.Poptags[0].GetComment().Content)
+	assert.Equal(t, `"`+"NYC"+`"`, tree.Pushmetas[0].Value)
+	assert.Equal(t, "; pushmeta comment", tree.Pushmetas[0].GetComment().Content)
+	assert.Equal(t, "; popmeta comment", tree.Popmetas[0].GetComment().Content)
+}
+
 // Integration tests for comment handling with transactions
 
 func TestParseTransactionWithMultipleInlineComments(t *testing.T) {

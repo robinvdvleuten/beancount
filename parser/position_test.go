@@ -141,12 +141,11 @@ func TestDirectivePositioning(t *testing.T) {
 	}
 }
 
-// TestMultiLineDirectivePositioning tests position tracking when dates and directives are on separate lines.
+// TestMultiLineDirectivePositioning verifies that split date/directive syntax is rejected.
 func TestMultiLineDirectivePositioning(t *testing.T) {
 	tests := []struct {
-		name          string
-		source        string
-		expectedLines []int // Expected line numbers for directives in order
+		name   string
+		source string
 	}{
 		{
 			name: "date and directive on separate lines",
@@ -158,7 +157,6 @@ close Assets:Checking
 
 2023-01-03
 balance Assets:Checking 100.00 USD`,
-			expectedLines: []int{2, 5, 8},
 		},
 		{
 			name: "multiple blank lines between date and directive",
@@ -170,7 +168,6 @@ open Assets:Checking USD
 2023-01-02
 
 close Assets:Checking`,
-			expectedLines: []int{4, 8},
 		},
 		{
 			name: "mixed single-line and multi-line directives",
@@ -180,25 +177,14 @@ close Assets:Checking
 2023-01-03 balance Assets:Checking 100.00 USD
 2023-01-04
 commodity USD`,
-			expectedLines: []int{1, 3, 4, 6},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tree, err := ParseString(context.Background(), tt.source)
-			assert.NoError(t, err)
-
-			assert.Equal(t, len(tt.expectedLines), len(tree.Directives),
-				"expected %d directives, got %d", len(tt.expectedLines), len(tree.Directives))
-
-			for i, directive := range tree.Directives {
-				expectedLine := tt.expectedLines[i]
-				actualLine := getDirectiveLine(directive)
-				assert.Equal(t, expectedLine, actualLine,
-					"directive %d should be on line %d, got line %d",
-					i, expectedLine, actualLine)
-			}
+			_, err := ParseString(context.Background(), tt.source)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), "unexpected end of line after date")
 		})
 	}
 }
@@ -209,8 +195,7 @@ func TestPositionTrackingWithComments(t *testing.T) {
 2023-01-01 open Assets:Checking USD
 ; Another comment
 
-2023-01-02
-close Assets:Checking
+2023-01-02 close Assets:Checking
 ; Final comment`
 
 	tree, err := ParseString(context.Background(), source)
@@ -221,26 +206,24 @@ close Assets:Checking
 	// First directive should be on line 2 (after comment)
 	assert.Equal(t, 2, getDirectiveLine(tree.Directives[0]))
 
-	// Second directive should be on line 6 (after comment and blank line)
-	assert.Equal(t, 6, getDirectiveLine(tree.Directives[1]))
+	// Second directive should be on line 5 (after comment and blank line)
+	assert.Equal(t, 5, getDirectiveLine(tree.Directives[1]))
 }
 
 // TestPositionTrackingRegression tests the specific failing fuzz case for regression.
 func TestPositionTrackingRegression(t *testing.T) {
-	// This was the failing fuzz case that exposed the position tracking bug
-	// Note: changed from year 0000 (invalid) to 2000 (valid) but kept multi-line structure
-	source := "2000-01-01\nopen Assets:0"
+	source := "2000-01-01 open Assets:0"
 
 	tree, err := ParseString(context.Background(), source)
 	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(tree.Directives))
 
-	// The open directive should be on line 2, not line 1
+	// The open directive should be on line 1.
 	directive := tree.Directives[0]
 	actualLine := getDirectiveLine(directive)
-	assert.Equal(t, 2, actualLine,
-		"open directive should be on line 2, got line %d", actualLine)
+	assert.Equal(t, 1, actualLine,
+		"open directive should be on line 1, got line %d", actualLine)
 
 	// Verify it's the correct directive type
 	open, ok := directive.(*ast.Open)
@@ -269,8 +252,7 @@ func TestPositionTrackingWithMetadata(t *testing.T) {
   account-number: "12345"
   bank: "Test Bank"
 
-2023-01-02
-balance Assets:Checking 100.00 USD
+2023-01-02 balance Assets:Checking 100.00 USD
   tolerance: "0.01"`
 
 	tree, err := ParseString(context.Background(), source)
@@ -281,8 +263,8 @@ balance Assets:Checking 100.00 USD
 	// First directive on line 1
 	assert.Equal(t, 1, getDirectiveLine(tree.Directives[0]))
 
-	// Second directive on line 6 (after metadata and blank line)
-	assert.Equal(t, 6, getDirectiveLine(tree.Directives[1]))
+	// Second directive on line 5 (after metadata and blank line)
+	assert.Equal(t, 5, getDirectiveLine(tree.Directives[1]))
 }
 
 // TestCalculateSourceRangeIncludesContext verifies that parse errors include
@@ -306,9 +288,9 @@ func TestCalculateSourceRangeIncludesContext(t *testing.T) {
 	// Source range should include context (lines before/after the error)
 	rangeStr := string(parseErr.SourceRange.Source)
 	assert.Contains(t, rangeStr, "Expenses:Food")      // line 2 (context before)
-	assert.Contains(t, rangeStr, "Expenses:Transport")  // line 3 (context before)
-	assert.Contains(t, rangeStr, "INVALID")             // line 4 (error line)
-	assert.Contains(t, rangeStr, "Income:Salary")       // line 5 (context after)
+	assert.Contains(t, rangeStr, "Expenses:Transport") // line 3 (context before)
+	assert.Contains(t, rangeStr, "INVALID")            // line 4 (error line)
+	assert.Contains(t, rangeStr, "Income:Salary")      // line 5 (context after)
 }
 
 // TestPositionTrackingComplexScenario tests complex scenarios with mixed formatting.
@@ -316,22 +298,19 @@ func TestPositionTrackingComplexScenario(t *testing.T) {
 	source := `option "title" "Test Ledger"
 
 ; Account setup
-2023-01-01
-open Assets:Checking USD
+2023-01-01 open Assets:Checking USD
   description: "Primary checking"
 
 2023-01-01 open Expenses:Food
 2023-01-01 open Expenses:Transport
 
-2023-01-02
-* "Grocery Store" "Weekly shopping"
+2023-01-02 * "Grocery Store" "Weekly shopping"
   Expenses:Food      50.00 USD
   Assets:Checking
 
 2023-01-03 balance Assets:Checking 950.00 USD
 
-2023-01-04
-note Assets:Checking "Account review"
+2023-01-04 note Assets:Checking "Account review"
 
 2023-01-05 price USD 1.00 EUR
 
@@ -341,7 +320,7 @@ note Assets:Checking "Account review"
 	tree, err := ParseString(context.Background(), source)
 	assert.NoError(t, err)
 
-	expectedLines := []int{5, 8, 9, 12, 16, 19, 21, 24}
+	expectedLines := []int{4, 7, 8, 10, 14, 16, 18, 21}
 	assert.Equal(t, len(expectedLines), len(tree.Directives),
 		"expected %d directives, got %d", len(expectedLines), len(tree.Directives))
 

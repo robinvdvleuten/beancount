@@ -105,9 +105,24 @@ func (l *Lexer) validateUTF8() error {
 	for i := 0; i < len(l.source); i++ {
 		ch := l.source[i]
 
-		// Allow: tab (0x09), newline (0x0a), carriage return (0x0d)
+		// Treat CRLF and CR as line breaks for compatibility with official Beancount.
+		if ch == '\r' {
+			if i+1 < len(l.source) && l.source[i+1] == '\n' {
+				i++
+			}
+			line++
+			col = 1
+			continue
+		}
+		if ch == '\n' {
+			line++
+			col = 1
+			continue
+		}
+
+		// Allow: tab (0x09)
 		// Reject: other control characters (0x00-0x08, 0x0b-0x0c, 0x0e-0x1f)
-		if ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r' {
+		if ch < 0x20 && ch != '\t' {
 			return &InvalidUTF8Error{
 				Filename: l.filename,
 				Line:     line,
@@ -134,13 +149,7 @@ func (l *Lexer) validateUTF8() error {
 			}
 		}
 
-		// Update line/column tracking
-		if ch == '\n' {
-			line++
-			col = 1
-		} else {
-			col++
-		}
+		col++
 	}
 
 	return nil
@@ -157,34 +166,27 @@ func (l *Lexer) scanNextToken() Token {
 	blankLineStartCol := 0
 
 	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-
-		if ch == '\n' {
-			// Newline ends the current line
+		if breakLen := l.lineBreakLenAt(l.pos); breakLen > 0 {
+			// Line break ends the current line.
 			if !lineHasContent {
-				// Current line was blank (only whitespace or empty)
-				// Record this newline as marking a blank line
 				if blankLineStartPos < 0 {
 					blankLineStartPos = l.pos
 					blankLineStartLine = l.line
 					blankLineStartCol = l.column
 				}
-				// Emit a NEWLINE token for this blank line
 				tok := Token{NEWLINE, blankLineStartPos, l.pos, blankLineStartLine, blankLineStartCol}
-				l.pos++
-				l.line++
-				l.column = 1
+				l.consumeLineBreak()
 				return tok
 			}
-			// Line had content - just advance past the newline
-			l.pos++
-			l.line++
-			l.column = 1
+
+			l.consumeLineBreak()
 			lineHasContent = false
 			continue
 		}
 
-		if ch == ' ' || ch == '\t' || ch == '\r' {
+		ch := l.source[l.pos]
+
+		if ch == ' ' || ch == '\t' {
 			// Whitespace doesn't count as content
 			l.pos++
 			l.column++
@@ -228,6 +230,8 @@ func (l *Lexer) scanToken() Token {
 		} else {
 			tok = l.scanNumber(start, startLine, startCol)
 		}
+	case ch == '+' && l.peekIsDigit():
+		tok = l.scanNumber(start, startLine, startCol)
 	case ch == '-' && l.peekIsDigit():
 		tok = l.scanNumber(start, startLine, startCol)
 
@@ -293,9 +297,23 @@ func (l *Lexer) scanToken() Token {
 		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 	}
 
-	// Consume trailing newline if present, as this content token owns its line
-	if l.pos < len(l.source) && l.source[l.pos] == '\n' {
-		l.advance()
+	// Consume trailing spaces/tabs only when they are followed by a line break.
+	// This preserves spaces before comments while ensuring content tokens still own
+	// their physical line when users leave trailing whitespace at end-of-line.
+	savedPos := l.pos
+	savedCol := l.column
+	for l.pos < len(l.source) && (l.source[l.pos] == ' ' || l.source[l.pos] == '\t') {
+		l.pos++
+		l.column++
+	}
+	if l.lineBreakLenAt(l.pos) == 0 {
+		l.pos = savedPos
+		l.column = savedCol
+	}
+
+	// Consume trailing line break if present, as this content token owns its line.
+	if l.lineBreakLenAt(l.pos) > 0 {
+		l.consumeLineBreak()
 	}
 
 	return tok
@@ -439,18 +457,13 @@ func (l *Lexer) scanString(start, line, col int) Token {
 	// Scan until closing quote or end of source
 	closed := false
 	for l.pos < len(l.source) {
+		if l.lineBreakLenAt(l.pos) > 0 {
+			break
+		}
 		ch := l.source[l.pos]
 		if ch == '"' {
 			l.advance() // consume closing quote
 			closed = true
-			break
-		}
-		// Reject literal newlines in strings (must use escape sequences)
-		// IMPORTANT: Do NOT consume the newline. Leave it for scanToken/scanNextToken
-		// to handle, so blank lines are properly tracked and NEWLINE tokens are emitted.
-		// This maintains the invariant that content tokens own their line, but the
-		// line-ending newline belongs to scanNextToken for blank line detection.
-		if ch == '\n' {
 			break
 		}
 		// Handle escape sequences
@@ -542,6 +555,7 @@ var keywordMap = map[string]TokenType{
 	"document":  DOCUMENT,
 	"price":     PRICE,
 	"event":     EVENT,
+	"query":     QUERY,
 	"custom":    CUSTOM,
 	"option":    OPTION,
 	"include":   INCLUDE,
@@ -569,13 +583,13 @@ func (l *Lexer) scanComment() Token {
 	l.advance()
 
 	// Scan to end of line
-	for l.pos < len(l.source) && l.source[l.pos] != '\n' {
+	for l.pos < len(l.source) && l.lineBreakLenAt(l.pos) == 0 {
 		l.advance()
 	}
 
-	// Consume the newline if present, as it's part of the comment's line
-	if l.pos < len(l.source) && l.source[l.pos] == '\n' {
-		l.advance()
+	// Consume the trailing line break if present, as it's part of the comment's line.
+	if l.lineBreakLenAt(l.pos) > 0 {
+		l.consumeLineBreak()
 	}
 
 	return Token{COMMENT, start, l.pos, startLine, startCol}
@@ -610,6 +624,36 @@ func (l *Lexer) advance() byte {
 		l.column++
 	}
 	return ch
+}
+
+func (l *Lexer) lineBreakLenAt(pos int) int {
+	if pos >= len(l.source) {
+		return 0
+	}
+	switch l.source[pos] {
+	case '\n':
+		return 1
+	case '\r':
+		if pos+1 < len(l.source) && l.source[pos+1] == '\n' {
+			return 2
+		}
+		return 1
+	default:
+		return 0
+	}
+}
+
+func (l *Lexer) consumeLineBreak() {
+	if l.pos >= len(l.source) {
+		return
+	}
+	breakLen := l.lineBreakLenAt(l.pos)
+	if breakLen == 0 {
+		return
+	}
+	l.pos += breakLen
+	l.line++
+	l.column = 1
 }
 
 // Character classification helpers

@@ -210,6 +210,7 @@ func TestLexerKeywords(t *testing.T) {
 		"document":  DOCUMENT,
 		"price":     PRICE,
 		"event":     EVENT,
+		"query":     QUERY,
 		"custom":    CUSTOM,
 		"option":    OPTION,
 		"include":   INCLUDE,
@@ -277,6 +278,43 @@ func TestLexerComments(t *testing.T) {
 
 	for i, tok := range tokens {
 		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch (got %v)", i, tok.Type)
+	}
+}
+
+func TestLexerPlusPrefixedNumbers(t *testing.T) {
+	lexer := NewLexer([]byte("+123.45"), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+	assert.True(t, len(tokens) >= 1)
+	assert.Equal(t, NUMBER, tokens[0].Type)
+	assert.Equal(t, "+123.45", tokens[0].String(lexer.source))
+}
+
+func TestLexerCRLFCommentsAndDirectives(t *testing.T) {
+	input := "; comment\r\n2024-01-01 open Assets:Bank\r\n"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, EOF}
+	assert.Equal(t, len(expectedTypes), len(tokens))
+	for i, tok := range tokens {
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
+	}
+}
+
+func TestLexerCROnlyCommentsAndDirectives(t *testing.T) {
+	input := "; comment\r2024-01-01 open Assets:Bank\r"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, EOF}
+	assert.Equal(t, len(expectedTypes), len(tokens))
+	for i, tok := range tokens {
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
 	}
 }
 
@@ -445,7 +483,7 @@ func TestKeywordMapLookup(t *testing.T) {
 	keywords := map[string]TokenType{
 		"txn": TXN, "balance": BALANCE, "open": OPEN, "close": CLOSE,
 		"commodity": COMMODITY, "pad": PAD, "note": NOTE, "document": DOCUMENT,
-		"price": PRICE, "event": EVENT, "custom": CUSTOM, "option": OPTION,
+		"price": PRICE, "event": EVENT, "query": QUERY, "custom": CUSTOM, "option": OPTION,
 		"include": INCLUDE, "plugin": PLUGIN, "pushtag": PUSHTAG,
 		"poptag": POPTAG, "pushmeta": PUSHMETA, "popmeta": POPMETA,
 	}

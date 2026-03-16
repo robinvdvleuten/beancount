@@ -24,6 +24,7 @@ func TestHandlerRegistry_GetHandler(t *testing.T) {
 		{ast.KindPrice, true},
 		{ast.KindCommodity, true},
 		{ast.KindEvent, true},
+		{ast.KindQuery, true},
 		{ast.KindCustom, true},
 		{ast.DirectiveKind("unknown"), false},
 	}
@@ -363,6 +364,23 @@ func TestCustomHandler(t *testing.T) {
 
 	customHandler.Apply(ctx, ledger, custom, nil)
 	// Custom handler doesn't mutate state currently
+}
+
+func TestQueryHandler(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2024-01-01 query "cash" "SELECT * FROM accounts"
+	`
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	queryHandler := &QueryHandler{}
+	queryDirective := tree.Directives[0]
+	errs, _ := queryHandler.Validate(ctx, ledger, queryDirective)
+	assert.Equal(t, len(errs), 0, "should have no errors")
+
+	queryHandler.Apply(ctx, ledger, queryDirective, nil)
+	// Query handler doesn't mutate state
 }
 
 // TestCommodityValidation_ValidCodes tests that multiple valid commodity codes are accepted

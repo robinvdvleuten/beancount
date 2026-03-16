@@ -280,17 +280,17 @@ func TestParseStringWithMetadata(t *testing.T) {
 	}{
 		{
 			name:     "valid metadata string",
-			input:    `2024-01-01 open Assets:Checking USD\n  metadata: "value"`,
+			input:    "2024-01-01 open Assets:Checking USD\n  metadata: \"value\"",
 			expected: "value",
 		},
 		{
 			name:     "metadata string with escapes",
-			input:    `2024-01-01 open Assets:Checking USD\n  metadata: "value with \"quotes\""`,
+			input:    "2024-01-01 open Assets:Checking USD\n  metadata: \"value with \\\"quotes\\\"\"",
 			expected: `value with "quotes"`,
 		},
 		{
 			name:     "metadata string with newline",
-			input:    `2024-01-01 open Assets:Checking USD\n  metadata: "line1\nline2"`,
+			input:    "2024-01-01 open Assets:Checking USD\n  metadata: \"line1\\nline2\"",
 			expected: "line1\nline2",
 		},
 	}
@@ -317,17 +317,17 @@ func TestParseCostWithLabel(t *testing.T) {
 	}{
 		{
 			name:     "cost with label",
-			input:    `2024-01-01 * "Transaction"\n  Assets:Checking  100 USD {"USD" , "label"}`,
+			input:    "2024-01-01 * \"Transaction\"\n  Assets:Checking  100 USD {100.00 USD, \"label\"}\n  Income:Other",
 			expected: "label",
 		},
 		{
 			name:     "cost with escaped label",
-			input:    `2024-01-01 * "Transaction"\n  Assets:Checking  100 USD {"USD" , "label with \"quotes\""}`,
+			input:    "2024-01-01 * \"Transaction\"\n  Assets:Checking  100 USD {100.00 USD, \"label with \\\"quotes\\\"\"}\n  Income:Other",
 			expected: `label with "quotes"`,
 		},
 		{
 			name:     "cost with label containing newline",
-			input:    `2024-01-01 * "Transaction"\n  Assets:Checking  100 USD {"USD" , "line1\nline2"}`,
+			input:    "2024-01-01 * \"Transaction\"\n  Assets:Checking  100 USD {100.00 USD, \"line1\\nline2\"}\n  Income:Other",
 			expected: "line1\nline2",
 		},
 	}

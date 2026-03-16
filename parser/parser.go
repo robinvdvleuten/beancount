@@ -112,9 +112,8 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			// Done - loop will exit via !p.isAtEnd()
 
 		default:
-			// Skip unknown tokens/lines
-			// This handles org-mode headers (* Options) and other non-directive lines
-			p.skipLine()
+			tok := p.peek()
+			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 		}
 	}
 
@@ -128,7 +127,9 @@ func (p *Parser) parseComment() *ast.Comment {
 
 	// Lexer includes the trailing newline in comment tokens.
 	// Strip it to keep Comment.Content semantic (comment text without line terminator).
+	content = strings.TrimSuffix(content, "\r\n")
 	content = strings.TrimSuffix(content, "\n")
+	content = strings.TrimSuffix(content, "\r")
 
 	// Determine comment type by checking if next token is a NEWLINE
 	commentType := ast.StandaloneComment
@@ -165,7 +166,9 @@ func (p *Parser) parseBlankLine() *ast.BlankLine {
 // parseOption parses: option "key" "value"
 func (p *Parser) parseOption() (*ast.Option, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(OPTION, "expected 'option'")
+	if err := p.consume(OPTION, "expected 'option'"); err != nil {
+		return nil, err
+	}
 
 	name, err := p.parseString()
 	if err != nil {
@@ -182,13 +185,21 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 		Value: value,
 	}
 	opt.SetPosition(pos)
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		opt.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return opt, nil
 }
 
 // parseInclude parses: include "filename"
 func (p *Parser) parseInclude() (*ast.Include, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(INCLUDE, "expected 'include'")
+	if err := p.consume(INCLUDE, "expected 'include'"); err != nil {
+		return nil, err
+	}
 
 	filename, err := p.parseString()
 	if err != nil {
@@ -199,13 +210,21 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 		Filename: filename,
 	}
 	inc.SetPosition(pos)
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		inc.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return inc, nil
 }
 
 // parsePlugin parses: plugin "name" ["config"]
 func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(PLUGIN, "expected 'plugin'")
+	if err := p.consume(PLUGIN, "expected 'plugin'"); err != nil {
+		return nil, err
+	}
 
 	name, err := p.parseString()
 	if err != nil {
@@ -226,13 +245,21 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 		plugin.Config = config
 	}
 
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		plugin.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return plugin, nil
 }
 
 // parsePushtag parses: pushtag #tag
 func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(PUSHTAG, "expected 'pushtag'")
+	if err := p.consume(PUSHTAG, "expected 'pushtag'"); err != nil {
+		return nil, err
+	}
 
 	tag, err := p.parseTag()
 	if err != nil {
@@ -243,13 +270,21 @@ func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
 		Tag: tag,
 	}
 	pt.SetPosition(pos)
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		pt.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return pt, nil
 }
 
 // parsePoptag parses: poptag #tag
 func (p *Parser) parsePoptag() (*ast.Poptag, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(POPTAG, "expected 'poptag'")
+	if err := p.consume(POPTAG, "expected 'poptag'"); err != nil {
+		return nil, err
+	}
 
 	tag, err := p.parseTag()
 	if err != nil {
@@ -260,45 +295,71 @@ func (p *Parser) parsePoptag() (*ast.Poptag, error) {
 		Tag: tag,
 	}
 	pt.SetPosition(pos)
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		pt.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return pt, nil
 }
 
 // parsePushmeta parses: pushmeta key: value
 func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(PUSHMETA, "expected 'pushmeta'")
+	if err := p.consume(PUSHMETA, "expected 'pushmeta'"); err != nil {
+		return nil, err
+	}
 
 	key, err := p.parseIdent()
 	if err != nil {
 		return nil, err
 	}
 
-	p.consume(COLON, "expected ':'")
+	if err := p.consume(COLON, "expected ':'"); err != nil {
+		return nil, err
+	}
 
 	pm := &ast.Pushmeta{
 		Key:   key,
-		Value: p.parseRestOfLine(),
+		Value: p.parseRestOfLineUntilComment(),
 	}
 	pm.SetPosition(pos)
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		pm.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return pm, nil
 }
 
 // parsePopmeta parses: popmeta key:
 func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 	pos := p.tokenPositionFromPeek()
-	p.consume(POPMETA, "expected 'popmeta'")
+	if err := p.consume(POPMETA, "expected 'popmeta'"); err != nil {
+		return nil, err
+	}
 
 	key, err := p.parseIdent()
 	if err != nil {
 		return nil, err
 	}
 
-	p.consume(COLON, "expected ':'")
+	if err := p.consume(COLON, "expected ':'"); err != nil {
+		return nil, err
+	}
 
 	pm := &ast.Popmeta{
 		Key: key,
 	}
 	pm.SetPosition(pos)
+	if !p.isAtEnd() && p.peek().Type == COMMENT && p.peek().Line == pos.Line {
+		pm.SetComment(p.parseComment())
+	}
+	if err := p.ensureLineConsumed(pos.Line); err != nil {
+		return nil, err
+	}
 	return pm, nil
 }
 
@@ -312,21 +373,14 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		return nil, err
 	}
 
-	// Skip any NEWLINE tokens between date and directive keyword
-	// This allows multi-line directive syntax where date is on one line
-	// and directive keyword is on the next
-	for !p.isAtEnd() && p.peek().Type == NEWLINE {
-		p.advance()
-	}
-
-	// After skipping newlines, check for EOF
 	if p.isAtEnd() {
 		return nil, p.errorAtToken(dateTok, "unexpected end of file after date")
 	}
+	if p.peek().Line != dateTok.Line {
+		return nil, p.errorAtEndOfPrevious("unexpected end of line after date")
+	}
 
 	// Check that next token is properly separated from date (whitespace required)
-	// This check runs after NEWLINE skipping to ensure we're checking the actual
-	// directive keyword token, not a trailing NEWLINE from the date line
 	nextTok := p.peek()
 	if nextTok.Line == dateTok.Line && nextTok.Column == dateTok.Column+dateTok.Len() {
 		return nil, p.errorAtToken(nextTok, "whitespace required between date and directive")
@@ -358,6 +412,8 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		return p.parsePrice(pos, date)
 	case EVENT:
 		return p.parseEvent(pos, date)
+	case QUERY:
+		return p.parseQuery(pos, date)
 	case CUSTOM:
 		return p.parseCustom(pos, date)
 	default:

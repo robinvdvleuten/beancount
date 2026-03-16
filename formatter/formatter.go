@@ -624,6 +624,8 @@ func (f *Formatter) formatDirective(d ast.Directive, buf *strings.Builder) {
 		f.formatPrice(directive, buf)
 	case *ast.Event:
 		f.formatEvent(directive, buf)
+	case *ast.Query:
+		f.formatQuery(directive, buf)
 	case *ast.Custom:
 		f.formatCustom(directive, buf)
 	case *ast.Transaction:
@@ -641,6 +643,10 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 	f.formatRawString(opt.Name, buf)
 	buf.WriteByte(' ')
 	f.formatRawString(opt.Value, buf)
+	if opt.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(opt.GetComment().Content)
+	}
 	buf.WriteByte('\n')
 }
 
@@ -652,6 +658,10 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 
 	buf.WriteString("include ")
 	f.formatRawString(inc.Filename, buf)
+	if inc.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(inc.GetComment().Content)
+	}
 	buf.WriteByte('\n')
 }
 
@@ -861,6 +871,31 @@ func (f *Formatter) formatEvent(e *ast.Event, buf *strings.Builder) {
 	f.formatMetadata(e.Metadata, buf)
 }
 
+// formatQuery formats a query directive.
+func (f *Formatter) formatQuery(q *ast.Query, buf *strings.Builder) {
+	if f.canPreserveDirectiveLine(q.Position().Line, q.Date()) && !hasAnyInlineMetadata(q.Metadata) {
+		originalLine := f.getOriginalLine(q.Position().Line)
+		if strings.Count(originalLine, "\"") >= 4 {
+			if f.tryPreserveOriginalLine(q.Position().Line, buf) {
+				f.formatMetadata(q.Metadata, buf)
+				return
+			}
+		}
+	}
+
+	buf.WriteString(q.Date().String())
+	buf.WriteString(" query ")
+	f.formatRawString(q.Name, buf)
+	buf.WriteByte(' ')
+	f.formatRawString(q.QueryString, buf)
+	if q.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(q.GetComment().Content)
+	}
+	buf.WriteByte('\n')
+	f.formatMetadata(q.Metadata, buf)
+}
+
 // formatCustom formats a custom directive.
 func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) && !hasAnyInlineMetadata(c.Metadata) {
@@ -913,6 +948,10 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 		buf.WriteByte(' ')
 		f.formatRawString(p.Config, buf)
 	}
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
+	}
 	buf.WriteByte('\n')
 }
 
@@ -924,6 +963,10 @@ func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
 
 	buf.WriteString("pushtag #")
 	buf.WriteString(string(p.Tag))
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
+	}
 	buf.WriteByte('\n')
 }
 
@@ -935,6 +978,10 @@ func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
 
 	buf.WriteString("poptag #")
 	buf.WriteString(string(p.Tag))
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
+	}
 	buf.WriteByte('\n')
 }
 
@@ -948,6 +995,10 @@ func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
 	buf.WriteString(p.Key)
 	buf.WriteString(": ")
 	buf.WriteString(p.Value)
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
+	}
 	buf.WriteByte('\n')
 }
 
@@ -959,7 +1010,12 @@ func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
 
 	buf.WriteString("popmeta ")
 	buf.WriteString(p.Key)
-	buf.WriteString(":\n")
+	buf.WriteByte(':')
+	if p.GetComment() != nil {
+		buf.WriteByte(' ')
+		buf.WriteString(p.GetComment().Content)
+	}
+	buf.WriteByte('\n')
 }
 
 // formatTransaction formats a transaction directive with proper structure.

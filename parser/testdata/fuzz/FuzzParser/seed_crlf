@@ -1,0 +1,2 @@
+go test fuzz v1
+[]byte("2014-01-01 open Assets:Checking USD\r\n2014-01-02 close Assets:Checking\r\n")
