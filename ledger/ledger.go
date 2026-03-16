@@ -83,7 +83,7 @@ func (e *ValidationErrors) Error() string {
 		}
 		buf.WriteString(err.Error())
 	}
-	buf.WriteString(fmt.Sprintf("\n\n%d validation error(s) found", len(e.Errors)))
+	fmt.Fprintf(&buf, "\n\n%d validation error(s) found", len(e.Errors))
 	return buf.String()
 }
 
