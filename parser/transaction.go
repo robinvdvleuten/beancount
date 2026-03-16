@@ -16,20 +16,18 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 
 	// Handle optional 'txn' keyword and flag
 	// Valid forms:
-	//   DATE txn * "narration"
-	//   DATE txn ! "narration"
+	//   DATE txn
 	//   DATE * "narration"
 	//   DATE ! "narration"
 
 	if p.match(TXN) {
-		// Explicit 'txn' keyword defaults to cleared (*) if no flag follows.
-		if p.match(ASTERISK) {
-			txn.Flag = "*"
-		} else if p.match(EXCLAIM) {
-			txn.Flag = "!"
-		} else {
-			txn.Flag = "*"
+		// Explicit 'txn' keyword defaults to cleared (*) and does not allow
+		// an additional flag token on the same line.
+		if p.peek().Line == pos.Line && (p.check(ASTERISK) || p.check(EXCLAIM)) {
+			tok := p.peek()
+			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 		}
+		txn.Flag = "*"
 	} else if p.match(ASTERISK) {
 		txn.Flag = "*"
 	} else if p.match(EXCLAIM) {

@@ -74,6 +74,28 @@ func TestParseTransactionWithBareTxnKeyword(t *testing.T) {
 	assert.Equal(t, 2, len(txn.Postings))
 }
 
+func TestParseTransactionRejectsTxnKeywordWithClearedFlag(t *testing.T) {
+	source := `2024-01-15 txn *
+  Assets:Checking   100.00 USD
+  Expenses:Food    -100.00 USD
+`
+
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected token")
+}
+
+func TestParseTransactionRejectsTxnKeywordWithPendingFlag(t *testing.T) {
+	source := `2024-01-15 txn !
+  Assets:Checking   100.00 USD
+  Expenses:Food    -100.00 USD
+`
+
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected token")
+}
+
 func TestParseTransactionWithBareFlagOnly(t *testing.T) {
 	source := `2024-01-15 *
   Assets:Checking   100.00 USD

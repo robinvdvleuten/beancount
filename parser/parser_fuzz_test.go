@@ -68,6 +68,8 @@ func FuzzParser(f *testing.F) {
 		"junk\n2014-01-01 open Assets:Checking USD",
 		"2014-01-01 open Assets:Checking USD garbage",
 		"2014-01-01\nopen Assets:Checking USD",
+		"2014-05-05 txn *\n  Expenses:Food  4.50 USD\n  Assets:Cash",
+		"2014-05-05 txn !\n  Expenses:Food  4.50 USD\n  Assets:Cash",
 
 		// Pad directive
 		"2014-07-09 pad Assets:Checking Equity:Opening-Balances",
