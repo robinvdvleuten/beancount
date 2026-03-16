@@ -69,17 +69,35 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	}
 	currTok := p.advance()
 
-	// Intern currency code (USD, EUR, etc.)
+	return p.amountFromValueToken(valueTok, currTok, isExpression, value), nil
+}
+
+func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool, value string) *ast.Amount {
 	currency := p.internCurrency(currTok)
 
-	// Get the raw number token for perfect round-trip formatting
-	// Only available for plain numbers, not expressions
 	var raw string
 	if !isExpression && valueTok.Type == NUMBER {
 		raw = valueTok.String(p.source)
 	}
 
-	return ast.NewAmountWithRaw(raw, value, currency), nil
+	return ast.NewAmountWithRaw(raw, value, currency)
+}
+
+func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
+	tok := p.peek()
+	if tok.Type == ILLEGAL && p.isExpressionStartToken(tok) {
+		return Token{}, false, "", p.errorAtToken(tok, "unmatched parentheses in expression")
+	}
+	if !p.check(NUMBER) && !p.check(EXPRESSION) {
+		return Token{}, false, "", p.errorAtToken(p.peek(), "expected number or expression")
+	}
+	valueTok := p.advance()
+	isExpression := valueTok.Type == EXPRESSION
+	value := valueTok.String(p.source)
+	if valueTok.Type == NUMBER {
+		value = strings.ReplaceAll(value, ",", "")
+	}
+	return valueTok, isExpression, value, nil
 }
 
 // parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] } or {{ AMOUNT [, DATE] [, LABEL] }}

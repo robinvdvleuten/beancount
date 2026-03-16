@@ -134,6 +134,21 @@ func TestParseBalanceNegative(t *testing.T) {
 	assert.Equal(t, "-500.00", balance.Amount.Value)
 }
 
+func TestParseBalanceWithLocalTolerance(t *testing.T) {
+	input := `2014-08-09 balance Assets:Checking 100.00 ~ 0.05 USD`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	balance, ok := result.Directives[0].(*ast.Balance)
+	assert.True(t, ok)
+	assert.Equal(t, "100.00", balance.Amount.Value)
+	assert.NotEqual(t, (*ast.Amount)(nil), balance.Tolerance)
+	assert.Equal(t, "0.05", balance.Tolerance.Value)
+	assert.Equal(t, "USD", balance.Tolerance.Currency)
+}
+
 // Pad directive tests
 
 func TestParsePad(t *testing.T) {

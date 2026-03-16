@@ -748,7 +748,30 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 
 	if b.Amount != nil {
 		currentWidth := DateWidth + 1 + directiveKeywordWidth(b) + runewidth.StringWidth(string(b.Account))
-		f.formatAmountAligned(b.Amount, currentWidth, buf)
+		if b.Tolerance != nil {
+			amountValue := b.Amount.Value
+			if b.Amount.HasRaw() {
+				amountValue = b.Amount.Raw
+			}
+			toleranceValue := b.Tolerance.Value
+			if b.Tolerance.HasRaw() {
+				toleranceValue = b.Tolerance.Raw
+			}
+
+			padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amountValue) - runewidth.StringWidth(toleranceValue) - 4
+			if padding < MinimumSpacing {
+				padding = MinimumSpacing
+			}
+
+			buf.WriteString(strings.Repeat(" ", padding))
+			buf.WriteString(amountValue)
+			buf.WriteString(" ~ ")
+			buf.WriteString(toleranceValue)
+			buf.WriteByte(' ')
+			buf.WriteString(b.Amount.Currency)
+		} else {
+			f.formatAmountAligned(b.Amount, currentWidth, buf)
+		}
 	}
 
 	// Append inline comment if present

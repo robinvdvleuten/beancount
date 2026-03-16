@@ -1417,6 +1417,20 @@ func TestBalanceTolerance(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name: "balance uses local tolerance override",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 open Equity:Opening
+
+				2020-01-02 * "Deposit"
+				  Assets:Checking    100.01 USD
+				  Equity:Opening    -100.01 USD
+
+				2020-01-03 balance Assets:Checking 100.00 ~ 0.02 USD
+			`,
+			wantErr: false,
+		},
+		{
 			name: "tolerance applied after padding",
 			input: `
 				2020-01-01 open Assets:Checking USD
@@ -1572,13 +1586,13 @@ func TestValidateOpen(t *testing.T) {
 		wantConstraintLen int
 	}{
 		{
-			name:     "valid open directive",
-			accounts: map[string]*Account{},
-		open:        ast.NewOpen(date2024, checking, nil, ""),
-		wantErrCount: 0,
-	},
-	{
-		name: "account already open",
+			name:         "valid open directive",
+			accounts:     map[string]*Account{},
+			open:         ast.NewOpen(date2024, checking, nil, ""),
+			wantErrCount: 0,
+		},
+		{
+			name: "account already open",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
 					Name:      checking,
@@ -1586,11 +1600,11 @@ func TestValidateOpen(t *testing.T) {
 					Inventory: NewInventory(),
 				},
 			},
-		open:        ast.NewOpen(date2025, checking, nil, ""),
-		wantErrCount: 1,
-	},
-	{
-		name: "reopening closed account - error (duplicate open)",
+			open:         ast.NewOpen(date2025, checking, nil, ""),
+			wantErrCount: 1,
+		},
+		{
+			name: "reopening closed account - error (duplicate open)",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
 					Name:      checking,
@@ -1599,27 +1613,27 @@ func TestValidateOpen(t *testing.T) {
 					Inventory: NewInventory(),
 				},
 			},
-		open:        ast.NewOpen(date2025, checking, nil, ""),
-		wantErrCount: 1, // Beancount does NOT allow reopening - duplicate open is an error
+			open:         ast.NewOpen(date2025, checking, nil, ""),
+			wantErrCount: 1, // Beancount does NOT allow reopening - duplicate open is an error
 		},
 		{
 			name:     "metadata copying",
 			accounts: map[string]*Account{},
-	open: func() *ast.Open {
-			open := ast.NewOpen(date2024, checking, nil, "")
-			note := ast.NewRawString("Test account")
-			open.Metadata = []*ast.Metadata{
-				{Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
-			}
-			return open
-		}(),
+			open: func() *ast.Open {
+				open := ast.NewOpen(date2024, checking, nil, "")
+				note := ast.NewRawString("Test account")
+				open.Metadata = []*ast.Metadata{
+					{Key: "note", Value: &ast.MetadataValue{StringValue: &note}},
+				}
+				return open
+			}(),
 			wantErrCount:     0,
 			wantMetadataCopy: true,
 		},
 		{
-			name:     "constraint currencies copying",
-			accounts: map[string]*Account{},
-		open: ast.NewOpen(date2024, checking, []string{"USD", "EUR"}, ""),
+			name:              "constraint currencies copying",
+			accounts:          map[string]*Account{},
+			open:              ast.NewOpen(date2024, checking, []string{"USD", "EUR"}, ""),
 			wantErrCount:      0,
 			wantConstraintLen: 2,
 		},
@@ -1816,8 +1830,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			accountInventory: map[string]decimal.Decimal{
 				"USD": decimal.NewFromFloat(500.00),
 			},
-			balanceAmount:   "1000.00",
-			balanceCurrency: "USD",
+			balanceAmount:       "1000.00",
+			balanceCurrency:     "USD",
 			padEntry:            ast.NewPad(date2024Jan, checking, equity),
 			wantErr:             false,
 			wantPadding:         true,
@@ -1830,8 +1844,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			},
 			balanceAmount:   "1000.00",
 			balanceCurrency: "USD",
-			padEntry: ast.NewPad(date2024Mar, checking, equity), // After balance date
-			wantErr:  true,                                        // Pad after balance should error
+			padEntry:        ast.NewPad(date2024Mar, checking, equity), // After balance date
+			wantErr:         true,                                      // Pad after balance should error
 		},
 		{
 			name: "pad on same date as balance",
@@ -1840,8 +1854,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 			},
 			balanceAmount:   "1000.00",
 			balanceCurrency: "USD",
-			padEntry: ast.NewPad(date2024Feb, checking, equity), // Same as balance date
-			wantErr:  true,                                        // Pad on same date should error
+			padEntry:        ast.NewPad(date2024Feb, checking, equity), // Same as balance date
+			wantErr:         true,                                      // Pad on same date should error
 		},
 	}
 

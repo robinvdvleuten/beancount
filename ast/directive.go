@@ -141,12 +141,16 @@ func (c *Close) SetDate(date *Date) { c.date = date }
 // Example:
 //
 //	2014-08-09 balance Assets:US:BofA:Checking 562.00 USD
+//	2014-08-10 balance Assets:US:BofA:Checking 562.00 ~ 0.05 USD
 //	2014-08-09 balance Assets:Investments:Brokerage 10.00 HOOL {518.73 USD}
 type Balance struct {
 	pos     Position
 	date    *Date
 	Account Account
 	Amount  *Amount
+	// Tolerance is an optional local tolerance amount using the same currency
+	// as the asserted balance amount.
+	Tolerance *Amount
 
 	withComment
 	withMetadata
@@ -161,6 +165,9 @@ func (b *Balance) AffectedNodes() []string {
 	nodes := []string{string(b.Account)}
 	if b.Amount != nil {
 		nodes = append(nodes, b.Amount.Currency)
+	}
+	if b.Tolerance != nil {
+		nodes = append(nodes, b.Tolerance.Currency)
 	}
 	return nodes
 }

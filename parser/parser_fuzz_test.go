@@ -12,6 +12,7 @@ func FuzzParser(f *testing.F) {
 		"2014-01-01 open Assets:Checking USD",
 		"2014-12-31 close Assets:Checking",
 		"2014-08-09 balance Assets:Checking 100.00 USD",
+		"2014-08-09 balance Assets:Checking 100.00 ~ 0.05 USD",
 
 		// Simple transaction
 		"2014-05-05 * \"Cafe\" \"Coffee\"\n  Expenses:Food  4.50 USD\n  Assets:Cash",

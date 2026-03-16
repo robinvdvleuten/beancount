@@ -50,6 +50,7 @@ const (
 	COMMA    // ,
 	AT       // @
 	ATAT     // @@
+	TILDE    // ~
 	LBRACE   // {
 	RBRACE   // }
 	LDBRACE  // {{
@@ -99,6 +100,7 @@ var tokenNames = map[TokenType]string{
 	COMMA:    ",",
 	AT:       "@",
 	ATAT:     "@@",
+	TILDE:    "~",
 	LBRACE:   "{",
 	RBRACE:   "}",
 	LDBRACE:  "{{",

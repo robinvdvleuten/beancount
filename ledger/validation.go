@@ -859,6 +859,12 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 		errs = append(errs, NewInvalidAmountError(balance, balance.Account, balance.Amount.Value, err))
 		return errs
 	}
+	if balance.Tolerance != nil {
+		if _, err := ParseAmount(balance.Tolerance); err != nil {
+			errs = append(errs, NewInvalidAmountError(balance, balance.Account, balance.Tolerance.Value, err))
+			return errs
+		}
+	}
 
 	return errs
 }
@@ -1201,7 +1207,10 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 		}
 
 		difference := expectedAmount.Sub(actualAmount)
-		tolerance := v.config.Tolerance.GetDefaultTolerance(currency)
+		tolerance, err := v.balanceTolerance(balance)
+		if err != nil {
+			return nil, err
+		}
 
 		if difference.Abs().GreaterThan(tolerance) {
 			delta.PaddingAdjustments[currency] = difference
@@ -1235,7 +1244,10 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	}
 
 	// Check if amounts match within tolerance (after padding)
-	tolerance := v.config.Tolerance.GetDefaultTolerance(currency)
+	tolerance, err := v.balanceTolerance(balance)
+	if err != nil {
+		return nil, err
+	}
 	if !AmountEqual(delta.ExpectedAmount, actualAmountAfterPadding, tolerance) {
 		// Return error separately, not in delta
 		return nil, NewBalanceMismatchError(
@@ -1247,6 +1259,13 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	}
 
 	return delta, nil
+}
+
+func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, error) {
+	if balance.Tolerance == nil {
+		return v.config.Tolerance.GetDefaultTolerance(balance.Amount.Currency), nil
+	}
+	return ParseAmount(balance.Tolerance)
 }
 
 // validateInventoryOperations validates that inventory operations (lot reductions) are possible.

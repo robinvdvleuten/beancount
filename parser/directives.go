@@ -5,7 +5,8 @@ import "github.com/robinvdvleuten/beancount/ast"
 // Directive parsers for all non-transaction directives.
 // These are relatively simple parsers with deterministic structure.
 
-// parseBalance parses: DATE balance ACCOUNT AMOUNT
+// parseBalance parses: DATE balance ACCOUNT AMOUNT or
+// DATE balance ACCOUNT NUMBER ~ NUMBER CURRENCY.
 func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, error) {
 	if err := p.consume(BALANCE, "expected 'balance'"); err != nil {
 		return nil, err
@@ -16,10 +17,42 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 		return nil, err
 	}
 
-	amount, err := p.parseAmount()
+	valueTok, isExpression, value, err := p.parseAmountValueToken()
 	if err != nil {
 		return nil, err
 	}
+
+	var tolerance *ast.Amount
+	if p.match(TILDE) {
+		toleranceTok, toleranceIsExpression, toleranceValue, err := p.parseAmountValueToken()
+		if err != nil {
+			return nil, err
+		}
+		if !p.check(IDENT) {
+			return nil, p.errorAtEndOfPrevious("expected currency")
+		}
+		currTok := p.advance()
+		amount := p.amountFromValueToken(valueTok, currTok, isExpression, value)
+		tolerance = p.amountFromValueToken(toleranceTok, currTok, toleranceIsExpression, toleranceValue)
+
+		bal := &ast.Balance{
+			Account:   account,
+			Amount:    amount,
+			Tolerance: tolerance,
+		}
+		bal.SetPosition(pos)
+		bal.SetDate(date)
+		if err := p.finishDirective(bal); err != nil {
+			return nil, err
+		}
+		return bal, nil
+	}
+
+	if !p.check(IDENT) {
+		return nil, p.errorAtEndOfPrevious("expected currency")
+	}
+	currTok := p.advance()
+	amount := p.amountFromValueToken(valueTok, currTok, isExpression, value)
 
 	bal := &ast.Balance{
 		Account: account,

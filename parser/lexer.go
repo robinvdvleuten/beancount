@@ -298,6 +298,8 @@ func (l *Lexer) scanToken() Token {
 		} else {
 			tok = Token{AT, start, l.pos, startLine, startCol}
 		}
+	case ch == '~':
+		tok = Token{TILDE, start, l.pos, startLine, startCol}
 
 	default:
 		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}

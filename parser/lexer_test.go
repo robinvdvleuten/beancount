@@ -44,6 +44,11 @@ func TestLexerBasicTokens(t *testing.T) {
 			want:  []TokenType{ATAT, EOF},
 		},
 		{
+			name:  "tilde",
+			input: "~",
+			want:  []TokenType{TILDE, EOF},
+		},
+		{
 			name:  "braces",
 			input: "{ }",
 			want:  []TokenType{LBRACE, RBRACE, EOF},
