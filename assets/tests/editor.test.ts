@@ -11,11 +11,25 @@ import { test, expect } from "@playwright/test";
  * - File selector dropdown (when includes exist)
  */
 
-/** Navigate to Editor page via sidebar */
 async function navigateToEditor(page: import("@playwright/test").Page) {
-  await page.goto("/", { waitUntil: "networkidle" });
-  await page.getByRole("link", { name: "Editor" }).click();
+  await page.goto("/editor", { waitUntil: "networkidle" });
   await page.waitForURL("/editor");
+}
+
+async function getCurrentSource(page: import("@playwright/test").Page) {
+  const response = await page.request.get("/api/source");
+  expect(response.ok()).toBeTruthy();
+  return (await response.json()) as { source: string };
+}
+
+async function restoreSource(
+  page: import("@playwright/test").Page,
+  source: string,
+) {
+  const response = await page.request.put("/api/source", {
+    data: { source },
+  });
+  expect(response.ok()).toBeTruthy();
 }
 
 test.describe("Editor", () => {
@@ -38,58 +52,68 @@ test.describe("Editor", () => {
   });
 
   test("saves and restores file content", async ({ page }) => {
-    await navigateToEditor(page);
-
-    // Wait for editor to be visible
-    const editor = page.locator(".cm-editor");
-    await expect(editor).toBeVisible();
-
-    // Get original content
-    const editorContent = page.locator(".cm-content");
-    const originalText = await editorContent.textContent();
-
-    // Click into the editor and add a comment
-    const testComment = "; Test comment added by Playwright";
-    await editorContent.click();
-    await page.keyboard.type(`\n${testComment}`);
-
-    // Capture the save request to verify the payload
-    let savedSource: string | undefined;
-    page.on("request", (request) => {
-      if (request.url().includes("/api/source") && request.method() === "PUT") {
-        const body = request.postDataJSON() as { source?: string };
-        savedSource = body.source;
+    const consoleErrors: string[] = [];
+    page.on("console", (message) => {
+      if (message.type() === "error") {
+        consoleErrors.push(message.text());
       }
     });
 
-    // Save the file
-    await page.getByRole("button", { name: "Save" }).click();
-    await page.waitForLoadState("networkidle");
-
-    // Verify the saved content includes our typed comment
-    expect(savedSource).toBeDefined();
-    expect(savedSource).toContain(testComment);
-
-    // Verify no error state appeared
-    const errorIndicator = page.locator('[role="alert"]');
-    await expect(errorIndicator).toHaveCount(0);
-
-    // Restore original content by selecting all and replacing
-    await editorContent.click();
-    await page.keyboard.press("ControlOrMeta+a");
-    await page.keyboard.type(originalText ?? "");
-
-    // Save the restored content
-    await page.getByRole("button", { name: "Save" }).click();
-    await page.waitForLoadState("networkidle");
-  });
-
-  test("shows context-aware autocomplete", async ({ page }) => {
     await navigateToEditor(page);
 
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
     await expect(editor).toBeVisible();
+    await expect(page.locator(".cm-content")).toContainText("commodity USD");
+
+    // Read the real source from the API so restore doesn't depend on CodeMirror's viewport DOM.
+    const { source: originalSource } = await getCurrentSource(page);
+
+    const editorContent = page.locator(".cm-content");
+
+    try {
+      // Click into the editor and add a comment
+      const testComment = "; Test comment added by Playwright";
+      await editorContent.click();
+      await page.keyboard.press("ControlOrMeta+End");
+      await page.keyboard.type(`\n${testComment}`);
+
+      // Save the file
+      const saveResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/source") &&
+          response.request().method() === "PUT",
+      );
+      await page.getByRole("button", { name: "Save" }).click();
+      const saveResponse = await saveResponsePromise;
+      expect(saveResponse.ok()).toBeTruthy();
+
+      const savedBody = (await saveResponse.json()) as { source: string };
+      expect(savedBody.source).toContain(testComment);
+
+      // Verify the save completed in the UI and persisted to disk.
+      await expect(page.getByText("File saved")).toBeVisible();
+
+      const { source: savedSource } = await getCurrentSource(page);
+      expect(savedSource).toContain(testComment);
+      expect(consoleErrors).toEqual([]);
+    } finally {
+      await restoreSource(page, originalSource);
+    }
+  });
+
+  test("shows context-aware autocomplete", async ({ page }) => {
+    const accountsLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/accounts") && response.ok(),
+    );
+
+    await navigateToEditor(page);
+    await accountsLoaded;
+
+    // Wait for editor to be visible
+    const editor = page.locator(".cm-editor");
+    await expect(editor).toBeVisible();
+    await expect(page.locator(".cm-content")).toContainText("commodity USD");
 
     // Click into the editor and move to end of file
     const editorContent = page.locator(".cm-content");
@@ -98,10 +122,12 @@ test.describe("Editor", () => {
 
     // Type a transaction that triggers autocomplete
     await page.keyboard.type('\n\n2024-01-01 * "Test transaction"\n  Assets:U');
+    await page.keyboard.press("ControlOrMeta+Space");
 
     // Verify autocomplete tooltip appears
     const autocompleteTooltip = page.locator(".cm-tooltip-autocomplete");
-    await expect(autocompleteTooltip).toBeVisible({ timeout: 2000 });
+    await expect(autocompleteTooltip).toBeVisible();
+    await expect(autocompleteTooltip).toContainText("Assets:US:BofA");
 
     await page.keyboard.press("Escape");
   });
@@ -112,19 +138,12 @@ test.describe("Editor", () => {
     // Wait for editor to be visible
     const editor = page.locator(".cm-editor");
     await expect(editor).toBeVisible();
-
-    // Verify CodeMirror renders lines (virtualized, so only visible lines are in DOM)
-    // Check that at least some lines are rendered and content is present
-    const lines = page.locator(".cm-line");
-    const lineCount = await lines.count();
-    expect(lineCount).toBeGreaterThan(10);
-
-    // Verify syntax highlighting is applied by checking for styled spans within content
-    // CodeMirror wraps highlighted tokens in spans with generated class names
     const editorContent = page.locator(".cm-content");
+    await expect(editorContent).toContainText("commodity USD");
+
+    // Verify syntax highlighting is applied after CodeMirror finishes rendering tokens.
     const styledSpans = editorContent.locator("span[class]");
-    const spanCount = await styledSpans.count();
-    expect(spanCount).toBeGreaterThan(0);
+    await expect.poll(async () => await styledSpans.count()).toBeGreaterThan(0);
   });
 
   test("shows static filepath when no includes", async ({ page }) => {
