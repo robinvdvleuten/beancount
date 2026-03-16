@@ -49,25 +49,19 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 // Expressions are captured as-is (not evaluated) and stored in Amount.Value.
 // The ledger phase evaluates expressions when computing balances.
 func (p *Parser) parseAmount() (*ast.Amount, error) {
-	var value string
-	var numTok Token
-	isExpression := false
-
 	tok := p.peek()
-	if p.startsParenthesizedExpression(tok) {
-		var err error
-		value, err = p.parseExpression()
-		if err != nil {
-			return nil, err
-		}
-		isExpression = true
-	} else {
-		if !p.check(NUMBER) {
-			return nil, p.errorAtToken(p.peek(), "expected number or expression")
-		}
-		numTok = p.advance()
+	if tok.Type == ILLEGAL && p.isExpressionStartToken(tok) {
+		return nil, p.errorAtToken(tok, "unmatched parentheses in expression")
+	}
+	if !p.check(NUMBER) && !p.check(EXPRESSION) {
+		return nil, p.errorAtToken(p.peek(), "expected number or expression")
+	}
+	valueTok := p.advance()
+	isExpression := valueTok.Type == EXPRESSION
+	value := valueTok.String(p.source)
+	if valueTok.Type == NUMBER {
 		// Remove commas from number (e.g., "1,000" -> "1000")
-		value = strings.ReplaceAll(numTok.String(p.source), ",", "")
+		value = strings.ReplaceAll(value, ",", "")
 	}
 
 	if !p.check(IDENT) {
@@ -81,57 +75,11 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	// Get the raw number token for perfect round-trip formatting
 	// Only available for plain numbers, not expressions
 	var raw string
-	if !isExpression && numTok.Type == NUMBER {
-		raw = numTok.String(p.source)
+	if !isExpression && valueTok.Type == NUMBER {
+		raw = valueTok.String(p.source)
 	}
 
 	return ast.NewAmountWithRaw(raw, value, currency), nil
-}
-
-// parseExpression captures an expression's text from source without evaluating it.
-// Scans the source starting from current position to find matching parentheses.
-// Returns the full expression text including parentheses: "(5 + 3)"
-func (p *Parser) parseExpression() (string, error) {
-	tok := p.peek()
-	startPos := tok.Start
-	pos := startPos
-
-	if pos >= len(p.source) {
-		return "", p.errorAtToken(tok, "expected '('")
-	}
-	if p.source[pos] == '+' || p.source[pos] == '-' {
-		pos++
-	}
-	if pos >= len(p.source) || p.source[pos] != '(' {
-		return "", p.errorAtToken(tok, "expected '('")
-	}
-
-	depth := 0
-	for pos < len(p.source) {
-		ch := p.source[pos]
-		switch ch {
-		case '(':
-			depth++
-		case ')':
-			depth--
-			if depth == 0 {
-				// Found matching closing paren
-				endPos := pos + 1
-				exprText := string(p.source[startPos:endPos])
-
-				// Now consume all the tokens that were part of this expression
-				// We need to advance past the expression in the token stream
-				for !p.isAtEnd() && p.peek().Start < endPos {
-					p.advance()
-				}
-
-				return exprText, nil
-			}
-		}
-		pos++
-	}
-
-	return "", p.errorAtToken(tok, "unmatched parentheses in expression")
 }
 
 // parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] } or {{ AMOUNT [, DATE] [, LABEL] }}
@@ -177,7 +125,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	}
 
 	// Parse amount (required for total cost)
-	if p.check(NUMBER) {
+	if p.check(NUMBER) || p.check(EXPRESSION) {
 		amt, err := p.parseAmount()
 		if err != nil {
 			return nil, err
@@ -693,7 +641,7 @@ func (p *Parser) expectLineEnd(line int) error {
 	return nil
 }
 
-func (p *Parser) startsParenthesizedExpression(tok Token) bool {
+func (p *Parser) isExpressionStartToken(tok Token) bool {
 	if tok.Start >= len(p.source) {
 		return false
 	}

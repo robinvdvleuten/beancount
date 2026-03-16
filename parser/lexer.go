@@ -230,10 +230,16 @@ func (l *Lexer) scanToken() Token {
 		} else {
 			tok = l.scanNumber(start, startLine, startCol)
 		}
+	case ch == '(':
+		tok = l.scanExpression(start, startLine, startCol, ch)
 	case ch == '+' && l.peekIsDigit():
 		tok = l.scanNumber(start, startLine, startCol)
+	case ch == '+' && l.peek() == '(':
+		tok = l.scanExpression(start, startLine, startCol, ch)
 	case ch == '-' && l.peekIsDigit():
 		tok = l.scanNumber(start, startLine, startCol)
+	case ch == '-' && l.peek() == '(':
+		tok = l.scanExpression(start, startLine, startCol, ch)
 
 	// Strings: "..."
 	case ch == '"':
@@ -447,6 +453,39 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 	}
 
 	return Token{NUMBER, start, l.pos, line, col}
+}
+
+// scanExpression scans a signed or unsigned parenthesized amount expression.
+func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
+	depth := 0
+	if first == '(' {
+		depth = 1
+	} else {
+		if l.pos >= len(l.source) || l.source[l.pos] != '(' {
+			return Token{ILLEGAL, start, l.pos, line, col}
+		}
+		l.advance() // consume opening '(' after leading sign
+		depth = 1
+	}
+
+	for l.pos < len(l.source) {
+		if l.lineBreakLenAt(l.pos) > 0 {
+			return Token{ILLEGAL, start, l.pos, line, col}
+		}
+
+		ch := l.advance()
+		switch ch {
+		case '(':
+			depth++
+		case ')':
+			depth--
+			if depth == 0 {
+				return Token{EXPRESSION, start, l.pos, line, col}
+			}
+		}
+	}
+
+	return Token{ILLEGAL, start, l.pos, line, col}
 }
 
 // scanString scans a quoted string: "..."

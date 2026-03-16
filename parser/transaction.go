@@ -202,8 +202,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	posting.Account = account
 
 	// Optional amount (either NUMBER or parenthesized expression)
-	tok := p.peek()
-	hasAmount := p.check(NUMBER) || p.startsParenthesizedExpression(tok)
+	hasAmount := p.check(NUMBER) || p.check(EXPRESSION) || p.isExpressionStartToken(p.peek())
 	if hasAmount {
 		amount, err := p.parseAmount()
 		if err != nil {

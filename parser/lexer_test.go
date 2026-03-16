@@ -290,6 +290,23 @@ func TestLexerPlusPrefixedNumbers(t *testing.T) {
 	assert.Equal(t, "+123.45", tokens[0].String(lexer.source))
 }
 
+func TestLexerParenthesizedExpressions(t *testing.T) {
+	tests := []string{
+		"(100 + 50)",
+		"-(100 + 50)",
+		"+((100 + 50) / 2)",
+	}
+
+	for _, input := range tests {
+		lexer := NewLexer([]byte(input), "test")
+		tokens, err := lexer.ScanAll()
+		assert.NoError(t, err)
+		assert.True(t, len(tokens) >= 1)
+		assert.Equal(t, EXPRESSION, tokens[0].Type)
+		assert.Equal(t, input, tokens[0].String(lexer.source))
+	}
+}
+
 func TestLexerCRLFCommentsAndDirectives(t *testing.T) {
 	input := "; comment\r\n2024-01-01 open Assets:Bank\r\n"
 

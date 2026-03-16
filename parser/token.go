@@ -36,7 +36,8 @@ const (
 	ACCOUNT // Assets:Bank:Checking
 	STRING  // "quoted string"
 	NUMBER  // 123.45 or -123.45
-	IDENT   // USD, TRUE, FALSE, currency codes
+	EXPRESSION
+	IDENT // USD, TRUE, FALSE, currency codes
 
 	// Special literals
 	TAG  // #tag
@@ -82,11 +83,12 @@ var tokenNames = map[TokenType]string{
 	PUSHMETA:  "PUSHMETA",
 	POPMETA:   "POPMETA",
 
-	DATE:    "DATE",
-	ACCOUNT: "ACCOUNT",
-	STRING:  "STRING",
-	NUMBER:  "NUMBER",
-	IDENT:   "IDENT",
+	DATE:       "DATE",
+	ACCOUNT:    "ACCOUNT",
+	STRING:     "STRING",
+	NUMBER:     "NUMBER",
+	EXPRESSION: "EXPRESSION",
+	IDENT:      "IDENT",
 
 	TAG:  "TAG",
 	LINK: "LINK",
