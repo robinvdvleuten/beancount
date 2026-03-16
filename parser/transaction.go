@@ -93,77 +93,65 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		return nil, err
 	}
 
-	// Parse transaction-level metadata (only if on new line and properly indented)
-	if !p.isAtEnd() && p.peek().Line > txn.Position().Line && p.peek().Column > 1 {
-		metadata, err := p.parseMetadataFromLine(txn.Position().Line)
-		if err != nil {
-			return nil, err
-		}
-		txn.Metadata = metadata
-	}
-
-	// Parse postings (indented lines)
-	postings, err := p.parsePostings(txn.Position().Line)
-	if err != nil {
+	if err := p.parseTransactionBody(txn); err != nil {
 		return nil, err
 	}
-	txn.Postings = postings
 
 	return txn, nil
 }
 
-// parsePostings parses all postings for a transaction.
-// Postings are indented lines following the transaction header.
-func (p *Parser) parsePostings(headerLine int) ([]*ast.Posting, error) {
+func (p *Parser) parseTransactionBody(txn *ast.Transaction) error {
+	if err := p.parseLeadingTransactionMetadata(txn); err != nil {
+		return err
+	}
+
+	postings, err := p.parsePostingBlock()
+	if err != nil {
+		return err
+	}
+	txn.Postings = postings
+	return nil
+}
+
+func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
+	if !p.startsIndentedMetadataLine() {
+		return nil
+	}
+
+	metadata, err := p.parseMetadataFromLine(txn.Position().Line)
+	if err != nil {
+		return err
+	}
+	txn.Metadata = metadata
+	return nil
+}
+
+// parsePostingBlock parses all postings in the transaction's indented body.
+func (p *Parser) parsePostingBlock() ([]*ast.Posting, error) {
 	postings := make([]*ast.Posting, 0, 4)
 
-	// Postings must be indented (column > 1)
-	// We detect them by checking if the next token is on a new line,
-	// is indented, and looks like it could start a posting
 	for !p.isAtEnd() {
 		tok := p.peek()
 
-		if tok.Line == headerLine && (tok.Type == ASTERISK || tok.Type == EXCLAIM || tok.Type == ACCOUNT) {
-			return nil, p.errorAtToken(tok, "postings must start on a new line")
-		}
-
-		// Skip blank lines (NEWLINE tokens) that might appear between postings
-		// This handles cases like trailing whitespace that creates unwanted blank lines
-		// Must check NEWLINE before column check since blank lines have column 1
-		// HOWEVER: Don't consume a NEWLINE if it's followed by a directive or end-of-file,
-		// as it's a blank line that should be preserved in the AST, not part of the transaction
 		if tok.Type == NEWLINE {
-			// Peek ahead to see what comes after the blank line
-			nextIdx := p.pos + 1
-			if nextIdx < len(p.tokens) {
-				nextTok := p.tokens[nextIdx]
-				// If the next token is at column <= 1 or is EOF, this blank line marks
-				// the end of the transaction and should NOT be consumed here
-				if nextTok.Column <= 1 || nextTok.Type == EOF {
-					break // Don't consume this blank line - let the main parser handle it
-				}
+			if !p.shouldConsumeIndentedBlankLine() {
+				return postings, nil
 			}
-			// Safe to consume - it's a blank line between postings
-			p.advance() // consume the blank line and continue
+			p.advance()
 			continue
 		}
 
-		// Postings must be indented (not at column 1)
-		// This distinguishes them from org-mode headers like "* Credit-Cards"
 		if tok.Column <= 1 {
-			break
+			return postings, nil
 		}
 
-		// Posting can start with:
-		// - Optional flag (* or !)
-		// - Account name
-		// If we see anything else, it's not a posting
-		if tok.Type != ASTERISK && tok.Type != EXCLAIM && tok.Type != ACCOUNT {
-			if tok.Type == COMMENT {
-				p.advance() // consume comment and continue
-				continue
-			}
-			break
+		if tok.Type == COMMENT {
+			p.advance()
+			continue
+		}
+
+		if !p.isPostingStartToken(tok) {
+			return postings, nil
 		}
 
 		posting, err := p.parsePosting()
@@ -175,6 +163,23 @@ func (p *Parser) parsePostings(headerLine int) ([]*ast.Posting, error) {
 	}
 
 	return postings, nil
+}
+
+func (p *Parser) startsIndentedMetadataLine() bool {
+	if p.isAtEnd() {
+		return false
+	}
+	tok := p.peek()
+	return tok.Type != NEWLINE && tok.Column > 1 && p.isMetadataKeyStart(tok)
+}
+
+func (p *Parser) shouldConsumeIndentedBlankLine() bool {
+	nextTok := p.peekAhead(1)
+	return nextTok.Type != EOF && nextTok.Column > 1
+}
+
+func (p *Parser) isPostingStartToken(tok Token) bool {
+	return tok.Type == ASTERISK || tok.Type == EXCLAIM || tok.Type == ACCOUNT
 }
 
 // parsePosting parses a single posting:

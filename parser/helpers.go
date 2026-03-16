@@ -318,14 +318,7 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 	// Metadata lines are key: value where key can be IDENT or any keyword
 	for {
 		keyTok := p.peek()
-
-		// Check if this could be a metadata key
-		// Must be IDENT or a keyword, followed by COLON immediately (no whitespace)
-		isMetadataKey := (keyTok.Type == IDENT || p.isKeyword(keyTok.Type)) &&
-			p.peekAhead(1).Type == COLON &&
-			keyTok.Column+keyTok.Len() == p.peekAhead(1).Column
-
-		if !isMetadataKey {
+		if !p.isMetadataKeyStart(keyTok) {
 			break
 		}
 
@@ -351,6 +344,12 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 	}
 
 	return metadata, nil
+}
+
+func (p *Parser) isMetadataKeyStart(tok Token) bool {
+	return (tok.Type == IDENT || p.isKeyword(tok.Type)) &&
+		p.peekAhead(1).Type == COLON &&
+		tok.Column+tok.Len() == p.peekAhead(1).Column
 }
 
 // parseMetadataValue parses a typed metadata value. Beancount supports 8 value types:
