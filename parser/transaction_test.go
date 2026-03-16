@@ -57,6 +57,40 @@ func TestParseTransactionWithExclamationFlag(t *testing.T) {
 	assert.Equal(t, "!", txn.Flag)
 }
 
+func TestParseTransactionWithBareTxnKeyword(t *testing.T) {
+	source := `2024-01-15 txn
+  Assets:Checking   100.00 USD
+  Expenses:Food    -100.00 USD
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	txn, ok := result.Directives[0].(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, "*", txn.Flag)
+	assert.Equal(t, "", txn.Payee.Value)
+	assert.Equal(t, "", txn.Narration.Value)
+	assert.Equal(t, 2, len(txn.Postings))
+}
+
+func TestParseTransactionWithBareFlagOnly(t *testing.T) {
+	source := `2024-01-15 *
+  Assets:Checking   100.00 USD
+  Expenses:Food    -100.00 USD
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	txn, ok := result.Directives[0].(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, "*", txn.Flag)
+	assert.Equal(t, "", txn.Payee.Value)
+	assert.Equal(t, "", txn.Narration.Value)
+	assert.Equal(t, 2, len(txn.Postings))
+}
+
 // TestParseTransactionWithThreePostings tests transaction with three postings
 func TestParseTransactionWithThreePostings(t *testing.T) {
 	source := `2024-01-15 * "Three-way split"

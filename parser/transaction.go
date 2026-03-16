@@ -22,13 +22,13 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	//   DATE ! "narration"
 
 	if p.match(TXN) {
-		// Explicit 'txn' keyword
+		// Explicit 'txn' keyword defaults to cleared (*) if no flag follows.
 		if p.match(ASTERISK) {
 			txn.Flag = "*"
 		} else if p.match(EXCLAIM) {
 			txn.Flag = "!"
 		} else {
-			return nil, p.error("expected flag (* or !) after 'txn'")
+			txn.Flag = "*"
 		}
 	} else if p.match(ASTERISK) {
 		txn.Flag = "*"
@@ -45,7 +45,6 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	// Parse payee and/or narration
 	// If one string: it's the narration
 	// If two strings: first is payee, second is narration
-	hasNarration := false
 	if p.check(STRING) {
 		first, err := p.parseString()
 		if err != nil {
@@ -60,16 +59,10 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 			}
 			txn.Payee = first
 			txn.Narration = second
-			hasNarration = true
 		} else {
 			// One string: just narration
 			txn.Narration = first
-			hasNarration = true
 		}
-	}
-
-	if !hasNarration {
-		return nil, p.error("expected transaction payee or narration string")
 	}
 
 	// Parse tags and links (can be intermixed)

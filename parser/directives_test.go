@@ -466,14 +466,6 @@ func TestParsePushmetaRequiresColon(t *testing.T) {
 
 // Error cases
 
-func TestParseTransactionRequiresNarration(t *testing.T) {
-	input := `2000-01-01 !Assets:0 Income:0`
-
-	_, err := ParseString(context.Background(), input)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "expected transaction payee or narration string")
-}
-
 func TestParsePadMissingAccount(t *testing.T) {
 	input := `2023-01-01 pad Assets:Checking
 `

@@ -182,6 +182,20 @@ option "title" "Ledger"
 	assert.Equal(t, 1, len(tree.Directives))
 }
 
+func TestParseNestedOrgStyleSectionHeaders(t *testing.T) {
+	source := `** Banking
+
+2024-01-01 open Assets:Checking USD
+`
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(tree.Comments))
+	assert.Equal(t, "** Banking", tree.Comments[0].Content)
+	assert.Equal(t, ast.SectionComment, tree.Comments[0].Type)
+	assert.Equal(t, 1, len(tree.Directives))
+}
+
 func TestParseTopLevelPragmasWithInlineComments(t *testing.T) {
 	source := `option "title" "Ledger" ; option comment
 plugin "beancount.plugins.auto_accounts" ; plugin comment

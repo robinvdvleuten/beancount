@@ -15,6 +15,8 @@ func FuzzParser(f *testing.F) {
 
 		// Simple transaction
 		"2014-05-05 * \"Cafe\" \"Coffee\"\n  Expenses:Food  4.50 USD\n  Assets:Cash",
+		"2014-05-05 *\n  Expenses:Food  4.50 USD\n  Assets:Cash",
+		"2014-05-05 txn\n  Expenses:Food  4.50 USD\n  Assets:Cash",
 
 		// Transaction with inferred amounts
 		"2014-05-06 * \"Store\"\n  Expenses:Shopping  50.00 USD\n  Assets:Checking",
