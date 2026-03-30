@@ -16,7 +16,7 @@
     "@codemirror/lint": "^6.9.5",
     "@codemirror/state": "^6.6.0",
     "@codemirror/view": "^6.40.0",
-    "@solidjs/router": "^0.15.4",
+    "@solidjs/router": "^0.16.1",
     "codemirror": "^6.0.2",
     "daisyui": "^5.5.14",
     "heroicons": "^2.2.0",
