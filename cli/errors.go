@@ -82,8 +82,7 @@ func (r *ErrorRenderer) renderWithSourceContext(pos ast.Position, message string
 	buf.WriteString(errorStyle.Render(message))
 	buf.WriteString("\n\n")
 
-	sourceStr := string(sourceContent)
-	sourceLines := strings.Split(sourceStr, "\n")
+	sourceLines := ast.SplitSourceLines(string(sourceContent))
 
 	startLine := pos.Line - 3
 	endLine := pos.Line + 1

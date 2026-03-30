@@ -805,15 +805,19 @@ func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
 	foundStart := wantStart == 1
 	foundEnd := false
 
-	for i, b := range p.source {
-		if b == '\n' {
+	for i := 0; i < len(p.source); i++ {
+		b := p.source[i]
+		if b == '\n' || b == '\r' {
+			if b == '\r' && i+1 < len(p.source) && p.source[i+1] == '\n' {
+				i++
+			}
 			currentLine++
 			if !foundStart && currentLine == wantStart {
 				startOffset = i + 1
 				foundStart = true
 			}
 			if currentLine > wantEnd {
-				endOffset = i // exclude this newline
+				endOffset = i
 				foundEnd = true
 				break
 			}

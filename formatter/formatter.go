@@ -416,8 +416,9 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	}
 	widthTimer.End()
 
-	// Store source lines for preserving original spacing
-	f.sourceLines = strings.Split(string(sourceContent), "\n")
+	// Store source lines for preserving original spacing.
+	// Must split on \r\n, \r, and \n to match the lexer's lineBreakLenAt semantics.
+	f.sourceLines = ast.SplitSourceLines(string(sourceContent))
 	defer func() {
 		f.sourceLines = nil            // Clear after formatting
 		f.linesWithMultipleItems = nil // Clear after formatting
