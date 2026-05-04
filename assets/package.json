@@ -18,7 +18,7 @@
     "@codemirror/view": "^6.41.0",
     "@solidjs/router": "^0.16.1",
     "codemirror": "^6.0.2",
-    "daisyui": "^5.5.14",
+    "daisyui": "^5.5.19",
     "heroicons": "^2.2.0",
     "lezer-beancount": "^1.1.0",
     "match-sorter": "^8.3.0",
