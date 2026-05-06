@@ -1,5 +1,6 @@
 import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
+import type { SyntaxNode } from "@lezer/common";
 import { matchSorter } from "match-sorter";
 import type { AccountInfo } from "../../types";
 import {
@@ -7,6 +8,30 @@ import {
   isChildOfPosting,
   isAfterAccountDirectiveKeyword,
 } from "./syntax-predicates";
+
+const ACCOUNT_FRAGMENT_PATTERN = "[A-Z][\\w:-]*";
+const POSTING_ACCOUNT_PREFIX = new RegExp(`^\\s+(?:[*!]\\s+)?${ACCOUNT_FRAGMENT_PATTERN}$`);
+
+const isChildOfPostingBlock = (node: SyntaxNode): boolean => {
+  let current: SyntaxNode | null = node;
+  while (current) {
+    if (current.name === "PostingBlock") {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+};
+
+const isInPartialPostingAccountContext = (
+  context: CompletionContext,
+  node: SyntaxNode,
+): boolean => {
+  const line = context.state.doc.lineAt(context.pos);
+  const linePrefix = line.text.slice(0, context.pos - line.from);
+
+  return isChildOfPostingBlock(node) && POSTING_ACCOUNT_PREFIX.test(linePrefix);
+};
 
 /**
  * Main context detection function that determines if autocomplete should trigger.
@@ -41,7 +66,7 @@ export const isInAccountContext = (context: CompletionContext): boolean => {
     return true;
   }
 
-  return false;
+  return isInPartialPostingAccountContext(context, node);
 };
 
 // Autocomplete function for account names using match-sorter for intelligent ranking
