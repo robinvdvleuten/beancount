@@ -378,11 +378,46 @@ func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) b
 	}
 
 	if originalLine := f.getOriginalLine(lineNum); originalLine != "" {
-		buf.WriteString(strings.TrimSpace(originalLine))
+		trimmedLine := strings.TrimSpace(originalLine)
+		if hasOpenStringLiteral(trimmedLine) {
+			return false
+		}
+		buf.WriteString(trimmedLine)
 		buf.WriteByte('\n')
 		return true
 	}
 	return false
+}
+
+func hasOpenStringLiteral(line string) bool {
+	inString := false
+	escaped := false
+
+	for i := 0; i < len(line); i++ {
+		switch line[i] {
+		case ';':
+			if !inString {
+				return false
+			}
+		case '"':
+			if !inString {
+				inString = true
+				continue
+			}
+			if !escaped {
+				inString = false
+			}
+		case '\\':
+			if inString {
+				escaped = !escaped
+				continue
+			}
+		default:
+		}
+		escaped = false
+	}
+
+	return inString
 }
 
 // hasAnyInlineMetadata returns true if any of the metadata entries are marked as inline.

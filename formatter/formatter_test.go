@@ -937,6 +937,27 @@ func TestFormattingIdempotency(t *testing.T) {
 		// Both should be identical
 		assert.Equal(t, formatted1, formatted2, "Formatting should be idempotent")
 	})
+
+	t.Run("MultilineNoteStringWithEscapedQuote", func(t *testing.T) {
+		source := "1000-01-01 note A:0 \"\\\"\n\""
+		ast1 := parser.MustParseString(context.Background(), source)
+
+		f1 := New()
+		var buf1 bytes.Buffer
+		err := f1.Format(context.Background(), ast1, []byte(source), &buf1)
+		assert.NoError(t, err)
+
+		formatted1 := buf1.String()
+		assert.Equal(t, "1000-01-01 note A:0 \"\\\"\\n\"\n", formatted1)
+
+		ast2 := parser.MustParseString(context.Background(), formatted1)
+		f2 := New()
+		var buf2 bytes.Buffer
+		err = f2.Format(context.Background(), ast2, []byte(formatted1), &buf2)
+		assert.NoError(t, err)
+
+		assert.Equal(t, formatted1, buf2.String(), "Formatting should be idempotent")
+	})
 }
 
 func TestFormatterWidthOptions(t *testing.T) {
