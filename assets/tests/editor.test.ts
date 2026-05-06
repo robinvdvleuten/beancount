@@ -166,6 +166,38 @@ test.describe("Editor", () => {
     await page.keyboard.press("Escape");
   });
 
+  test("autocompletes non-leading account segments", async ({ page }) => {
+    const accountsLoaded = page.waitForResponse(
+      (response) => response.url().includes("/api/accounts") && response.ok(),
+    );
+
+    await navigateToEditor(page);
+    await accountsLoaded;
+
+    const editor = page.locator(".cm-editor");
+    await expect(editor).toBeVisible();
+
+    const editorContent = page.locator(".cm-content");
+    await editorContent.click();
+    await page.keyboard.press("ControlOrMeta+End");
+
+    await page.keyboard.type('\n\n2024-01-01 * "Test transaction"\n  Rent');
+    await page.keyboard.press("ControlOrMeta+Space");
+
+    const autocompleteTooltip = page.locator(".cm-tooltip-autocomplete");
+    await expect(autocompleteTooltip).toBeVisible();
+    await expect(autocompleteTooltip).toContainText("Expenses:Home:Rent");
+
+    await page.keyboard.press("Escape");
+    await page.keyboard.type("\n\n2024-01-01 close BofA");
+    await page.keyboard.press("ControlOrMeta+Space");
+
+    await expect(autocompleteTooltip).toBeVisible();
+    await expect(autocompleteTooltip).toContainText("Assets:US:BofA");
+
+    await page.keyboard.press("Escape");
+  });
+
   test("renders syntax highlighting", async ({ page }) => {
     await navigateToEditor(page);
 
