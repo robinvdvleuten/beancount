@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0](https://github.com/robinvdvleuten/beancount/compare/v0.9.0...v0.10.0) (2026-05-06)
+
+
+### Features
+
+* **editor:** save with Cmd+S keyboard shortcut ([#211](https://github.com/robinvdvleuten/beancount/issues/211)) ([eb35fcd](https://github.com/robinvdvleuten/beancount/commit/eb35fcdbacf0886e87dc0d3393bee0f0be081795)), closes [#179](https://github.com/robinvdvleuten/beancount/issues/179)
+
+
+### Bug Fixes
+
+* **editor:** autocomplete non-leading account segments ([#212](https://github.com/robinvdvleuten/beancount/issues/212)) ([914a37c](https://github.com/robinvdvleuten/beancount/commit/914a37c22854c974673d465aaa4558ffba479f84)), closes [#176](https://github.com/robinvdvleuten/beancount/issues/176)
+* **formatter:** keep multiline string formatting idempotent ([04b177f](https://github.com/robinvdvleuten/beancount/commit/04b177f13659259fdee7706e888a2f43313475ac))
+* **web:** report saved source errors and allow startup ([#209](https://github.com/robinvdvleuten/beancount/issues/209)) ([c8b66bd](https://github.com/robinvdvleuten/beancount/commit/c8b66bda0a22eb99638f5c497826fa7381f7ef1d)), closes [#178](https://github.com/robinvdvleuten/beancount/issues/178)
+
 ## [0.9.0](https://github.com/robinvdvleuten/beancount/compare/v0.8.0...v0.9.0) (2026-03-31)
 
 
