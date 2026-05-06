@@ -102,6 +102,45 @@ test.describe("Editor", () => {
     }
   });
 
+  test("shows diagnostics after saving invalid content", async ({ page }) => {
+    await navigateToEditor(page);
+
+    const editor = page.locator(".cm-editor");
+    await expect(editor).toBeVisible();
+    await expect(page.locator(".cm-content")).toContainText("commodity USD");
+
+    const { source: originalSource } = await getCurrentSource(page);
+    const invalidSource = "12345";
+    const editorContent = page.locator(".cm-content");
+
+    try {
+      await editorContent.click();
+      await page.keyboard.press("ControlOrMeta+a");
+      await page.keyboard.type(invalidSource);
+
+      const saveResponsePromise = page.waitForResponse(
+        (response) =>
+          response.url().includes("/api/source") &&
+          response.request().method() === "PUT",
+      );
+      await page.getByRole("button", { name: "Save" }).click();
+      const saveResponse = await saveResponsePromise;
+      expect(saveResponse.ok()).toBeTruthy();
+
+      const savedBody = (await saveResponse.json()) as {
+        source: string;
+        errors: Array<{ type: string }>;
+      };
+      expect(savedBody.source).toBe(invalidSource);
+      expect(savedBody.errors).toHaveLength(1);
+      expect(savedBody.errors[0]?.type).toBe("ParseError");
+
+      await expect(page.locator(".cm-lintRange-error")).toHaveCount(1);
+    } finally {
+      await restoreSource(page, originalSource);
+    }
+  });
+
   test("shows context-aware autocomplete", async ({ page }) => {
     const accountsLoaded = page.waitForResponse(
       (response) => response.url().includes("/api/accounts") && response.ok(),
