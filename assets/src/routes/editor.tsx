@@ -227,7 +227,10 @@ const Editor: Component = () => {
     await refetchAccounts();
   };
 
-  const handleSaveClick = () => void doSave(false);
+  const handleSaveRequest = () => {
+    if (meta.readOnly || isLoading()) return;
+    void doSave(false);
+  };
 
   const handleForceOverwrite = () => {
     conflictModalRef?.close();
@@ -301,7 +304,7 @@ const Editor: Component = () => {
         <div class="navbar-end">
           <button
             class="btn btn-sm"
-            onClick={handleSaveClick}
+            onClick={handleSaveRequest}
             disabled={meta.readOnly || isLoading()}
           >
             <ArrowDownTrayIcon class="size-4" />
@@ -333,6 +336,7 @@ const Editor: Component = () => {
               accounts={accountsData()?.accounts ?? []}
               filepath={currentFile() ?? null}
               onChange={handleValueChange}
+              onSaveRequest={handleSaveRequest}
             />
           </Match>
         </Switch>

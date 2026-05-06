@@ -78,13 +78,13 @@ test.describe("Editor", () => {
       await page.keyboard.press("ControlOrMeta+End");
       await page.keyboard.type(`\n${testComment}`);
 
-      // Save the file
+      // Save the file with the editor shortcut
       const saveResponsePromise = page.waitForResponse(
         (response) =>
           response.url().includes("/api/source") &&
           response.request().method() === "PUT",
       );
-      await page.getByRole("button", { name: "Save" }).click();
+      await page.keyboard.press("ControlOrMeta+KeyS");
       const saveResponse = await saveResponsePromise;
       expect(saveResponse.ok()).toBeTruthy();
 
