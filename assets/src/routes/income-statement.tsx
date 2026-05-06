@@ -1,11 +1,4 @@
-import {
-  type Component,
-  For,
-  Match,
-  Show,
-  Switch,
-  createResource,
-} from "solid-js";
+import { type Component, For, Match, Show, Switch, createResource } from "solid-js";
 import type { BalancesResponse, BalanceNode } from "../types";
 import { useFileChange } from "../hooks/useFileChange";
 
@@ -38,10 +31,7 @@ const flattenNode = (node: BalanceNode, depth = 0): FlatRow[] => {
     return [row];
   }
 
-  return [
-    row,
-    ...node.children.flatMap((child) => flattenNode(child, depth + 1)),
-  ];
+  return [row, ...node.children.flatMap((child) => flattenNode(child, depth + 1))];
 };
 
 const formatAmount = (amount: string | undefined): string => {
@@ -104,9 +94,7 @@ const IncomeStatement: Component = () => {
                 <tbody>
                   <For each={rows()}>
                     {(row) => (
-                      <tr
-                        class={row.isHeader ? "font-semibold bg-base-200" : ""}
-                      >
+                      <tr class={row.isHeader ? "font-semibold bg-base-200" : ""}>
                         <td
                           style={{
                             "padding-left": `${row.depth * 1.5 + 1}rem`,

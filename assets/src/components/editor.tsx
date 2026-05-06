@@ -7,11 +7,7 @@ import { beancount } from "../codemirror/language";
 import { editorTheme, beancountSyntaxHighlighting } from "../codemirror/theme";
 import { errorsToDiagnostics } from "../codemirror/error-diagnostics";
 import { createAccountCompletion } from "../codemirror/autocomplete";
-import {
-  createEditorKeymap,
-  createEditorView,
-  createUpdateListener,
-} from "../codemirror/setup";
+import { createEditorKeymap, createEditorView, createUpdateListener } from "../codemirror/setup";
 
 interface EditorProps {
   value?: string;
@@ -23,7 +19,7 @@ interface EditorProps {
 }
 
 const Editor = (props: EditorProps) => {
-  let editorRef: HTMLDivElement | undefined;
+  let editorRef: HTMLDivElement | undefined = undefined;
   let viewRef: EditorView | null = null;
 
   const saveKeyBinding = (): KeyBinding => ({
@@ -39,9 +35,7 @@ const Editor = (props: EditorProps) => {
       // Track errors and filepath dependencies to recreate linter when they change
       const _errors = props.errors;
       const _filepath = props.filepath;
-      return linterExt((view) =>
-        errorsToDiagnostics(_errors ?? null, view, _filepath ?? null),
-      );
+      return linterExt((view) => errorsToDiagnostics(_errors ?? null, view, _filepath ?? null));
     },
     undefined,
     { equals: false },
@@ -96,12 +90,7 @@ const Editor = (props: EditorProps) => {
   // Use defer: true to skip the initial run - the editor is created with all extensions in onMount
   createEffect(
     on(
-      [
-        linter,
-        accountCompletion,
-        () => props.onChange,
-        () => props.onSaveRequest,
-      ],
+      [linter, accountCompletion, () => props.onChange, () => props.onSaveRequest],
       () => {
         const view = viewRef;
         if (!view) return;

@@ -36,10 +36,7 @@ function globalsPlugin(): Plugin {
     transformIndexHtml(html) {
       // In dev server, replace Go template variables with actual values
       if (process.env.NODE_ENV === "development") {
-        return html.replace(
-          /\{\{ \.Metadata \}\}/g,
-          JSON.stringify(metadataDevValue),
-        );
+        return html.replace(/\{\{ \.Metadata \}\}/g, JSON.stringify(metadataDevValue));
       }
     },
   };

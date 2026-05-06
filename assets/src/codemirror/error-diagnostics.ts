@@ -12,16 +12,12 @@ export function errorsToDiagnostics(
   }
 
   // Filter to only errors from the current file
-  const fileErrors = filepath
-    ? errors.filter((e) => e.position?.filename === filepath)
-    : errors;
+  const fileErrors = filepath ? errors.filter((e) => e.position?.filename === filepath) : errors;
 
   return fileErrors.map((error) => {
     const messageParts = error.message.split(": ");
     const cleanMessage =
-      messageParts.length >= 2
-        ? messageParts.slice(1).join(": ")
-        : error.message;
+      messageParts.length >= 2 ? messageParts.slice(1).join(": ") : error.message;
 
     if (!error.position) {
       return {

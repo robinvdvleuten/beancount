@@ -1,7 +1,4 @@
-import {
-  autocompletion,
-  type CompletionContext,
-} from "@codemirror/autocomplete";
+import { autocompletion, type CompletionContext } from "@codemirror/autocomplete";
 import { syntaxTree } from "@codemirror/language";
 import { matchSorter } from "match-sorter";
 import type { AccountInfo } from "../../types";

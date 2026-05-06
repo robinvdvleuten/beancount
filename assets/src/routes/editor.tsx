@@ -40,9 +40,7 @@ const fetchSource = async (): Promise<SourceResponse> => {
   return (await response.json()) as SourceResponse;
 };
 
-const fetchSourceForFile = async (
-  filepath: string,
-): Promise<SourceResponse> => {
+const fetchSourceForFile = async (filepath: string): Promise<SourceResponse> => {
   const url = `/api/source?filepath=${encodeURIComponent(filepath)}`;
   const response = await fetch(url);
   if (!response.ok) {
@@ -61,23 +59,16 @@ const fetchAccounts = async (): Promise<AccountsResponse> => {
 
 const Editor: Component = () => {
   // Initial fetch to get root file and files list
-  const [initialData, { refetch: refetchInitial }] =
-    createResource(fetchSource);
+  const [initialData, { refetch: refetchInitial }] = createResource(fetchSource);
 
   // Track currently selected file (initialized from initial fetch)
-  const [currentFile, setCurrentFile] = createSignal<string | undefined>(
-    undefined,
-  );
+  const [currentFile, setCurrentFile] = createSignal<string | undefined>(undefined);
 
   // Track available files (updated from API responses)
-  const [currentFiles, setCurrentFiles] = createSignal<Files | undefined>(
-    undefined,
-  );
+  const [currentFiles, setCurrentFiles] = createSignal<Files | undefined>(undefined);
 
   // Track last known fingerprint for conflict detection
-  const [fingerprint, setFingerprint] = createSignal<string | undefined>(
-    undefined,
-  );
+  const [fingerprint, setFingerprint] = createSignal<string | undefined>(undefined);
 
   // Conflict modal state
   const [showConflictModal, setShowConflictModal] = createSignal(false);
@@ -115,8 +106,7 @@ const Editor: Component = () => {
     }
   });
 
-  const [accountsData, { refetch: refetchAccounts }] =
-    createResource(fetchAccounts);
+  const [accountsData, { refetch: refetchAccounts }] = createResource(fetchAccounts);
 
   // Success toast for save
   const saveToast = useToast();
@@ -133,9 +123,7 @@ const Editor: Component = () => {
   });
 
   // Local editing state - tracks unsaved changes
-  const [editedSource, setEditedSource] = createSignal<string | undefined>(
-    undefined,
-  );
+  const [editedSource, setEditedSource] = createSignal<string | undefined>(undefined);
   // Local errors state - updated after save
   const [errors, setErrors] = createSignal<EditorError[] | null>(null);
 
@@ -257,8 +245,7 @@ const Editor: Component = () => {
 
   // Error state
   const loadError = () =>
-    (initialData.error as Error | undefined) ??
-    (fileData.error as Error | undefined);
+    (initialData.error as Error | undefined) ?? (fileData.error as Error | undefined);
 
   return (
     <>
@@ -267,19 +254,13 @@ const Editor: Component = () => {
           <Show
             when={currentFiles() && currentFiles()!.includes.length > 0}
             fallback={
-              <span
-                class="text-sm text-base-content/70"
-                aria-label="Current file"
-              >
+              <span class="text-sm text-base-content/70" aria-label="Current file">
                 {currentFile() ? displayFilename(currentFile()!) : "..."}
               </span>
             }
           >
             <details class="dropdown">
-              <summary
-                class="btn btn-ghost btn-sm gap-1 px-2"
-                aria-label="Select file"
-              >
+              <summary class="btn btn-ghost btn-sm gap-1 px-2" aria-label="Select file">
                 {currentFile() ? displayFilename(currentFile()!) : "..."}
                 <ChevronDownIcon class="size-3" />
               </summary>
@@ -378,9 +359,7 @@ const Editor: Component = () => {
         <dialog ref={(el) => (conflictModalRef = el)} class="modal">
           <div class="modal-box">
             <h3 class="font-bold text-lg">File Changed</h3>
-            <p class="py-4">
-              This file was modified externally. Overwrite with your changes?
-            </p>
+            <p class="py-4">This file was modified externally. Overwrite with your changes?</p>
             <div class="modal-action">
               <button class="btn" onClick={handleCancelOverwrite}>
                 Cancel

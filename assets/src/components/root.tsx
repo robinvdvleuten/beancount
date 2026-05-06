@@ -43,9 +43,7 @@ const Root: ParentComponent = (props) => {
             <MenuItem href="/editor">Editor</MenuItem>
           </ul>
         </aside>
-        <main class="flex flex-1 flex-col overflow-hidden">
-          {props.children}
-        </main>
+        <main class="flex flex-1 flex-col overflow-hidden">{props.children}</main>
       </div>
 
       <footer class="flex items-center justify-between border-t border-base-300 px-6 py-2">

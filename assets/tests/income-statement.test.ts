@@ -9,29 +9,19 @@ import { test, expect } from "@playwright/test";
  * - Table structure and content
  */
 
-async function navigateToIncomeStatement(
-  page: import("@playwright/test").Page,
-) {
+async function navigateToIncomeStatement(page: import("@playwright/test").Page) {
   const balancesLoaded = page.waitForResponse(
-    (response) =>
-      response.url().includes("/api/balances?types=Income,Expenses") &&
-      response.ok(),
+    (response) => response.url().includes("/api/balances?types=Income,Expenses") && response.ok(),
   );
 
   await page.goto("/income-statement");
   await balancesLoaded;
 }
 
-async function waitForIncomeStatementRows(
-  page: import("@playwright/test").Page,
-) {
+async function waitForIncomeStatementRows(page: import("@playwright/test").Page) {
   await expect(page.getByRole("table")).toBeVisible();
-  await expect(
-    page.getByRole("columnheader", { name: "Account" }),
-  ).toBeVisible();
-  await expect
-    .poll(async () => await page.locator("tbody tr").count())
-    .toBeGreaterThan(0);
+  await expect(page.getByRole("columnheader", { name: "Account" })).toBeVisible();
+  await expect.poll(async () => await page.locator("tbody tr").count()).toBeGreaterThan(0);
 }
 
 async function expectIncomeStatementRow(
@@ -59,9 +49,7 @@ test.describe("Income Statement", () => {
 
     await navigateToIncomeStatement(page);
 
-    await expect(
-      page.getByRole("heading", { name: "Income Statement" }),
-    ).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Income Statement" })).toBeVisible();
     await waitForIncomeStatementRows(page);
 
     expect(errors).toEqual([]);
@@ -80,24 +68,16 @@ test.describe("Income Statement", () => {
     await waitForIncomeStatementRows(page);
 
     // Verify Income and Expenses section headers exist
-    await expect(
-      page.getByRole("cell", { name: "Income", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("cell", { name: "Expenses", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("cell", { name: "Income", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "Expenses", exact: true })).toBeVisible();
   });
 
   test("displays currency columns with amounts", async ({ page }) => {
     await navigateToIncomeStatement(page);
     await waitForIncomeStatementRows(page);
 
-    await expect(
-      page.getByRole("columnheader", { name: "USD", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("columnheader", { name: "VACHR", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "USD", exact: true })).toBeVisible();
+    await expect(page.getByRole("columnheader", { name: "VACHR", exact: true })).toBeVisible();
 
     await expectIncomeStatementRow(page, "Expenses", ["102,101.57", "184.00"]);
   });
@@ -127,12 +107,8 @@ test.describe("Income Statement", () => {
     await navigateToIncomeStatement(page);
     await waitForIncomeStatementRows(page);
 
-    await expect(
-      page.getByRole("cell", { name: "Income", exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByRole("cell", { name: "Expenses", exact: true }),
-    ).toBeVisible();
+    await expect(page.getByRole("cell", { name: "Income", exact: true })).toBeVisible();
+    await expect(page.getByRole("cell", { name: "Expenses", exact: true })).toBeVisible();
 
     await expectIncomeStatementRow(page, "Home", ["80,760.97"]);
     await expectIncomeStatementRow(page, "Rent", ["74,400.00"]);
@@ -152,9 +128,7 @@ test.describe("Income Statement", () => {
 
     await page.goto("/income-statement", { waitUntil: "networkidle" });
 
-    await expect(
-      page.getByText("No income or expense transactions found."),
-    ).toBeVisible();
+    await expect(page.getByText("No income or expense transactions found.")).toBeVisible();
     await expect(page.locator("tbody tr")).toHaveCount(0);
   });
 

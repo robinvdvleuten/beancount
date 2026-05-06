@@ -10,14 +10,10 @@ function nextFrame(): Promise<void> {
 }
 
 function afterTransition(element: HTMLElement): Promise<unknown[]> {
-  return Promise.all(
-    element.getAnimations().map((animation) => animation.finished),
-  );
+  return Promise.all(element.getAnimations().map((animation) => animation.finished));
 }
 
-export async function enter(
-  element: HTMLElement | null | undefined,
-): Promise<void> {
+export async function enter(element: HTMLElement | null | undefined): Promise<void> {
   if (!element) return;
 
   element.classList.remove("hidden");
@@ -29,9 +25,7 @@ export async function enter(
   element.classList.remove("enter", "enter-end");
 }
 
-export async function leave(
-  element: HTMLElement | null | undefined,
-): Promise<void> {
+export async function leave(element: HTMLElement | null | undefined): Promise<void> {
   if (!element) return;
 
   element.classList.add("leave", "leave-start");

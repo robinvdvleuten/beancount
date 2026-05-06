@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "lint": "prettier . --check && eslint",
+    "lint": "oxlint && oxfmt --check",
     "preview": "vite preview",
     "test": "playwright test"
   },
@@ -25,17 +25,15 @@
     "solid-js": "^1.9.12"
   },
   "devDependencies": {
-    "@eslint/js": "~9.39.2",
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.2.2",
     "@types/node": "^25.6.0",
-    "eslint": "~9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-solid": "~0.14.5",
-    "prettier": "3.8.2",
+    "eslint-plugin-solid": "^0.14.5",
+    "oxfmt": "^0.48.0",
+    "oxlint": "^1.63.0",
+    "oxlint-tsgolint": "^0.22.1",
     "tailwindcss": "^4.2.4",
     "typescript": "~5.9.3",
-    "typescript-eslint": "~8.57.0",
     "vite": "^8.0.9",
     "vite-plugin-solid": "^2.11.12",
     "vite-plugin-solid-svg": "^0.8.1"

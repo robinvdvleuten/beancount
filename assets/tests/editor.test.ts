@@ -22,10 +22,7 @@ async function getCurrentSource(page: import("@playwright/test").Page) {
   return (await response.json()) as { source: string };
 }
 
-async function restoreSource(
-  page: import("@playwright/test").Page,
-  source: string,
-) {
+async function restoreSource(page: import("@playwright/test").Page, source: string) {
   const response = await page.request.put("/api/source", {
     data: { source },
   });
@@ -81,8 +78,7 @@ test.describe("Editor", () => {
       // Save the file with the editor shortcut
       const saveResponsePromise = page.waitForResponse(
         (response) =>
-          response.url().includes("/api/source") &&
-          response.request().method() === "PUT",
+          response.url().includes("/api/source") && response.request().method() === "PUT",
       );
       await page.keyboard.press("ControlOrMeta+KeyS");
       const saveResponse = await saveResponsePromise;
@@ -120,8 +116,7 @@ test.describe("Editor", () => {
 
       const saveResponsePromise = page.waitForResponse(
         (response) =>
-          response.url().includes("/api/source") &&
-          response.request().method() === "PUT",
+          response.url().includes("/api/source") && response.request().method() === "PUT",
       );
       await page.getByRole("button", { name: "Save" }).click();
       const saveResponse = await saveResponsePromise;
