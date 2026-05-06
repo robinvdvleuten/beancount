@@ -37,6 +37,7 @@ type Server struct {
 	ledger       *ledger.Ledger
 	rootFile     string   // Absolute path of the root ledger file
 	includeFiles []string // Absolute paths of included files
+	reloadErr    error    // Last load or parse error, if the current files are invalid
 
 	// inputFile is the file path passed to New(), used only for initial loading.
 	// After loading, rootFile contains the resolved absolute path.
@@ -57,6 +58,7 @@ func NewWithVersion(port int, ledgerFile, version, commitSHA string) *Server {
 		Host:      "127.0.0.1",
 		Version:   version,
 		CommitSHA: commitSHA,
+		ledger:    ledger.New(),
 		inputFile: ledgerFile,
 	}
 }
@@ -70,14 +72,16 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.inputFile == "" {
 		return fmt.Errorf("ledger file is required")
 	}
+	if err := s.initializeSourceState(ctx); err != nil {
+		return err
+	}
 
 	// Initialize SSE clients map
 	s.sseClients = make(map[chan string]struct{})
 
 	loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.inputFile)))
 	if _, err := s.reloadLedger(ctx); err != nil {
-		loadTimer.End()
-		return fmt.Errorf("failed to load ledger: %w", err)
+		log.Printf("Warning: initial ledger load failed: %v", err)
 	}
 	loadTimer.End()
 
@@ -98,6 +102,41 @@ func (s *Server) Start(ctx context.Context) error {
 
 	addr := fmt.Sprintf("%s:%d", s.Host, s.Port)
 	return http.ListenAndServe(addr, mux)
+}
+
+func (s *Server) initializeSourceState(ctx context.Context) error {
+	rootFile, err := filepath.Abs(s.inputFile)
+	if err != nil {
+		return fmt.Errorf("failed to resolve absolute path for %s: %w", s.inputFile, err)
+	}
+
+	includes := []string{}
+	if result, err := loader.New().Load(ctx, s.inputFile); err == nil {
+		rootFile = result.Root
+		baseDir := filepath.Dir(result.Root)
+		includes = make([]string, 0, len(result.AST.Includes))
+		for _, inc := range result.AST.Includes {
+			includePath := inc.Filename.Value
+			if !filepath.IsAbs(includePath) {
+				includePath = filepath.Join(baseDir, includePath)
+			}
+			absPath, err := filepath.Abs(includePath)
+			if err != nil {
+				continue
+			}
+			includes = append(includes, absPath)
+		}
+	}
+
+	s.mu.Lock()
+	s.rootFile = rootFile
+	s.includeFiles = includes
+	if s.ledger == nil {
+		s.ledger = ledger.New()
+	}
+	s.mu.Unlock()
+
+	return nil
 }
 
 func (s *Server) setupRouter() (*http.ServeMux, error) {
@@ -135,6 +174,12 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 
 	result, err := ldr.Load(ctx, s.inputFile)
 	if err != nil {
+		if initErr := s.initializeSourceState(ctx); initErr != nil {
+			return nil, initErr
+		}
+		s.mu.Lock()
+		s.reloadErr = jsonSafeSourceError(err)
+		s.mu.Unlock()
 		return nil, err // I/O or parse error
 	}
 
@@ -146,6 +191,7 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 	s.ledger = l
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes
+	s.reloadErr = nil
 	s.mu.Unlock()
 
 	return oldIncludes, nil
@@ -229,6 +275,7 @@ func (s *Server) handleFileChange(ctx context.Context, watcher *fsnotify.Watcher
 	prevIncludes, err := s.reloadLedger(ctx)
 	if err != nil {
 		log.Printf("Failed to reload ledger: %v", err)
+		s.broadcast("reload")
 		return
 	}
 

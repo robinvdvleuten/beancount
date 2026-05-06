@@ -36,6 +36,28 @@ type SourceResponse struct {
 	Files       Files   `json:"files"`
 }
 
+type sourceError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+func (e *sourceError) Error() string {
+	return e.Message
+}
+
+func jsonSafeSourceError(err error) error {
+	if err == nil {
+		return nil
+	}
+	if _, ok := err.(json.Marshaler); ok {
+		return err
+	}
+	return &sourceError{
+		Type:    "LoadError",
+		Message: err.Error(),
+	}
+}
+
 // computeFingerprint returns a short hash of content for change detection.
 func computeFingerprint(content []byte) string {
 	hash := sha256.Sum256(content)
@@ -94,10 +116,16 @@ func (s *Server) buildResponse(source []byte) *SourceResponse {
 	if includes == nil {
 		includes = []string{}
 	}
+	errors := []error{}
+	if s.reloadErr != nil {
+		errors = []error{s.reloadErr}
+	} else if s.ledger != nil {
+		errors = s.ledger.Errors()
+	}
 	return &SourceResponse{
 		Source:      string(source),
 		Fingerprint: computeFingerprint(source),
-		Errors:      s.ledger.Errors(),
+		Errors:      errors,
 		Files: Files{
 			Root:     s.rootFile,
 			Includes: includes,

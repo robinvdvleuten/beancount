@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -38,9 +39,7 @@ func TestAPISource(t *testing.T) {
 		assert.Equal(t, http.StatusOK, rec.Code)
 		assert.Equal(t, "application/json", rec.Header().Get("Content-Type"))
 
-		var response map[string]interface{}
-		err := json.NewDecoder(rec.Body).Decode(&response)
-		assert.NoError(t, err)
+		response := decodeSourceResponse(t, rec)
 		assert.Equal(t, testContent, response["source"].(string))
 		assert.NotEqual(t, nil, response["errors"])
 		// Verify files are included in response
@@ -57,9 +56,7 @@ func TestAPISource(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var response map[string]interface{}
-		err := json.NewDecoder(rec.Body).Decode(&response)
-		assert.NoError(t, err)
+		response := decodeSourceResponse(t, rec)
 		assert.Equal(t, testContent, response["source"].(string))
 	})
 
@@ -107,9 +104,7 @@ func TestAPISource(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var response map[string]interface{}
-		err = json.NewDecoder(rec.Body).Decode(&response)
-		assert.NoError(t, err)
+		response := decodeSourceResponse(t, rec)
 		assert.Equal(t, updatedContent, response["source"].(string))
 		// Verify files are included in PUT response
 		files := response["files"].(map[string]interface{})
@@ -167,10 +162,19 @@ func TestAPISource(t *testing.T) {
 		assert.Equal(t, invalidContent, string(content))
 
 		// Response should still be valid JSON with source
-		var response map[string]interface{}
-		err = json.NewDecoder(rec.Body).Decode(&response)
-		assert.NoError(t, err)
+		response := decodeSourceResponse(t, rec)
 		assert.Equal(t, invalidContent, response["source"].(string))
+		assertParseError(t, response)
+
+		getReq := httptest.NewRequest(http.MethodGet, "/api/source", nil)
+		getRec := httptest.NewRecorder()
+		mux.ServeHTTP(getRec, getReq)
+
+		assert.Equal(t, http.StatusOK, getRec.Code)
+
+		getResponse := decodeSourceResponse(t, getRec)
+		assert.Equal(t, invalidContent, getResponse["source"].(string))
+		assertParseError(t, getResponse)
 	})
 
 	t.Run("PutInvalidJSON", func(t *testing.T) {
@@ -208,12 +212,110 @@ func TestAPISource(t *testing.T) {
 
 		assert.Equal(t, http.StatusOK, rec.Code)
 
-		var response map[string]interface{}
-		err = json.NewDecoder(rec.Body).Decode(&response)
-		assert.NoError(t, err)
+		response := decodeSourceResponse(t, rec)
 		errors := response["errors"].([]interface{})
 		assert.True(t, len(errors) > 0, "Expected validation errors for unopened accounts")
 	})
+}
+
+func TestAPISourceIncludeParseErrorStillSavesFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	rootFile := filepath.Join(tmpDir, "root.beancount")
+	includeFile := filepath.Join(tmpDir, "include.beancount")
+
+	err := os.WriteFile(rootFile, []byte("include \"include.beancount\"\n"), 0600)
+	assert.NoError(t, err)
+	err = os.WriteFile(includeFile, []byte("2024-01-01 open Assets:Checking\n"), 0600)
+	assert.NoError(t, err)
+
+	server := New(8080, rootFile)
+	_, err = server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	invalidContent := "this is not valid beancount syntax @@@"
+	requestBody := map[string]string{
+		"filepath": includeFile,
+		"source":   invalidContent,
+	}
+	bodyBytes, err := json.Marshal(requestBody)
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodPut, "/api/source", strings.NewReader(string(bodyBytes)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	content, err := os.ReadFile(includeFile)
+	assert.NoError(t, err)
+	assert.Equal(t, invalidContent, string(content))
+
+	response := decodeSourceResponse(t, rec)
+	assert.Equal(t, invalidContent, response["source"].(string))
+
+	parseError := assertParseError(t, response)
+	position := parseError["position"].(map[string]interface{})
+	assert.Equal(t, includeFile, position["filename"].(string))
+}
+
+func TestAPISourceInitialParseErrorStillServesEditor(t *testing.T) {
+	tmpFile, err := os.CreateTemp("", "test-invalid-start-*.beancount")
+	assert.NoError(t, err)
+	defer func() { _ = os.Remove(tmpFile.Name()) }()
+
+	invalidContent := "12345"
+	_, err = tmpFile.WriteString(invalidContent)
+	assert.NoError(t, err)
+	_ = tmpFile.Close()
+
+	server := New(8080, tmpFile.Name())
+	err = server.initializeSourceState(context.Background())
+	assert.NoError(t, err)
+	_, err = server.reloadLedger(context.Background())
+	assert.Error(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/source", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	response := decodeSourceResponse(t, rec)
+	assert.Equal(t, invalidContent, response["source"].(string))
+	assertParseError(t, response)
+
+	accountsReq := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
+	accountsRec := httptest.NewRecorder()
+	mux.ServeHTTP(accountsRec, accountsReq)
+
+	assert.Equal(t, http.StatusOK, accountsRec.Code)
+}
+
+func decodeSourceResponse(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {
+	t.Helper()
+
+	var response map[string]interface{}
+	err := json.NewDecoder(rec.Body).Decode(&response)
+	assert.NoError(t, err)
+
+	return response
+}
+
+func assertParseError(t *testing.T, response map[string]interface{}) map[string]interface{} {
+	t.Helper()
+
+	errors := response["errors"].([]interface{})
+	assert.Equal(t, 1, len(errors))
+	parseError := errors[0].(map[string]interface{})
+	assert.Equal(t, "ParseError", parseError["type"].(string))
+
+	return parseError
 }
 
 func TestConcurrentReloadLedger(t *testing.T) {
