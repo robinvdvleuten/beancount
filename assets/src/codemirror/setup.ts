@@ -1,4 +1,4 @@
-import { EditorView, keymap } from "@codemirror/view";
+import { EditorView, keymap, type KeyBinding } from "@codemirror/view";
 import { EditorState, type Extension } from "@codemirror/state";
 import { indentWithTab } from "@codemirror/commands";
 
@@ -7,6 +7,7 @@ interface EditorViewConfig {
   value?: string;
   extensions: Extension[];
   onChange?: (value: string) => void;
+  keyBindings?: KeyBinding[];
 }
 
 export function createUpdateListener(
@@ -19,14 +20,18 @@ export function createUpdateListener(
   });
 }
 
+export function createEditorKeymap(keyBindings: KeyBinding[] = []): Extension {
+  return keymap.of([indentWithTab, ...keyBindings]);
+}
+
 export function createEditorView(config: EditorViewConfig): EditorView {
-  const { parent, value = "", extensions, onChange } = config;
+  const { parent, value = "", extensions, onChange, keyBindings } = config;
 
   const state = EditorState.create({
     doc: value,
     extensions: [
       ...extensions,
-      keymap.of([indentWithTab]),
+      createEditorKeymap(keyBindings),
       createUpdateListener(onChange),
     ],
   });

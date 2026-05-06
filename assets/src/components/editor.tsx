@@ -1,14 +1,17 @@
 import { createEffect, createMemo, onCleanup, onMount, on } from "solid-js";
 import { linter as linterExt, lintGutter } from "@codemirror/lint";
 import { StateEffect } from "@codemirror/state";
-import { lineNumbers, EditorView, keymap } from "@codemirror/view";
-import { indentWithTab } from "@codemirror/commands";
+import { lineNumbers, EditorView, type KeyBinding } from "@codemirror/view";
 import type { AccountInfo, EditorError } from "../types";
 import { beancount } from "../codemirror/language";
 import { editorTheme, beancountSyntaxHighlighting } from "../codemirror/theme";
 import { errorsToDiagnostics } from "../codemirror/error-diagnostics";
 import { createAccountCompletion } from "../codemirror/autocomplete";
-import { createEditorView, createUpdateListener } from "../codemirror/setup";
+import {
+  createEditorKeymap,
+  createEditorView,
+  createUpdateListener,
+} from "../codemirror/setup";
 
 interface EditorProps {
   value?: string;
@@ -16,11 +19,20 @@ interface EditorProps {
   accounts: AccountInfo[];
   filepath?: string | null;
   onChange?: (value: string) => void;
+  onSaveRequest?: () => void;
 }
 
 const Editor = (props: EditorProps) => {
   let editorRef: HTMLDivElement | undefined;
   let viewRef: EditorView | null = null;
+
+  const saveKeyBinding = (): KeyBinding => ({
+    key: "Mod-s",
+    run: () => {
+      props.onSaveRequest?.();
+      return true;
+    },
+  });
 
   const linter = createMemo(
     () => {
@@ -56,6 +68,7 @@ const Editor = (props: EditorProps) => {
         accountCompletion(),
       ],
       onChange: (value) => props.onChange?.(value),
+      keyBindings: [saveKeyBinding()],
     });
 
     viewRef = view;
@@ -79,11 +92,16 @@ const Editor = (props: EditorProps) => {
     }
   });
 
-  // Reconfigure extensions when linter, completion or onChange changes
+  // Reconfigure extensions when linter, completion or callbacks change
   // Use defer: true to skip the initial run - the editor is created with all extensions in onMount
   createEffect(
     on(
-      [linter, accountCompletion, () => props.onChange],
+      [
+        linter,
+        accountCompletion,
+        () => props.onChange,
+        () => props.onSaveRequest,
+      ],
       () => {
         const view = viewRef;
         if (!view) return;
@@ -97,7 +115,7 @@ const Editor = (props: EditorProps) => {
             linter(),
             lintGutter(),
             accountCompletion(),
-            keymap.of([indentWithTab]),
+            createEditorKeymap([saveKeyBinding()]),
             createUpdateListener((value) => props.onChange?.(value)),
           ]),
         });
