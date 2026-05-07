@@ -229,4 +229,36 @@ test.describe("Editor", () => {
     const fileSelector = page.getByLabel("Select file");
     await expect(fileSelector).toHaveCount(0);
   });
+
+  test("closes file selector when clicking outside", async ({ page }) => {
+    const { source: originalSource } = await getCurrentSource(page);
+    const sourceWithInclude = `${originalSource.trimEnd()}\ninclude "kitchensink.beancount"\n`;
+
+    try {
+      const response = await page.request.put("/api/source", {
+        data: { source: sourceWithInclude },
+      });
+      expect(response.ok()).toBeTruthy();
+
+      await navigateToEditor(page);
+
+      const editor = page.locator(".cm-editor");
+      await expect(editor).toBeVisible();
+
+      const fileSelector = page.getByLabel("Select file");
+      await expect(fileSelector).toBeVisible();
+
+      const dropdown = page.locator("details.dropdown");
+      await fileSelector.click();
+      await expect(dropdown).toHaveJSProperty("open", true);
+      await expect(page.locator(".dropdown-content")).toBeVisible();
+
+      await editor.click();
+
+      await expect(dropdown).toHaveJSProperty("open", false);
+      await expect(page.locator(".dropdown-content")).toBeHidden();
+    } finally {
+      await restoreSource(page, originalSource);
+    }
+  });
 });

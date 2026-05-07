@@ -7,6 +7,8 @@ import {
   Match,
   Show,
   For,
+  onCleanup,
+  onMount,
 } from "solid-js";
 import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid";
 import ChevronDownIcon from "heroicons/24/solid/chevron-down.svg?component-solid";
@@ -73,6 +75,7 @@ const Editor: Component = () => {
   // Conflict modal state
   const [showConflictModal, setShowConflictModal] = createSignal(false);
   let conflictModalRef: HTMLDialogElement | undefined;
+  let fileDropdownRef: HTMLDetailsElement | undefined;
 
   // Initialize currentFile, currentFiles, and fingerprint from initial fetch
   createEffect(() => {
@@ -157,7 +160,29 @@ const Editor: Component = () => {
       setEditedSource(undefined);
       setErrors(null);
     }
+    closeFileDropdown();
   };
+
+  const closeFileDropdown = () => {
+    if (fileDropdownRef) {
+      fileDropdownRef.open = false;
+    }
+  };
+
+  const handleFileDropdownPointerDown = (event: PointerEvent) => {
+    const target = event.target;
+    if (target instanceof Node && !fileDropdownRef?.contains(target)) {
+      closeFileDropdown();
+    }
+  };
+
+  onMount(() => {
+    document.addEventListener("pointerdown", handleFileDropdownPointerDown);
+  });
+
+  onCleanup(() => {
+    document.removeEventListener("pointerdown", handleFileDropdownPointerDown);
+  });
 
   const handleValueChange = (value: string) => {
     setEditedSource(value);
@@ -259,7 +284,7 @@ const Editor: Component = () => {
               </span>
             }
           >
-            <details class="dropdown">
+            <details ref={(el) => (fileDropdownRef = el)} class="dropdown">
               <summary class="btn btn-ghost btn-sm gap-1 px-2" aria-label="Select file">
                 {currentFile() ? displayFilename(currentFile()!) : "..."}
                 <ChevronDownIcon class="size-3" />
