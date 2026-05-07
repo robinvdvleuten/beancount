@@ -82,36 +82,43 @@ func FuzzLexer(f *testing.F) {
 			return
 		}
 
-		// Validate invariants
-		if tokens == nil {
-			t.Error("ScanAll returned nil tokens")
-			return
-		}
-
-		if len(tokens) == 0 {
-			t.Error("ScanAll returned zero tokens (expected at least EOF)")
-			return
-		}
-
-		// Must end with EOF
-		if tokens[len(tokens)-1].Type != EOF {
-			t.Errorf("Last token must be EOF, got %v", tokens[len(tokens)-1].Type)
-		}
-
-		// All tokens must have valid positions
-		for i, tok := range tokens {
-			if tok.Line < 1 {
-				t.Errorf("Token %d has invalid line %d", i, tok.Line)
-			}
-			if tok.Column < 1 {
-				t.Errorf("Token %d has invalid column %d", i, tok.Column)
-			}
-			if tok.Start > tok.End {
-				t.Errorf("Token %d: Start=%d > End=%d", i, tok.Start, tok.End)
-			}
-			if tok.End > len(data) {
-				t.Errorf("Token %d: End=%d > data length %d", i, tok.End, len(data))
-			}
-		}
+		assertTokenStreamInvariants(t, data, tokens)
 	})
+}
+
+func assertTokenStreamInvariants(t *testing.T, data []byte, tokens []Token) {
+	t.Helper()
+
+	if tokens == nil {
+		t.Fatal("ScanAll returned nil tokens")
+	}
+	if len(tokens) == 0 {
+		t.Fatal("ScanAll returned zero tokens (expected at least EOF)")
+	}
+
+	for i, tok := range tokens {
+		if tok.Line < 1 {
+			t.Errorf("Token %d has invalid line %d", i, tok.Line)
+		}
+		if tok.Column < 1 {
+			t.Errorf("Token %d has invalid column %d", i, tok.Column)
+		}
+		if tok.Start < 0 || tok.Start > tok.End || tok.End > len(data) {
+			t.Errorf("Token %d has invalid range [%d:%d] for input length %d", i, tok.Start, tok.End, len(data))
+		}
+		if i > 0 && tok.Start < tokens[i-1].End {
+			t.Errorf("Token %d starts before previous token ends: start=%d previousEnd=%d", i, tok.Start, tokens[i-1].End)
+		}
+		if tok.Type != EOF && tok.Start == tok.End {
+			t.Errorf("Token %d (%s) has empty range [%d:%d]", i, tok.Type, tok.Start, tok.End)
+		}
+	}
+
+	eof := tokens[len(tokens)-1]
+	if eof.Type != EOF {
+		t.Fatalf("Last token must be EOF, got %v", eof.Type)
+	}
+	if eof.Start != eof.End || eof.End != len(data) {
+		t.Errorf("EOF range = [%d:%d], want [%d:%d]", eof.Start, eof.End, len(data), len(data))
+	}
 }

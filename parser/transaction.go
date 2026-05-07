@@ -180,9 +180,11 @@ func (p *Parser) isPostingStartToken(tok Token) bool {
 //	[METADATA]*
 func (p *Parser) parsePosting() (*ast.Posting, error) {
 	// Track the posting's starting line for inline metadata detection
-	postingLine := p.peek().Line
+	postingTok := p.peek()
+	postingLine := postingTok.Line
 
 	posting := &ast.Posting{}
+	posting.SetPosition(tokenPosition(postingTok, p.filename))
 
 	// Optional flag
 	if p.match(ASTERISK) {

@@ -9,8 +9,80 @@ import (
 )
 
 func FuzzFormatter(f *testing.F) {
-	// Seed corpus - ONLY valid beancount syntax
-	seeds := []string{
+	stableSeeds := stableFormatterSeeds()
+	seeds := append([]string{}, stableSeeds...)
+	seeds = append(seeds,
+		// Lexer/parser regression corpus: invalid mutations should be skipped by the
+		// formatter fuzz target, but these seeds keep useful coverage nearby.
+		"0001-01-01 open A:0!\"\n\n0001-01-01 balance A:0 0 A",
+	)
+
+	for _, seed := range seeds {
+		f.Add([]byte(seed))
+	}
+
+	f.Fuzz(func(t *testing.T, data []byte) {
+		// CRITICAL: Must never panic
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("Formatter panicked: %v\nInput: %q", r, data)
+			}
+		}()
+
+		ctx := context.Background()
+		isStableSeed := isStableFormatterSeed(data, stableSeeds)
+
+		// Parse original. Invalid fuzz-mutated inputs are expected and skipped.
+		ast1, err := parser.ParseBytes(ctx, data)
+		if err != nil || ast1 == nil {
+			if isStableSeed {
+				t.Fatalf("Stable formatter seed failed to parse: %v\nInput: %q", err, data)
+			}
+			return
+		}
+
+		// Format
+		var buf bytes.Buffer
+		fmtr := New()
+		if err := fmtr.Format(ctx, ast1, data, &buf); err != nil {
+			t.Errorf("Format failed: %v", err)
+			return
+		}
+
+		formatted := buf.Bytes()
+
+		// Property 1: Parse(Format(Parse(x))) succeeds for formatter-stable seeds.
+		// Fuzz-mutated inputs can still reach odd parser-accepted corners; if their
+		// formatted output no longer parses, skip them and let curated seeds guard the
+		// intended formatter contract.
+		ast2, err := parser.ParseBytes(ctx, formatted)
+		if err != nil {
+			if isStableSeed {
+				t.Fatalf("Formatted stable seed did not reparse: %v\nInput: %q\nFormatted: %q", err, data, formatted)
+			}
+			return
+		}
+
+		if ast2 == nil {
+			t.Error("Re-parsed AST is nil")
+			return
+		}
+
+		// Property 2: Format(Format(x)) == Format(x) (idempotency)
+		var buf2 bytes.Buffer
+		if err := fmtr.Format(ctx, ast2, formatted, &buf2); err != nil {
+			t.Errorf("Second format failed: %v", err)
+			return
+		}
+
+		if !bytes.Equal(buf.Bytes(), buf2.Bytes()) {
+			t.Errorf("Not idempotent:\nFirst:  %q\nSecond: %q", buf.Bytes(), buf2.Bytes())
+		}
+	})
+}
+
+func stableFormatterSeeds() []string {
+	return []string{
 		// Simple directives
 		"2014-01-01 open Assets:Checking USD",
 		"2014-12-31 close Assets:Checking",
@@ -54,71 +126,15 @@ func FuzzFormatter(f *testing.F) {
 		// Blank lines between directives (regression test for idempotency bug)
 		"2020-01-01 open Assets:Test\n\n2020-01-02 close Assets:Test",
 		"0001-01-01 open A:Test\n\n0001-01-01 balance A:Test 0 USD",
-
-		// Malformed string with blank line after (regression test for lexer token consumption)
-		// The string has a literal newline which forces the lexer to handle blank lines correctly
-		"0001-01-01 open A:0!\"\n\n0001-01-01 balance A:0 0 A",
+		"2014-01-01 open Assets:Checking USD\r\n2014-01-02 close Assets:Checking\r\n",
 	}
+}
 
+func isStableFormatterSeed(data []byte, seeds []string) bool {
 	for _, seed := range seeds {
-		f.Add([]byte(seed))
+		if bytes.Equal(data, []byte(seed)) {
+			return true
+		}
 	}
-
-	f.Fuzz(func(t *testing.T, data []byte) {
-		// CRITICAL: Must never panic
-		defer func() {
-			if r := recover(); r != nil {
-				t.Errorf("Formatter panicked: %v\nInput: %q", r, data)
-			}
-		}()
-
-		ctx := context.Background()
-
-		// Parse original (filter invalid inputs)
-		ast1, err := parser.ParseBytes(ctx, data)
-		if err != nil || ast1 == nil || len(ast1.Directives) == 0 {
-			return // Skip invalid inputs - formatter only works on valid syntax
-		}
-
-		// Format
-		var buf bytes.Buffer
-		fmtr := New()
-		if err := fmtr.Format(ctx, ast1, data, &buf); err != nil {
-			t.Errorf("Format failed: %v", err)
-			return
-		}
-
-		formatted := buf.Bytes()
-
-		// Property 1: Parse(Format(Parse(x))) succeeds
-		// Note: Some inputs parse successfully in the first pass but fail in subsequent parses
-		// due to parser leniency with syntax that the official Beancount validator rejects:
-		// - Malformed amounts (e.g., `(\")` treated as amount value instead of cost)
-		// - Invalid dates (e.g., year 0000 which is out of range)
-		// These are genuinely invalid Beancount inputs. We skip them rather than fail,
-		// as they represent validation-level issues (not parser syntax errors) and edge cases
-		// in parser leniency, not formatter bugs. The formatter preserves them as-is.
-		ast2, err := parser.ParseBytes(ctx, formatted)
-		if err != nil {
-			// Skip malformed inputs that can't be re-parsed
-			// (This is expected for genuinely invalid Beancount syntax)
-			return
-		}
-
-		if ast2 == nil {
-			t.Error("Re-parsed AST is nil")
-			return
-		}
-
-		// Property 2: Format(Format(x)) == Format(x) (idempotency)
-		var buf2 bytes.Buffer
-		if err := fmtr.Format(ctx, ast2, formatted, &buf2); err != nil {
-			t.Errorf("Second format failed: %v", err)
-			return
-		}
-
-		if !bytes.Equal(buf.Bytes(), buf2.Bytes()) {
-			t.Errorf("Not idempotent:\nFirst:  %q\nSecond: %q", buf.Bytes(), buf2.Bytes())
-		}
-	})
+	return false
 }

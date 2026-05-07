@@ -176,7 +176,7 @@ func (l *Lexer) scanNextToken() Token {
 					blankLineStartLine = l.line
 					blankLineStartCol = l.column
 				}
-				tok := Token{NEWLINE, blankLineStartPos, l.pos, blankLineStartLine, blankLineStartCol}
+				tok := Token{NEWLINE, blankLineStartPos, l.pos + breakLen, blankLineStartLine, blankLineStartCol}
 				l.consumeLineBreak()
 				return tok
 			}

@@ -3,6 +3,8 @@ package parser
 import (
 	"context"
 	"testing"
+
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 func FuzzParser(f *testing.F) {
@@ -92,6 +94,9 @@ func FuzzParser(f *testing.F) {
 	for _, seed := range seeds {
 		f.Add([]byte(seed))
 	}
+	for _, seed := range curatedValidParserSeeds() {
+		f.Add([]byte(seed))
+	}
 
 	f.Fuzz(func(t *testing.T, data []byte) {
 		// CRITICAL: Parser must never panic on any input
@@ -102,14 +107,123 @@ func FuzzParser(f *testing.F) {
 		}()
 
 		ctx := context.Background()
-		ast, err := ParseBytes(ctx, data)
+		tree, err := ParseBytes(ctx, data)
 
 		// Validate invariants
 		if err == nil {
-			if ast == nil {
+			if tree == nil {
 				t.Error("ParseBytes returned nil AST with nil error")
+				return
 			}
+			assertASTInvariants(t, data, tree)
 		}
 		// If err != nil, that's expected for invalid syntax - parser handled it gracefully
 	})
+}
+
+func TestParseCuratedValidSeeds(t *testing.T) {
+	for _, seed := range curatedValidParserSeeds() {
+		t.Run("", func(t *testing.T) {
+			if _, err := ParseString(context.Background(), seed); err != nil {
+				t.Fatalf("ParseString failed for curated valid seed:\n%s\nerror: %v", seed, err)
+			}
+		})
+	}
+}
+
+func curatedValidParserSeeds() []string {
+	// These fixtures have been verified with bean-check.
+	return []string{
+		"option \"operating_currency\" \"USD\"\n2024-01-01 open Assets:Cash USD\n2024-01-02 balance Assets:Cash 0 USD",
+		"option \"operating_currency\" \"USD\"\n2024-01-01 open Assets:Cash USD\n2024-01-01 open Expenses:Food USD\n\n2024-01-02 * \"Lunch\"\n  Assets:Cash  -10 USD\n  Expenses:Food  10 USD",
+		"option \"operating_currency\" \"USD\"\n2024-01-01 open Assets:Cash USD\n2024-01-01 open Expenses:Food USD\n\n2024-01-02 * \"Lunch\"\n  ; body comment\n  Assets:Cash  -10 USD\n  Expenses:Food  10 USD",
+		"option \"operating_currency\" \"USD\"\r\n2024-01-01 open Assets:Cash USD\r\n",
+	}
+}
+
+func assertASTInvariants(t *testing.T, data []byte, tree *ast.AST) {
+	t.Helper()
+
+	for i, d := range tree.Directives {
+		assertPositionInBounds(t, data, "directive", i, d.Position())
+		if txn, ok := d.(*ast.Transaction); ok {
+			assertTransactionBodyInvariants(t, data, txn)
+		}
+	}
+	for i, option := range tree.Options {
+		assertPositionInBounds(t, data, "option", i, option.Position())
+	}
+	for i, include := range tree.Includes {
+		assertPositionInBounds(t, data, "include", i, include.Position())
+	}
+	for i, plugin := range tree.Plugins {
+		assertPositionInBounds(t, data, "plugin", i, plugin.Position())
+	}
+	for i, pushtag := range tree.Pushtags {
+		assertPositionInBounds(t, data, "pushtag", i, pushtag.Position())
+	}
+	for i, poptag := range tree.Poptags {
+		assertPositionInBounds(t, data, "poptag", i, poptag.Position())
+	}
+	for i, pushmeta := range tree.Pushmetas {
+		assertPositionInBounds(t, data, "pushmeta", i, pushmeta.Position())
+	}
+	for i, popmeta := range tree.Popmetas {
+		assertPositionInBounds(t, data, "popmeta", i, popmeta.Position())
+	}
+	for i, comment := range tree.Comments {
+		assertPositionInBounds(t, data, "comment", i, comment.Position())
+	}
+	for i, blankLine := range tree.BlankLines {
+		assertPositionInBounds(t, data, "blankLine", i, blankLine.Position())
+	}
+}
+
+func assertTransactionBodyInvariants(t *testing.T, data []byte, txn *ast.Transaction) {
+	t.Helper()
+
+	postingIndex := 0
+	for i, item := range txn.BodyItems {
+		populated := 0
+		if item.Posting != nil {
+			populated++
+			if postingIndex >= len(txn.Postings) {
+				t.Fatalf("transaction body item %d has extra posting beyond Postings length %d", i, len(txn.Postings))
+			}
+			if item.Posting != txn.Postings[postingIndex] {
+				t.Fatalf("transaction body posting %d does not match txn.Postings order", i)
+			}
+			assertPositionInBounds(t, data, "bodyPosting", i, item.Posting.Position())
+			postingIndex++
+		}
+		if item.Comment != nil {
+			populated++
+			assertPositionInBounds(t, data, "bodyComment", i, item.Comment.Position())
+		}
+		if item.BlankLine != nil {
+			populated++
+			assertPositionInBounds(t, data, "bodyBlankLine", i, item.BlankLine.Position())
+		}
+		if populated != 1 {
+			t.Fatalf("transaction body item %d has %d populated fields, want 1", i, populated)
+		}
+	}
+
+	if postingIndex != len(txn.Postings) {
+		t.Fatalf("transaction body has %d posting items, want %d", postingIndex, len(txn.Postings))
+	}
+}
+
+func assertPositionInBounds(t *testing.T, data []byte, label string, index int, pos ast.Position) {
+	t.Helper()
+
+	if pos.Line < 1 {
+		t.Errorf("%s %d has invalid line %d", label, index, pos.Line)
+	}
+	if pos.Column < 1 {
+		t.Errorf("%s %d has invalid column %d", label, index, pos.Column)
+	}
+	if pos.Offset < 0 || pos.Offset > len(data) {
+		t.Errorf("%s %d has offset %d outside input length %d", label, index, pos.Offset, len(data))
+	}
 }
