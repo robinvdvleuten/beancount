@@ -219,6 +219,10 @@ func TestParseTransactionWithBlankLinesBetweenPostings(t *testing.T) {
 	assert.True(t, ok)
 	// Blank lines should be skipped gracefully
 	assert.Equal(t, 2, len(txn.Postings))
+	assert.Equal(t, 3, len(txn.BodyItems))
+	assert.Equal(t, txn.Postings[0], txn.BodyItems[0].Posting)
+	assert.True(t, txn.BodyItems[1].BlankLine != nil)
+	assert.Equal(t, txn.Postings[1], txn.BodyItems[2].Posting)
 }
 
 // TestParseTransactionWithCost tests transaction with explicit cost specification

@@ -19,6 +19,9 @@ func FuzzFormatter(f *testing.F) {
 		// Simple transaction
 		"2014-05-05 * \"Cafe\" \"Coffee\"\n  Expenses:Food  4.50 USD\n  Assets:Cash",
 		"2014-05-05 P \"Opening balance\"\n  Assets:Checking  1,000.00 USD\n  Equity:Opening-Balances",
+		"2014-05-05 * \"With comments\"\n  ; before\n  Expenses:Food  4.50 USD\n  ; between\n  Assets:Cash",
+		"2014-05-05 * \"In progress\"\n  Assets:Cash  -10 USD",
+		"2014-05-05 * \"With blank\"\n  Expenses:Food  4.50 USD\n\n  Assets:Cash",
 
 		// Transaction with inferred amount
 		"2014-05-06 * \"Store\"\n  Expenses:Shopping  50.00 USD\n  Assets:Checking",

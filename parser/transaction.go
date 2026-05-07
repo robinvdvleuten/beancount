@@ -96,12 +96,7 @@ func (p *Parser) parseTransactionBody(txn *ast.Transaction) error {
 		return err
 	}
 
-	postings, err := p.parsePostingBlock()
-	if err != nil {
-		return err
-	}
-	txn.Postings = postings
-	return nil
+	return p.parsePostingBlock(txn)
 }
 
 func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
@@ -117,43 +112,44 @@ func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
 	return nil
 }
 
-// parsePostingBlock parses all postings in the transaction's indented body.
-func (p *Parser) parsePostingBlock() ([]*ast.Posting, error) {
-	postings := make([]*ast.Posting, 0, 4)
-
+// parsePostingBlock parses all postings and trivia in the transaction's indented body.
+func (p *Parser) parsePostingBlock(txn *ast.Transaction) error {
 	for !p.isAtEnd() {
 		tok := p.peek()
 
 		if tok.Type == NEWLINE {
-			if !p.shouldConsumeIndentedBlankLine() {
-				return postings, nil
+			if len(txn.BodyItems) == 0 || !p.shouldConsumeIndentedBlankLine() {
+				return nil
 			}
-			p.advance()
+			blankLine := p.parseBlankLine()
+			txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{BlankLine: blankLine})
 			continue
 		}
 
 		if tok.Column <= 1 {
-			return postings, nil
+			return nil
 		}
 
 		if tok.Type == COMMENT {
-			p.advance()
+			comment := p.parseComment()
+			txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{Comment: comment})
 			continue
 		}
 
 		if !p.isPostingStartToken(tok) {
-			return postings, nil
+			return nil
 		}
 
 		posting, err := p.parsePosting()
 		if err != nil {
-			return nil, err
+			return err
 		}
 
-		postings = append(postings, posting)
+		txn.Postings = append(txn.Postings, posting)
+		txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{Posting: posting})
 	}
 
-	return postings, nil
+	return nil
 }
 
 func (p *Parser) startsIndentedMetadataLine() bool {
@@ -165,8 +161,13 @@ func (p *Parser) startsIndentedMetadataLine() bool {
 }
 
 func (p *Parser) shouldConsumeIndentedBlankLine() bool {
-	nextTok := p.peekAhead(1)
-	return nextTok.Type != EOF && nextTok.Column > 1
+	for i := 1; ; i++ {
+		nextTok := p.peekAhead(i)
+		if nextTok.Type == NEWLINE {
+			continue
+		}
+		return nextTok.Type != EOF && nextTok.Column > 1 && p.isPostingStartToken(nextTok)
+	}
 }
 
 func (p *Parser) isPostingStartToken(tok Token) bool {

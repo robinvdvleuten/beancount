@@ -28,7 +28,8 @@ type Transaction struct {
 	withComment
 	withMetadata
 
-	Postings []*Posting
+	Postings  []*Posting
+	BodyItems []TransactionBodyItem
 }
 
 var _ Directive = &Transaction{}
@@ -58,6 +59,15 @@ func (t *Transaction) SetPosition(pos Position) { t.pos = pos }
 
 // SetDate sets the date (for use by parser/builders in ast package)
 func (t *Transaction) SetDate(date *Date) { t.date = date }
+
+// TransactionBodyItem represents one ordered line-level item inside a transaction body.
+// Exactly one field should be set. Postings remain duplicated in Transaction.Postings
+// for semantic processing; BodyItems exists to preserve source order for formatting.
+type TransactionBodyItem struct {
+	Posting   *Posting
+	Comment   *Comment
+	BlankLine *BlankLine
+}
 
 // Posting represents a single leg of a transaction, specifying an account and optional
 // amount, cost, and price. Each transaction must have at least two postings that balance

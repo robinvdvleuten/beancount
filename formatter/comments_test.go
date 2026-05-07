@@ -166,3 +166,93 @@ option "title" "Ledger"
 	assert.NoError(t, err)
 	assert.Equal(t, source, output.String())
 }
+
+func TestFormatPreservesTransactionBodyCommentsAndBlankLines(t *testing.T) {
+	source := `2024-01-02 * "Test"
+  ; comment before first posting
+  Assets:Cash  -10 USD
+  ; comment between postings
+
+  Expenses:Food  10 USD
+  ; comment after postings
+`
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	f := New()
+	output := bytes.NewBufferString("")
+	err := f.Format(context.Background(), tree, []byte(source), output)
+	assert.NoError(t, err)
+
+	result := output.String()
+	before := bytes.Index([]byte(result), []byte("; comment before first posting"))
+	firstPosting := bytes.Index([]byte(result), []byte("Assets:Cash"))
+	between := bytes.Index([]byte(result), []byte("; comment between postings"))
+	secondPosting := bytes.Index([]byte(result), []byte("Expenses:Food"))
+	after := bytes.Index([]byte(result), []byte("; comment after postings"))
+
+	assert.True(t, before >= 0 && before < firstPosting)
+	assert.True(t, firstPosting < between && between < secondPosting)
+	assert.True(t, secondPosting < after)
+	assert.True(t, bytes.Contains([]byte(result), []byte("; comment between postings\n\n    Expenses:Food")))
+}
+
+func TestFormatCanDropTransactionBodyTrivia(t *testing.T) {
+	source := `2024-01-02 * "Test"
+  ; comment before first posting
+  Assets:Cash  -10 USD
+
+  Expenses:Food  10 USD
+`
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	f := New(WithPreserveComments(false), WithPreserveBlanks(false))
+	output := bytes.NewBufferString("")
+	err := f.Format(context.Background(), tree, []byte(source), output)
+	assert.NoError(t, err)
+
+	result := output.String()
+	assert.True(t, !bytes.Contains([]byte(result), []byte("; comment before first posting")))
+	assert.True(t, !bytes.Contains([]byte(result), []byte("\n\n")))
+	assert.True(t, bytes.Contains([]byte(result), []byte("Assets:Cash")))
+	assert.True(t, bytes.Contains([]byte(result), []byte("Expenses:Food")))
+}
+
+func TestFormatPreservesOneLegTransaction(t *testing.T) {
+	source := `2024-01-02 * "In progress"
+  Assets:Cash  -10 USD
+`
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	f := New()
+	output := bytes.NewBufferString("")
+	err := f.Format(context.Background(), tree, []byte(source), output)
+	assert.NoError(t, err)
+
+	result := output.String()
+	assert.True(t, bytes.Contains([]byte(result), []byte("2024-01-02 * \"In progress\"")))
+	assert.True(t, bytes.Contains([]byte(result), []byte("Assets:Cash")))
+}
+
+func TestFormatLeadingBlankTriviaAfterTransactionIsIdempotent(t *testing.T) {
+	for _, source := range []string{
+		"0001-01-01 !\n\n \n ;",
+		"0001-01-01 !\n ;\n\n \n ;",
+	} {
+		tree1 := parser.MustParseBytes(context.Background(), []byte(source))
+		f := New()
+
+		output1 := bytes.NewBufferString("")
+		err := f.Format(context.Background(), tree1, []byte(source), output1)
+		assert.NoError(t, err)
+
+		tree2 := parser.MustParseBytes(context.Background(), output1.Bytes())
+		output2 := bytes.NewBufferString("")
+		err = f.Format(context.Background(), tree2, output1.Bytes(), output2)
+		assert.NoError(t, err)
+
+		assert.Equal(t, output1.String(), output2.String())
+	}
+}

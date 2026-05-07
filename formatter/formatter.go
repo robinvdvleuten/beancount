@@ -194,14 +194,8 @@ func New(opts ...Option) *Formatter {
 
 // isValidDirective returns true if a directive is valid to format.
 // Checks:
-// - Transactions must have at least 2 postings
 // - Date-based directives must have valid dates (not empty string representation)
 func isValidDirective(d ast.Directive) bool {
-	// Check transaction postings
-	if txn, ok := d.(*ast.Transaction); ok {
-		return len(txn.Postings) >= 2
-	}
-
 	// All directives implement Date() method, check if date is valid
 	date := d.Date()
 	if date == nil {
@@ -477,7 +471,7 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Format all items in order
 	directiveTimer := collector.Start("formatter.directive_formatting")
 	for _, item := range items {
-		// Skip invalid directives (transactions with < 2 postings, or directives with invalid dates)
+		// Skip invalid directives, such as directives with invalid dates.
 		if item.directive != nil && !isValidDirective(item.directive) {
 			continue
 		}
@@ -1081,10 +1075,6 @@ func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
 
 // formatTransaction formats a transaction directive with proper structure.
 func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) {
-	if len(t.Postings) < 2 {
-		return
-	}
-
 	buf.WriteString(t.Date().String())
 	buf.WriteByte(' ')
 	buf.WriteString(t.Flag)
@@ -1119,8 +1109,31 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 
 	f.formatMetadata(t.Metadata, buf)
 
+	if len(t.BodyItems) > 0 {
+		for _, item := range t.BodyItems {
+			f.formatTransactionBodyItem(item, buf)
+		}
+		return
+	}
+
 	for _, posting := range t.Postings {
 		f.formatPosting(posting, buf)
+	}
+}
+
+func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strings.Builder) {
+	switch {
+	case item.Posting != nil:
+		f.formatPosting(item.Posting, buf)
+	case item.Comment != nil:
+		if f.PreserveComments {
+			buf.WriteString(strings.Repeat(" ", f.Indentation))
+			f.formatComment(item.Comment, buf)
+		}
+	case item.BlankLine != nil:
+		if f.PreserveBlanks {
+			buf.WriteByte('\n')
+		}
 	}
 }
 

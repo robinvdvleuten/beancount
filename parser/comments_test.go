@@ -380,3 +380,26 @@ func TestParseTransactionWithInlineCommentEdgeCases(t *testing.T) {
 		assert.Equal(t, 0, len(txn.Postings))
 	})
 }
+
+func TestParseTransactionPreservesBodyComments(t *testing.T) {
+	source := `2024-01-01 * "Test"
+  ; Comment before first posting
+  Assets:Cash 50 USD
+  ; Comment between postings
+  Expenses:Food 50 USD
+  ; Comment after postings
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	txn := result.Directives[0].(*ast.Transaction)
+	assert.Equal(t, 2, len(txn.Postings))
+	assert.Equal(t, 5, len(txn.BodyItems))
+
+	assert.Equal(t, "; Comment before first posting", txn.BodyItems[0].Comment.Content)
+	assert.Equal(t, txn.Postings[0], txn.BodyItems[1].Posting)
+	assert.Equal(t, "; Comment between postings", txn.BodyItems[2].Comment.Content)
+	assert.Equal(t, txn.Postings[1], txn.BodyItems[3].Posting)
+	assert.Equal(t, "; Comment after postings", txn.BodyItems[4].Comment.Content)
+}
