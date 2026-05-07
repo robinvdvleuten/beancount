@@ -205,6 +205,38 @@ func TestLexerDates(t *testing.T) {
 	}
 }
 
+func TestLexerInvalidDates(t *testing.T) {
+	tests := []string{
+		"0000-01-01",
+		"2024-13-01",
+		"2024-02-30",
+	}
+
+	for _, input := range tests {
+		t.Run(input, func(t *testing.T) {
+			lexer := NewLexer([]byte(input), "test")
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
+			assert.True(t, len(tokens) >= 1)
+			assert.Equal(t, ILLEGAL, tokens[0].Type)
+		})
+	}
+}
+
+func TestLexerByteColumnsWithUnicodeAndTabs(t *testing.T) {
+	lexer := NewLexer([]byte("é\tUSD"), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+	assert.True(t, len(tokens) >= 2)
+
+	assert.Equal(t, IDENT, tokens[0].Type)
+	assert.Equal(t, 1, tokens[0].Column)
+	assert.Equal(t, 2, tokens[0].Len())
+
+	assert.Equal(t, IDENT, tokens[1].Type)
+	assert.Equal(t, 4, tokens[1].Column)
+}
+
 func TestLexerMultilineStringTracksFollowingLine(t *testing.T) {
 	input := "\"line1\nline2\"\n2024-01-01 open Assets:Bank"
 

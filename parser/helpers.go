@@ -730,7 +730,25 @@ func (p *Parser) isExpressionStartToken(tok Token) bool {
 func (p *Parser) errorAtToken(tok Token, format string, args ...any) error {
 	pos := tokenPosition(tok, p.filename)
 	sourceRange := p.calculateSourceRange(pos)
+	if tok.Type == ILLEGAL {
+		return newErrorfWithSource(pos, sourceRange, "%s", p.illegalTokenMessage(tok))
+	}
 	return newErrorfWithSource(pos, sourceRange, format, args...)
+}
+
+func (p *Parser) illegalTokenMessage(tok Token) string {
+	text := tok.String(p.source)
+	bytes := tok.Bytes(p.source)
+	switch {
+	case ast.IsDateLiteralShape(bytes):
+		return fmt.Sprintf("invalid date %q", text)
+	case strings.HasPrefix(text, `"`):
+		return "unterminated string"
+	case p.isExpressionStartToken(tok):
+		return "unmatched parentheses in expression"
+	default:
+		return fmt.Sprintf("invalid token %q", text)
+	}
 }
 
 func (p *Parser) error(format string, args ...any) error {
@@ -787,9 +805,8 @@ func (p *Parser) errorAtEndOfPrevious(format string, args ...any) error {
 }
 
 // calculateSourceRange determines the byte range in source that contains context lines around the error position.
-// This includes 2 lines before and 2 lines after the error line for context display.
+// This includes 2 lines before and 1 line after the error line for context display.
 func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
-	// Determine line range to include (2 lines before and after error line)
 	// pos.Line is 1-based
 	wantStart := pos.Line - 2 // show 2 lines before (1-based)
 	if wantStart < 1 {
@@ -803,7 +820,6 @@ func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
 	startOffset := 0
 	endOffset := len(p.source)
 	foundStart := wantStart == 1
-	foundEnd := false
 
 	for i := 0; i < len(p.source); i++ {
 		b := p.source[i]
@@ -818,12 +834,10 @@ func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
 			}
 			if currentLine > wantEnd {
 				endOffset = i
-				foundEnd = true
 				break
 			}
 		}
 	}
-	_ = foundEnd
 
 	// Ensure we don't exceed source bounds
 	if endOffset > len(p.source) {

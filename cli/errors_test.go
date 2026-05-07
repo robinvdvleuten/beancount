@@ -109,6 +109,26 @@ func TestErrorRenderer_RenderWithSourceContext(t *testing.T) {
 	assert.True(t, len(lines) >= 5, "Expected at least 5 lines in output")
 }
 
+func TestCaretPaddingUsesDisplayWidth(t *testing.T) {
+	tests := []struct {
+		name       string
+		line       string
+		byteColumn int
+		want       int
+	}{
+		{"ASCII", "abc", 3, 2},
+		{"UnicodeNarrow", "éUSD", 3, 1},
+		{"UnicodeWide", "界USD", 4, 2},
+		{"TabStop", "A\tB", 3, 8},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, caretPadding(tt.line, tt.byteColumn))
+		})
+	}
+}
+
 func TestErrorRenderer_RenderWithContext_AllDirectiveTypes(t *testing.T) {
 	renderer := NewErrorRenderer(nil)
 	pos := ast.Position{Filename: "test.beancount", Line: 1, Column: 1}

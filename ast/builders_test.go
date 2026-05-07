@@ -55,6 +55,28 @@ func TestNewDate(t *testing.T) {
 	}
 }
 
+func TestIsValidDateLiteral(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+		want  bool
+	}{
+		{"Dash", "2024-01-15", true},
+		{"Slash", "2024/01/15", true},
+		{"LeapYear", "2024-02-29", true},
+		{"YearZero", "0000-01-01", false},
+		{"InvalidMonth", "2024-13-01", false},
+		{"InvalidDay", "2024-02-30", false},
+		{"BadShape", "2024.01.15", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, IsValidDateLiteral([]byte(tt.input)))
+		})
+	}
+}
+
 func TestNewDateFromTime(t *testing.T) {
 	now := time.Now()
 	date := NewDateFromTime(now)

@@ -10,7 +10,7 @@ type Position struct {
 	Filename string `json:"filename"`
 	Offset   int    `json:"offset"` // Byte offset
 	Line     int    `json:"line"`   // Line number (1-indexed)
-	Column   int    `json:"column"` // Column number (1-indexed)
+	Column   int    `json:"column"` // Byte column number (1-indexed)
 }
 
 // Positioned is implemented by all AST nodes that have a source position.

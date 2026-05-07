@@ -293,6 +293,90 @@ func TestCalculateSourceRangeIncludesContext(t *testing.T) {
 	assert.Contains(t, rangeStr, "Income:Salary")      // line 5 (context after)
 }
 
+func TestCalculateSourceRangeEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		contains []string
+	}{
+		{
+			name: "first line",
+			source: `2024-01-01 balance Assets:Checking INVALID
+2024-01-02 open Assets:Checking USD
+2024-01-03 open Income:Salary USD
+`,
+			contains: []string{"INVALID", "Assets:Checking USD"},
+		},
+		{
+			name: "last line without trailing newline",
+			source: `2024-01-01 open Assets:Checking USD
+2024-01-02 open Income:Salary USD
+2024-01-03 balance Assets:Checking INVALID`,
+			contains: []string{"Assets:Checking USD", "Income:Salary USD", "INVALID"},
+		},
+		{
+			name:     "crlf",
+			source:   "2024-01-01 open Assets:Checking USD\r\n2024-01-02 balance Assets:Checking INVALID\r\n",
+			contains: []string{"Assets:Checking USD", "INVALID"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseString(context.Background(), tt.source)
+			assert.Error(t, err)
+
+			parseErr, ok := err.(*ParseError)
+			assert.True(t, ok)
+
+			rangeStr := string(parseErr.SourceRange.Source)
+			for _, want := range tt.contains {
+				assert.Contains(t, rangeStr, want)
+			}
+		})
+	}
+}
+
+func TestIllegalTokenDiagnostics(t *testing.T) {
+	tests := []struct {
+		name    string
+		source  string
+		message string
+	}{
+		{
+			name:    "invalid date",
+			source:  "2024-02-30 open Assets:Checking USD",
+			message: `invalid date "2024-02-30"`,
+		},
+		{
+			name:    "unterminated string",
+			source:  `"missing`,
+			message: "unterminated string",
+		},
+		{
+			name: "unmatched expression",
+			source: `2024-01-01 * "Bad"
+  Assets:Checking  (1 + 2 USD
+  Expenses:Food
+`,
+			message: "unmatched parentheses in expression",
+		},
+		{
+			name:    "unknown byte",
+			source:  "$",
+			message: `invalid token "$"`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseString(context.Background(), tt.source)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.message)
+		})
+	}
+}
+
 // TestPositionTrackingComplexScenario tests complex scenarios with mixed formatting.
 func TestPositionTrackingComplexScenario(t *testing.T) {
 	source := `option "title" "Test Ledger"

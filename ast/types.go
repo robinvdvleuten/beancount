@@ -237,20 +237,64 @@ type Date struct {
 	time.Time
 }
 
-func (d *Date) Capture(values []string) error {
-	var t time.Time
-	var err error
-	for _, layout := range []string{"2006-01-02", "2006/01/02"} {
-		t, err = time.Parse(layout, values[0])
-		if err == nil {
-			d.Time = t
-			return nil
+// IsValidDateLiteral reports whether value is a valid Beancount date literal.
+// Accepted forms are YYYY-MM-DD and YYYY/MM/DD with years in 0001..9999.
+func IsValidDateLiteral(value []byte) bool {
+	_, ok := parseDateLiteral(value)
+	return ok
+}
+
+// IsDateLiteralShape reports whether value has the YYYY-MM-DD or YYYY/MM/DD shape.
+func IsDateLiteralShape(value []byte) bool {
+	if len(value) != 10 {
+		return false
+	}
+	sep := value[4]
+	return asciiDigits(value[0:4]) &&
+		(sep == '-' || sep == '/') &&
+		asciiDigits(value[5:7]) &&
+		value[7] == sep &&
+		asciiDigits(value[8:10])
+}
+
+func parseDateLiteral(value []byte) (time.Time, bool) {
+	if !IsDateLiteralShape(value) {
+		return time.Time{}, false
+	}
+	year := int(value[0]-'0')*1000 + int(value[1]-'0')*100 + int(value[2]-'0')*10 + int(value[3]-'0')
+	month := int(value[5]-'0')*10 + int(value[6]-'0')
+	day := int(value[8]-'0')*10 + int(value[9]-'0')
+
+	if year == 0 || month < 1 || month > 12 || day < 1 {
+		return time.Time{}, false
+	}
+
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if t.Year() != year || int(t.Month()) != month || t.Day() != day {
+		return time.Time{}, false
+	}
+
+	return t, true
+}
+
+func asciiDigits(value []byte) bool {
+	for _, b := range value {
+		if b < '0' || b > '9' {
+			return false
 		}
 	}
-	if err != nil {
-		return fmt.Errorf("invalid date: %s", values[0])
+	return true
+}
+
+func (d *Date) Capture(values []string) error {
+	if len(values) == 0 {
+		return fmt.Errorf("invalid date: ")
 	}
-	return nil
+	if t, ok := parseDateLiteral([]byte(values[0])); ok {
+		d.Time = t
+		return nil
+	}
+	return fmt.Errorf("invalid date: %s", values[0])
 }
 
 // IsZero returns true if the Date is nil or represents the zero time.

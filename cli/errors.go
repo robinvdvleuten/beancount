@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/parser"
@@ -104,15 +106,45 @@ func (r *ErrorRenderer) renderWithSourceContext(pos ast.Position, message string
 
 		if i == pos.Line-1 && pos.Column > 0 {
 			buf.WriteString("   ")
-			for j := 0; j < pos.Column-1; j++ {
-				buf.WriteByte(' ')
-			}
+			buf.WriteString(strings.Repeat(" ", caretPadding(sourceLines[i], pos.Column)))
 			buf.WriteString(errCaretStyle.Render("^"))
 			buf.WriteByte('\n')
 		}
 	}
 
 	return buf.String()
+}
+
+func caretPadding(line string, byteColumn int) int {
+	if byteColumn <= 1 {
+		return 0
+	}
+
+	targetBytes := byteColumn - 1
+	if targetBytes > len(line) {
+		targetBytes = len(line)
+	}
+
+	width := 0
+	for i := 0; i < targetBytes; {
+		r, size := utf8.DecodeRuneInString(line[i:])
+		if r == utf8.RuneError && size == 1 {
+			width++
+			i++
+			continue
+		}
+		if i+size > targetBytes {
+			break
+		}
+
+		if r == '\t' {
+			width += 8 - width%8
+		} else {
+			width += runewidth.RuneWidth(r)
+		}
+		i += size
+	}
+	return width
 }
 
 func (r *ErrorRenderer) renderWithContext(pos ast.Position, message string, directive ast.Directive) string {
