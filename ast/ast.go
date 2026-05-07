@@ -87,6 +87,8 @@ type AST struct {
 	Popmetas   []*Popmeta
 	Comments   []*Comment
 	BlankLines []*BlankLine
+
+	pushPopApplied bool
 }
 
 // WithMetadata is an interface for AST nodes that can have metadata attached.
@@ -149,6 +151,12 @@ type positionedItem struct {
 // ApplyPushPopDirectives applies pushtag/poptag and pushmeta/popmeta directives
 // to transactions and other directives in file order (before date sorting).
 func ApplyPushPopDirectives(ast *AST) error {
+	if ast.pushPopApplied {
+		return nil
+	}
+
+	ast.pushPopApplied = true
+
 	// Collect all positioned items
 	var items []positionedItem
 
@@ -242,6 +250,11 @@ func ApplyPushPopDirectives(ast *AST) error {
 	return nil
 }
 
+// MarkPushPopDirectivesApplied marks a tree as already containing derived push/pop effects.
+func MarkPushPopDirectivesApplied(ast *AST) {
+	ast.pushPopApplied = true
+}
+
 // LinesWithMultipleItems returns a set of line numbers (1-indexed) that contain
 // multiple AST items (directives, options, includes, comments, blank lines, etc.).
 // This is useful for tools that need to preserve or reconstruct source lines safely.
@@ -309,9 +322,7 @@ func isSorted(d Directives) bool {
 	return true
 }
 
-// SortDirectives sort all directives by their parsed date.
-//
-// This is called automatically during Parse*(), but can be called on a manually constructed AST.
+// SortDirectives sorts all directives by their parsed date for semantic processing.
 func SortDirectives(ast *AST) error {
 	// Skip sorting if already sorted (common case for well-maintained files)
 	if isSorted(ast.Directives) {

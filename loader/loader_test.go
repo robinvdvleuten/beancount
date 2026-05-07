@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -132,6 +133,46 @@ include "included.beancount"
 	assert.Equal(t, absMainFile, result.Root)
 	assert.Equal(t, 1, len(result.Includes))
 	assert.Equal(t, absIncludedFile, result.Includes[0])
+}
+
+func TestLoadWithFollowIncludesDoesNotDuplicatePushPopDuringLedgerProcess(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	includedFile := filepath.Join(tmpDir, "included.beancount")
+	err := os.WriteFile(includedFile, []byte(`
+2024-01-01 open Equity:Opening-Balances USD
+`), 0644)
+	assert.NoError(t, err)
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	err = os.WriteFile(mainFile, []byte(`
+pushtag #main
+include "included.beancount"
+2024-01-02 * "Seed"
+  Assets:Checking           10.00 USD
+  Equity:Opening-Balances  -10.00 USD
+poptag #main
+2024-01-01 open Assets:Checking USD
+`), 0644)
+	assert.NoError(t, err)
+
+	ldr := New(WithFollowIncludes())
+	result, err := ldr.Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+
+	var txn *ast.Transaction
+	for _, directive := range result.AST.Directives {
+		if current, ok := directive.(*ast.Transaction); ok {
+			txn = current
+			break
+		}
+	}
+	assert.True(t, txn != nil)
+	assert.Equal(t, []ast.Tag{"main"}, txn.Tags)
+
+	l := ledger.New()
+	assert.NoError(t, l.Process(context.Background(), result.AST))
+	assert.Equal(t, []ast.Tag{"main"}, txn.Tags)
 }
 
 func TestLoadNestedIncludes(t *testing.T) {

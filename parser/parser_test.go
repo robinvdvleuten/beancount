@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 func TestMustParseBytes(t *testing.T) {
@@ -86,4 +87,43 @@ func TestMustParseWithComments(t *testing.T) {
 	assert.True(t, ast != nil)
 	assert.True(t, len(ast.Comments) > 0)
 	assert.Equal(t, len(ast.Directives), 2)
+}
+
+func TestParseBytesPreservesSourceOrder(t *testing.T) {
+	source := `2024-01-02 open Assets:Later USD
+2024-01-01 open Assets:Earlier USD
+`
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(tree.Directives))
+
+	first := tree.Directives[0].(*ast.Open)
+	second := tree.Directives[1].(*ast.Open)
+	assert.Equal(t, "Assets:Later", string(first.Account))
+	assert.Equal(t, "Assets:Earlier", string(second.Account))
+}
+
+func TestParseBytesDoesNotApplyPushPopDirectives(t *testing.T) {
+	source := `pushtag #trip
+pushmeta location: "NYC"
+2024-01-01 open Assets:Checking USD
+2024-01-02 * "Dinner"
+  Assets:Checking  -10.00 USD
+  Expenses:Food     10.00 USD
+poptag #trip
+popmeta location:
+`
+
+	tree, err := ParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(tree.Directives))
+	assert.Equal(t, 1, len(tree.Pushtags))
+	assert.Equal(t, 1, len(tree.Pushmetas))
+
+	open := tree.Directives[0].(*ast.Open)
+	txn := tree.Directives[1].(*ast.Transaction)
+	assert.Equal(t, 0, len(open.Metadata))
+	assert.Equal(t, 0, len(txn.Metadata))
+	assert.Equal(t, 0, len(txn.Tags))
 }

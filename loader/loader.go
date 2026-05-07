@@ -3,8 +3,8 @@
 // single AST, handling relative paths and deduplication.
 //
 // The loader supports two modes of operation:
-//   - Simple mode: Parses a single file with include directives preserved in the AST
-//   - Follow mode: Recursively loads all included files and merges them into one AST
+//   - Simple mode: parses a single raw source AST with include directives preserved
+//   - Follow mode: recursively loads all included files and merges them into one processed AST
 //
 // When following includes, the loader resolves relative paths from the directory of
 // the file containing the include directive, and deduplicates files that are included
@@ -292,6 +292,11 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		return nil, parser.NewParseErrorWithSource(filename, err, data)
 	}
 
+	if err := prepareLoadedAST(result); err != nil {
+		loadTimer.End()
+		return nil, err
+	}
+
 	// If no includes, end and return
 	if len(result.Includes) == 0 {
 		loadTimer.End()
@@ -352,7 +357,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 
 // mergeASTs combines a main AST with multiple included ASTs.
 // The main AST's options take precedence over included files' options.
-// All directives are combined and will be sorted by date by the parser.
+// All directives are combined and sorted for ledger processing.
 func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 	result := &ast.AST{
 		Directives: make(ast.Directives, 0, len(main.Directives)),
@@ -374,14 +379,17 @@ func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 
 		// Merge plugins (append, don't override)
 		result.Plugins = append(result.Plugins, inc.Plugins...)
-
-		// Note: Pushtag/Poptag/Pushmeta/Popmeta are already applied during parsing,
-		// so we don't need to merge them here (they've already modified their
-		// respective file's directives)
 	}
 
-	// Re-sort all directives by date
 	_ = ast.SortDirectives(result)
+	ast.MarkPushPopDirectivesApplied(result)
 
 	return result
+}
+
+func prepareLoadedAST(tree *ast.AST) error {
+	if err := ast.ApplyPushPopDirectives(tree); err != nil {
+		return err
+	}
+	return ast.SortDirectives(tree)
 }

@@ -117,6 +117,17 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	// Extract telemetry collector from context
 	collector := telemetry.FromContext(ctx)
 
+	prepareTimer := collector.Start("ledger.prepare_ast")
+	if err := ast.ApplyPushPopDirectives(tree); err != nil {
+		prepareTimer.End()
+		return err
+	}
+	if err := ast.SortDirectives(tree); err != nil {
+		prepareTimer.End()
+		return err
+	}
+	prepareTimer.End()
+
 	// Enrich AST with semantic information (currencies, accounts)
 	enriched := tree.Enrich()
 
@@ -136,7 +147,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	// Attach config to context for use throughout processing
 	ctx = cfg.WithContext(ctx)
 
-	// Process directives in order (they're already sorted by date)
+	// Process directives in semantic date order.
 	processTimer := collector.StartStructured(telemetry.TimerConfig{
 		Name:  "ledger.processing",
 		Count: len(tree.Directives),

@@ -469,9 +469,9 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 	}
 }
 
-// Public API functions that match the old parser interface
+// Public API functions parse source syntax into raw ASTs.
 
-// Parse parses AST from an io.Reader.
+// Parse parses a raw source AST from an io.Reader.
 // This is a convenience wrapper around ParseBytesWithFilename.
 func Parse(ctx context.Context, r io.Reader) (*ast.AST, error) {
 	data, err := io.ReadAll(r)
@@ -481,7 +481,7 @@ func Parse(ctx context.Context, r io.Reader) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", data)
 }
 
-// ParseString parses AST from a string.
+// ParseString parses a raw source AST from a string.
 // This is a convenience wrapper around ParseBytesWithFilename.
 func ParseString(ctx context.Context, str string) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", []byte(str))
@@ -501,7 +501,7 @@ func MustParseString(ctx context.Context, str string) *ast.AST {
 	return result
 }
 
-// ParseBytes parses AST from bytes.
+// ParseBytes parses a raw source AST from bytes.
 // This is a convenience wrapper around ParseBytesWithFilename.
 func ParseBytes(ctx context.Context, data []byte) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", data)
@@ -521,7 +521,8 @@ func MustParseBytes(ctx context.Context, data []byte) *ast.AST {
 	return result
 }
 
-// ParseBytesWithFilename parses AST from bytes with a filename for position tracking.
+// ParseBytesWithFilename parses a raw source AST from bytes with a filename for position tracking.
+// Parsing preserves directive source order and does not apply semantic push/pop directives.
 func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (*ast.AST, error) {
 	// Check for cancellation
 	select {
@@ -553,20 +554,7 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 		return nil, err
 	}
 
-	// Apply push/pop directives
-	pushPopTimer := collector.Start("parser.push_pop")
-	if err := ast.ApplyPushPopDirectives(tree); err != nil {
-		pushPopTimer.End()
-		return nil, err
-	}
-	pushPopTimer.End()
-
-	// Sort directives
-	sortTimer := collector.Start("parser.sorting")
-	err = ast.SortDirectives(tree)
-	sortTimer.End()
-
-	return tree, err
+	return tree, nil
 }
 
 // MustParseBytesWithFilename parses AST from bytes with a filename, panicking on error.

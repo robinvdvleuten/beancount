@@ -281,6 +281,19 @@ func TestCalculateCurrencyColumn(t *testing.T) {
 	})
 }
 
+func TestFormatUsesRawParserSourceOrder(t *testing.T) {
+	source := `2024-01-02 open Assets:Later USD
+2024-01-01 open Assets:Earlier USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+
+	f := New()
+	var buf bytes.Buffer
+	err := f.Format(context.Background(), tree, nil, &buf)
+	assert.NoError(t, err)
+	assert.Equal(t, source, buf.String())
+}
+
 func TestFormatDirectives(t *testing.T) {
 	t.Run("Option", func(t *testing.T) {
 		source := `option "title" "My Ledger"`

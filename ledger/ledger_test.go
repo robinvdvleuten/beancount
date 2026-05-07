@@ -90,6 +90,29 @@ func TestLedger_ProcessOpen(t *testing.T) {
 	}
 }
 
+func TestLedgerProcessPreparesRawParserAST(t *testing.T) {
+	source := `pushtag #trip
+2024-01-02 * "Seed"
+  Assets:Checking           10.00 USD
+  Equity:Opening-Balances  -10.00 USD
+poptag #trip
+2024-01-01 open Assets:Checking USD
+2024-01-01 open Equity:Opening-Balances USD
+`
+
+	tree := parser.MustParseString(context.Background(), source)
+	txn := tree.Directives[0].(*ast.Transaction)
+	assert.Equal(t, 0, len(txn.Tags))
+
+	l := New()
+	err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+
+	assert.Equal(t, "Assets:Checking", string(tree.Directives[0].(*ast.Open).Account))
+	assert.Equal(t, 1, len(txn.Tags))
+	assert.Equal(t, ast.Tag("trip"), txn.Tags[0])
+}
+
 func TestLedger_ProcessClose(t *testing.T) {
 	tests := []struct {
 		name      string
