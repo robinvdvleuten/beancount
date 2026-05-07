@@ -18,6 +18,7 @@ func FuzzFormatter(f *testing.F) {
 
 		// Simple transaction
 		"2014-05-05 * \"Cafe\" \"Coffee\"\n  Expenses:Food  4.50 USD\n  Assets:Cash",
+		"2014-05-05 P \"Opening balance\"\n  Assets:Checking  1,000.00 USD\n  Equity:Opening-Balances",
 
 		// Transaction with inferred amount
 		"2014-05-06 * \"Store\"\n  Expenses:Shopping  50.00 USD\n  Assets:Checking",
@@ -39,6 +40,7 @@ func FuzzFormatter(f *testing.F) {
 
 		// Transaction with metadata
 		"2014-01-05 * \"Coffee\"\n  description: \"Morning coffee\"\n  Expenses:Food  5.00 USD\n  Assets:Cash",
+		"2014-01-05 * \"Budget\"\n  budget: 1,234.56 USD\n  target: USD\n  active: TRUE\n  Expenses:Food  5.00 USD\n  Assets:Cash",
 
 		// Transaction with tags and links
 		"2014-01-06 * \"Lunch\" #food ^receipt-001\n  Expenses:Food  15.00 USD\n  Assets:Cash",

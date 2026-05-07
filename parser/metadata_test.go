@@ -279,6 +279,38 @@ func TestParseMetadataInvalidStringReturnsError(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid string literal")
 }
 
+func TestParseMetadataRejectsUnsupportedUnquotedValues(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "LowercaseWord",
+			source: "2024-01-01 commodity USD\n  name: foo\n",
+			want:   `unsupported metadata value "foo"`,
+		},
+		{
+			name:   "MultiwordUnquoted",
+			source: "2024-01-01 commodity USD\n  name: some value\n",
+			want:   `unsupported metadata value "some"`,
+		},
+		{
+			name:   "UnterminatedString",
+			source: "2024-01-01 commodity USD\n  name: \"unterminated\n",
+			want:   "unterminated string",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseString(context.Background(), tt.source)
+			assert.Error(t, err)
+			assert.Contains(t, err.Error(), tt.want)
+		})
+	}
+}
+
 func TestParseMetadataAllowsOmittedValue(t *testing.T) {
 	source := "2024-01-01 commodity USD\n  name:\n"
 

@@ -461,22 +461,22 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 			return &ast.MetadataValue{Account: &account}, nil
 		}
 
-		// Otherwise treat as Currency
+		if !isUppercaseMetadataIdentifier(identStr) {
+			return nil, p.errorAtToken(tok, "unsupported metadata value %q", identStr)
+		}
+
 		p.advance()
 		return &ast.MetadataValue{Currency: &identStr}, nil
 	}
 
-	// Fallback: read rest of line as string
-	value := p.parseRestOfLine()
-	unquoted, err := p.unquoteString(value)
-	if err != nil {
-		// For fallback metadata, if unquoting fails, keep original value
-		// This maintains compatibility with existing behavior
-		rawStr := ast.NewRawString(value)
-		return &ast.MetadataValue{StringValue: &rawStr}, nil
+	return nil, p.errorAtToken(tok, "unsupported metadata value %q", tok.String(p.source))
+}
+
+func isUppercaseMetadataIdentifier(value string) bool {
+	if value == "" {
+		return false
 	}
-	rawStr := ast.NewRawString(unquoted)
-	return &ast.MetadataValue{StringValue: &rawStr}, nil
+	return strings.ToUpper(value) == value
 }
 
 func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
@@ -541,22 +541,6 @@ func (p *Parser) isKeyword(typ TokenType) bool {
 	default:
 		return false
 	}
-}
-
-// parseRestOfLine reads all tokens until end of line and returns as string.
-func (p *Parser) parseRestOfLine() string {
-	currentLine := p.peek().Line
-
-	var buf strings.Builder
-	for !p.isAtEnd() && p.peek().Line == currentLine {
-		if buf.Len() > 0 {
-			buf.WriteByte(' ')
-		}
-		tok := p.advance()
-		buf.WriteString(tok.String(p.source))
-	}
-
-	return strings.TrimSpace(buf.String())
 }
 
 // parseRestOfLineUntilComment reads tokens until end of line or an inline comment.

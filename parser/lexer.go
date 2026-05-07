@@ -367,27 +367,34 @@ func (l *Lexer) scanDate(start, line, col int) Token {
 // scanNumber scans a number: [-+]?[0-9]+(,[0-9]{3})*(\.[0-9]+)?
 // Commas are allowed as thousands separators within the integer part.
 func (l *Lexer) scanNumber(start, line, col int) Token {
-	// Optional sign already consumed if present
+	digitStart := start
+	if l.source[start] == '+' || l.source[start] == '-' {
+		digitStart = start + 1
+	}
 
-	// Scan integer part (including optional comma thousands separators)
-	for l.pos < len(l.source) {
-		ch := l.source[l.pos]
-		if isDigit(ch) {
+	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+		l.advance()
+	}
+
+	if l.pos < len(l.source) && l.source[l.pos] == ',' {
+		if l.pos-digitStart > 3 {
+			l.consumeNumberRemainder()
+			return Token{ILLEGAL, start, l.pos, line, col}
+		}
+
+		for l.pos < len(l.source) && l.source[l.pos] == ',' {
 			l.advance()
-		} else if ch == ',' {
-			// Look ahead: comma must be followed by exactly 3 digits
-			// Valid: 1,000  1,000,000
-			// Invalid: 1,00 1,0000
-			if l.pos+4 <= len(l.source) &&
-				isDigit(l.source[l.pos+1]) &&
-				isDigit(l.source[l.pos+2]) &&
-				isDigit(l.source[l.pos+3]) {
-				l.advance() // consume comma
-			} else {
-				break
+			for i := 0; i < 3; i++ {
+				if l.pos >= len(l.source) || !isDigit(l.source[l.pos]) {
+					l.consumeNumberRemainder()
+					return Token{ILLEGAL, start, l.pos, line, col}
+				}
+				l.advance()
 			}
-		} else {
-			break
+			if l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+				l.consumeNumberRemainder()
+				return Token{ILLEGAL, start, l.pos, line, col}
+			}
 		}
 	}
 
@@ -403,6 +410,17 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 	}
 
 	return Token{NUMBER, start, l.pos, line, col}
+}
+
+func (l *Lexer) consumeNumberRemainder() {
+	for l.pos < len(l.source) {
+		ch := l.source[l.pos]
+		if isDigit(ch) || ch == ',' || ch == '.' {
+			l.advance()
+			continue
+		}
+		break
+	}
 }
 
 // scanExpression scans a signed or unsigned parenthesized amount expression.

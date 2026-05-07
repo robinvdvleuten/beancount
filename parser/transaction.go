@@ -19,6 +19,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	//   DATE txn
 	//   DATE * "narration"
 	//   DATE ! "narration"
+	//   DATE P "narration"
 
 	if p.match(TXN) {
 		// Explicit 'txn' keyword defaults to cleared (*) and does not allow
@@ -32,12 +33,11 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		txn.Flag = "*"
 	} else if p.match(EXCLAIM) {
 		txn.Flag = "!"
-	} else if p.check(STRING) {
-		// Padding transaction (no flag, starts with string)
-		// This is allowed in some cases
+	} else if p.check(IDENT) && p.peek().String(p.source) == "P" {
+		p.advance()
 		txn.Flag = "P"
 	} else {
-		return nil, p.error("expected transaction flag (* or !) or 'txn'")
+		return nil, p.error("expected transaction flag (*, !, P) or 'txn'")
 	}
 
 	// Parse payee and/or narration

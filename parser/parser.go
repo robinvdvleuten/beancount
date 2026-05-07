@@ -442,6 +442,11 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 	switch directiveTok.Type {
 	case TXN, ASTERISK, EXCLAIM:
 		return p.parseTransaction(pos, date)
+	case IDENT:
+		if directiveTok.String(p.source) == "P" {
+			return p.parseTransaction(pos, date)
+		}
+		return nil, p.error("unknown directive after date")
 	case BALANCE:
 		return p.parseBalance(pos, date)
 	case OPEN:

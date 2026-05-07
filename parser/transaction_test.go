@@ -57,6 +57,21 @@ func TestParseTransactionWithExclamationFlag(t *testing.T) {
 	assert.Equal(t, "!", txn.Flag)
 }
 
+func TestParseTransactionWithPaddingFlag(t *testing.T) {
+	source := `2024-01-15 P "Padding transaction"
+  Assets:Checking   100.00 USD
+  Equity:Opening-Balances    -100.00 USD
+`
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	txn, ok := result.Directives[0].(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, "P", txn.Flag)
+	assert.Equal(t, "Padding transaction", txn.Narration.Value)
+}
+
 func TestParseTransactionWithBareTxnKeyword(t *testing.T) {
 	source := `2024-01-15 txn
   Assets:Checking   100.00 USD
@@ -83,6 +98,17 @@ func TestParseTransactionRejectsTxnKeywordWithClearedFlag(t *testing.T) {
 	_, err := ParseString(context.Background(), source)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected token")
+}
+
+func TestParseTransactionRejectsStringFirstSyntax(t *testing.T) {
+	source := `2024-01-15 "String-first transaction"
+  Assets:Checking   100.00 USD
+  Equity:Opening-Balances    -100.00 USD
+`
+
+	_, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown directive after date")
 }
 
 func TestParseTransactionRejectsTxnKeywordWithPendingFlag(t *testing.T) {

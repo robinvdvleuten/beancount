@@ -18,6 +18,7 @@ func FuzzParser(f *testing.F) {
 		"2014-05-05 * \"Cafe\" \"Coffee\"\n  Expenses:Food  4.50 USD\n  Assets:Cash",
 		"2014-05-05 *\n  Expenses:Food  4.50 USD\n  Assets:Cash",
 		"2014-05-05 txn\n  Expenses:Food  4.50 USD\n  Assets:Cash",
+		"2014-05-05 P \"Opening balance\"\n  Assets:Checking  1,000.00 USD\n  Equity:Opening-Balances",
 
 		// Transaction with inferred amounts
 		"2014-05-06 * \"Store\"\n  Expenses:Shopping  50.00 USD\n  Assets:Checking",
@@ -46,6 +47,8 @@ func FuzzParser(f *testing.F) {
 		// Metadata
 		"2014-01-01 open Assets:Checking USD\n  description: \"Primary checking account\"",
 		"2014-01-01 open Assets:Checking USD\n  note:",
+		"2014-01-01 commodity USD\n  target: USD\n  active: TRUE\n  budget: 1,234.56 USD",
+		"2014-01-01 commodity USD\n  name: foo",
 
 		// Price directive
 		"2014-07-09 price HOOL 579.18 USD",
@@ -70,6 +73,7 @@ func FuzzParser(f *testing.F) {
 		"2014-01-01\nopen Assets:Checking USD",
 		"2014-05-05 txn *\n  Expenses:Food  4.50 USD\n  Assets:Cash",
 		"2014-05-05 txn !\n  Expenses:Food  4.50 USD\n  Assets:Cash",
+		"2014-05-05 \"String-first\"\n  Assets:Checking  1.00 USD\n  Equity:Opening-Balances",
 
 		// Pad directive
 		"2014-07-09 pad Assets:Checking Equity:Opening-Balances",

@@ -251,7 +251,7 @@ func TestParseTransactionWithMultipleInlineComments(t *testing.T) {
 func TestParseTransactionWithMixedInlineCommentsAndMetadata(t *testing.T) {
 	source := `2024-01-01 * "Mixed test"
   Assets:Cash 100 USD
-    category: food
+    category: "food"
   Expenses:Food 50 USD ; lunch money
   Expenses:Drinks 30 USD
 `

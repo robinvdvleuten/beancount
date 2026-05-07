@@ -7,6 +7,14 @@ import (
 	"github.com/alecthomas/assert/v2"
 )
 
+func tokenTypes(tokens []Token) []TokenType {
+	types := make([]TokenType, len(tokens))
+	for i, tok := range tokens {
+		types[i] = tok.Type
+	}
+	return types
+}
+
 func TestLexerBasicTokens(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -89,7 +97,9 @@ func TestLexerNumbers(t *testing.T) {
 		// Comma-separated thousands (like 1,000 USD)
 		{"1,000", "1,000"},
 		{"1,000,000", "1,000,000"},
+		{"+1,000", "+1,000"},
 		{"-1,000", "-1,000"},
+		{"1,000.00", "1,000.00"},
 		{"-1,000.50", "-1,000.50"},
 		{"1,234,567.89", "1,234,567.89"},
 	}
@@ -104,6 +114,33 @@ func TestLexerNumbers(t *testing.T) {
 			assert.Equal(t, NUMBER, tokens[0].Type)
 			got := tokens[0].String(lexer.source)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestLexerRejectsMalformedCommaNumbers(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{"ShortGroup", "1,00"},
+		{"LongGroup", "1,0000"},
+		{"TwoDigitGroup", "12,34"},
+		{"DoubleCommaIntentionalDivergence", "1,,000"},
+		{"UngroupedPrefixBeforeComma", "1234,567"},
+		{"LongDecimalAdjacentGroup", "1,2345.67"},
+		{"NegativeLongGroup", "-1,0000"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			lexer := NewLexer([]byte(tt.input), "test")
+			tokens, err := lexer.ScanAll()
+			assert.NoError(t, err)
+
+			assert.True(t, len(tokens) >= 1, "expected at least 1 token")
+			assert.Equal(t, ILLEGAL, tokens[0].Type)
+			assert.Equal(t, tt.input, tokens[0].String(lexer.source))
 		})
 	}
 }
@@ -381,6 +418,59 @@ func TestLexerCROnlyCommentsAndDirectives(t *testing.T) {
 	assert.NoError(t, err)
 
 	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, EOF}
+	assert.Equal(t, len(expectedTypes), len(tokens))
+	for i, tok := range tokens {
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
+	}
+}
+
+func TestLexerMixedLineEndingsAndBlankOwnership(t *testing.T) {
+	input := "; header\n2024-01-01 open Assets:Bank\r\n\r\n; footer\r2024-01-02 open Assets:Cash"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, NEWLINE, COMMENT, DATE, OPEN, ACCOUNT, EOF}
+	assert.Equal(t, len(expectedTypes), len(tokens))
+	for i, tok := range tokens {
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
+	}
+}
+
+func TestLexerCROnlyConsecutiveBlankLines(t *testing.T) {
+	input := "2024-01-01 open Assets:Bank\r\r\r2024-01-02 open Assets:Cash"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	expectedTypes := []TokenType{DATE, OPEN, ACCOUNT, NEWLINE, NEWLINE, DATE, OPEN, ACCOUNT, EOF}
+	assert.Equal(t, len(expectedTypes), len(tokens))
+	for i, tok := range tokens {
+		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
+	}
+}
+
+func TestLexerCommentAtEOFWithoutNewline(t *testing.T) {
+	input := "; final comment"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	assert.Equal(t, []TokenType{COMMENT, EOF}, tokenTypes(tokens))
+	assert.Equal(t, "; final comment", tokens[0].String(lexer.source))
+}
+
+func TestLexerStringFollowedByBlankLine(t *testing.T) {
+	input := "\"hello\"\n\n2024-01-01 open Assets:Bank"
+
+	lexer := NewLexer([]byte(input), "test")
+	tokens, err := lexer.ScanAll()
+	assert.NoError(t, err)
+
+	expectedTypes := []TokenType{STRING, NEWLINE, DATE, OPEN, ACCOUNT, EOF}
 	assert.Equal(t, len(expectedTypes), len(tokens))
 	for i, tok := range tokens {
 		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
