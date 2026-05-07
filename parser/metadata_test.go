@@ -191,6 +191,149 @@ func TestParseCommodityMetadata(t *testing.T) {
 	assert.Equal(t, "2", commodity.Metadata[2].Value.String())
 }
 
+func TestParseMetadataOnAllSupportedEntries(t *testing.T) {
+	tests := []struct {
+		name     string
+		source   string
+		metadata func(*ast.AST) []*ast.Metadata
+	}{
+		{
+			name: "commodity",
+			source: `2024-01-01 commodity USD
+  meta: "commodity"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Commodity).Metadata
+			},
+		},
+		{
+			name: "open",
+			source: `2024-01-01 open Assets:Cash USD
+  meta: "open"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Open).Metadata
+			},
+		},
+		{
+			name: "close",
+			source: `2024-01-01 close Assets:Cash
+  meta: "close"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Close).Metadata
+			},
+		},
+		{
+			name: "balance",
+			source: `2024-01-01 balance Assets:Cash 10.00 USD
+  meta: "balance"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Balance).Metadata
+			},
+		},
+		{
+			name: "pad",
+			source: `2024-01-01 pad Assets:Cash Equity:Opening-Balances
+  meta: "pad"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Pad).Metadata
+			},
+		},
+		{
+			name: "note",
+			source: `2024-01-01 note Assets:Cash "Called the bank"
+  meta: "note"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Note).Metadata
+			},
+		},
+		{
+			name: "document",
+			source: `2024-01-01 document Assets:Cash "/documents/statement.pdf"
+  meta: "document"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Document).Metadata
+			},
+		},
+		{
+			name: "price",
+			source: `2024-01-01 price USD 1.10 EUR
+  meta: "price"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Price).Metadata
+			},
+		},
+		{
+			name: "event",
+			source: `2024-01-01 event "location" "Amsterdam"
+  meta: "event"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Event).Metadata
+			},
+		},
+		{
+			name: "query",
+			source: `2024-01-01 query "cash" "SELECT account"
+  meta: "query"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Query).Metadata
+			},
+		},
+		{
+			name: "custom",
+			source: `2024-01-01 custom "budget" "monthly"
+  meta: "custom"
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Custom).Metadata
+			},
+		},
+		{
+			name: "transaction",
+			source: `2024-01-01 * "Dinner"
+  meta: "transaction"
+  Assets:Cash  -10.00 USD
+  Expenses:Food  10.00 USD
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Transaction).Metadata
+			},
+		},
+		{
+			name: "posting",
+			source: `2024-01-01 * "Dinner"
+  Assets:Cash  -10.00 USD
+    meta: "posting"
+  Expenses:Food  10.00 USD
+`,
+			metadata: func(tree *ast.AST) []*ast.Metadata {
+				return tree.Directives[0].(*ast.Transaction).Postings[0].Metadata
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			parsed, err := ParseString(context.Background(), tt.source)
+			assert.NoError(t, err)
+			assert.Equal(t, 1, len(parsed.Directives))
+
+			metadata := tt.metadata(parsed)
+			assert.Equal(t, 1, len(metadata))
+			assert.Equal(t, "meta", metadata[0].Key)
+			assert.Equal(t, tt.name, metadata[0].Value.String())
+		})
+	}
+}
+
 func TestParseMetadataEdgeCases(t *testing.T) {
 	t.Run("EmptyString", func(t *testing.T) {
 		source := `2024-01-01 * "Test"
