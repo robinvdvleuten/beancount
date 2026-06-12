@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/shopspring/decimal"
 )
 
 func TestAPIBalances(t *testing.T) {
@@ -119,7 +118,7 @@ func TestAPIBalances(t *testing.T) {
 		assetsRoot := response.Roots[0]
 		assert.Equal(t, "Assets", assetsRoot.Name)
 		usdBalance := assetsRoot.Balance["USD"]
-		assert.True(t, usdBalance.Equal(decimal.NewFromInt(1000)), "Assets should be 1000 as of Jan 31, got %s", usdBalance)
+		assert.Equal(t, "1000", usdBalance)
 	})
 
 	t.Run("PeriodBalance", func(t *testing.T) {
@@ -152,10 +151,10 @@ func TestAPIBalances(t *testing.T) {
 		assert.True(t, expensesRoot != nil, "Expenses root should exist")
 
 		// Income in February: -3000 (credited)
-		assert.True(t, incomeRoot.Balance["USD"].Equal(decimal.NewFromInt(-3000)))
+		assert.Equal(t, "-3000", incomeRoot.Balance["USD"])
 
 		// Expenses in February: 150
-		assert.True(t, expensesRoot.Balance["USD"].Equal(decimal.NewFromInt(150)))
+		assert.Equal(t, "150", expensesRoot.Balance["USD"])
 	})
 
 	t.Run("HierarchicalStructure", func(t *testing.T) {
@@ -295,5 +294,47 @@ func TestAPIBalances(t *testing.T) {
 		assert.True(t, hasName, "node should have 'name' field")
 		assert.True(t, hasDepth, "node should have 'depth' field")
 		assert.True(t, hasBalance, "node should have 'balance' field")
+
+		balance := firstRoot["balance"].(map[string]interface{})
+		usdBalance, ok := balance["USD"].(string)
+		assert.True(t, ok, "balance values should be JSON strings")
+		assert.Equal(t, "3850", usdBalance)
+	})
+
+	t.Run("PreciseDecimalBalanceString", func(t *testing.T) {
+		tmpFilePrecise, err := os.CreateTemp("", "test-precise-*.beancount")
+		assert.NoError(t, err)
+		defer func() { _ = os.Remove(tmpFilePrecise.Name()) }()
+
+		_, err = tmpFilePrecise.WriteString(`
+2024-01-01 open Assets:Crypto BTC
+2024-01-01 open Equity:Opening BTC
+
+2024-01-01 * "Precise balance"
+  Assets:Crypto  0.123456789012345678 BTC
+  Equity:Opening
+`)
+		assert.NoError(t, err)
+		_ = tmpFilePrecise.Close()
+
+		serverPrecise := New(8080, tmpFilePrecise.Name())
+		_, err = serverPrecise.reloadLedger(context.Background())
+		assert.NoError(t, err)
+		muxPrecise, err := serverPrecise.setupRouter()
+		assert.NoError(t, err)
+
+		req := httptest.NewRequest(http.MethodGet, "/api/balances?types=Assets", nil)
+		rec := httptest.NewRecorder()
+
+		muxPrecise.ServeHTTP(rec, req)
+
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var response BalancesResponse
+		err = json.NewDecoder(rec.Body).Decode(&response)
+		assert.NoError(t, err)
+
+		assert.Equal(t, 1, len(response.Roots))
+		assert.Equal(t, "0.123456789012345678", response.Roots[0].Balance["BTC"])
 	})
 }

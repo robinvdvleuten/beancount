@@ -6,7 +6,6 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/shopspring/decimal"
 )
 
 // BalancesResponse is the JSON response structure for the balances endpoint.
@@ -19,11 +18,11 @@ type BalancesResponse struct {
 
 // BalanceNodeResponse represents a node in the balance tree for JSON serialization.
 type BalanceNodeResponse struct {
-	Name     string                     `json:"name"`
-	Account  string                     `json:"account,omitempty"`
-	Depth    int                        `json:"depth"`
-	Balance  map[string]decimal.Decimal `json:"balance"`
-	Children []*BalanceNodeResponse     `json:"children,omitempty"`
+	Name     string                 `json:"name"`
+	Account  string                 `json:"account,omitempty"`
+	Depth    int                    `json:"depth"`
+	Balance  map[string]string      `json:"balance"`
+	Children []*BalanceNodeResponse `json:"children,omitempty"`
 }
 
 // handleGetBalances handles GET requests to /api/balances.
@@ -127,7 +126,20 @@ func convertBalanceNode(node *ledger.BalanceNode) *BalanceNodeResponse {
 		Name:     node.Name,
 		Account:  node.Account,
 		Depth:    node.Depth,
-		Balance:  node.Balance.ToMap(),
+		Balance:  convertBalance(node.Balance),
 		Children: children,
 	}
+}
+
+func convertBalance(balance *ledger.Balance) map[string]string {
+	if balance == nil {
+		return map[string]string{}
+	}
+
+	entries := balance.Entries()
+	converted := make(map[string]string, len(entries))
+	for _, entry := range entries {
+		converted[entry.Currency] = entry.Amount.String()
+	}
+	return converted
 }

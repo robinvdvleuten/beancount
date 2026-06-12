@@ -37,11 +37,20 @@ const flattenNode = (node: BalanceNode, depth = 0): FlatRow[] => {
 const formatAmount = (amount: string | undefined): string => {
   if (!amount) return "--";
 
-  const num = parseFloat(amount);
-  return num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
+  const sign = amount.startsWith("-") ? "-" : "";
+  const unsigned = sign ? amount.slice(1) : amount;
+  const [integer = "0", fraction = ""] = unsigned.split(".");
+  const groupedInteger = integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+
+  if (fraction.length === 0) {
+    return `${sign}${groupedInteger}.00`;
+  }
+
+  if (fraction.length === 1) {
+    return `${sign}${groupedInteger}.${fraction}0`;
+  }
+
+  return `${sign}${groupedInteger}.${fraction}`;
 };
 
 const displayName = (row: FlatRow): string => {
