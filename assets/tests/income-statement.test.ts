@@ -89,6 +89,43 @@ test.describe("Income Statement", () => {
     await expectIncomeStatementRow(page, "Expenses", "Expenses", ["102,101.57", "184.00 VACHR"]);
   });
 
+  test("displays high precision decimal strings without rounding", async ({ page }) => {
+    await page.route("**/api/balances**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          roots: [
+            {
+              name: "Income",
+              depth: 0,
+              balance: {
+                BTC: "0.123456789012345678",
+              },
+              children: [
+                {
+                  name: "Income:Mining",
+                  account: "Income:Mining",
+                  depth: 1,
+                  balance: {
+                    BTC: "0.123456789012345678",
+                  },
+                },
+              ],
+            },
+          ],
+          currencies: ["BTC"],
+        }),
+      }),
+    );
+
+    await page.goto("/income-statement", { waitUntil: "networkidle" });
+    await waitForIncomeStatementRows(page);
+
+    await expect(page.getByRole("columnheader", { name: "BTC", exact: true })).toBeVisible();
+    await expectIncomeStatementRow(page, "Income", "Mining", ["0.123456789012345678"]);
+  });
+
   test("shows loading state initially", async ({ page }) => {
     // Slow down network to catch loading state
     await page.route("**/api/balances**", async (route) => {
