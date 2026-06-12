@@ -40,6 +40,7 @@ const Root: ParentComponent = (props) => {
         <aside class="w-56 border-r border-base-300 bg-base-200">
           <ul class="menu px-0 w-full">
             <MenuItem href="/income-statement">Income Statement</MenuItem>
+            <MenuItem href="/balance-sheet">Balance Sheet</MenuItem>
             <MenuItem href="/editor">Editor</MenuItem>
           </ul>
         </aside>
