@@ -272,6 +272,24 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 
 **CodeMirror**: Minimal setup only. Import only what you use: `@codemirror/{state,view,commands,language,lint,autocomplete}`. Drop `@uiw/react-codemirror`, `@uiw/codemirror-themes`—use `EditorView.theme()` directly. Only `indentWithTab` for keybindings. Result: ~75KB gzipped (vs 400KB+ with basicSetup). Wrappers defeat tree-shaking.
 
+**Composable Components**: Prefer Radix-style composition for reusable UI primitives instead of abstracting whole feature trees behind one large component. Routes should own data fetching, state branching, and page-specific layout decisions; shared components should expose small primitives that compose clearly.
+
+```tsx
+// Prefer: route composes primitives and keeps intent visible
+<FinancialReport.Root>
+  <FinancialReport.Grid>
+    <FinancialReport.Column>
+      <FinancialReport.Table section={assets} currencies={currencies} />
+    </FinancialReport.Column>
+  </FinancialReport.Grid>
+</FinancialReport.Root>
+
+const sections = () => FinancialReport.getSections(data()?.roots, ["Assets"])
+
+// Avoid: one component hides routing-specific structure and policy
+<FinancialReportPage data={data} primarySections={["Assets"]} secondarySections={["Equity"]} />
+```
+
 | Directory | Purpose |
 |-----------|---------|
 | `src/codemirror/` | CodeMirror setup (language, theme, linting, autocomplete) |

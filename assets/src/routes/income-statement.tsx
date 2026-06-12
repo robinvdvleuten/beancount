@@ -1,50 +1,10 @@
 import { type Component, For, Match, Show, Switch, createResource } from "solid-js";
-import type { BalancesResponse, BalanceNode } from "../types";
 import { useFileChange } from "../hooks/useFileChange";
-
-const fetchIncomeStatement = async (): Promise<BalancesResponse> => {
-  const response = await fetch("/api/balances?types=Income,Expenses");
-  if (!response.ok) {
-    throw new Error(`Failed to fetch: ${response.statusText}`);
-  }
-  return (await response.json()) as BalancesResponse;
-};
-
-interface FlatRow {
-  name: string;
-  account?: string;
-  depth: number;
-  balance: Record<string, string>;
-  isHeader: boolean;
-}
-
-const flattenNode = (node: BalanceNode, depth = 0): FlatRow[] => {
-  const row: FlatRow = {
-    name: node.name,
-    account: node.account,
-    depth,
-    balance: node.balance,
-    isHeader: !node.account,
-  };
-
-  if (!node.children || node.children.length === 0) {
-    return [row];
-  }
-
-  return [row, ...node.children.flatMap((child) => flattenNode(child, depth + 1))];
-};
-
-const formatAmount = (amount: string | undefined): string => {
-  if (!amount) return "—";
-  const num = parseFloat(amount);
-  return num.toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-};
+import { fetchBalances } from "../lib/balances";
+import { FinancialReport } from "../components/financial-report";
 
 const IncomeStatement: Component = () => {
-  const [data, { refetch }] = createResource(fetchIncomeStatement);
+  const [data, { refetch }] = createResource(() => fetchBalances(["Income", "Expenses"]));
 
   // File change detection via SSE - click to reload
   const fileChange = useFileChange({
@@ -54,76 +14,53 @@ const IncomeStatement: Component = () => {
     },
   });
 
-  const rows = () => {
-    const d = data();
-    if (!d) return [];
-    return d.roots.flatMap((root) => flattenNode(root));
-  };
-
-  const currencies = () => data()?.currencies ?? [];
+  const incomeSections = () => FinancialReport.getSections(data()?.roots, ["Income"]);
+  const expenseSections = () => FinancialReport.getSections(data()?.roots, ["Expenses"]);
+  const hasRows = () => incomeSections().length > 0 || expenseSections().length > 0;
 
   return (
     <>
-      <div class="flex-1 overflow-auto p-4">
+      <FinancialReport.Root>
         <Switch>
           <Match when={data.loading}>
-            <div class="flex items-center justify-center py-12">
-              <span class="loading loading-spinner loading-lg" />
-            </div>
+            <FinancialReport.Loading />
           </Match>
 
           <Match when={data.error as Error | undefined}>
-            {(error) => (
-              <div class="alert alert-error" role="alert">
-                <span>Error: {error().message}</span>
-              </div>
-            )}
+            {(error) => <FinancialReport.Error error={error()} />}
           </Match>
 
           <Match when={data()}>
-            <div class="overflow-x-auto">
-              <table class="table">
-                <thead>
-                  <tr>
-                    <th>Account</th>
-                    <For each={currencies()}>
-                      {(currency) => <th class="text-right">{currency}</th>}
+            {(report) => (
+              <Show
+                when={hasRows()}
+                fallback={
+                  <FinancialReport.Empty>
+                    No income or expense transactions found.
+                  </FinancialReport.Empty>
+                }
+              >
+                <FinancialReport.Grid>
+                  <FinancialReport.Column>
+                    <For each={incomeSections()}>
+                      {(section) => (
+                        <FinancialReport.Table section={section} currencies={report().currencies} />
+                      )}
                     </For>
-                  </tr>
-                </thead>
-                <tbody>
-                  <For each={rows()}>
-                    {(row) => (
-                      <tr class={row.isHeader ? "font-semibold bg-base-200" : ""}>
-                        <td
-                          style={{
-                            "padding-left": `${row.depth * 1.5 + 1}rem`,
-                          }}
-                        >
-                          {row.isHeader ? row.name : row.name.split(":").pop()}
-                        </td>
-                        <For each={currencies()}>
-                          {(currency) => (
-                            <td class="text-right font-mono">
-                              {formatAmount(row.balance[currency])}
-                            </td>
-                          )}
-                        </For>
-                      </tr>
-                    )}
-                  </For>
-                </tbody>
-              </table>
-            </div>
-
-            <Show when={rows().length === 0}>
-              <div class="text-center py-12 text-base-content/50">
-                No income or expense transactions found.
-              </div>
-            </Show>
+                  </FinancialReport.Column>
+                  <FinancialReport.Column>
+                    <For each={expenseSections()}>
+                      {(section) => (
+                        <FinancialReport.Table section={section} currencies={report().currencies} />
+                      )}
+                    </For>
+                  </FinancialReport.Column>
+                </FinancialReport.Grid>
+              </Show>
+            )}
           </Match>
         </Switch>
-      </div>
+      </FinancialReport.Root>
 
       {/* External file change toast - click to reload */}
       <Show when={fileChange.pendingReload()}>

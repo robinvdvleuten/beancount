@@ -19,17 +19,20 @@ async function navigateToIncomeStatement(page: import("@playwright/test").Page) 
 }
 
 async function waitForIncomeStatementRows(page: import("@playwright/test").Page) {
-  await expect(page.getByRole("table")).toBeVisible();
-  await expect(page.getByRole("columnheader", { name: "Account" })).toBeVisible();
+  const incomeTable = page.getByRole("table", { name: "Income" });
+  await expect(incomeTable).toBeVisible();
+  await expect(incomeTable.getByRole("columnheader", { name: "Account" })).toBeVisible();
   await expect.poll(async () => await page.locator("tbody tr").count()).toBeGreaterThan(0);
 }
 
 async function expectIncomeStatementRow(
   page: import("@playwright/test").Page,
+  tableName: string,
   accountName: string,
   expectedTexts: string[],
 ) {
   const row = page
+    .getByRole("table", { name: tableName })
     .locator("tbody tr")
     .filter({
       has: page.getByRole("cell", { name: accountName, exact: true }),
@@ -59,8 +62,9 @@ test.describe("Income Statement", () => {
     await navigateToIncomeStatement(page);
     await waitForIncomeStatementRows(page);
 
-    await expectIncomeStatementRow(page, "Rent", ["74,400.00"]);
-    await expectIncomeStatementRow(page, "Match401k", ["-27,500.00"]);
+    await expect(page.getByRole("table")).toHaveCount(2);
+    await expectIncomeStatementRow(page, "Expenses", "Rent", ["74,400.00"]);
+    await expectIncomeStatementRow(page, "Income", "Match401k", ["-27,500.00"]);
   });
 
   test("displays Income and Expenses sections", async ({ page }) => {
@@ -76,10 +80,13 @@ test.describe("Income Statement", () => {
     await navigateToIncomeStatement(page);
     await waitForIncomeStatementRows(page);
 
-    await expect(page.getByRole("columnheader", { name: "USD", exact: true })).toBeVisible();
-    await expect(page.getByRole("columnheader", { name: "VACHR", exact: true })).toBeVisible();
+    const expensesTable = page.getByRole("table", { name: "Expenses" });
+    await expect(
+      expensesTable.getByRole("columnheader", { name: "USD", exact: true }),
+    ).toBeVisible();
+    await expect(expensesTable.getByRole("columnheader", { name: "Other" })).toBeVisible();
 
-    await expectIncomeStatementRow(page, "Expenses", ["102,101.57", "184.00"]);
+    await expectIncomeStatementRow(page, "Expenses", "Expenses", ["102,101.57", "184.00 VACHR"]);
   });
 
   test("shows loading state initially", async ({ page }) => {
@@ -100,7 +107,7 @@ test.describe("Income Statement", () => {
 
     // Verify loading spinner is gone and table is visible
     await expect(loadingSpinner).not.toBeVisible();
-    await expect(page.getByRole("table")).toBeVisible();
+    await expect(page.getByRole("table", { name: "Income" })).toBeVisible();
   });
 
   test("displays hierarchical account structure", async ({ page }) => {
@@ -110,8 +117,8 @@ test.describe("Income Statement", () => {
     await expect(page.getByRole("cell", { name: "Income", exact: true })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Expenses", exact: true })).toBeVisible();
 
-    await expectIncomeStatementRow(page, "Home", ["80,760.97"]);
-    await expectIncomeStatementRow(page, "Rent", ["74,400.00"]);
+    await expectIncomeStatementRow(page, "Expenses", "Home", ["80,760.97"]);
+    await expectIncomeStatementRow(page, "Expenses", "Rent", ["74,400.00"]);
   });
 
   test("shows empty state when API returns no rows", async ({ page }) => {
