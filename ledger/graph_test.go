@@ -180,6 +180,23 @@ func TestGraph_FindPath_MultiHop(t *testing.T) {
 	assert.Equal(t, path[1].To, "GBP")
 }
 
+func TestGraph_FindPath_BranchingDoesNotCorruptQueuedPath(t *testing.T) {
+	g := NewGraph()
+	date := newTestDate("2024-01-15")
+
+	g.AddEdge(&Edge{From: "A", To: "B", Kind: "price", Date: date, Weight: decimal.NewFromInt(1)})
+	g.AddEdge(&Edge{From: "B", To: "C", Kind: "price", Date: date, Weight: decimal.NewFromInt(1)})
+	g.AddEdge(&Edge{From: "C", To: "D", Kind: "price", Date: date, Weight: decimal.NewFromInt(1)})
+	g.AddEdge(&Edge{From: "D", To: "E", Kind: "price", Date: date, Weight: decimal.NewFromInt(1)})
+	g.AddEdge(&Edge{From: "D", To: "F", Kind: "price", Date: date, Weight: decimal.NewFromInt(1)})
+	g.AddEdge(&Edge{From: "E", To: "G", Kind: "price", Date: date, Weight: decimal.NewFromInt(1)})
+
+	path, err := g.FindPath("A", "G", date)
+	assert.NoError(t, err)
+	assert.Equal(t, 5, len(path))
+	assert.Equal(t, "E", path[3].To)
+}
+
 func TestGraph_FindPath_NoPath(t *testing.T) {
 	g := NewGraph()
 	date := newTestDate("2024-01-15")

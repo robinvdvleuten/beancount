@@ -206,7 +206,7 @@ func (g *Graph) FindPath(fromID, toID string, date *ast.Date) ([]*Edge, error) {
 
 			// Found target
 			if targetID == toID {
-				return append(item.edges, edge), nil
+				return appendPath(item.edges, edge), nil
 			}
 
 			// Skip visited nodes to avoid cycles
@@ -217,12 +217,19 @@ func (g *Graph) FindPath(fromID, toID string, date *ast.Date) ([]*Edge, error) {
 			visited[targetID] = true
 			queue = append(queue, queueItem{
 				nodeID: targetID,
-				edges:  append(item.edges, edge),
+				edges:  appendPath(item.edges, edge),
 			})
 		}
 	}
 
 	return nil, fmt.Errorf("no path found from %s to %s on %s", fromID, toID, date.String())
+}
+
+func appendPath(path []*Edge, edge *Edge) []*Edge {
+	result := make([]*Edge, len(path)+1)
+	copy(result, path)
+	result[len(path)] = edge
+	return result
 }
 
 // isEdgeValidOnDate checks if an edge is valid on or before the given date.
