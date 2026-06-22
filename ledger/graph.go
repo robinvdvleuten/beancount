@@ -31,6 +31,9 @@ type Graph struct {
 	// Structure: edges[fromNodeID] = []*Edge
 	edges map[string][]*Edge
 
+	// incomingEdges maps node ID to incoming edges for reverse lookups.
+	incomingEdges map[string][]*Edge
+
 	// priceEdgesByDate maps a date to price edges for efficient temporal lookup
 	// Used for forward-fill price queries
 	priceEdgesByDate map[time.Time][]*Edge
@@ -68,6 +71,7 @@ func NewGraph() *Graph {
 	return &Graph{
 		nodes:            make(map[string]*Node),
 		edges:            make(map[string][]*Edge),
+		incomingEdges:    make(map[string][]*Edge),
 		priceEdgesByDate: make(map[time.Time][]*Edge),
 		sortedDates:      make([]*ast.Date, 0),
 		priceDates:       make(map[time.Time]struct{}),
@@ -115,6 +119,7 @@ func (g *Graph) AddEdge(edge *Edge) *Edge {
 
 	// Add edge to adjacency list
 	g.edges[edge.From] = append(g.edges[edge.From], edge)
+	g.incomingEdges[edge.To] = append(g.incomingEdges[edge.To], edge)
 
 	// Index price edges by date for forward-fill queries
 	if edge.Kind == "price" && edge.Date != nil {
@@ -296,12 +301,9 @@ func (g *Graph) GetChildren(nodeID string) []*Node {
 // GetParent returns the parent node via hierarchy edge, or nil if no parent.
 // Since edges are parent → child, we look for incoming edges (someone pointing to us).
 func (g *Graph) GetParent(nodeID string) *Node {
-	// Look for incoming hierarchy edges: parent -> nodeID
-	for _, edges := range g.edges {
-		for _, edge := range edges {
-			if edge.Kind == "hierarchy" && edge.To == nodeID {
-				return g.GetNode(edge.From)
-			}
+	for _, edge := range g.incomingEdges[nodeID] {
+		if edge.Kind == "hierarchy" {
+			return g.GetNode(edge.From)
 		}
 	}
 	return nil
