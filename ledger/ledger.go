@@ -59,6 +59,7 @@ import (
 // are collected and returned together after processing.
 type Ledger struct {
 	graph                 *Graph // Unified graph of accounts, currencies, and relationships
+	accounts              map[string]*Account
 	config                *Config
 	errors                []error
 	padEntries            map[string]*ast.Pad // account -> pad directive
@@ -99,6 +100,7 @@ func (e *ValidationErrors) Unwrap() []error {
 func New() *Ledger {
 	return &Ledger{
 		graph:       NewGraph(),
+		accounts:    make(map[string]*Account),
 		errors:      make([]error, 0),
 		padEntries:  make(map[string]*ast.Pad),
 		usedPads:    make(map[string]bool),
@@ -264,21 +266,16 @@ func (l *Ledger) Errors() []error {
 
 // GetAccount returns an account by name
 func (l *Ledger) GetAccount(name string) (*Account, bool) {
-	node := l.graph.GetNode(name)
-	if node == nil || node.Kind != NodeAccount {
-		return nil, false
-	}
-	acc, ok := node.Meta.(*Account)
-	return acc, ok
+	account, ok := l.accounts[name]
+	return account, ok
 }
 
 // Accounts returns all accounts in the ledger
 func (l *Ledger) Accounts() map[string]*Account {
-	result := make(map[string]*Account)
-	l.forEachAccount(func(acc *Account) bool {
-		result[string(acc.Name)] = acc
-		return true
-	})
+	result := make(map[string]*Account, len(l.accounts))
+	for name, account := range l.accounts {
+		result[name] = account
+	}
 	return result
 }
 
@@ -381,11 +378,9 @@ func (l *Ledger) Graph() *Graph {
 // forEachAccount iterates over all accounts in the ledger, calling fn for each.
 // The callback can return false to break early (not used currently, but enables future filtering).
 func (l *Ledger) forEachAccount(fn func(*Account) bool) {
-	for _, node := range l.graph.GetNodesByKind(NodeAccount) {
-		if account, ok := node.Meta.(*Account); ok {
-			if !fn(account) {
-				break
-			}
+	for _, account := range l.accounts {
+		if !fn(account) {
+			break
 		}
 	}
 }
@@ -688,6 +683,7 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 		Inventory:            NewInventory(),
 	}
 	l.graph.AddNode(accountName, NodeAccount, account)
+	l.accounts[accountName] = account
 
 	// Create implicit parent nodes and hierarchy edges
 	l.ensureAccountHierarchy(accountName)
