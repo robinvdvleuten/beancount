@@ -263,7 +263,7 @@ func TestGraph_ConvertAmount_SameCurrency(t *testing.T) {
 
 	rate, err := g.ConvertAmount(mustParseDec("100"), "USD", "USD", date)
 	assert.NoError(t, err)
-	assert.True(t, rate.Equal(mustParseDec("1")))
+	assert.True(t, rate.Equal(mustParseDec("100")))
 }
 
 func TestGraph_ConvertAmount_DirectRate(t *testing.T) {
@@ -279,10 +279,9 @@ func TestGraph_ConvertAmount_DirectRate(t *testing.T) {
 		Weight: mustParseDec("0.92"),
 	})
 
-	rate, err := g.ConvertAmount(mustParseDec("100"), "USD", "EUR", date)
+	amount, err := g.ConvertAmount(mustParseDec("100"), "USD", "EUR", date)
 	assert.NoError(t, err)
-	// ConvertAmount returns the conversion rate (0.92), not the amount (92)
-	assert.True(t, rate.Equal(mustParseDec("0.92")))
+	assert.True(t, amount.Equal(mustParseDec("92")))
 }
 
 func TestGraph_ConvertAmount_MultiHop(t *testing.T) {

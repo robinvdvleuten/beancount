@@ -257,12 +257,12 @@ func isEdgeValidOnDate(edge *Edge, date *ast.Date) bool {
 // Uses pathfinding to find a conversion path if a direct edge doesn't exist.
 // Returns the converted amount using the most recent prices on or before the date.
 //
-// Same-currency conversions always return 1.0.
+// Same-currency conversions return the original amount.
 // Returns an error if no conversion path exists or if intermediate conversions fail.
 func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, date *ast.Date) (decimal.Decimal, error) {
 	// Same currency - identity conversion
 	if fromCur == toCur {
-		return decimal.NewFromInt(1), nil
+		return amount, nil
 	}
 
 	// Find path from source to target currency
@@ -272,7 +272,7 @@ func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, dat
 	}
 
 	// Calculate conversion by multiplying all edge weights
-	result := decimal.NewFromInt(1)
+	result := amount
 	for _, edge := range path {
 		if edge.Kind != "price" || edge.Weight.IsZero() {
 			return decimal.Zero, fmt.Errorf("invalid price edge in conversion path: %s→%s", edge.From, edge.To)
