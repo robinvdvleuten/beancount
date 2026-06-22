@@ -3,6 +3,7 @@ package ledger
 import (
 	"fmt"
 	"sort"
+	"time"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
@@ -30,12 +31,15 @@ type Graph struct {
 	// Structure: edges[fromNodeID] = []*Edge
 	edges map[string][]*Edge
 
-	// priceEdgesByDate maps (date string) to list of price edges for efficient temporal lookup
+	// priceEdgesByDate maps a date to price edges for efficient temporal lookup
 	// Used for forward-fill price queries
-	priceEdgesByDate map[string][]*Edge
+	priceEdgesByDate map[time.Time][]*Edge
 
 	// sortedDates maintains price dates in chronological order for forward-fill lookups
 	sortedDates []*ast.Date
+
+	// priceDates records dates already present in sortedDates.
+	priceDates map[time.Time]struct{}
 }
 
 // Node represents a vertex in the ledger graph.
@@ -64,8 +68,9 @@ func NewGraph() *Graph {
 	return &Graph{
 		nodes:            make(map[string]*Node),
 		edges:            make(map[string][]*Edge),
-		priceEdgesByDate: make(map[string][]*Edge),
+		priceEdgesByDate: make(map[time.Time][]*Edge),
 		sortedDates:      make([]*ast.Date, 0),
+		priceDates:       make(map[time.Time]struct{}),
 	}
 }
 
@@ -113,22 +118,17 @@ func (g *Graph) AddEdge(edge *Edge) *Edge {
 
 	// Index price edges by date for forward-fill queries
 	if edge.Kind == "price" && edge.Date != nil {
-		dateKey := edge.Date.String()
+		dateKey := edge.Date.Time
 		g.priceEdgesByDate[dateKey] = append(g.priceEdgesByDate[dateKey], edge)
 
-		// Keep sortedDates sorted (only add if new date)
-		dateExists := false
-		for _, d := range g.sortedDates {
-			if d.String() == dateKey {
-				dateExists = true
-				break
-			}
-		}
-		if !dateExists {
-			g.sortedDates = append(g.sortedDates, edge.Date)
-			sort.Slice(g.sortedDates, func(i, j int) bool {
-				return g.sortedDates[i].Before(g.sortedDates[j].Time)
+		if _, exists := g.priceDates[dateKey]; !exists {
+			insertAt := sort.Search(len(g.sortedDates), func(i int) bool {
+				return !g.sortedDates[i].Before(dateKey)
 			})
+			g.sortedDates = append(g.sortedDates, nil)
+			copy(g.sortedDates[insertAt+1:], g.sortedDates[insertAt:])
+			g.sortedDates[insertAt] = edge.Date
+			g.priceDates[dateKey] = struct{}{}
 		}
 	}
 
@@ -149,16 +149,12 @@ func (g *Graph) GetOutgoingEdges(fromID string) []*Edge {
 func (g *Graph) GetPriceEdgesOnDate(date *ast.Date) []*Edge {
 	var result []*Edge
 
-	// Iterate dates in reverse chronological order
-	for i := len(g.sortedDates) - 1; i >= 0; i-- {
+	firstAfter := sort.Search(len(g.sortedDates), func(i int) bool {
+		return g.sortedDates[i].After(date.Time)
+	})
+	for i := firstAfter - 1; i >= 0; i-- {
 		sortedDate := g.sortedDates[i]
-
-		// Stop if we've gone before the lookup date
-		if sortedDate.After(date.Time) {
-			continue
-		}
-
-		dateKey := sortedDate.String()
+		dateKey := sortedDate.Time
 		if edges, ok := g.priceEdgesByDate[dateKey]; ok {
 			result = append(result, edges...)
 		}

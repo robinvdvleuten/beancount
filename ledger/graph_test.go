@@ -317,9 +317,10 @@ func TestGraph_PriceEdgesIndexing(t *testing.T) {
 	date1 := newTestDate("2024-01-15")
 	date2 := newTestDate("2024-01-20")
 
-	// Add price edges on different dates
-	g.AddEdge(&Edge{From: "USD", To: "EUR", Kind: "price", Date: date1, Weight: mustParseDec("0.92")})
+	// Add price edges out of order and repeat one date.
 	g.AddEdge(&Edge{From: "USD", To: "EUR", Kind: "price", Date: date2, Weight: mustParseDec("0.94")})
+	g.AddEdge(&Edge{From: "USD", To: "EUR", Kind: "price", Date: date1, Weight: mustParseDec("0.92")})
+	g.AddEdge(&Edge{From: "EUR", To: "GBP", Kind: "price", Date: date1, Weight: mustParseDec("0.86")})
 
 	// Both dates should be indexed
 	assert.Equal(t, len(g.sortedDates), 2)
