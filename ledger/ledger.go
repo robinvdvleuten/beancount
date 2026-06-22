@@ -522,6 +522,7 @@ func (l *Ledger) buildBalanceTree(entries []balanceTreeEntry, typeFilter map[str
 func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode {
 	// Create a map of account name to node for quick lookup
 	nodeMap := make(map[string]*BalanceNode)
+	childSets := make(map[string]map[string]struct{})
 
 	// Create leaf nodes for all accounts
 	for _, entry := range entries {
@@ -560,15 +561,14 @@ func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *
 			parent := nodeMap[parentPath]
 			child := nodeMap[childPath]
 			if child != nil {
-				found := false
-				for _, c := range parent.Children {
-					if c.Name == child.Name {
-						found = true
-						break
-					}
+				children := childSets[parentPath]
+				if children == nil {
+					children = make(map[string]struct{})
+					childSets[parentPath] = children
 				}
-				if !found {
+				if _, exists := children[childPath]; !exists {
 					parent.Children = append(parent.Children, child)
+					children[childPath] = struct{}{}
 				}
 			}
 		}

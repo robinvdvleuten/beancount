@@ -9,155 +9,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Validation Architecture
-//
-// The ledger uses a two-phase approach for processing directives:
-//
-// 1. Validation Phase (Pure Functions)
-//   - Checks all business rules without side effects
-//   - Uses the validator type with read-only access to ledger state
-//   - Returns all errors found (doesn't short-circuit)
-//   - Produces delta objects describing planned mutations
-//   - Runs with telemetry instrumentation for performance monitoring
-//
-// 2. Mutation Phase (State Changes)
-//   - Only executes if validation passes
-//   - Applies deltas to update account state
-//   - Can assume all inputs are valid
-//
-// Validation Flow:
-//
-// TRANSACTIONS:
-//   Ledger.processTransaction(txn)
-//     ↓
-//   validator.validateTransaction(ctx, txn) → ([]error, *TransactionDelta)
-//     ├─ validateAccountsOpen()           // Check accounts exist and are open
-//     ├─ validateAmounts()                // Check amounts are parseable
-//     ├─ validateCosts()                  // Check cost specifications
-//     ├─ validatePrices()                 // Check price specifications
-//     ├─ validateMetadata()               // Check metadata entries
-//     ├─ calculateBalance()               // Calculate weights, check balance
-//     ├─ validateInventoryOperations()    // Check lot operations
-//     └─ validateConstraintCurrencies()   // Check currency restrictions
-//     ↓
-//   Ledger.applyTransaction(txn, delta)
-//     └─ Apply inferred amounts/costs, update inventories
-//
-// OPEN DIRECTIVES:
-//   Ledger.processOpen(open)
-//     ↓
-//   validator.validateOpen(open) → ([]error, *OpenDelta)
-//     ├─ Check account doesn't already exist
-//     └─ Parse account type, copy metadata
-//     ↓
-//   Ledger.applyOpen(delta)
-//     └─ Create account with properties
-//
-// CLOSE DIRECTIVES:
-//   Ledger.processClose(close)
-//     ↓
-//   validator.validateClose(close) → ([]error, *CloseDelta)
-//     ├─ Check account exists
-//     └─ Check account is not already closed
-//     ↓
-//   Ledger.applyClose(delta)
-//     └─ Set account close date
-//
-// BALANCE ASSERTIONS:
-//   Ledger.processBalance(balance)
-//     ↓
-//   validator.validateBalance(balance) → []error
-//     ├─ Check account exists and is open
-//     └─ Check amount is parseable
-//     ↓
-//   validator.calculateBalanceDelta(balance, pad) → (*BalanceDelta, error)
-//     ├─ Validate pad timing (must come before balance)
-//     ├─ Calculate padding adjustments if needed
-//     └─ Check balance matches within tolerance
-//     ↓
-//   Ledger.applyBalance(delta)
-//     └─ Apply padding transaction, remove pad entry
-//
-// PAD DIRECTIVES:
-//   Ledger.processPad(pad)
-//     ↓
-//   validator.validatePad(pad) → ([]error, *PadDelta)
-//     ├─ Check main account exists and is open
-//     └─ Check pad account exists and is open
-//     ↓
-//   Ledger.applyPad(delta)
-//     └─ Store pad entry for next balance assertion
-//
-// NOTE/DOCUMENT DIRECTIVES:
-//   validator.validateNote(note) → []error
-//   validator.validateDocument(doc) → []error
-//     └─ Check account exists and is open
-//     (No mutations needed - validation only)
-//
-// Delta Types:
-//   - TransactionDelta: InferredAmounts, InferredCosts
-//   - OpenDelta: Account properties (name, type, currencies, metadata)
-//   - CloseDelta: Account name, close date
-//   - BalanceDelta: PaddingAdjustments, pad account, removal flag
-//   - PadDelta: Stores pad entry for later use
-//
-// Validation Methods:
-//   Transaction: validateTransaction, validateAccountsOpen, validateAmounts,
-//                validateCosts, validatePrices, validateMetadata, calculateBalance,
-//                validateInventoryOperations, validateConstraintCurrencies
-//   Open:        validateOpen
-//   Close:       validateClose
-//   Balance:     validateBalance, calculateBalanceDelta
-//   Pad:         validatePad
-//   Note:        validateNote
-//   Document:    validateDocument
-//
-// This separation provides several benefits:
-//   - Individual validation rules can be tested in isolation
-//   - Validation can be performed without mutating state (dry-run mode)
-//   - Clear separation of concerns (validation vs mutation)
-//   - Better error reporting (all errors found, not just first)
-//   - Delta inspection allows observing planned changes before applying
-//   - Easier to understand and maintain
-//
-// Example: Normal usage
-//
-//   v := newValidator(ledger.accounts, ledger.toleranceConfig)
-//   errs, delta := v.validateTransaction(ctx, txn)
-//   if len(errs) > 0 {
-//       // Handle validation errors
-//       for _, err := range errs {
-//           fmt.Println(err)
-//       }
-//       return
-//   }
-//   // Validation passed - safe to mutate state
-//   ledger.applyTransaction(txn, delta)
-//
-// Example: Dry-run mode (inspect deltas without applying)
-//
-//   v := newValidator(ledger.accounts, ledger.toleranceConfig)
-//   errs, delta := v.validateTransaction(ctx, txn)
-//   if len(errs) == 0 {
-//       // Inferred amounts/costs are stored directly on postings
-//       for _, posting := range txn.Postings {
-//           if posting.Inferred {
-//               log.Printf("  %s: %s %s (inferred)", posting.Account, posting.Amount.Value, posting.Amount.Currency)
-//           }
-//       }
-//       // Don't call applyTransaction - just inspect!
-//   }
-//
-//   // Balance assertions with padding
-//   errs := v.validateBalance(balance)
-//   if len(errs) == 0 {
-//       delta, err := v.calculateBalanceDelta(balance, padEntry)
-//       if err == nil && delta.HasMutations() {
-//           log.Printf("Would add padding: %v", delta.PaddingAdjustments)
-//           log.Printf("Pad from account: %s", delta.PadAccountName)
-//           // Don't call applyBalance - just inspect!
-//       }
-//   }
+// Validation computes directive-specific deltas without mutating ledger state.
+// Handlers apply those deltas only when validation succeeds.
 
 // validator provides transaction validation with read-only access to ledger state.
 // This is a separate type from Ledger to ensure validation cannot mutate state.
@@ -1135,7 +988,7 @@ func createPaddingTransaction(
 
 	// Calculate negative amount string (preserve formatting)
 	var negDifferenceStr string
-	if differenceStr[0] == '-' {
+	if strings.HasPrefix(differenceStr, "-") {
 		negDifferenceStr = differenceStr[1:] // Remove minus sign
 	} else {
 		negDifferenceStr = "-" + differenceStr // Add minus sign

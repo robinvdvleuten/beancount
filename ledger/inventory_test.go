@@ -235,6 +235,14 @@ func TestReduceLotDoesNotMutateOnFailure(t *testing.T) {
 	assert.True(t, lots[1].Amount.Equal(decimal.NewFromInt(20)))
 }
 
+func TestInventoryStringSortsCommodities(t *testing.T) {
+	inv := NewInventory()
+	inv.Add("USD", decimal.NewFromInt(10))
+	inv.Add("EUR", decimal.NewFromInt(20))
+
+	assert.Equal(t, "{20 EUR, 10 USD}", inv.String())
+}
+
 func TestCanReduceSpecificLot(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-15")
 

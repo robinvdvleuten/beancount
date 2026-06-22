@@ -117,11 +117,18 @@ func (inv *Inventory) String() string {
 		return "{}"
 	}
 
+	commodities := make([]string, 0, len(inv.lots))
+	for commodity := range inv.lots {
+		commodities = append(commodities, commodity)
+	}
+	sort.Strings(commodities)
+
 	var buf strings.Builder
 	buf.WriteByte('{')
 
 	first := true
-	for commodity, lots := range inv.lots {
+	for _, commodity := range commodities {
+		lots := inv.lots[commodity]
 		for _, lot := range lots {
 			if !first {
 				buf.WriteString(", ")
