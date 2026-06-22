@@ -30,7 +30,7 @@
     "@types/node": "^25.9.2",
     "eslint-plugin-solid": "^0.14.5",
     "oxfmt": "^0.54.0",
-    "oxlint": "^1.68.0",
+    "oxlint": "^1.69.0",
     "oxlint-tsgolint": "^0.23.0",
     "tailwindcss": "^4.3.0",
     "typescript": "~6.0.3",
