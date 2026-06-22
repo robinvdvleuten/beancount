@@ -212,13 +212,15 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		// Use stable sort to preserve original ordering for same-date directives
 		_ = ast.SortDirectives(tree)
 
-		// Process synthetic transactions to update inventory
-		// Note: These transactions are pre-validated and always balance
+		// Process synthetic transactions to update inventory.
 		for _, txn := range l.syntheticTransactions {
-			// Synthetic transactions skip validation - they're pre-validated by padding calculation
 			handler := GetHandler(txn.Kind())
 			if handler != nil {
-				_, delta := handler.Validate(ctx, l, txn)
+				errs, delta := handler.Validate(ctx, l, txn)
+				if len(errs) > 0 {
+					l.errors = append(l.errors, errs...)
+					continue
+				}
 				handler.Apply(ctx, l, txn, delta)
 			}
 		}

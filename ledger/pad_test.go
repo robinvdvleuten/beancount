@@ -194,6 +194,25 @@ func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
 	assert.Equal(t, "2020-01-05", txn.Date().String())
 }
 
+func TestPadSyntheticTransactionValidationErrorDoesNotPanic(t *testing.T) {
+	source := `
+		2020-01-01 open Assets:Checking
+		2020-01-01 open Equity:Opening-Balances EUR
+
+		2020-01-05 pad Assets:Checking Equity:Opening-Balances
+		2020-01-15 balance Assets:Checking 1000.00 USD
+	`
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	ledger := New()
+	err := ledger.Process(context.Background(), tree)
+
+	assert.Error(t, err)
+	validationErrs, ok := err.(*ValidationErrors)
+	assert.True(t, ok)
+	assert.True(t, len(validationErrs.Errors) > 0)
+}
+
 // Helper function to find padding transactions in AST
 func findPaddingTransactions(tree *ast.AST) []*ast.Transaction {
 	var paddingTxns []*ast.Transaction
