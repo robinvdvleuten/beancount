@@ -9,10 +9,33 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ledger"
 )
+
+func TestServerStartStopsWhenContextIsCanceled(t *testing.T) {
+	ledgerFile := filepath.Join(t.TempDir(), "main.beancount")
+	err := os.WriteFile(ledgerFile, []byte("2024-01-01 open Assets:Checking\n"), 0600)
+	assert.NoError(t, err)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	server := New(0, ledgerFile)
+	done := make(chan error, 1)
+	go func() {
+		done <- server.Start(ctx)
+	}()
+
+	cancel()
+
+	select {
+	case err := <-done:
+		assert.NoError(t, err)
+	case <-time.After(2 * time.Second):
+		t.Fatal("Server.Start did not return after context cancellation")
+	}
+}
 
 func TestAPISource(t *testing.T) {
 	tmpFile, err := os.CreateTemp("", "test-*.beancount")

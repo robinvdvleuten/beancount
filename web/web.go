@@ -11,8 +11,10 @@ package web
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"path/filepath"
 	"sync"
@@ -101,7 +103,36 @@ func (s *Server) Start(ctx context.Context) error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", s.Host, s.Port)
-	return http.ListenAndServe(addr, mux)
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("failed to listen on %s: %w", addr, err)
+	}
+
+	serverCtx, cancelServer := context.WithCancel(ctx)
+	defer cancelServer()
+
+	server := &http.Server{
+		Addr:    addr,
+		Handler: mux,
+		BaseContext: func(net.Listener) context.Context {
+			return serverCtx
+		},
+	}
+
+	go func() {
+		<-serverCtx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := server.Shutdown(shutdownCtx); err != nil {
+			log.Printf("Failed to shut down web server: %v", err)
+		}
+	}()
+
+	err = server.Serve(listener)
+	if errors.Is(err, http.ErrServerClosed) {
+		return nil
+	}
+	return fmt.Errorf("failed to serve on %s: %w", addr, err)
 }
 
 func (s *Server) initializeSourceState(ctx context.Context) error {
