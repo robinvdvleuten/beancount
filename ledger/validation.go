@@ -301,46 +301,35 @@ func (v *validator) validatePrices(txn *ast.Transaction) []error {
 //	    }
 //	}
 func (v *validator) validateMetadata(txn *ast.Transaction) []error {
-	var errs []error
-
-	// Validate transaction-level metadata
-	if txn.HasMetadata() {
-		seen := make(map[string]bool)
-		for _, meta := range txn.Metadata {
-			// Check for duplicate keys
-			if seen[meta.Key] {
-				errs = append(errs, NewInvalidMetadataError(txn, "", meta.Key, meta.Value, "duplicate key"))
-				continue
-			}
-			seen[meta.Key] = true
-
-			// Check for empty values (empty string values)
-			if meta.Value != nil && meta.Value.StringValue != nil && meta.Value.StringValue.IsEmpty() {
-				errs = append(errs, NewInvalidMetadataError(txn, "", meta.Key, meta.Value, "empty value"))
-			}
-		}
-	}
-
-	// Validate posting-level metadata
+	errs := validateMetadataEntries(txn, txn.Metadata, "")
 	for _, posting := range txn.Postings {
-		if posting.HasMetadata() {
-			seen := make(map[string]bool)
-			for _, meta := range posting.Metadata {
-				// Check for duplicate keys
-				if seen[meta.Key] {
-					errs = append(errs, NewInvalidMetadataError(txn, posting.Account, meta.Key, meta.Value, "duplicate key"))
-					continue
-				}
-				seen[meta.Key] = true
+		errs = append(errs, validateMetadataEntries(txn, posting.Metadata, posting.Account)...)
+	}
+	return errs
+}
 
-				// Check for empty values (empty string values)
-				if meta.Value != nil && meta.Value.StringValue != nil && meta.Value.StringValue.IsEmpty() {
-					errs = append(errs, NewInvalidMetadataError(txn, posting.Account, meta.Key, meta.Value, "empty value"))
-				}
-			}
+func validateMetadataEntries(
+	txn *ast.Transaction,
+	metadata []*ast.Metadata,
+	account ast.Account,
+) []error {
+	var errs []error
+	seen := make(map[string]bool, len(metadata))
+	for _, meta := range metadata {
+		if seen[meta.Key] {
+			errs = append(errs, NewInvalidMetadataError(
+				txn, account, meta.Key, meta.Value, "duplicate key",
+			))
+			continue
+		}
+		seen[meta.Key] = true
+
+		if meta.Value != nil && meta.Value.StringValue != nil && meta.Value.StringValue.IsEmpty() {
+			errs = append(errs, NewInvalidMetadataError(
+				txn, account, meta.Key, meta.Value, "empty value",
+			))
 		}
 	}
-
 	return errs
 }
 
@@ -420,28 +409,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			// Multiple currencies - infer posting must balance all of them
 			// Create multi-currency amount (not supported, so fail)
 			// This matches official beancount: "cannot infer multi-currency amount"
-			residuals := make(map[string]decimal.Decimal)
-			for currency, residual := range balance {
-				residuals[currency] = residual
-			}
-			validation := &balanceValidation{
-				isBalanced: false,
-				residuals:  residuals,
-			}
-			return delta, validation, nil
+			return delta, unbalancedValidation(balance), nil
 		}
 		// else: len(balance) == 0 means already balanced, no inference needed
 	} else if len(pc.withoutAmounts) > 1 {
 		// Multiple postings without amounts - ambiguous, can't infer
-		residuals := make(map[string]decimal.Decimal)
-		for currency, residual := range balance {
-			residuals[currency] = residual
-		}
-		validation := &balanceValidation{
-			isBalanced: false,
-			residuals:  residuals,
-		}
-		return delta, validation, nil
+		return delta, unbalancedValidation(balance), nil
 	}
 
 	// Infer costs for empty cost specs {}
@@ -461,15 +434,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		// Beancount compliance: Cannot infer costs when multiple postings have empty cost specs
 		// This is ambiguous - which posting gets which portion of the residual?
 		if positiveEmptyCosts > 1 {
-			residuals := make(map[string]decimal.Decimal)
-			for currency, residual := range balance {
-				residuals[currency] = residual
-			}
-			validation := &balanceValidation{
-				isBalanced: false,
-				residuals:  residuals,
-			}
-			return delta, validation, nil
+			return delta, unbalancedValidation(balance), nil
 		}
 
 		for _, posting := range pc.withEmptyCosts {
@@ -498,15 +463,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 				}
 			} else if len(balance) > 1 {
 				// Multiple currencies - ambiguous
-				residuals := make(map[string]decimal.Decimal)
-				for currency, residual := range balance {
-					residuals[currency] = residual
-				}
-				validation := &balanceValidation{
-					isBalanced: false,
-					residuals:  residuals,
-				}
-				return delta, validation, nil
+				return delta, unbalancedValidation(balance), nil
 			}
 		}
 	}
@@ -544,6 +501,17 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	}
 
 	return delta, validation, nil
+}
+
+func unbalancedValidation(balance map[string]decimal.Decimal) *balanceValidation {
+	residuals := make(map[string]decimal.Decimal, len(balance))
+	for currency, residual := range balance {
+		residuals[currency] = residual
+	}
+	return &balanceValidation{
+		isBalanced: false,
+		residuals:  residuals,
+	}
 }
 
 // validateTransaction runs all validation checks on a transaction.
