@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.0](https://github.com/robinvdvleuten/beancount/compare/v0.9.0...v0.10.0) (2026-06-22)
+
+
+### Features
+
+* add route for viewing balance sheet ([#245](https://github.com/robinvdvleuten/beancount/issues/245)) ([0530861](https://github.com/robinvdvleuten/beancount/commit/053086113f425ad55f3448b4a28f0ddba885d6c1))
+* **editor:** save with Cmd+S keyboard shortcut ([#211](https://github.com/robinvdvleuten/beancount/issues/211)) ([eb35fcd](https://github.com/robinvdvleuten/beancount/commit/eb35fcdbacf0886e87dc0d3393bee0f0be081795)), closes [#179](https://github.com/robinvdvleuten/beancount/issues/179)
+* **formatter:** preserve transaction body trivia ([11c8ac7](https://github.com/robinvdvleuten/beancount/commit/11c8ac7504a9e6b46480ade0ead80d60ddc55a7b))
+* **parser:** improve syntax error diagnostics ([5d7be7c](https://github.com/robinvdvleuten/beancount/commit/5d7be7c02bab1abb3c163699890bf20bb859815e))
+* **parser:** keep parsing syntax-only ([1e68a78](https://github.com/robinvdvleuten/beancount/commit/1e68a78fe38adead75748ba5b82e3764e5f6c3c8))
+* **parser:** tighten beancount syntax parsing ([c4d5718](https://github.com/robinvdvleuten/beancount/commit/c4d571887a325c7e1d2e98e7fb7701ae0e2f7f6f))
+* preserve decimal balance precision in API and UI ([#246](https://github.com/robinvdvleuten/beancount/issues/246)) ([26f4cf7](https://github.com/robinvdvleuten/beancount/commit/26f4cf709284f505c56331add59db51e891b70b3))
+
+
+### Bug Fixes
+
+* **editor:** autocomplete non-leading account segments ([#212](https://github.com/robinvdvleuten/beancount/issues/212)) ([914a37c](https://github.com/robinvdvleuten/beancount/commit/914a37c22854c974673d465aaa4558ffba479f84)), closes [#176](https://github.com/robinvdvleuten/beancount/issues/176)
+* **editor:** close file selector on outside click ([b758f78](https://github.com/robinvdvleuten/beancount/commit/b758f786129a7fef1932efe8dc977842df49056c))
+* **formatter:** keep multiline string formatting idempotent ([04b177f](https://github.com/robinvdvleuten/beancount/commit/04b177f13659259fdee7706e888a2f43313475ac))
+* **ledger:** convert the requested amount ([d757f7f](https://github.com/robinvdvleuten/beancount/commit/d757f7f12c57ec7d2eaf637c3c8be2ecc07dbe29)), closes [#249](https://github.com/robinvdvleuten/beancount/issues/249)
+* **ledger:** handle invalid padding transactions ([25397c7](https://github.com/robinvdvleuten/beancount/commit/25397c786da3c95e8d77d8ce49766b77bb944c9c)), closes [#251](https://github.com/robinvdvleuten/beancount/issues/251)
+* **ledger:** honor LIFO lot booking ([65855f4](https://github.com/robinvdvleuten/beancount/commit/65855f4db8f436aaac3513f306eba907842a8616)), closes [#247](https://github.com/robinvdvleuten/beancount/issues/247)
+* **ledger:** isolate BFS path slices ([3ad22cf](https://github.com/robinvdvleuten/beancount/commit/3ad22cfb70378a968244b838b34c64dd80202f14)), closes [#248](https://github.com/robinvdvleuten/beancount/issues/248)
+* **ledger:** reject mixed nil dates in GetBalanceTree ([#267](https://github.com/robinvdvleuten/beancount/issues/267)) ([b0c5363](https://github.com/robinvdvleuten/beancount/commit/b0c53630b6ed6610d1c298887a8c8fd734299b8a))
+* **ledger:** resolve review sweep findings ([1cf9a0d](https://github.com/robinvdvleuten/beancount/commit/1cf9a0d8a4fd04205d17889625d282d581963237)), closes [#260](https://github.com/robinvdvleuten/beancount/issues/260)
+* **ledger:** upgrade implicit account nodes ([920963b](https://github.com/robinvdvleuten/beancount/commit/920963b5862425e087d3ad1c8c74cd558fe72718))
+* **web:** report saved source errors and allow startup ([#209](https://github.com/robinvdvleuten/beancount/issues/209)) ([c8b66bd](https://github.com/robinvdvleuten/beancount/commit/c8b66bda0a22eb99638f5c497826fa7381f7ef1d)), closes [#178](https://github.com/robinvdvleuten/beancount/issues/178)
+* **web:** stop server on context cancellation ([4f98c75](https://github.com/robinvdvleuten/beancount/commit/4f98c75bd31d358690a27ed2c9644c2db4f5cd1b)), closes [#259](https://github.com/robinvdvleuten/beancount/issues/259)
+
+
+### Performance Improvements
+
+* **ledger:** cache price graphs by date ([281d4a3](https://github.com/robinvdvleuten/beancount/commit/281d4a3659c83272d44352cb86fd0ba664d6a048)), closes [#253](https://github.com/robinvdvleuten/beancount/issues/253)
+* **ledger:** index incoming graph edges ([1751e58](https://github.com/robinvdvleuten/beancount/commit/1751e58a3a68d5cfc33eea69d984142477f41a81)), closes [#255](https://github.com/robinvdvleuten/beancount/issues/255)
+* **ledger:** index price dates incrementally ([6eaadaf](https://github.com/robinvdvleuten/beancount/commit/6eaadaf640ab6d0e434aef4546a34a529e8ee9ce)), closes [#254](https://github.com/robinvdvleuten/beancount/issues/254)
+* **ledger:** reuse the account lookup map ([e15e0bb](https://github.com/robinvdvleuten/beancount/commit/e15e0bbc0acbd2c0e5cac1790afc120f0792b383)), closes [#252](https://github.com/robinvdvleuten/beancount/issues/252)
+
 ## [0.9.0](https://github.com/robinvdvleuten/beancount/compare/v0.8.0...v0.9.0) (2026-03-31)
 
 
