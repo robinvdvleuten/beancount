@@ -259,6 +259,27 @@ func TestGetBalanceTree_InvalidDateRange(t *testing.T) {
 	assert.Contains(t, err.Error(), "after")
 }
 
+func TestGetBalanceTree_MixedNilDates(t *testing.T) {
+	l := ledger.New()
+	source := `
+2024-01-01 open Assets:Checking USD
+`
+	ctx := context.Background()
+	tree, err := parser.ParseBytes(ctx, []byte(source))
+	assert.NoError(t, err)
+	assert.NoError(t, l.Process(ctx, tree))
+
+	date, _ := ast.NewDate("2024-01-01")
+
+	// Only startDate set should return an error, not panic.
+	_, err = l.GetBalanceTree(nil, date, nil)
+	assert.Error(t, err)
+
+	// Only endDate set should return an error, not panic.
+	_, err = l.GetBalanceTree(nil, nil, date)
+	assert.Error(t, err)
+}
+
 func TestGetBalanceTree_NoTransactions(t *testing.T) {
 	l := ledger.New()
 	source := `

@@ -377,6 +377,9 @@ func (l *Ledger) forEachAccount(fn func(*Account) bool) {
 // aggregated bottom-up so parent nodes include the sum of all their descendants.
 func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast.Date) (*BalanceTree, error) {
 	// Validate date range
+	if (startDate == nil) != (endDate == nil) {
+		return nil, fmt.Errorf("startDate and endDate must both be set or both be nil")
+	}
 	if startDate != nil && endDate != nil && startDate.After(endDate.Time) {
 		return nil, fmt.Errorf("startDate %s is after endDate %s", startDate.String(), endDate.String())
 	}
