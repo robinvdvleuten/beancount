@@ -946,6 +946,22 @@ func TestLedger_GetPriceSameCurrency(t *testing.T) {
 	assert.True(t, rate.Equal(mustParseDec("1")))
 }
 
+func TestLedger_GetPriceCachesForwardFillGraphByDate(t *testing.T) {
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, "2024-01-15 price USD 1.08 CAD\n")
+	ledger := New()
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	date := newTestDate("2024-01-15")
+	_, found := ledger.GetPrice(date, "USD", "CAD")
+	assert.True(t, found)
+	_, found = ledger.GetPrice(date, "CAD", "USD")
+	assert.True(t, found)
+
+	assert.Equal(t, 1, len(ledger.priceGraphs))
+}
+
 func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
 	source := `
 2024-01-15 price USD 1.08 CAD

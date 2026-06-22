@@ -38,6 +38,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -63,6 +64,8 @@ type Ledger struct {
 	padEntries            map[string]*ast.Pad // account -> pad directive
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
+	priceGraphMu          sync.RWMutex
+	priceGraphs           map[string]*Graph
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -95,10 +98,11 @@ func (e *ValidationErrors) Unwrap() []error {
 // New creates a new empty ledger
 func New() *Ledger {
 	return &Ledger{
-		graph:      NewGraph(),
-		errors:     make([]error, 0),
-		padEntries: make(map[string]*ast.Pad),
-		usedPads:   make(map[string]bool),
+		graph:       NewGraph(),
+		errors:      make([]error, 0),
+		padEntries:  make(map[string]*ast.Pad),
+		usedPads:    make(map[string]bool),
+		priceGraphs: make(map[string]*Graph),
 	}
 }
 
@@ -287,8 +291,7 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 		return decimal.NewFromInt(1), true
 	}
 
-	// Build temporary graph with most recent edges per currency pair
-	tempGraph := l.buildForwardFillGraph(date)
+	tempGraph := l.forwardFillGraph(date)
 
 	// Find path using the filtered edges
 	path, err := tempGraph.FindPath(fromCurrency, toCurrency, date)
@@ -305,6 +308,29 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 	}
 
 	return result, true
+}
+
+func (l *Ledger) forwardFillGraph(date *ast.Date) *Graph {
+	key := date.String()
+
+	l.priceGraphMu.RLock()
+	graph := l.priceGraphs[key]
+	l.priceGraphMu.RUnlock()
+	if graph != nil {
+		return graph
+	}
+
+	graph = l.buildForwardFillGraph(date)
+
+	l.priceGraphMu.Lock()
+	if cached := l.priceGraphs[key]; cached != nil {
+		graph = cached
+	} else {
+		l.priceGraphs[key] = graph
+	}
+	l.priceGraphMu.Unlock()
+
+	return graph
 }
 
 // buildForwardFillGraph constructs a temporary graph with only the most recent
@@ -820,6 +846,10 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 		Meta:     price,
 		Inferred: true,
 	})
+
+	l.priceGraphMu.Lock()
+	clear(l.priceGraphs)
+	l.priceGraphMu.Unlock()
 }
 
 // applyCommodity creates an explicit commodity node in the graph with metadata.
