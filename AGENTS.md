@@ -15,7 +15,7 @@ Project-specific conventions for the beancount Go implementation.
 **Examples**:
 - **Compression for localhost server**: Saves ~3ms per page load. Not worth the complexity.
 - **Position tracking in parser errors**: Shows exact line/column for syntax errors. Worth the complexity—saves hours of debugging.
-- **Validation in parser**: Catches errors earlier. Worth the complexity for better error messages.
+- **Syntax validation in parser**: Reports malformed input at the exact source position. Worth the complexity for better error messages.
 - **Premature optimization**: "Might be useful later" is not justification. YAGNI applies.
 
 **Process**:
@@ -31,7 +31,8 @@ Don't waste time planning solutions to non-problems.
 
 **Go**:
 ```bash
-gofmt -w .           # Format (required)
+gofmt -w <changed-files> # Format changed Go files (required)
+gofmt -l .           # Verify repository formatting (must print nothing)
 golangci-lint run    # Lint (must pass)
 go test ./...        # Test all (must pass)
 go test -run TestName ./package  # Run single test
@@ -49,23 +50,18 @@ npm run --prefix assets test  # Playwright
 
 ## Validation Logic Separation
 
-**CRITICAL**: Parser → Process → Validate. No validation in parser or processing phases.
+**CRITICAL**: Parse → Validate → Apply. No semantic validation in parsing or mutation phases.
 
 | Phase | Does | Does NOT |
 |-------|------|----------|
 | **Parser** | Parse tokens into AST, report syntax errors | Semantic validation, cross-directive checks, business logic |
-| **Processing** | Apply directives, compute derived values, build ledger state | Validate correctness, check errors |
-| **Validation** | All semantic checks (accounts open, transactions balance, assertions match) | - |
+| **Validation** | Perform all semantic checks and compute mutation deltas | Mutate ledger state |
+| **Apply** | Apply validated deltas, compute derived state, build ledger state | Validate correctness, check errors |
 
 ```go
 // Parser: syntax only
 func (p *Parser) parseTransaction() (*Transaction, error) {
     return &Transaction{Date: p.parseDate(), Flag: p.parseFlag()}, nil
-}
-
-// Processor: mutate state only
-func (l *Ledger) processTransaction(txn *Transaction) {
-    l.accounts[txn.Account].Inventory.Add(txn.Amount)
 }
 
 // Validator: all checks
@@ -75,6 +71,11 @@ func (v *Validator) validateTransaction(txn *Transaction) []error {
         errs = append(errs, NewError("account not open", txn))
     }
     return errs
+}
+
+// Apply: mutate state only after validation succeeds
+func (l *Ledger) applyTransaction(txn *Transaction, delta *TransactionDelta) {
+    // Mutate account inventories from the validated postings.
 }
 ```
 
@@ -89,7 +90,7 @@ context7_get_library_docs(context7CompatibleLibraryID: "/shopspring/decimal", to
 
 ## Beancount Compliance
 
-Always validate against official tools: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`.
+When changing Beancount semantics, parsing, lexing, formatting, or query behavior, validate against the relevant official tools: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Purely internal refactors and unrelated infrastructure changes do not require an official-tool comparison.
 
 ```bash
 # Debug parser / lexer issues or inconsistencies
@@ -164,7 +165,7 @@ var handlerRegistry = map[ast.DirectiveKind]Handler{
 type TransactionHandler struct{}
 func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
     cfg := ConfigFromContext(ctx)
-    v := newValidator(l.Accounts(), cfg)
+    v := newValidator(l.accounts, cfg) // Stable read-only lookup; do not copy via Accounts().
     return v.validateTransaction(ctx, d.(*ast.Transaction))
 }
 func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
