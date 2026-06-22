@@ -179,23 +179,9 @@ func (inv *Inventory) reduceWithBooking(commodity string, amount decimal.Decimal
 		return fmt.Errorf("no lots available for %s", commodity)
 	}
 
-	// For now, implement FIFO (oldest first)
-	// Sort lots by date (lots without date come first)
-	sortedLots := make([]*lot, len(lots))
-	copy(sortedLots, lots)
-	sort.Slice(sortedLots, func(i, j int) bool {
-		// Lots without date come first
-		if sortedLots[i].Spec == nil || sortedLots[i].Spec.Date == nil {
-			return true
-		}
-		if sortedLots[j].Spec == nil || sortedLots[j].Spec.Date == nil {
-			return false
-		}
-		// Sort by date
-		return sortedLots[i].Spec.Date.Before(sortedLots[j].Spec.Date.Time)
-	})
+	sortedLots := sortedLotsForBooking(lots, bookingMethod)
 
-	// Reduce from lots in FIFO order
+	// Reduce from lots in booking order
 	remaining := amount
 	for _, lot := range sortedLots {
 		if remaining.IsZero() {
@@ -355,56 +341,7 @@ func (inv *Inventory) canReduceWithBooking(commodity string, amount decimal.Deci
 		return fmt.Errorf("no lots available for %s", commodity)
 	}
 
-	// Sort lots according to booking method
-	sortedLots := make([]*lot, len(lots))
-	copy(sortedLots, lots)
-
-	switch bookingMethod {
-	case "FIFO", "":
-		sort.Slice(sortedLots, func(i, j int) bool {
-			// Lots without date come first
-			iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
-			jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
-
-			if !iHasDate && !jHasDate {
-				return i < j // Stable sort for lots without dates
-			}
-			if !iHasDate {
-				return true
-			}
-			if !jHasDate {
-				return false
-			}
-
-			// Both have dates - compare
-			if sortedLots[i].Spec.Date.Time.Equal(sortedLots[j].Spec.Date.Time) { //nolint:staticcheck
-				return i < j // Stable sort for same date
-			}
-			return sortedLots[i].Spec.Date.Time.Before(sortedLots[j].Spec.Date.Time) //nolint:staticcheck
-		})
-	case "LIFO":
-		sort.Slice(sortedLots, func(i, j int) bool {
-			// Reverse of FIFO - lots with dates come first, newest first
-			iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
-			jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
-
-			if !iHasDate && !jHasDate {
-				return i < j // Stable sort for lots without dates
-			}
-			if !iHasDate {
-				return false
-			}
-			if !jHasDate {
-				return true
-			}
-
-			// Both have dates - compare (reversed)
-			if sortedLots[i].Spec.Date.Time.Equal(sortedLots[j].Spec.Date.Time) { //nolint:staticcheck
-				return i < j // Stable sort for same date
-			}
-			return sortedLots[i].Spec.Date.Time.After(sortedLots[j].Spec.Date.Time) //nolint:staticcheck
-		})
-	}
+	sortedLots := sortedLotsForBooking(lots, bookingMethod)
 
 	// Simulate reduction in booking order
 	remaining := amount
@@ -421,6 +358,32 @@ func (inv *Inventory) canReduceWithBooking(commodity string, amount decimal.Deci
 	// If we get here, we couldn't reduce the full amount
 	return fmt.Errorf("insufficient amount for %s using %s: need %s across %d lots",
 		commodity, bookingMethod, amount.String(), len(lots))
+}
+
+func sortedLotsForBooking(lots []*lot, bookingMethod string) []*lot {
+	sortedLots := append([]*lot(nil), lots...)
+	lifo := bookingMethod == "LIFO"
+
+	sort.SliceStable(sortedLots, func(i, j int) bool {
+		iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
+		jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
+
+		if iHasDate != jHasDate {
+			if lifo {
+				return iHasDate
+			}
+			return !iHasDate
+		}
+		if !iHasDate {
+			return false
+		}
+		if lifo {
+			return sortedLots[i].Spec.Date.After(sortedLots[j].Spec.Date.Time)
+		}
+		return sortedLots[i].Spec.Date.Before(sortedLots[j].Spec.Date.Time)
+	})
+
+	return sortedLots
 }
 
 // lotSpecsMatch checks if two lot specs match

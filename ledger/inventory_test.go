@@ -187,6 +187,35 @@ func TestCanReduceLot(t *testing.T) {
 	}
 }
 
+func TestReduceLotLIFO(t *testing.T) {
+	date1, err := ast.NewDate("2024-01-15")
+	assert.NoError(t, err)
+	date2, err := ast.NewDate("2024-02-15")
+	assert.NoError(t, err)
+	cost100 := decimal.NewFromInt(100)
+	cost200 := decimal.NewFromInt(200)
+
+	inv := NewInventory()
+	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{
+		Cost:         &cost100,
+		CostCurrency: "USD",
+		Date:         date1,
+	})
+	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{
+		Cost:         &cost200,
+		CostCurrency: "USD",
+		Date:         date2,
+	})
+
+	err = inv.ReduceLot("STOCK", decimal.NewFromInt(-5), &lotSpec{}, "LIFO")
+	assert.NoError(t, err)
+
+	lots := inv.GetLots("STOCK")
+	assert.Equal(t, 2, len(lots))
+	assert.True(t, lots[0].Amount.Equal(decimal.NewFromInt(10)))
+	assert.True(t, lots[1].Amount.Equal(decimal.NewFromInt(5)))
+}
+
 func TestCanReduceSpecificLot(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-15")
 
