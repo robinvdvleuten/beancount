@@ -27,7 +27,7 @@ type Account struct {
 	OpenDate             *ast.Date
 	CloseDate            *ast.Date
 	ConstraintCurrencies []string
-	BookingMethod        string
+	BookingMethod        BookingMethod
 	Metadata             []*ast.Metadata
 	Inventory            *Inventory        // Inventory with lot tracking
 	Postings             []*AccountPosting // Transaction history in chronological order
@@ -94,7 +94,7 @@ func (a *Account) GetChildren(l *Ledger) []*Account {
 	// Extract Account objects from nodes, sort by name
 	var children []*Account
 	for _, node := range childNodes {
-		if node.Kind == "account" {
+		if node.Kind == NodeAccount {
 			var acc *Account
 			if a, ok := node.Meta.(*Account); ok {
 				// Explicitly opened account

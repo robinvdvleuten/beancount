@@ -26,7 +26,7 @@ func TestCanReduceLot(t *testing.T) {
 		commodity     string
 		amount        decimal.Decimal
 		spec          *lotSpec
-		bookingMethod string
+		bookingMethod BookingMethod
 		wantErr       bool
 		errContains   string
 	}{
@@ -399,7 +399,7 @@ func TestCanReduceWithBooking(t *testing.T) {
 		setup         func() *Inventory
 		commodity     string
 		amount        decimal.Decimal
-		bookingMethod string
+		bookingMethod BookingMethod
 		wantErr       bool
 		errContains   string
 	}{

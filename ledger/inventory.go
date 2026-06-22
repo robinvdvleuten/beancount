@@ -27,6 +27,20 @@ type reductionPlan struct {
 	addAmount       *decimal.Decimal
 }
 
+type BookingMethod string
+
+const (
+	BookingFIFO BookingMethod = "FIFO"
+	BookingLIFO BookingMethod = "LIFO"
+)
+
+func defaultBookingMethod(method BookingMethod) BookingMethod {
+	if method == "" {
+		return BookingFIFO
+	}
+	return method
+}
+
 // NewInventory creates a new inventory
 func NewInventory() *Inventory {
 	return &Inventory{
@@ -72,7 +86,7 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 }
 
 // ReduceLot reduces from a specific lot or uses booking method
-func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
+func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod BookingMethod) error {
 	plan, err := inv.planReduction(commodity, amount, spec, bookingMethod)
 	if err != nil {
 		return err
@@ -149,7 +163,12 @@ func (inv *Inventory) String() string {
 
 // CanReduceLot checks if a reduction is possible without mutating state.
 // This is a read-only version of ReduceLot used for validation.
-func (inv *Inventory) CanReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
+func (inv *Inventory) CanReduceLot(
+	commodity string,
+	amount decimal.Decimal,
+	spec *lotSpec,
+	bookingMethod BookingMethod,
+) error {
 	_, err := inv.planReduction(commodity, amount, spec, bookingMethod)
 	return err
 }
@@ -158,7 +177,7 @@ func (inv *Inventory) planReduction(
 	commodity string,
 	amount decimal.Decimal,
 	spec *lotSpec,
-	bookingMethod string,
+	bookingMethod BookingMethod,
 ) (*reductionPlan, error) {
 	// Reducing means amount should be negative
 	if amount.GreaterThanOrEqual(decimal.Zero) {
@@ -216,7 +235,7 @@ func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Deci
 func (inv *Inventory) planBookingReduction(
 	commodity string,
 	amount decimal.Decimal,
-	bookingMethod string,
+	bookingMethod BookingMethod,
 ) (*reductionPlan, error) {
 	lots := inv.lots[commodity]
 
@@ -248,7 +267,11 @@ func (inv *Inventory) planBookingReduction(
 	}, nil
 }
 
-func (inv *Inventory) canReduceWithBooking(commodity string, amount decimal.Decimal, bookingMethod string) error {
+func (inv *Inventory) canReduceWithBooking(
+	commodity string,
+	amount decimal.Decimal,
+	bookingMethod BookingMethod,
+) error {
 	_, err := inv.planBookingReduction(commodity, amount, bookingMethod)
 	return err
 }
@@ -324,9 +347,9 @@ func (inv *Inventory) applyReduction(plan *reductionPlan) {
 	}
 }
 
-func sortedLotsForBooking(lots []*lot, bookingMethod string) []*lot {
+func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 	sortedLots := append([]*lot(nil), lots...)
-	lifo := bookingMethod == "LIFO"
+	lifo := defaultBookingMethod(bookingMethod) == BookingLIFO
 
 	sort.SliceStable(sortedLots, func(i, j int) bool {
 		iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil

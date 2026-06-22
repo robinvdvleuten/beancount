@@ -138,7 +138,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	// Pre-populate graph with currency nodes (they're not explicitly opened)
 	// Account nodes are created by Open directives with full metadata
 	for currency := range enriched.Currencies {
-		l.graph.AddNode(currency, "currency", nil)
+		l.graph.AddNode(currency, NodeCurrency, nil)
 	}
 
 	// Parse configuration from AST options
@@ -263,7 +263,7 @@ func (l *Ledger) Errors() []error {
 // GetAccount returns an account by name
 func (l *Ledger) GetAccount(name string) (*Account, bool) {
 	node := l.graph.GetNode(name)
-	if node == nil || node.Kind != "account" {
+	if node == nil || node.Kind != NodeAccount {
 		return nil, false
 	}
 	acc, ok := node.Meta.(*Account)
@@ -302,7 +302,7 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 	// Multiply rates along the path
 	result := decimal.NewFromInt(1)
 	for _, edge := range path {
-		if edge.Kind == "price" && !edge.Weight.IsZero() {
+		if edge.Kind == EdgePrice && !edge.Weight.IsZero() {
 			result = result.Mul(edge.Weight)
 		}
 	}
@@ -356,7 +356,7 @@ func (l *Ledger) buildForwardFillGraph(date *ast.Date) *Graph {
 				inverseEdge := &Edge{
 					From:     edge.To,
 					To:       edge.From,
-					Kind:     "price",
+					Kind:     EdgePrice,
 					Date:     edge.Date,
 					Weight:   decimal.NewFromInt(1).Div(edge.Weight),
 					Meta:     edge.Meta,
@@ -379,7 +379,7 @@ func (l *Ledger) Graph() *Graph {
 // forEachAccount iterates over all accounts in the ledger, calling fn for each.
 // The callback can return false to break early (not used currently, but enables future filtering).
 func (l *Ledger) forEachAccount(fn func(*Account) bool) {
-	for _, node := range l.graph.GetNodesByKind("account") {
+	for _, node := range l.graph.GetNodesByKind(NodeAccount) {
 		if account, ok := node.Meta.(*Account); ok {
 			if !fn(account) {
 				break
@@ -685,7 +685,7 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 		Metadata:             delta.Metadata,
 		Inventory:            NewInventory(),
 	}
-	l.graph.AddNode(accountName, "account", account)
+	l.graph.AddNode(accountName, NodeAccount, account)
 
 	// Create implicit parent nodes and hierarchy edges
 	l.ensureAccountHierarchy(accountName)
@@ -704,13 +704,13 @@ func (l *Ledger) ensureAccountHierarchy(accountName string) {
 
 		// Ensure parent node exists (implicit if not explicitly opened)
 		if l.graph.GetNode(parentPath) == nil {
-			l.graph.AddNode(parentPath, "account", nil)
+			l.graph.AddNode(parentPath, NodeAccount, nil)
 		}
 
 		// Ensure hierarchy edge exists
 		existsEdge := false
 		for _, edge := range l.graph.GetOutgoingEdges(parentPath) {
-			if edge.Kind == "hierarchy" && edge.To == childPath {
+			if edge.Kind == EdgeHierarchy && edge.To == childPath {
 				existsEdge = true
 				break
 			}
@@ -720,7 +720,7 @@ func (l *Ledger) ensureAccountHierarchy(accountName string) {
 			l.graph.AddEdge(&Edge{
 				From:   parentPath,
 				To:     childPath,
-				Kind:   "hierarchy",
+				Kind:   EdgeHierarchy,
 				Date:   nil,
 				Weight: decimal.Zero,
 				Meta:   nil,
@@ -786,10 +786,7 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 			} else if amount.GreaterThan(decimal.Zero) {
 				account.Inventory.AddLot(currency, amount, lotSpec)
 			} else {
-				bookingMethod := account.BookingMethod
-				if bookingMethod == "" {
-					bookingMethod = "FIFO"
-				}
+				bookingMethod := defaultBookingMethod(account.BookingMethod)
 				err := account.Inventory.ReduceLot(currency, amount, lotSpec, bookingMethod)
 				if err != nil {
 					// This should never happen after validateInventoryOperations - panic to catch bugs
@@ -829,7 +826,7 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 	l.graph.AddEdge(&Edge{
 		From:     from,
 		To:       to,
-		Kind:     "price",
+		Kind:     EdgePrice,
 		Date:     price.Date(),
 		Weight:   amount,
 		Meta:     price,
@@ -840,7 +837,7 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 	l.graph.AddEdge(&Edge{
 		From:     to,
 		To:       from,
-		Kind:     "price",
+		Kind:     EdgePrice,
 		Date:     price.Date(),
 		Weight:   decimal.NewFromInt(1).Div(amount),
 		Meta:     price,
@@ -861,7 +858,7 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 func (l *Ledger) applyCommodity(commodity *ast.Commodity, delta *CommodityDelta) {
 	// Create or upgrade the commodity node with metadata
 	// This upgrades implicit "currency" nodes to explicit "commodity" nodes
-	node := l.graph.AddNode(delta.CommodityID, "commodity", &CommodityNode{
+	node := l.graph.AddNode(delta.CommodityID, NodeCommodity, &CommodityNode{
 		ID:       delta.CommodityID,
 		Date:     delta.Date,
 		Metadata: delta.Metadata,
@@ -869,7 +866,7 @@ func (l *Ledger) applyCommodity(commodity *ast.Commodity, delta *CommodityDelta)
 
 	// Ensure the node kind is set to "commodity" (not "currency")
 	// This handles the case where the node was previously created as "currency"
-	node.Kind = "commodity"
+	node.Kind = NodeCommodity
 }
 
 // CommodityNode represents a commodity or currency as an explicit graph node.

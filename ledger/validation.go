@@ -902,7 +902,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 		Account:              open.Account,
 		OpenDate:             open.Date(),
 		ConstraintCurrencies: constraintCurrenciesCopy,
-		BookingMethod:        open.BookingMethod,
+		BookingMethod:        BookingMethod(open.BookingMethod),
 		Metadata:             metadataCopy,
 	}
 
@@ -1162,10 +1162,7 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 				continue
 			}
 
-			bookingMethod := account.BookingMethod
-			if bookingMethod == "" {
-				bookingMethod = "FIFO"
-			}
+			bookingMethod := defaultBookingMethod(account.BookingMethod)
 
 			// Check if reduction is possible (read-only)
 			if err := account.Inventory.CanReduceLot(currency, amount, lotSpec, bookingMethod); err != nil {

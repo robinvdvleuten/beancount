@@ -45,11 +45,27 @@ type Graph struct {
 	priceDates map[time.Time]struct{}
 }
 
+type NodeKind string
+
+const (
+	NodeUnknown   NodeKind = "unknown"
+	NodeAccount   NodeKind = "account"
+	NodeCurrency  NodeKind = "currency"
+	NodeCommodity NodeKind = "commodity"
+)
+
+type EdgeKind string
+
+const (
+	EdgePrice     EdgeKind = "price"
+	EdgeHierarchy EdgeKind = "hierarchy"
+)
+
 // Node represents a vertex in the ledger graph.
 // Nodes are typed (Account, Currency, Commodity) for semantic clarity.
 type Node struct {
 	ID   string      // Unique identifier (e.g., "Assets:Cash", "USD")
-	Kind string      // "account", "currency", "commodity"
+	Kind NodeKind    // Account, currency, commodity, or unknown
 	Meta interface{} // Optional metadata (e.g., Account pointer, commodity info)
 }
 
@@ -58,7 +74,7 @@ type Node struct {
 type Edge struct {
 	From       string          // Source node ID
 	To         string          // Target node ID
-	Kind       string          // "price", "opening", "closing", "transaction_posting"
+	Kind       EdgeKind        // Price, hierarchy, or another domain relationship
 	Date       *ast.Date       // Date the edge is valid from (required for all edges)
 	Weight     decimal.Decimal // Rate/amount for price edges; zero for non-price edges
 	Meta       interface{}     // Original directive (ast.Price, ast.Transaction, etc.)
@@ -79,7 +95,7 @@ func NewGraph() *Graph {
 }
 
 // AddNode adds a node to the graph or returns existing node if already present.
-func (g *Graph) AddNode(id, kind string, meta interface{}) *Node {
+func (g *Graph) AddNode(id string, kind NodeKind, meta interface{}) *Node {
 	if node, exists := g.nodes[id]; exists {
 		return node
 	}
@@ -99,7 +115,7 @@ func (g *Graph) GetNode(id string) *Node {
 }
 
 // GetNodesByKind returns all nodes of a given kind.
-func (g *Graph) GetNodesByKind(kind string) []*Node {
+func (g *Graph) GetNodesByKind(kind NodeKind) []*Node {
 	var result []*Node
 	for _, node := range g.nodes {
 		if node.Kind == kind {
@@ -114,15 +130,15 @@ func (g *Graph) GetNodesByKind(kind string) []*Node {
 // Returns the added edge for chaining or inspection.
 func (g *Graph) AddEdge(edge *Edge) *Edge {
 	// Ensure nodes exist
-	g.AddNode(edge.From, "unknown", nil)
-	g.AddNode(edge.To, "unknown", nil)
+	g.AddNode(edge.From, NodeUnknown, nil)
+	g.AddNode(edge.To, NodeUnknown, nil)
 
 	// Add edge to adjacency list
 	g.edges[edge.From] = append(g.edges[edge.From], edge)
 	g.incomingEdges[edge.To] = append(g.incomingEdges[edge.To], edge)
 
 	// Index price edges by date for forward-fill queries
-	if edge.Kind == "price" && edge.Date != nil {
+	if edge.Kind == EdgePrice && edge.Date != nil {
 		dateKey := edge.Date.Time
 		g.priceEdgesByDate[dateKey] = append(g.priceEdgesByDate[dateKey], edge)
 
@@ -199,7 +215,7 @@ func (g *Graph) FindPath(fromID, toID string, date *ast.Date) ([]*Edge, error) {
 		// Explore outgoing edges
 		for _, edge := range g.GetOutgoingEdges(item.nodeID) {
 			// Skip edges invalid for this date
-			if edge.Kind == "price" && !isEdgeValidOnDate(edge, date) {
+			if edge.Kind == EdgePrice && !isEdgeValidOnDate(edge, date) {
 				continue
 			}
 
@@ -275,7 +291,7 @@ func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, dat
 	// Calculate conversion by multiplying all edge weights
 	result := amount
 	for _, edge := range path {
-		if edge.Kind != "price" || edge.Weight.IsZero() {
+		if edge.Kind != EdgePrice || edge.Weight.IsZero() {
 			return decimal.Zero, fmt.Errorf("invalid price edge in conversion path: %s→%s", edge.From, edge.To)
 		}
 		result = result.Mul(edge.Weight)
@@ -289,7 +305,7 @@ func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, dat
 func (g *Graph) GetChildren(nodeID string) []*Node {
 	var children []*Node
 	for _, edge := range g.GetOutgoingEdges(nodeID) {
-		if edge.Kind == "hierarchy" {
+		if edge.Kind == EdgeHierarchy {
 			if node := g.GetNode(edge.To); node != nil {
 				children = append(children, node)
 			}
@@ -302,7 +318,7 @@ func (g *Graph) GetChildren(nodeID string) []*Node {
 // Since edges are parent → child, we look for incoming edges (someone pointing to us).
 func (g *Graph) GetParent(nodeID string) *Node {
 	for _, edge := range g.incomingEdges[nodeID] {
-		if edge.Kind == "hierarchy" {
+		if edge.Kind == EdgeHierarchy {
 			return g.GetNode(edge.From)
 		}
 	}
@@ -346,7 +362,7 @@ func (g *Graph) GetStats() Stats {
 	for _, edges := range g.edges {
 		for _, edge := range edges {
 			edgeCount++
-			if edge.Kind == "price" {
+			if edge.Kind == EdgePrice {
 				priceCount++
 			}
 		}
