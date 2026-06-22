@@ -14,6 +14,19 @@ type Inventory struct {
 	lots map[string][]*lot
 }
 
+type lotReduction struct {
+	lot    *lot
+	amount decimal.Decimal
+}
+
+type reductionPlan struct {
+	commodity       string
+	reductions      []lotReduction
+	replaceLots     bool
+	replacementLots []*lot
+	addAmount       *decimal.Decimal
+}
+
 // NewInventory creates a new inventory
 func NewInventory() *Inventory {
 	return &Inventory{
@@ -60,154 +73,11 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 
 // ReduceLot reduces from a specific lot or uses booking method
 func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
-	// Reducing means amount should be negative
-	if amount.GreaterThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("reduce amount must be negative, got %s", amount.String())
+	plan, err := inv.planReduction(commodity, amount, spec, bookingMethod)
+	if err != nil {
+		return err
 	}
-
-	// Get absolute value for comparison
-	reduceAmount := amount.Abs()
-
-	// Merge cost {*} - merge all lots to average cost, then reduce
-	if spec != nil && spec.Merge {
-		return inv.reduceWithMerge(commodity, reduceAmount, spec)
-	}
-
-	// Empty spec {} means use booking method
-	if spec != nil && spec.IsEmpty() && !spec.Merge {
-		return inv.reduceWithBooking(commodity, reduceAmount, bookingMethod)
-	}
-
-	// Specific lot spec - find matching lot
-	if spec != nil && spec.Cost != nil && !spec.Merge {
-		return inv.reduceSpecificLot(commodity, reduceAmount, spec)
-	}
-
-	// No spec at all - treat as simple amount
-	// Just add the negative amount to first available lot or create new lot
-	inv.AddLot(commodity, amount, nil)
-	return nil
-}
-
-// reduceSpecificLot reduces from a specific lot matching the spec
-func (inv *Inventory) reduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
-	lots := inv.lots[commodity]
-
-	// Find matching lot
-	for _, lot := range lots {
-		if lotSpecsMatch(lot.Spec, spec) {
-			// Check if sufficient amount
-			if lot.Amount.LessThan(amount) {
-				return fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
-					spec.String(), lot.Amount.String(), amount.String())
-			}
-
-			// Reduce from lot
-			lot.Amount = lot.Amount.Sub(amount)
-
-			// Remove lot if empty
-			if lot.Amount.IsZero() {
-				inv.removeLot(commodity, lot)
-			}
-
-			return nil
-		}
-	}
-
-	return fmt.Errorf("lot not found: %s %s", commodity, spec.String())
-}
-
-// reduceWithMerge reduces using merge cost {*} - merges all lots to average cost, then reduces
-func (inv *Inventory) reduceWithMerge(commodity string, amount decimal.Decimal, spec *lotSpec) error {
-	lots := inv.lots[commodity]
-
-	if len(lots) == 0 {
-		return fmt.Errorf("no lots available for %s", commodity)
-	}
-
-	// Calculate total units and total cost basis
-	totalUnits := decimal.Zero
-	totalCost := decimal.Zero
-	costCurrency := ""
-
-	for _, lot := range lots {
-		totalUnits = totalUnits.Add(lot.Amount)
-		if lot.Spec != nil && lot.Spec.Cost != nil {
-			lotCost := lot.Spec.Cost.Mul(lot.Amount)
-			totalCost = totalCost.Add(lotCost)
-			if costCurrency == "" {
-				costCurrency = lot.Spec.CostCurrency
-			} else if costCurrency != lot.Spec.CostCurrency {
-				return fmt.Errorf("merge cost {*} not supported for mixed currencies")
-			}
-		}
-	}
-
-	if totalUnits.IsZero() {
-		return fmt.Errorf("no units available for %s", commodity)
-	}
-
-	// Calculate average cost per unit
-	averageCost := totalCost.Div(totalUnits)
-
-	// Check if we have enough total units
-	if totalUnits.LessThan(amount) {
-		return fmt.Errorf("insufficient total amount for %s: have %s, need %s",
-			commodity, totalUnits.String(), amount.String())
-	}
-
-	// Clear all existing lots and create single merged lot
-	delete(inv.lots, commodity)
-	remainingUnits := totalUnits.Sub(amount)
-	if remainingUnits.GreaterThan(decimal.Zero) {
-		// Create new lot with remaining units at average cost
-		mergedSpec := &lotSpec{
-			Cost:         &averageCost,
-			CostCurrency: costCurrency,
-		}
-		inv.AddLot(commodity, remainingUnits, mergedSpec)
-	}
-
-	return nil
-}
-
-// reduceWithBooking reduces using booking method (FIFO, LIFO, etc.)
-func (inv *Inventory) reduceWithBooking(commodity string, amount decimal.Decimal, bookingMethod string) error {
-	lots := inv.lots[commodity]
-
-	if len(lots) == 0 {
-		return fmt.Errorf("no lots available for %s", commodity)
-	}
-
-	sortedLots := sortedLotsForBooking(lots, bookingMethod)
-
-	// Reduce from lots in booking order
-	remaining := amount
-	for _, lot := range sortedLots {
-		if remaining.IsZero() {
-			break
-		}
-
-		if lot.Amount.GreaterThanOrEqual(remaining) {
-			// This lot has enough
-			lot.Amount = lot.Amount.Sub(remaining)
-			if lot.Amount.IsZero() {
-				inv.removeLot(commodity, lot)
-			}
-			remaining = decimal.Zero
-		} else {
-			// Take all from this lot
-			remaining = remaining.Sub(lot.Amount)
-			lot.Amount = decimal.Zero
-			inv.removeLot(commodity, lot)
-		}
-	}
-
-	if !remaining.IsZero() {
-		return fmt.Errorf("insufficient total amount for %s: need %s more",
-			commodity, remaining.String())
-	}
-
+	inv.applyReduction(plan)
 	return nil
 }
 
@@ -273,91 +143,178 @@ func (inv *Inventory) String() string {
 // CanReduceLot checks if a reduction is possible without mutating state.
 // This is a read-only version of ReduceLot used for validation.
 func (inv *Inventory) CanReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod string) error {
+	_, err := inv.planReduction(commodity, amount, spec, bookingMethod)
+	return err
+}
+
+func (inv *Inventory) planReduction(
+	commodity string,
+	amount decimal.Decimal,
+	spec *lotSpec,
+	bookingMethod string,
+) (*reductionPlan, error) {
 	// Reducing means amount should be negative
 	if amount.GreaterThanOrEqual(decimal.Zero) {
-		return fmt.Errorf("reduce amount must be negative, got %s", amount.String())
+		return nil, fmt.Errorf("reduce amount must be negative, got %s", amount.String())
 	}
 
 	reduceAmount := amount.Abs()
 
-	// Merge cost {*} - check if total units are sufficient
 	if spec != nil && spec.Merge {
-		lots := inv.lots[commodity]
-		if len(lots) == 0 {
-			return fmt.Errorf("no lots available for %s", commodity)
-		}
-
-		totalUnits := decimal.Zero
-		for _, lot := range lots {
-			totalUnits = totalUnits.Add(lot.Amount)
-		}
-
-		if totalUnits.LessThan(reduceAmount) {
-			return fmt.Errorf("insufficient total amount for %s: have %s, need %s",
-				commodity, totalUnits.String(), reduceAmount.String())
-		}
-		return nil
+		return inv.planMergeReduction(commodity, reduceAmount)
 	}
 
-	// Empty spec {} means use booking method
 	if spec != nil && spec.IsEmpty() && !spec.Merge {
-		return inv.canReduceWithBooking(commodity, reduceAmount, bookingMethod)
+		return inv.planBookingReduction(commodity, reduceAmount, bookingMethod)
 	}
 
-	// Specific lot spec - find matching lot
-	if spec != nil && spec.Cost != nil {
-		return inv.canReduceSpecificLot(commodity, reduceAmount, spec)
+	if spec != nil && spec.Cost != nil && !spec.Merge {
+		return inv.planSpecificReduction(commodity, reduceAmount, spec)
 	}
 
-	// No spec - always succeeds (simple add of negative amount)
-	return nil
+	return &reductionPlan{
+		commodity: commodity,
+		addAmount: &amount,
+	}, nil
 }
 
-// canReduceSpecificLot checks if a specific lot reduction is possible (read-only)
-func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
+func (inv *Inventory) planSpecificReduction(
+	commodity string,
+	amount decimal.Decimal,
+	spec *lotSpec,
+) (*reductionPlan, error) {
 	lots := inv.lots[commodity]
 
 	for _, lot := range lots {
-		// BEANCOUNT COMPLIANCE: lotSpecsMatch must check cost, date, and label
-		// Example: {100 USD, 2024-01-01, "batch-1"} must match all three fields
 		if lotSpecsMatch(lot.Spec, spec) {
 			if lot.Amount.LessThan(amount) {
-				return fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
+				return nil, fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
 					spec.String(), lot.Amount.String(), amount.String())
 			}
-			return nil
+			return &reductionPlan{
+				commodity:  commodity,
+				reductions: []lotReduction{{lot: lot, amount: amount}},
+			}, nil
 		}
 	}
 
-	return fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+	return nil, fmt.Errorf("lot not found: %s %s", commodity, spec.String())
 }
 
-// canReduceWithBooking checks if booking method reduction is possible (read-only).
-// This simulates the actual FIFO/LIFO booking to verify enough lots exist.
-func (inv *Inventory) canReduceWithBooking(commodity string, amount decimal.Decimal, bookingMethod string) error {
+func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
+	_, err := inv.planSpecificReduction(commodity, amount, spec)
+	return err
+}
+
+func (inv *Inventory) planBookingReduction(
+	commodity string,
+	amount decimal.Decimal,
+	bookingMethod string,
+) (*reductionPlan, error) {
 	lots := inv.lots[commodity]
 
 	if len(lots) == 0 {
-		return fmt.Errorf("no lots available for %s", commodity)
+		return nil, fmt.Errorf("no lots available for %s", commodity)
 	}
 
 	sortedLots := sortedLotsForBooking(lots, bookingMethod)
-
-	// Simulate reduction in booking order
 	remaining := amount
+	reductions := make([]lotReduction, 0, len(sortedLots))
 	for _, lot := range sortedLots {
 		if remaining.IsZero() {
-			return nil
+			break
 		}
-		if lot.Amount.GreaterThanOrEqual(remaining) {
-			return nil // This lot covers the remaining amount
-		}
-		remaining = remaining.Sub(lot.Amount)
+
+		reduction := decimal.Min(lot.Amount, remaining)
+		reductions = append(reductions, lotReduction{lot: lot, amount: reduction})
+		remaining = remaining.Sub(reduction)
 	}
 
-	// If we get here, we couldn't reduce the full amount
-	return fmt.Errorf("insufficient amount for %s using %s: need %s across %d lots",
-		commodity, bookingMethod, amount.String(), len(lots))
+	if !remaining.IsZero() {
+		return nil, fmt.Errorf("insufficient amount for %s using %s: need %s across %d lots",
+			commodity, bookingMethod, amount.String(), len(lots))
+	}
+
+	return &reductionPlan{
+		commodity:  commodity,
+		reductions: reductions,
+	}, nil
+}
+
+func (inv *Inventory) canReduceWithBooking(commodity string, amount decimal.Decimal, bookingMethod string) error {
+	_, err := inv.planBookingReduction(commodity, amount, bookingMethod)
+	return err
+}
+
+func (inv *Inventory) planMergeReduction(
+	commodity string,
+	amount decimal.Decimal,
+) (*reductionPlan, error) {
+	lots := inv.lots[commodity]
+	if len(lots) == 0 {
+		return nil, fmt.Errorf("no lots available for %s", commodity)
+	}
+
+	totalUnits := decimal.Zero
+	totalCost := decimal.Zero
+	costCurrency := ""
+	for _, lot := range lots {
+		totalUnits = totalUnits.Add(lot.Amount)
+		if lot.Spec == nil || lot.Spec.Cost == nil {
+			continue
+		}
+		totalCost = totalCost.Add(lot.Spec.Cost.Mul(lot.Amount))
+		if costCurrency == "" {
+			costCurrency = lot.Spec.CostCurrency
+		} else if costCurrency != lot.Spec.CostCurrency {
+			return nil, fmt.Errorf("merge cost {*} not supported for mixed currencies")
+		}
+	}
+
+	if totalUnits.IsZero() {
+		return nil, fmt.Errorf("no units available for %s", commodity)
+	}
+	if totalUnits.LessThan(amount) {
+		return nil, fmt.Errorf("insufficient total amount for %s: have %s, need %s",
+			commodity, totalUnits.String(), amount.String())
+	}
+
+	plan := &reductionPlan{
+		commodity:   commodity,
+		replaceLots: true,
+	}
+	remainingUnits := totalUnits.Sub(amount)
+	if remainingUnits.GreaterThan(decimal.Zero) {
+		averageCost := totalCost.Div(totalUnits)
+		plan.replacementLots = []*lot{newLot(commodity, remainingUnits, &lotSpec{
+			Cost:         &averageCost,
+			CostCurrency: costCurrency,
+		})}
+	}
+	return plan, nil
+}
+
+func (inv *Inventory) applyReduction(plan *reductionPlan) {
+	if plan.replaceLots {
+		if len(plan.replacementLots) == 0 {
+			delete(inv.lots, plan.commodity)
+		} else {
+			inv.lots[plan.commodity] = plan.replacementLots
+		}
+		return
+	}
+
+	if plan.addAmount != nil {
+		inv.AddLot(plan.commodity, *plan.addAmount, nil)
+		return
+	}
+
+	for _, reduction := range plan.reductions {
+		reduction.lot.Amount = reduction.lot.Amount.Sub(reduction.amount)
+		if reduction.lot.Amount.IsZero() {
+			inv.removeLot(plan.commodity, reduction.lot)
+		}
+	}
 }
 
 func sortedLotsForBooking(lots []*lot, bookingMethod string) []*lot {
