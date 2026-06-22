@@ -75,12 +75,12 @@ test.describe("Editor", () => {
       await page.keyboard.press("ControlOrMeta+End");
       await page.keyboard.type(`\n${testComment}`);
 
-      // Save the file with the editor shortcut
+      // Save the file through the visible UI control.
       const saveResponsePromise = page.waitForResponse(
         (response) =>
           response.url().includes("/api/source") && response.request().method() === "PUT",
       );
-      await page.keyboard.press("ControlOrMeta+KeyS");
+      await page.getByRole("button", { name: "Save" }).click();
       const saveResponse = await saveResponsePromise;
       expect(saveResponse.ok()).toBeTruthy();
 

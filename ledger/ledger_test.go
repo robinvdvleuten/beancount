@@ -935,6 +935,34 @@ plugin "beancount.plugins.auto_accounts"
 	assert.True(t, rate5.Equal(mustParseDec("1.10")))
 }
 
+func TestLedger_ExplicitAccountUpgradesImplicitHierarchyNode(t *testing.T) {
+	source := `
+2021-01-01 open Assets:Cash USD
+2021-01-01 open Expenses:Taxes:Y2021:US:Federal:PreTax401k USD
+2021-01-01 open Expenses:Taxes:Y2021:US:Federal USD
+
+2021-01-02 * "Federal tax"
+  Assets:Cash                            -100 USD
+  Expenses:Taxes:Y2021:US:Federal        100 USD
+`
+
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	err := ledger.Process(ctx, tree)
+	assert.NoError(t, err)
+
+	account, ok := ledger.GetAccount("Expenses:Taxes:Y2021:US:Federal")
+	assert.True(t, ok)
+	assert.True(t, account.Inventory.Get("USD").Equal(mustParseDec("100")))
+
+	node := ledger.Graph().GetNode("Expenses:Taxes:Y2021:US:Federal")
+	nodeAccount, ok := node.Meta.(*Account)
+	assert.True(t, ok)
+	assert.Equal(t, account, nodeAccount)
+}
+
 func TestLedger_GetPriceSameCurrency(t *testing.T) {
 	ledger := New()
 

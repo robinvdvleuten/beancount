@@ -682,7 +682,9 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 		Metadata:             delta.Metadata,
 		Inventory:            NewInventory(),
 	}
-	l.graph.AddNode(accountName, NodeAccount, account)
+	node := l.graph.AddNode(accountName, NodeAccount, account)
+	node.Kind = NodeAccount
+	node.Meta = account
 	l.accounts[accountName] = account
 
 	// Create implicit parent nodes and hierarchy edges
@@ -729,11 +731,7 @@ func (l *Ledger) ensureAccountHierarchy(accountName string) {
 
 // applyClose applies the close delta to the ledger (mutation only)
 func (l *Ledger) applyClose(delta *CloseDelta) {
-	node := l.graph.GetNode(delta.AccountName)
-	if node == nil {
-		return
-	}
-	if account, ok := node.Meta.(*Account); ok {
+	if account, ok := l.accounts[delta.AccountName]; ok {
 		account.CloseDate = delta.CloseDate
 	}
 }
@@ -747,14 +745,9 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 		}
 
 		accountName := string(posting.Account)
-		node := l.graph.GetNode(accountName)
-		if node == nil {
-			panic(fmt.Sprintf("BUG: account %s not found after validation", accountName))
-		}
-
-		account, ok := node.Meta.(*Account)
+		account, ok := l.accounts[accountName]
 		if !ok {
-			panic(fmt.Sprintf("BUG: account %s metadata is not *Account", accountName))
+			panic(fmt.Sprintf("BUG: account %s not found after validation", accountName))
 		}
 
 		amount, err := ParseAmount(posting.Amount)

@@ -86,7 +86,11 @@ test.describe("Income Statement", () => {
     ).toBeVisible();
     await expect(expensesTable.getByRole("columnheader", { name: "Other" })).toBeVisible();
 
-    await expectIncomeStatementRow(page, "Expenses", "Expenses", ["102,101.57", "184.00 VACHR"]);
+    await expectIncomeStatementRow(page, "Expenses", "Expenses", [
+      "236,544.48",
+      "55,000.00 IRAUSD",
+      "184.00 VACHR",
+    ]);
   });
 
   test("displays high precision decimal strings without rounding", async ({ page }) => {
