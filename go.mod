@@ -2,6 +2,8 @@ module github.com/robinvdvleuten/beancount
 
 go 1.25.0
 
+ignore ./assets/node_modules
+
 require (
 	github.com/alecthomas/assert/v2 v2.11.0
 	github.com/alecthomas/kong v1.15.0
