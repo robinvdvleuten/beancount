@@ -1417,7 +1417,7 @@ func TestBalanceTolerance(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "balance exceeds tolerance - should error",
+			name: "balance within doubled inferred tolerance - passes",
 			input: `
 				2020-01-01 open Assets:Checking USD
 				2020-01-01 open Equity:Opening
@@ -1428,7 +1428,21 @@ func TestBalanceTolerance(t *testing.T) {
 
 				2020-01-03 balance Assets:Checking 100.00 USD
 			`,
-			wantErr: true,
+			wantErr: false, // tolerance = 0.01 * 0.5 * 2 = 0.01; diff of 0.01 is not greater
+		},
+		{
+			name: "balance exceeds tolerance - should error",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 open Equity:Opening
+
+				2020-01-02 * "Deposit"
+				  Assets:Checking    100.02 USD
+				  Equity:Opening    -100.02 USD
+
+				2020-01-03 balance Assets:Checking 100.00 USD
+			`,
+			wantErr: true, // diff of 0.02 exceeds the 0.01 tolerance
 		},
 		{
 			name: "balance uses local tolerance override",
