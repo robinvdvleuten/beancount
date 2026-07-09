@@ -787,6 +787,12 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 			if amount.IsZero() {
 				// Zero amount with cost spec is a no-op for inventory
 			} else if amount.GreaterThan(decimal.Zero) {
+				// Beancount records an acquisition date on every lot,
+				// defaulting to the transaction date; LIFO/FIFO ordering
+				// and dated lot specs depend on it.
+				if lotSpec != nil && lotSpec.Date == nil {
+					lotSpec.Date = txn.Date()
+				}
 				account.Inventory.AddLot(currency, amount, lotSpec)
 			} else {
 				bookingMethod := defaultBookingMethod(account.BookingMethod)

@@ -240,7 +240,7 @@ func (inv *Inventory) planReduction(
 	}
 
 	if spec.Cost != nil {
-		return inv.planSpecificReduction(commodity, reduceAmount, spec)
+		return inv.planSpecificReduction(commodity, reduceAmount, spec, bookingMethod)
 	}
 
 	return &reductionPlan{
@@ -315,27 +315,26 @@ func (inv *Inventory) planSpecificReduction(
 	commodity string,
 	amount decimal.Decimal,
 	spec *lotSpec,
+	bookingMethod BookingMethod,
 ) (*reductionPlan, error) {
-	lots := inv.lots[commodity]
-
-	for _, lot := range lots {
-		if lotSpecsMatch(lot.Spec, spec) {
-			if lot.Amount.LessThan(amount) {
-				return nil, fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
-					spec.String(), lot.Amount.String(), amount.String())
-			}
-			return &reductionPlan{
-				commodity:  commodity,
-				reductions: []lotReduction{{lot: lot, amount: amount}},
-			}, nil
+	// The spec acts as a filter: lots match on the components it provides
+	// (cost, date, label), so a spec without a date still matches dated lots.
+	matches := make([]*lot, 0, len(inv.lots[commodity]))
+	for _, lot := range inv.lots[commodity] {
+		if lotMatchesReductionSpec(lot, spec) {
+			matches = append(matches, lot)
 		}
 	}
 
-	return nil, fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+	}
+
+	return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
 }
 
 func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
-	_, err := inv.planSpecificReduction(commodity, amount, spec)
+	_, err := inv.planSpecificReduction(commodity, amount, spec, BookingFIFO)
 	return err
 }
 
@@ -350,7 +349,12 @@ func (inv *Inventory) planBookingReduction(
 		return nil, fmt.Errorf("no lots available for %s", commodity)
 	}
 
-	sortedLots := sortedLotsForBooking(lots, bookingMethod)
+	return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(lots, bookingMethod))
+}
+
+// planReductionAcrossLots reduces the given amount across lots in order,
+// consuming each lot before moving to the next.
+func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLots []*lot) (*reductionPlan, error) {
 	remaining := amount
 	reductions := make([]lotReduction, 0, len(sortedLots))
 	for _, lot := range sortedLots {
@@ -364,8 +368,8 @@ func (inv *Inventory) planBookingReduction(
 	}
 
 	if !remaining.IsZero() {
-		return nil, fmt.Errorf("insufficient amount for %s using %s: need %s across %d lots",
-			commodity, bookingMethod, amount.String(), len(lots))
+		return nil, fmt.Errorf("insufficient amount for %s: need %s across %d lots",
+			commodity, amount.String(), len(sortedLots))
 	}
 
 	return &reductionPlan{

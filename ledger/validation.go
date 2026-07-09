@@ -362,6 +362,9 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 	// Calculate weights for postings with amounts
 	var allWeights []weightSet
+	// Negative empty-cost postings whose lot cost could not be resolved via
+	// booking (e.g. NONE booking); their cost must be inferred from the residual.
+	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
 	for _, posting := range pc.withAmounts {
 		weights, err := calculateWeights(posting)
 		if err != nil {
@@ -371,7 +374,17 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 		// Check if this is an empty cost spec (returns empty weights)
 		if len(weights) == 0 && posting.Cost != nil && posting.Cost.IsEmpty() {
-			// Don't add to allWeights yet - will be handled in inference
+			// Reductions resolve their weight from the booked lots' cost basis,
+			// matching beancount, which books lots before interpolation.
+			// Augmentations are handled in cost inference below.
+			amount, aerr := ParseAmount(posting.Amount)
+			if aerr == nil && amount.IsNegative() {
+				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Amount.Currency, amount); ok {
+					allWeights = append(allWeights, booked)
+				} else {
+					unresolvedEmptyCosts[posting] = true
+				}
+			}
 		} else {
 			allWeights = append(allWeights, weights)
 		}
@@ -386,6 +399,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	defer putBalanceMap(balance)
 
 	delta := &TransactionDelta{}
+
+	// An unresolved cost and a missing amount are two unknowns; beancount
+	// reports "too many missing numbers" and cannot interpolate.
+	if len(unresolvedEmptyCosts) > 0 && len(pc.withoutAmounts) > 0 {
+		return delta, unbalancedValidation(balance), nil
+	}
 
 	// Infer missing amounts if possible
 	// Beancount allows at most 1 posting without amount per transaction
@@ -420,21 +439,22 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 	// Infer costs for empty cost specs {}
 	if len(pc.withEmptyCosts) > 0 {
-		// Count positive amount empty costs (augmentations that need cost inference)
-		positiveEmptyCosts := 0
+		// Count empty costs that need inference from the residual: augmentations
+		// plus reductions whose lot cost could not be resolved via booking.
+		inferableEmptyCosts := 0
 		for _, posting := range pc.withEmptyCosts {
 			amount, err := ParseAmount(posting.Amount)
 			if err != nil {
 				continue
 			}
-			if !amount.IsNegative() {
-				positiveEmptyCosts++
+			if !amount.IsNegative() || unresolvedEmptyCosts[posting] {
+				inferableEmptyCosts++
 			}
 		}
 
 		// Beancount compliance: Cannot infer costs when multiple postings have empty cost specs
 		// This is ambiguous - which posting gets which portion of the residual?
-		if positiveEmptyCosts > 1 {
+		if inferableEmptyCosts > 1 {
 			return delta, unbalancedValidation(balance), nil
 		}
 
@@ -444,8 +464,9 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 				continue
 			}
 
-			// Only infer cost for augmentations (positive amounts)
-			if amount.IsNegative() || amount.IsZero() {
+			// Infer cost for augmentations, and for reductions whose cost was
+			// not resolved from booked lots (e.g. NONE booking)
+			if amount.IsZero() || (amount.IsNegative() && !unresolvedEmptyCosts[posting]) {
 				continue
 			}
 
@@ -1104,6 +1125,50 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 		return decimal.New(1, exp).Mul(v.config.Tolerance.multiplier).Mul(decimal.NewFromInt(2)), nil
 	}
 	return ParseAmount(balance.Tolerance)
+}
+
+// bookedReductionWeights resolves the balancing weights of an empty-cost {}
+// reduction from the lots selected by the account's booking method, matching
+// beancount, which books lots before interpolation.
+//
+// The second return value reports whether the posting's cost is considered
+// resolved. It is false only when the cost must instead be inferred from the
+// transaction residual (NONE booking, or booked lots without a cost basis).
+// Booking failures (ambiguous matches, insufficient lots) return true with no
+// weights: they are reported separately by validateInventoryOperations, and
+// the posting must not additionally participate in cost inference.
+func (v *validator) bookedReductionWeights(accountName ast.Account, commodity string, amount decimal.Decimal) (weightSet, bool) {
+	account, ok := v.accounts[string(accountName)]
+	if !ok {
+		return nil, true // Unopened account; reported by validateAccountsOpen
+	}
+
+	bookingMethod := defaultBookingMethod(account.BookingMethod)
+	if bookingMethod == BookingNONE {
+		return nil, false
+	}
+
+	plan, err := account.Inventory.planReduction(commodity, amount, &lotSpec{}, bookingMethod)
+	if err != nil {
+		return nil, true // Booking error; reported by validateInventoryOperations
+	}
+	if plan == nil || len(plan.reductions) == 0 {
+		return nil, false
+	}
+
+	var weights weightSet
+	for _, reduction := range plan.reductions {
+		spec := reduction.lot.Spec
+		if spec == nil || spec.Cost == nil {
+			return nil, false // Lot held without cost basis; infer from residual
+		}
+		weights = append(weights, weight{
+			Amount:   reduction.amount.Mul(*spec.Cost).Neg(),
+			Currency: spec.CostCurrency,
+		})
+	}
+
+	return weights, true
 }
 
 // validateInventoryOperations validates that inventory operations (lot reductions) are possible.

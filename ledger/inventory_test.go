@@ -801,7 +801,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 				2020-01-04 * "Sell - should reduce lot 1 first"
 				  Assets:Brokerage    -15 STOCK {}
 				  Assets:Cash         1650 USD
-				  Income:CapitalGains    -1650 USD
+				  Income:CapitalGains    -100 USD
 			`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
@@ -811,6 +811,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 				// Should have 5 shares left from lot 2 at 110 USD
 				assert.Equal(t, 1, len(lots))
 				assert.Equal(t, "5", lots[0].Amount.String())
+				assert.Equal(t, "110", lots[0].Spec.Cost.String())
 			},
 		},
 		{
@@ -830,8 +831,8 @@ func TestFIFOLIFOBooking(t *testing.T) {
 
 				2020-01-04 * "Sell - should reduce lot 2 first"
 				  Assets:Brokerage    -15 STOCK {}
-				  Assets:Cash         1600 USD
-				  Income:CapitalGains    -1600 USD
+				  Assets:Cash         1650 USD
+				  Income:CapitalGains    -50 USD
 			`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
@@ -841,6 +842,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 				// Should have 5 shares left from lot 1 at 100 USD
 				assert.Equal(t, 1, len(lots))
 				assert.Equal(t, "5", lots[0].Amount.String())
+				assert.Equal(t, "100", lots[0].Spec.Cost.String())
 			},
 		},
 		{
@@ -859,7 +861,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 				2020-01-03 * "Sell - should use insertion order"
 				  Assets:Brokerage    -25 STOCK {}
 				  Assets:Cash         2625 USD
-				  Income:CapitalGains    -2625 USD
+				  Income:CapitalGains    -25 USD
 			`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {

@@ -1170,8 +1170,8 @@ func TestEmptyCostBehavior(t *testing.T) {
 
 				2020-01-03 * "Sell stock with empty cost (FIFO)"
 				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         500 USD
-				  Income:CapitalGains    -500 USD
+				  Assets:Cash         600 USD
+				  Income:CapitalGains    -100 USD
 			`,
 			wantErr: false,
 		},
@@ -1192,8 +1192,8 @@ func TestEmptyCostBehavior(t *testing.T) {
 
 				2020-01-04 * "Sell stock with empty cost (LIFO - newest first)"
 				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         550 USD
-				  Income:CapitalGains    -550 USD
+				  Assets:Cash         560 USD
+				  Income:CapitalGains    -10 USD
 			`,
 			wantErr: false,
 		},
@@ -1239,6 +1239,64 @@ func TestEmptyCostBehavior(t *testing.T) {
 				  Income:CapitalGains    -2000 USD
 			`,
 			wantErr: true, // Beancount error: trying to reduce 20 shares when only 10 available
+		},
+		{
+			name: "{} reduction resolves weight from booked lot for interpolation",
+			input: `
+				2020-01-01 open Assets:Brokerage
+				2020-01-01 open Assets:Cash USD
+				2020-01-01 open Income:CapitalGains
+
+				2020-01-02 * "Buy stock"
+				  Assets:Brokerage    10 STOCK {100 USD}
+				  Assets:Cash        -1000 USD
+
+				2020-01-03 * "Sell with auto gains posting"
+				  Assets:Brokerage    -5 STOCK {}
+				  Assets:Cash         600 USD
+				  Income:CapitalGains
+
+				2020-01-04 balance Income:CapitalGains -100 USD
+			`,
+			wantErr: false, // gains inferred from lot cost basis, not the full proceeds
+		},
+		{
+			name: "NONE booking interpolates {} cost from residual",
+			input: `
+				option "booking_method" "NONE"
+				2020-01-01 open Assets:Brokerage
+				2020-01-01 open Assets:Cash USD
+				2020-01-01 open Income:CapitalGains
+
+				2020-01-02 * "Buy stock"
+				  Assets:Brokerage    10 STOCK {100 USD}
+				  Assets:Cash        -1000 USD
+
+				2020-01-03 * "Sell, cost interpolated as 100"
+				  Assets:Brokerage    -5 STOCK {}
+				  Assets:Cash         600 USD
+				  Income:CapitalGains    -100 USD
+			`,
+			wantErr: false, // verified against bean-check 2.3.6
+		},
+		{
+			name: "NONE booking with {} and auto posting has too many unknowns",
+			input: `
+				option "booking_method" "NONE"
+				2020-01-01 open Assets:Brokerage
+				2020-01-01 open Assets:Cash USD
+				2020-01-01 open Income:CapitalGains
+
+				2020-01-02 * "Buy stock"
+				  Assets:Brokerage    10 STOCK {100 USD}
+				  Assets:Cash        -1000 USD
+
+				2020-01-03 * "Sell with two unknowns"
+				  Assets:Brokerage    -5 STOCK {}
+				  Assets:Cash         600 USD
+				  Income:CapitalGains
+			`,
+			wantErr: true, // beancount: "Too many missing numbers for currency group"
 		},
 	}
 
