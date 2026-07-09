@@ -2,7 +2,7 @@ package ledger
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -135,7 +135,7 @@ func (inv *Inventory) String() string {
 	for commodity := range inv.lots {
 		commodities = append(commodities, commodity)
 	}
-	sort.Strings(commodities)
+	slices.Sort(commodities)
 
 	var buf strings.Builder
 	buf.WriteByte('{')
@@ -351,23 +351,41 @@ func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 	sortedLots := append([]*lot(nil), lots...)
 	lifo := defaultBookingMethod(bookingMethod) == BookingLIFO
 
-	sort.SliceStable(sortedLots, func(i, j int) bool {
-		iHasDate := sortedLots[i].Spec != nil && sortedLots[i].Spec.Date != nil
-		jHasDate := sortedLots[j].Spec != nil && sortedLots[j].Spec.Date != nil
+	slices.SortStableFunc(sortedLots, func(a, b *lot) int {
+		aHasDate := a.Spec != nil && a.Spec.Date != nil
+		bHasDate := b.Spec != nil && b.Spec.Date != nil
 
-		if iHasDate != jHasDate {
+		if aHasDate != bHasDate {
 			if lifo {
-				return iHasDate
+				if aHasDate {
+					return -1
+				}
+				return 1
 			}
-			return !iHasDate
+			if !aHasDate {
+				return -1
+			}
+			return 1
 		}
-		if !iHasDate {
-			return false
+		if !aHasDate {
+			return 0
 		}
 		if lifo {
-			return sortedLots[i].Spec.Date.After(sortedLots[j].Spec.Date.Time)
+			if a.Spec.Date.After(b.Spec.Date.Time) {
+				return -1
+			}
+			if a.Spec.Date.Before(b.Spec.Date.Time) {
+				return 1
+			}
+			return 0
 		}
-		return sortedLots[i].Spec.Date.Before(sortedLots[j].Spec.Date.Time)
+		if a.Spec.Date.Before(b.Spec.Date.Time) {
+			return -1
+		}
+		if a.Spec.Date.After(b.Spec.Date.Time) {
+			return 1
+		}
+		return 0
 	})
 
 	return sortedLots

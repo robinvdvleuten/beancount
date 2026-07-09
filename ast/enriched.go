@@ -1,6 +1,6 @@
 package ast
 
-import "sort"
+import "slices"
 
 // EnrichedAST wraps an AST with pre-extracted semantic information.
 // This enables building a graph skeleton without inspecting directives.
@@ -63,6 +63,6 @@ func mapKeys(m map[string]bool) []string {
 	for k := range m {
 		keys = append(keys, k)
 	}
-	sort.Strings(keys)
+	slices.Sort(keys)
 	return keys
 }

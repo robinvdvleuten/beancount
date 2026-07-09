@@ -3,7 +3,7 @@ package ledger
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -213,7 +213,7 @@ func (e *TransactionNotBalancedError) formatResiduals() string {
 	for currency := range e.Residuals {
 		currencies = append(currencies, currency)
 	}
-	sort.Strings(currencies)
+	slices.Sort(currencies)
 
 	// Format as "(amount1 CUR1, amount2 CUR2, ...)"
 	var buf strings.Builder

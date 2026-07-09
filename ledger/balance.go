@@ -1,7 +1,7 @@
 package ledger
 
 import (
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/shopspring/decimal"
@@ -39,8 +39,14 @@ func NewBalanceFromMap(m map[string]decimal.Decimal) *Balance {
 	}
 
 	// Sort by currency code for deterministic order
-	sort.Slice(entries, func(i, j int) bool {
-		return entries[i].Currency < entries[j].Currency
+	slices.SortFunc(entries, func(a, b *CurrencyAmount) int {
+		if a.Currency < b.Currency {
+			return -1
+		}
+		if a.Currency > b.Currency {
+			return 1
+		}
+		return 0
 	})
 
 	return &Balance{entries: entries}
@@ -70,8 +76,14 @@ func (b *Balance) Set(currency string, amount decimal.Decimal) {
 		Currency: currency,
 		Amount:   amount,
 	})
-	sort.Slice(b.entries, func(i, j int) bool {
-		return b.entries[i].Currency < b.entries[j].Currency
+	slices.SortFunc(b.entries, func(a, b *CurrencyAmount) int {
+		if a.Currency < b.Currency {
+			return -1
+		}
+		if a.Currency > b.Currency {
+			return 1
+		}
+		return 0
 	})
 }
 

@@ -2,7 +2,7 @@ package web
 
 import (
 	"net/http"
-	"sort"
+	"slices"
 )
 
 // AccountInfo represents basic information about a ledger account.
@@ -33,8 +33,14 @@ func (s *Server) handleGetAccounts(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Sort alphabetically using standard library
-	sort.Slice(accounts, func(i, j int) bool {
-		return accounts[i].Name < accounts[j].Name
+	slices.SortFunc(accounts, func(a, b AccountInfo) int {
+		if a.Name < b.Name {
+			return -1
+		}
+		if a.Name > b.Name {
+			return 1
+		}
+		return 0
 	})
 
 	writeJSONResponse(w, &AccountsResponse{Accounts: accounts})

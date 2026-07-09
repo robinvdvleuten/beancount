@@ -36,7 +36,7 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 
@@ -450,7 +450,7 @@ func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast
 	for currency := range currencySet {
 		currencies = append(currencies, currency)
 	}
-	sort.Strings(currencies)
+	slices.Sort(currencies)
 
 	// Build the tree structure
 	tree := l.buildBalanceTree(entries, typeFilter)
@@ -599,8 +599,14 @@ func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *
 
 	// Sort children at each level
 	for _, node := range nodeMap {
-		sort.Slice(node.Children, func(i, j int) bool {
-			return node.Children[i].Name < node.Children[j].Name
+		slices.SortFunc(node.Children, func(a, b *BalanceNode) int {
+			if a.Name < b.Name {
+				return -1
+			}
+			if a.Name > b.Name {
+				return 1
+			}
+			return 0
 		})
 	}
 
@@ -630,8 +636,14 @@ func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *
 	}
 
 	// Sort root's children
-	sort.Slice(root.Children, func(i, j int) bool {
-		return root.Children[i].Name < root.Children[j].Name
+	slices.SortFunc(root.Children, func(a, b *BalanceNode) int {
+		if a.Name < b.Name {
+			return -1
+		}
+		if a.Name > b.Name {
+			return 1
+		}
+		return 0
 	})
 
 	// Aggregate balances from children to root

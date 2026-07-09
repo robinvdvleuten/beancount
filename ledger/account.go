@@ -1,7 +1,7 @@
 package ledger
 
 import (
-	"sort"
+	"slices"
 
 	"github.com/robinvdvleuten/beancount/ast"
 )
@@ -112,8 +112,14 @@ func (a *Account) GetChildren(l *Ledger) []*Account {
 		}
 	}
 
-	sort.Slice(children, func(i, j int) bool {
-		return children[i].Name < children[j].Name
+	slices.SortFunc(children, func(a, b *Account) int {
+		if a.Name < b.Name {
+			return -1
+		}
+		if a.Name > b.Name {
+			return 1
+		}
+		return 0
 	})
 
 	return children

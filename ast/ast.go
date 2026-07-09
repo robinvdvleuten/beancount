@@ -6,9 +6,7 @@
 // programmatically for generating Beancount output.
 package ast
 
-import (
-	"golang.org/x/exp/slices"
-)
+import "slices"
 
 // Directives is a slice of Directive that implements sort.Interface.
 type Directives []Directive

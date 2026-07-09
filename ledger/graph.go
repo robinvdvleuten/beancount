@@ -2,7 +2,7 @@ package ledger
 
 import (
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -64,9 +64,9 @@ const (
 // Node represents a vertex in the ledger graph.
 // Nodes are typed (Account, Currency, Commodity) for semantic clarity.
 type Node struct {
-	ID   string      // Unique identifier (e.g., "Assets:Cash", "USD")
-	Kind NodeKind    // Account, currency, commodity, or unknown
-	Meta interface{} // Optional metadata (e.g., Account pointer, commodity info)
+	ID   string   // Unique identifier (e.g., "Assets:Cash", "USD")
+	Kind NodeKind // Account, currency, commodity, or unknown
+	Meta any      // Optional metadata (e.g., Account pointer, commodity info)
 }
 
 // Edge represents a directed relationship between two nodes.
@@ -77,7 +77,7 @@ type Edge struct {
 	Kind       EdgeKind        // Price, hierarchy, or another domain relationship
 	Date       *ast.Date       // Date the edge is valid from (required for all edges)
 	Weight     decimal.Decimal // Rate/amount for price edges; zero for non-price edges
-	Meta       interface{}     // Original directive (ast.Price, ast.Transaction, etc.)
+	Meta       any             // Original directive (ast.Price, ast.Transaction, etc.)
 	Inferred   bool            // True if edge was inferred (e.g., inverse price edge)
 	ValidUntil *ast.Date       // Optional: edge validity end date (for closings)
 }
@@ -95,7 +95,7 @@ func NewGraph() *Graph {
 }
 
 // AddNode adds a node to the graph or returns existing node if already present.
-func (g *Graph) AddNode(id string, kind NodeKind, meta interface{}) *Node {
+func (g *Graph) AddNode(id string, kind NodeKind, meta any) *Node {
 	if node, exists := g.nodes[id]; exists {
 		return node
 	}
@@ -143,8 +143,14 @@ func (g *Graph) AddEdge(edge *Edge) *Edge {
 		g.priceEdgesByDate[dateKey] = append(g.priceEdgesByDate[dateKey], edge)
 
 		if _, exists := g.priceDates[dateKey]; !exists {
-			insertAt := sort.Search(len(g.sortedDates), func(i int) bool {
-				return !g.sortedDates[i].Before(dateKey)
+			insertAt, _ := slices.BinarySearchFunc(g.sortedDates, dateKey, func(date *ast.Date, target time.Time) int {
+				if date.Before(target) {
+					return -1
+				}
+				if date.After(target) {
+					return 1
+				}
+				return 0
 			})
 			g.sortedDates = append(g.sortedDates, nil)
 			copy(g.sortedDates[insertAt+1:], g.sortedDates[insertAt:])
@@ -170,8 +176,11 @@ func (g *Graph) GetOutgoingEdges(fromID string) []*Edge {
 func (g *Graph) GetPriceEdgesOnDate(date *ast.Date) []*Edge {
 	var result []*Edge
 
-	firstAfter := sort.Search(len(g.sortedDates), func(i int) bool {
-		return g.sortedDates[i].After(date.Time)
+	firstAfter, _ := slices.BinarySearchFunc(g.sortedDates, date.Time, func(sortedDate *ast.Date, target time.Time) int {
+		if sortedDate.After(target) {
+			return 1
+		}
+		return -1
 	})
 	for i := firstAfter - 1; i >= 0; i-- {
 		sortedDate := g.sortedDates[i]
