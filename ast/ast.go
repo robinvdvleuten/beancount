@@ -17,14 +17,16 @@ func (d Directives) Less(i, j int) bool { return compareDirectives(d[i], d[j]) <
 
 // compareDirectives compares two directives by their date, then by type priority,
 // then by source position (line number). Returns -1 if a < b, 0 if a == b, 1 if a > b.
-// This implements a stable sort that preserves source order for same-date, same-type
-// directives, matching the behavior of the official Python beancount implementation.
+// This matches the same-date processing order of the official Python beancount
+// implementation.
 //
 // For same-date directives, the processing order is:
 //  1. Open (accounts must be opened before use)
-//  2. Close (process closes before transactions that might use closed accounts)
-//  3. All other directives (transactions, balance, pad, etc.)
-//  4. Within same type, sort by line number (preserves source order)
+//  2. Balance (assertions apply at the beginning of the day)
+//  3. All other directives (transactions, pad, note, price, etc.)
+//  4. Document
+//  5. Close (processed last)
+//  6. Within the same priority, sort by line number
 func compareDirectives(a, b Directive) int {
 	// First compare by date
 	if a.Date().Before(b.Date().Time) {
@@ -64,11 +66,15 @@ func getDirectiveLine(d Directive) int {
 func directiveTypePriority(d Directive) int {
 	switch d.(type) {
 	case *Open:
-		return 0 // Process opens first
+		return -2
+	case *Balance:
+		return -1
+	case *Document:
+		return 1
 	case *Close:
-		return 1 // Process closes second
+		return 2
 	default:
-		return 2 // All others (transactions, balance, pad, note, etc.)
+		return 0
 	}
 }
 

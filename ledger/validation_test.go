@@ -1261,9 +1261,9 @@ func TestEmptyCostBehavior(t *testing.T) {
 	}
 }
 
-// TestPadTiming tests CRITICAL pad directive timing rules.
-// In beancount, pad directives MUST come chronologically BEFORE the balance assertion.
-// This is one of the most important compliance rules.
+// TestPadTiming tests pad directive timing rules.
+// In beancount, pad directives must be processed before the balance assertion;
+// same-date balance assertions run before pads and therefore do not consume them.
 func TestPadTiming(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1283,7 +1283,7 @@ func TestPadTiming(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "pad on same date as balance - invalid (CRITICAL)",
+			name: "pad on same date as balance - balance runs before pad",
 			input: `
 				2020-01-01 open Assets:Checking USD
 				2020-01-01 open Equity:Opening
@@ -1292,7 +1292,7 @@ func TestPadTiming(t *testing.T) {
 				2020-01-05 balance Assets:Checking 100 USD
 			`,
 			wantErr: true,
-			errMsg:  "must come before balance",
+			errMsg:  "Balance mismatch",
 		},
 		{
 			name: "pad after balance - balance fails without pad",

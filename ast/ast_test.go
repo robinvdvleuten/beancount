@@ -22,6 +22,46 @@ func newCloseForTest(line int, date *Date, account Account) *Close {
 	return close
 }
 
+// newBalanceForTest creates a Balance directive for testing.
+func newBalanceForTest(line int, date *Date, account Account) *Balance {
+	balance := &Balance{Account: account, Amount: NewAmount("0", "USD")}
+	balance.SetPosition(Position{Line: line})
+	balance.SetDate(date)
+	return balance
+}
+
+// newPadForTest creates a Pad directive for testing.
+func newPadForTest(line int, date *Date, account, padAccount Account) *Pad {
+	pad := &Pad{Account: account, AccountPad: padAccount}
+	pad.SetPosition(Position{Line: line})
+	pad.SetDate(date)
+	return pad
+}
+
+// newNoteForTest creates a Note directive for testing.
+func newNoteForTest(line int, date *Date, account Account) *Note {
+	note := &Note{Account: account, Description: NewRawString("note")}
+	note.SetPosition(Position{Line: line})
+	note.SetDate(date)
+	return note
+}
+
+// newDocumentForTest creates a Document directive for testing.
+func newDocumentForTest(line int, date *Date, account Account) *Document {
+	document := &Document{Account: account, PathToDocument: NewRawString("receipt.pdf")}
+	document.SetPosition(Position{Line: line})
+	document.SetDate(date)
+	return document
+}
+
+// newTransactionForTest creates a Transaction directive for testing.
+func newTransactionForTest(line int, date *Date) *Transaction {
+	transaction := &Transaction{Flag: "*", Narration: NewRawString("test")}
+	transaction.SetPosition(Position{Line: line})
+	transaction.SetDate(date)
+	return transaction
+}
+
 // newOptionForTest creates an Option for testing.
 func newOptionForTest(line int, name, value RawString) *Option {
 	opt := &Option{Name: name, Value: value}
@@ -83,6 +123,44 @@ func newBlankLineForTest(line int) *BlankLine {
 	bl := &BlankLine{}
 	bl.SetPosition(Position{Line: line})
 	return bl
+}
+
+func TestSortDirectives(t *testing.T) {
+	date, _ := NewDate("2024-01-01")
+	account, _ := NewAccount("Assets:Checking")
+	padAccount, _ := NewAccount("Equity:Opening-Balances")
+
+	open := newOpenForTest(70, date, account)
+	balance := newBalanceForTest(60, date, account)
+	transaction := newTransactionForTest(30, date)
+	pad := newPadForTest(40, date, account, padAccount)
+	note := newNoteForTest(50, date, account)
+	document := newDocumentForTest(20, date, account)
+	close := newCloseForTest(10, date, account)
+
+	tree := &AST{
+		Directives: []Directive{
+			close,
+			document,
+			note,
+			pad,
+			transaction,
+			balance,
+			open,
+		},
+	}
+
+	err := SortDirectives(tree)
+	assert.NoError(t, err)
+	assert.Equal(t, []Directive{
+		open,
+		balance,
+		transaction,
+		pad,
+		note,
+		document,
+		close,
+	}, tree.Directives)
 }
 
 func TestLinesWithMultipleItems(t *testing.T) {
