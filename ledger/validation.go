@@ -1084,7 +1084,15 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 
 func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, error) {
 	if balance.Tolerance == nil {
-		return v.config.Tolerance.GetDefaultTolerance(balance.Amount.Currency), nil
+		amount, err := ParseAmount(balance.Amount)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		exp := amount.Exponent()
+		if exp >= 0 {
+			return decimal.Zero, nil
+		}
+		return decimal.New(1, exp).Mul(v.config.Tolerance.multiplier), nil
 	}
 	return ParseAmount(balance.Tolerance)
 }

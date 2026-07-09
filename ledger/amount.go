@@ -51,12 +51,10 @@ type ToleranceConfig struct {
 }
 
 // NewToleranceConfig creates a default tolerance configuration
-// Default: 0.005 tolerance for all currencies, 0.5 multiplier
+// Default: no configured default tolerances, 0.5 multiplier
 func NewToleranceConfig() *ToleranceConfig {
 	return &ToleranceConfig{
-		defaults: map[string]decimal.Decimal{
-			"*": decimal.NewFromFloat(0.005),
-		},
+		defaults:      make(map[string]decimal.Decimal),
 		multiplier:    decimal.NewFromFloat(0.5),
 		inferFromCost: false,
 	}
@@ -65,8 +63,8 @@ func NewToleranceConfig() *ToleranceConfig {
 // InferTolerance calculates tolerance from amount precision
 // Algorithm:
 //  1. Find the smallest exponent across all amounts
-//  2. Calculate tolerance = 10^minExp * multiplier
-//  3. If no amounts, use default tolerance for currency
+//  2. Calculate tolerance = 10^minExp * multiplier for fractional precision
+//  3. If no fractional precision is inferred, use default tolerance for currency
 func InferTolerance(amounts []decimal.Decimal, currency string, config *ToleranceConfig) decimal.Decimal {
 	if config == nil {
 		config = NewToleranceConfig()
@@ -98,6 +96,10 @@ func InferTolerance(amounts []decimal.Decimal, currency string, config *Toleranc
 		return config.GetDefaultTolerance(currency)
 	}
 
+	if minExp >= 0 {
+		return config.GetDefaultTolerance(currency)
+	}
+
 	// Calculate tolerance: 10^minExp * multiplier
 	// For example: minExp = -5 gives 10^-5 = 0.00001
 	tolerance := decimal.New(1, minExp).Mul(config.multiplier)
@@ -109,7 +111,7 @@ func InferTolerance(amounts []decimal.Decimal, currency string, config *Toleranc
 // Checks currency-specific default first, then wildcard "*"
 func (c *ToleranceConfig) GetDefaultTolerance(currency string) decimal.Decimal {
 	if c == nil {
-		return decimal.NewFromFloat(0.005)
+		return decimal.Zero
 	}
 
 	// Check currency-specific default
@@ -123,7 +125,7 @@ func (c *ToleranceConfig) GetDefaultTolerance(currency string) decimal.Decimal {
 	}
 
 	// Final fallback
-	return decimal.NewFromFloat(0.005)
+	return decimal.Zero
 }
 
 // AmountEqual checks if two amounts are equal within tolerance

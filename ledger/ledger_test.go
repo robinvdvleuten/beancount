@@ -379,7 +379,7 @@ func TestLedger_ProcessBalance(t *testing.T) {
 
 				2020-01-16 balance Assets:Checking  1000.00 USD
 			`,
-			wantErr: false, // Within 0.005 tolerance
+			wantErr: false, // Within inferred 0.005 tolerance
 		},
 		{
 			name: "balance after multiple transactions",

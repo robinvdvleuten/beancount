@@ -20,7 +20,7 @@ func TestConfigFromOptions(t *testing.T) {
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.5), config.Tolerance.multiplier)
-				assert.Equal(t, decimal.NewFromFloat(0.005), config.Tolerance.defaults["*"])
+				assert.Equal(t, 0, len(config.Tolerance.defaults))
 				assert.False(t, config.Tolerance.inferFromCost)
 				assert.Equal(t, "SIMPLE", config.BookingMethod)
 			},
@@ -53,8 +53,8 @@ func TestConfigFromOptions(t *testing.T) {
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.003), config.Tolerance.defaults["USD"])
-				// Wildcard should still have default
-				assert.Equal(t, decimal.NewFromFloat(0.005), config.Tolerance.defaults["*"])
+				_, ok := config.Tolerance.defaults["*"]
+				assert.False(t, ok)
 			},
 		},
 		{
@@ -131,8 +131,8 @@ func TestConfigFromOptions(t *testing.T) {
 				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.defaults["USD"])
 				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.defaults["EUR"])
 				assert.Equal(t, decimal.NewFromFloat(0.0001), config.Tolerance.defaults["BTC"])
-				// Wildcard should still have default
-				assert.Equal(t, decimal.NewFromFloat(0.005), config.Tolerance.defaults["*"])
+				_, ok := config.Tolerance.defaults["*"]
+				assert.False(t, ok)
 			},
 		},
 		{

@@ -60,21 +60,33 @@ func TestInferTolerance(t *testing.T) {
 			amounts:  []string{},
 			currency: "USD",
 			config:   NewToleranceConfig(),
-			wantTol:  "0.005", // Default
+			wantTol:  "0",
 		},
 		{
 			name:     "all zero amounts - use default",
 			amounts:  []string{"0.00", "0.000"},
 			currency: "USD",
 			config:   NewToleranceConfig(),
-			wantTol:  "0.005", // Default
+			wantTol:  "0",
 		},
 		{
-			name:     "integer amounts",
+			name:     "integer amounts without default",
 			amounts:  []string{"100", "200"},
 			currency: "USD",
 			config:   NewToleranceConfig(),
-			wantTol:  "0.5", // 10^0 * 0.5 = 0.5
+			wantTol:  "0",
+		},
+		{
+			name:     "integer amounts with configured default",
+			amounts:  []string{"100", "200"},
+			currency: "USD",
+			config: &ToleranceConfig{
+				defaults: map[string]decimal.Decimal{
+					"USD": decimal.NewFromFloat(0.5),
+				},
+				multiplier: decimal.NewFromFloat(0.5),
+			},
+			wantTol: "0.5",
 		},
 		{
 			name:     "currency-specific default",
@@ -105,7 +117,7 @@ func TestInferTolerance(t *testing.T) {
 			want, err := decimal.NewFromString(tt.wantTol)
 			assert.NoError(t, err, "failed to parse expected tolerance %q", tt.wantTol)
 
-			assert.Equal(t, want, got, "InferTolerance() mismatch")
+			assert.True(t, got.Equal(want), "InferTolerance() mismatch: got %s, want %s", got, want)
 		})
 	}
 }
@@ -121,7 +133,7 @@ func TestGetDefaultTolerance(t *testing.T) {
 			name:     "nil config - fallback",
 			config:   nil,
 			currency: "USD",
-			want:     "0.005",
+			want:     "0",
 		},
 		{
 			name: "currency-specific default",
@@ -157,7 +169,7 @@ func TestGetDefaultTolerance(t *testing.T) {
 				multiplier: decimal.NewFromFloat(0.5),
 			},
 			currency: "EUR",
-			want:     "0.005",
+			want:     "0",
 		},
 	}
 
@@ -167,7 +179,7 @@ func TestGetDefaultTolerance(t *testing.T) {
 			want, err := decimal.NewFromString(tt.want)
 			assert.NoError(t, err, "failed to parse expected tolerance %q", tt.want)
 
-			assert.Equal(t, want, got, "GetDefaultTolerance() mismatch")
+			assert.True(t, got.Equal(want), "GetDefaultTolerance() mismatch: got %s, want %s", got, want)
 		})
 	}
 }
@@ -177,6 +189,6 @@ func TestNewToleranceConfig(t *testing.T) {
 
 	assert.True(t, config != nil, "NewToleranceConfig() should not return nil")
 	assert.Equal(t, decimal.NewFromFloat(0.5), config.multiplier)
-	assert.Equal(t, decimal.NewFromFloat(0.005), config.defaults["*"])
+	assert.Equal(t, 0, len(config.defaults))
 	assert.False(t, config.inferFromCost)
 }

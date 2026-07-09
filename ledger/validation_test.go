@@ -1367,7 +1367,7 @@ func TestPadTiming(t *testing.T) {
 }
 
 // TestBalanceTolerance tests balance assertion tolerance handling.
-// Beancount uses a default tolerance of 0.005 for balance checks.
+// Beancount infers balance tolerance from the asserted amount's precision.
 func TestBalanceTolerance(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -1389,7 +1389,7 @@ func TestBalanceTolerance(t *testing.T) {
 			wantErr: false,
 		},
 		{
-			name: "balance within default tolerance (0.005)",
+			name: "balance within inferred tolerance (0.005)",
 			input: `
 				2020-01-01 open Assets:Checking USD
 				2020-01-01 open Equity:Opening
@@ -1401,6 +1401,20 @@ func TestBalanceTolerance(t *testing.T) {
 				2020-01-03 balance Assets:Checking 100.00 USD
 			`,
 			wantErr: false,
+		},
+		{
+			name: "integer precision balance is exact",
+			input: `
+				2020-01-01 open Assets:Checking USD
+				2020-01-01 open Equity:Opening
+
+				2020-01-02 * "Deposit"
+				  Assets:Checking    100.4 USD
+				  Equity:Opening    -100.4 USD
+
+				2020-01-03 balance Assets:Checking 100 USD
+			`,
+			wantErr: true,
 		},
 		{
 			name: "balance exceeds tolerance - should error",
