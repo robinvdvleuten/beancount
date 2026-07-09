@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -1147,6 +1148,11 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 			// Check if reduction is possible (read-only)
 			if err := account.Inventory.CanReduceLot(currency, amount, lotSpec, bookingMethod); err != nil {
+				var ambiguousErr *ambiguousBookingMatchError
+				if errors.As(err, &ambiguousErr) {
+					errs = append(errs, NewAmbiguousBookingError(txn, posting.Account, ambiguousErr))
+					continue
+				}
 				errs = append(errs, NewInsufficientInventoryError(txn, posting.Account, err))
 			}
 		}

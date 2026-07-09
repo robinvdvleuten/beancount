@@ -637,6 +637,45 @@ func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, de
 	}
 }
 
+// AmbiguousBookingError is returned when STRICT booking cannot choose a unique lot.
+type AmbiguousBookingError struct {
+	directiveError
+	Payee   string
+	Account ast.Account
+	Details error
+}
+
+func (e *AmbiguousBookingError) Error() string {
+	return fmt.Sprintf("%s: Ambiguous booking (account %s): %v",
+		e.formatLocation(), e.Account, e.Details)
+}
+
+func (e *AmbiguousBookingError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *AmbiguousBookingError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "AmbiguousBookingError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"date":     e.Date().String(),
+		"payee":    e.Payee,
+		"details":  e.Details.Error(),
+	})
+}
+
+// NewAmbiguousBookingError creates an error for ambiguous STRICT booking matches.
+func NewAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details error) *AmbiguousBookingError {
+	return &AmbiguousBookingError{
+		directiveError: newDirectiveError(txn),
+		Payee:          txn.Payee.Value,
+		Account:        account,
+		Details:        details,
+	}
+}
+
 // CurrencyConstraintError is returned when a posting uses a currency not allowed by the account
 type CurrencyConstraintError struct {
 	directiveError

@@ -2061,6 +2061,107 @@ func TestValidateInventoryOperations(t *testing.T) {
 	}
 }
 
+func TestBookingMethodSemantics(t *testing.T) {
+	tests := []struct {
+		name                    string
+		input                   string
+		wantErr                 bool
+		wantAmbiguousBookingErr bool
+	}{
+		{
+			name: "STRICT ambiguous reduction errors",
+			input: `
+				2020-01-01 open Assets:Brokerage
+				2020-01-01 open Assets:Cash USD
+				2020-01-01 open Income:CapitalGains
+
+				2020-01-02 * "Buy lot 1"
+				  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
+				  Assets:Cash         -1000 USD
+
+				2020-01-03 * "Buy lot 2"
+				  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
+				  Assets:Cash         -1100 USD
+
+				2020-01-04 * "Sell"
+				  Assets:Brokerage       -5 HOOL {}
+				  Assets:Cash           500 USD
+				  Income:CapitalGains  -500 USD
+			`,
+			wantErr:                 true,
+			wantAmbiguousBookingErr: true,
+		},
+		{
+			name: "global NONE allows mixed-sign inventory",
+			input: `
+				option "booking_method" "NONE"
+				2020-01-01 open Assets:Brokerage
+				2020-01-01 open Assets:Cash USD
+				2020-01-01 open Income:CapitalGains
+
+				2020-01-02 * "Buy lot 1"
+				  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
+				  Assets:Cash         -1000 USD
+
+				2020-01-03 * "Buy lot 2"
+				  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
+				  Assets:Cash         -1100 USD
+
+				2020-01-04 * "Sell"
+				  Assets:Brokerage       -5 HOOL {}
+				  Assets:Cash           500 USD
+				  Income:CapitalGains  -500 USD
+			`,
+			wantErr: false,
+		},
+		{
+			name: "per-account NONE overrides global STRICT",
+			input: `
+				option "booking_method" "STRICT"
+				2020-01-01 open Assets:Brokerage "NONE"
+				2020-01-01 open Assets:Cash USD
+				2020-01-01 open Income:CapitalGains
+
+				2020-01-02 * "Buy lot 1"
+				  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
+				  Assets:Cash         -1000 USD
+
+				2020-01-03 * "Buy lot 2"
+				  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
+				  Assets:Cash         -1100 USD
+
+				2020-01-04 * "Sell"
+				  Assets:Brokerage       -5 HOOL {}
+				  Assets:Cash           500 USD
+				  Income:CapitalGains  -500 USD
+			`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := parser.MustParseString(context.Background(), tt.input)
+
+			l := New()
+			err := l.Process(context.Background(), tree)
+
+			if tt.wantErr {
+				assert.Error(t, err)
+				if tt.wantAmbiguousBookingErr {
+					errs := l.Errors()
+					assert.True(t, len(errs) > 0)
+					_, ok := errs[0].(*AmbiguousBookingError)
+					assert.True(t, ok)
+				}
+				return
+			}
+
+			assert.NoError(t, err)
+		})
+	}
+}
+
 // TestValidateConstraintCurrencies tests the validateConstraintCurrencies() function
 func TestValidateConstraintCurrencies(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-15")

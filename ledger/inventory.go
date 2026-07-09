@@ -25,6 +25,28 @@ type reductionPlan struct {
 	replaceLots     bool
 	replacementLots []*lot
 	addAmount       *decimal.Decimal
+	addSpec         *lotSpec
+}
+
+type ambiguousBookingMatchError struct {
+	commodity string
+	amount    decimal.Decimal
+	spec      *lotSpec
+	matches   []*lot
+}
+
+func (e *ambiguousBookingMatchError) Error() string {
+	matchStrings := make([]string, 0, len(e.matches))
+	for _, match := range e.matches {
+		matchStrings = append(matchStrings, match.String())
+	}
+
+	return fmt.Sprintf("ambiguous matches for \"-%s %s %s\": %s",
+		e.amount.String(),
+		e.commodity,
+		e.spec.String(),
+		strings.Join(matchStrings, ", "),
+	)
 }
 
 type BookingMethod string
@@ -188,16 +210,36 @@ func (inv *Inventory) planReduction(
 	}
 
 	reduceAmount := amount.Abs()
+	bookingMethod = defaultBookingMethod(bookingMethod)
 
-	if spec != nil && spec.Merge {
+	if bookingMethod == BookingNONE {
+		return &reductionPlan{
+			commodity: commodity,
+			addAmount: &amount,
+			addSpec:   spec,
+		}, nil
+	}
+
+	if spec == nil {
+		return &reductionPlan{
+			commodity: commodity,
+			addAmount: &amount,
+		}, nil
+	}
+
+	if spec.Merge {
 		return inv.planMergeReduction(commodity, reduceAmount)
 	}
 
-	if spec != nil && spec.IsEmpty() && !spec.Merge {
+	if bookingMethod == BookingSTRICT {
+		return inv.planStrictReduction(commodity, reduceAmount, spec)
+	}
+
+	if spec.IsEmpty() {
 		return inv.planBookingReduction(commodity, reduceAmount, bookingMethod)
 	}
 
-	if spec != nil && spec.Cost != nil && !spec.Merge {
+	if spec.Cost != nil {
 		return inv.planSpecificReduction(commodity, reduceAmount, spec)
 	}
 
@@ -205,6 +247,68 @@ func (inv *Inventory) planReduction(
 		commodity: commodity,
 		addAmount: &amount,
 	}, nil
+}
+
+func (inv *Inventory) planStrictReduction(
+	commodity string,
+	amount decimal.Decimal,
+	spec *lotSpec,
+) (*reductionPlan, error) {
+	lots := inv.lots[commodity]
+	if len(lots) == 0 {
+		return nil, fmt.Errorf("no lots available for %s", commodity)
+	}
+
+	matches := make([]*lot, 0, len(lots))
+	for _, lot := range lots {
+		if lotMatchesReductionSpec(lot, spec) {
+			matches = append(matches, lot)
+		}
+	}
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("lot not found: %s %s", commodity, spec.String())
+	}
+
+	if len(matches) == 1 {
+		lot := matches[0]
+		if lot.Amount.LessThan(amount) {
+			return nil, fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
+				spec.String(), lot.Amount.String(), amount.String())
+		}
+		return &reductionPlan{
+			commodity:  commodity,
+			reductions: []lotReduction{{lot: lot, amount: amount}},
+		}, nil
+	}
+
+	total := decimal.Zero
+	for _, lot := range matches {
+		total = total.Add(lot.Amount)
+	}
+
+	if total.LessThan(amount) {
+		return nil, fmt.Errorf("insufficient total amount for %s: have %s, need %s",
+			commodity, total.String(), amount.String())
+	}
+
+	if total.Equal(amount) {
+		reductions := make([]lotReduction, 0, len(matches))
+		for _, lot := range matches {
+			reductions = append(reductions, lotReduction{lot: lot, amount: lot.Amount})
+		}
+		return &reductionPlan{
+			commodity:  commodity,
+			reductions: reductions,
+		}, nil
+	}
+
+	return nil, &ambiguousBookingMatchError{
+		commodity: commodity,
+		amount:    amount,
+		spec:      spec,
+		matches:   matches,
+	}
 }
 
 func (inv *Inventory) planSpecificReduction(
@@ -338,7 +442,7 @@ func (inv *Inventory) applyReduction(plan *reductionPlan) {
 	}
 
 	if plan.addAmount != nil {
-		inv.AddLot(plan.commodity, *plan.addAmount, nil)
+		inv.AddLot(plan.commodity, *plan.addAmount, plan.addSpec)
 		return
 	}
 
@@ -392,6 +496,39 @@ func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 	})
 
 	return sortedLots
+}
+
+func lotMatchesReductionSpec(lot *lot, spec *lotSpec) bool {
+	if spec == nil {
+		return lot.Spec == nil || lot.Spec.IsEmpty()
+	}
+	if spec.IsEmpty() {
+		return true
+	}
+	if lot.Spec == nil {
+		return false
+	}
+
+	if spec.Cost != nil {
+		if lot.Spec.Cost == nil || !lot.Spec.Cost.Equal(*spec.Cost) {
+			return false
+		}
+		if lot.Spec.CostCurrency != spec.CostCurrency {
+			return false
+		}
+	}
+
+	if spec.Date != nil {
+		if lot.Spec.Date == nil || !lot.Spec.Date.Equal(spec.Date.Time) {
+			return false
+		}
+	}
+
+	if spec.Label != "" && lot.Spec.Label != spec.Label {
+		return false
+	}
+
+	return true
 }
 
 // lotSpecsMatch checks if two lot specs match

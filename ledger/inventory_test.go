@@ -723,6 +723,51 @@ func TestCanReduceWithBooking(t *testing.T) {
 	}
 }
 
+func TestStrictBookingReduction(t *testing.T) {
+	date1, _ := ast.NewDate("2024-01-15")
+	date2, _ := ast.NewDate("2024-02-15")
+
+	d := func(s string) decimal.Decimal {
+		val, _ := decimal.NewFromString(s)
+		return val
+	}
+
+	t.Run("ambiguous partial reduction errors", func(t *testing.T) {
+		inv := NewInventory()
+		inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
+		inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
+
+		err := inv.CanReduceLot("STOCK", d("-40"), &lotSpec{}, BookingSTRICT)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "ambiguous matches")
+	})
+
+	t.Run("full reduction across matching lots passes", func(t *testing.T) {
+		inv := NewInventory()
+		inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
+		inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
+
+		err := inv.CanReduceLot("STOCK", d("-110"), &lotSpec{}, BookingSTRICT)
+		assert.NoError(t, err)
+	})
+}
+
+func TestNoneBookingReduction(t *testing.T) {
+	date1, _ := ast.NewDate("2024-01-15")
+
+	d := func(s string) decimal.Decimal {
+		val, _ := decimal.NewFromString(s)
+		return val
+	}
+
+	inv := NewInventory()
+	inv.AddLot("STOCK", d("10"), &lotSpec{Date: date1})
+
+	err := inv.ReduceLot("STOCK", d("-5"), &lotSpec{}, BookingNONE)
+	assert.NoError(t, err)
+	assert.Equal(t, "5", inv.Get("STOCK").String())
+}
+
 // Helper function to create a pointer to a decimal
 func ptrDecimal(d decimal.Decimal) *decimal.Decimal {
 	return &d
