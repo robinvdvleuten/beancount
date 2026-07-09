@@ -30,13 +30,16 @@ type reductionPlan struct {
 type BookingMethod string
 
 const (
-	BookingFIFO BookingMethod = "FIFO"
-	BookingLIFO BookingMethod = "LIFO"
+	BookingSTRICT  BookingMethod = "STRICT"
+	BookingNONE    BookingMethod = "NONE"
+	BookingFIFO    BookingMethod = "FIFO"
+	BookingLIFO    BookingMethod = "LIFO"
+	BookingAVERAGE BookingMethod = "AVERAGE"
 )
 
 func defaultBookingMethod(method BookingMethod) BookingMethod {
 	if method == "" {
-		return BookingFIFO
+		return BookingSTRICT
 	}
 	return method
 }

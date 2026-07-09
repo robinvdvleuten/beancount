@@ -30,7 +30,7 @@ type Config struct {
 func NewConfig() *Config {
 	return &Config{
 		Tolerance:     NewToleranceConfig(),
-		BookingMethod: "SIMPLE",
+		BookingMethod: string(BookingSTRICT),
 		AccountNames: &AccountNamesConfig{
 			Assets:      "Assets",
 			Liabilities: "Liabilities",
@@ -56,7 +56,7 @@ func configFromAST(tree *ast.AST) (*Config, error) {
 //   - option "inferred_tolerance_default" "CURRENCY:TOLERANCE"
 //   - option "inferred_tolerance_multiplier" "0.6"
 //   - option "infer_tolerance_from_cost" "TRUE"
-//   - option "booking_method" "SIMPLE|FULL"
+//   - option "booking_method" "STRICT|NONE|FIFO|LIFO|AVERAGE"
 //   - option "name_assets" "Assets"
 //   - option "name_liabilities" "Liabilities"
 //   - option "name_equity" "Equity"
@@ -75,8 +75,12 @@ func configFromOptions(options map[string][]string) (*Config, error) {
 	// Parse booking method (use first value if multiple)
 	if vals := options["booking_method"]; len(vals) > 0 {
 		method := strings.ToUpper(vals[0])
-		if method != "SIMPLE" && method != "FULL" {
-			return nil, fmt.Errorf("invalid booking_method %q, expected SIMPLE or FULL", vals[0])
+		if method != string(BookingSTRICT) &&
+			method != string(BookingNONE) &&
+			method != string(BookingFIFO) &&
+			method != string(BookingLIFO) &&
+			method != string(BookingAVERAGE) {
+			return nil, fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, or AVERAGE", vals[0])
 		}
 		cfg.BookingMethod = method
 	}

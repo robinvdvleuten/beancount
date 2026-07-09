@@ -22,7 +22,7 @@ func TestConfigFromOptions(t *testing.T) {
 				assert.Equal(t, decimal.NewFromFloat(0.5), config.Tolerance.multiplier)
 				assert.Equal(t, 0, len(config.Tolerance.defaults))
 				assert.False(t, config.Tolerance.inferFromCost)
-				assert.Equal(t, "SIMPLE", config.BookingMethod)
+				assert.Equal(t, "STRICT", config.BookingMethod)
 			},
 		},
 		{
@@ -83,14 +83,24 @@ func TestConfigFromOptions(t *testing.T) {
 				"inferred_tolerance_multiplier": {"0.75"},
 				"inferred_tolerance_default":    {"EUR:0.002"},
 				"infer_tolerance_from_cost":     {"TRUE"},
-				"booking_method":                {"FULL"},
+				"booking_method":                {"AVERAGE"},
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.75), config.Tolerance.multiplier)
 				assert.Equal(t, decimal.NewFromFloat(0.002), config.Tolerance.defaults["EUR"])
 				assert.True(t, config.Tolerance.inferFromCost)
-				assert.Equal(t, "FULL", config.BookingMethod)
+				assert.Equal(t, "AVERAGE", config.BookingMethod)
+			},
+		},
+		{
+			name: "official booking methods",
+			options: map[string][]string{
+				"booking_method": {"none"},
+			},
+			wantErr: false,
+			checkConfig: func(t *testing.T, config *Config) {
+				assert.Equal(t, "NONE", config.BookingMethod)
 			},
 		},
 		{
@@ -193,7 +203,7 @@ func TestNewConfig(t *testing.T) {
 	cfg := NewConfig()
 	assert.True(t, cfg != nil)
 	assert.True(t, cfg.Tolerance != nil)
-	assert.Equal(t, "SIMPLE", cfg.BookingMethod)
+	assert.Equal(t, "STRICT", cfg.BookingMethod)
 	assert.True(t, cfg.AccountNames != nil)
 	assert.Equal(t, "Assets", cfg.AccountNames.Assets)
 	assert.Equal(t, "Liabilities", cfg.AccountNames.Liabilities)

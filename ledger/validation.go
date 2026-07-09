@@ -865,12 +865,17 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	constraintCurrenciesCopy := make([]string, len(open.ConstraintCurrencies))
 	copy(constraintCurrenciesCopy, open.ConstraintCurrencies)
 
+	bookingMethod := BookingMethod(open.BookingMethod)
+	if bookingMethod == "" {
+		bookingMethod = BookingMethod(v.config.BookingMethod)
+	}
+
 	// Build delta with account properties (avoid allocating Inventory during validation)
 	delta := &OpenDelta{
 		Account:              open.Account,
 		OpenDate:             open.Date(),
 		ConstraintCurrencies: constraintCurrenciesCopy,
-		BookingMethod:        BookingMethod(open.BookingMethod),
+		BookingMethod:        bookingMethod,
 		Metadata:             metadataCopy,
 	}
 

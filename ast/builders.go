@@ -370,7 +370,7 @@ func NewPendingTransaction(date *Date, narration string, postings ...*Posting) *
 
 // NewOpen creates an Open directive for an account.
 // The constraintCurrencies parameter can be nil for no currency constraints.
-// The bookingMethod parameter can be empty for default booking (typically FIFO).
+// The bookingMethod parameter can be empty for the configured default booking method.
 //
 // Example:
 //
