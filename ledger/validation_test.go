@@ -368,14 +368,11 @@ func TestCalculateBalance(t *testing.T) {
 					ast.NewPosting(checking, ast.WithAmount("-50.0005", "USD")),
 				),
 			),
-			// amounts at -3 and -4 decimals, minExp = -4
-			// tolerance = 10^-4 * 0.5 = 0.00005
-			// diff = 0.0005, which is > 0.00005
-			// Actually, let me use a smaller difference
-			wantBalanced: false,
-			wantResiduals: map[string]string{
-				"USD": "0.0005",
-			},
+			// amounts at -3 and -4 decimals, coarsest is -3
+			// tolerance = 10^-3 * 0.5 = 0.0005
+			// diff = 0.0005, which is not greater than the tolerance
+			// (verified against bean-check 2.3.6)
+			wantBalanced: true,
 		},
 		{
 			name: "exactly within inferred tolerance",

@@ -60,51 +60,45 @@ func NewToleranceConfig() *ToleranceConfig {
 	}
 }
 
-// InferTolerance calculates tolerance from amount precision
-// Algorithm:
-//  1. Find the smallest exponent across all amounts
-//  2. Calculate tolerance = 10^minExp * multiplier for fractional precision
-//  3. If no fractional precision is inferred, use default tolerance for currency
+// InferTolerance calculates tolerance from amount precision.
+// Algorithm (matching beancount's interpolate.infer_tolerances):
+//  1. For each amount with fractional precision (negative exponent, zero
+//     amounts included), compute 10^exp * multiplier.
+//  2. Use the maximum of those tolerances (the coarsest precision wins),
+//     also taking the currency-specific configured default into account.
+//  3. If no amount has fractional precision, fall back to the default
+//     tolerance for the currency.
 func InferTolerance(amounts []decimal.Decimal, currency string, config *ToleranceConfig) decimal.Decimal {
 	if config == nil {
 		config = NewToleranceConfig()
 	}
 
-	// If no amounts provided, return default tolerance
-	if len(amounts) == 0 {
-		return config.GetDefaultTolerance(currency)
-	}
-
-	// Find minimum exponent (most precise)
-	minExp := int32(0)
+	inferred := decimal.Zero
 	foundAny := false
 
 	for _, amount := range amounts {
-		if amount.IsZero() {
-			continue // Skip zero amounts
+		exp := amount.Exponent()
+		if exp >= 0 {
+			continue // Integer precision does not contribute
 		}
 
-		exp := amount.Exponent()
-		if !foundAny || exp < minExp {
-			minExp = exp
+		tolerance := decimal.New(1, exp).Mul(config.multiplier)
+		if !foundAny || tolerance.GreaterThan(inferred) {
+			inferred = tolerance
 			foundAny = true
 		}
 	}
 
-	// If all amounts were zero, use default
 	if !foundAny {
 		return config.GetDefaultTolerance(currency)
 	}
 
-	if minExp >= 0 {
-		return config.GetDefaultTolerance(currency)
+	// The currency-specific configured default participates in the maximum.
+	if def, ok := config.defaults[currency]; ok && def.GreaterThan(inferred) {
+		return def
 	}
 
-	// Calculate tolerance: 10^minExp * multiplier
-	// For example: minExp = -5 gives 10^-5 = 0.00001
-	tolerance := decimal.New(1, minExp).Mul(config.multiplier)
-
-	return tolerance
+	return inferred
 }
 
 // GetDefaultTolerance returns the default tolerance for a currency

@@ -37,11 +37,11 @@ func TestInferTolerance(t *testing.T) {
 			wantTol:  "0.05", // 10^-1 * 0.5 = 0.05
 		},
 		{
-			name:     "mixed precision uses smallest",
+			name:     "mixed precision uses coarsest",
 			amounts:  []string{"100.00", "50.123"},
 			currency: "USD",
 			config:   NewToleranceConfig(),
-			wantTol:  "0.0005", // 10^-3 * 0.5 = 0.0005
+			wantTol:  "0.005", // max(10^-2, 10^-3) * 0.5 = 0.005
 		},
 		{
 			name:     "custom multiplier",
@@ -63,11 +63,23 @@ func TestInferTolerance(t *testing.T) {
 			wantTol:  "0",
 		},
 		{
-			name:     "all zero amounts - use default",
+			name:     "zero amounts contribute their precision",
 			amounts:  []string{"0.00", "0.000"},
 			currency: "USD",
 			config:   NewToleranceConfig(),
-			wantTol:  "0",
+			wantTol:  "0.005", // coarsest precision wins: 10^-2 * 0.5
+		},
+		{
+			name:     "inferred tolerance capped by larger currency default",
+			amounts:  []string{"100.00"},
+			currency: "USD",
+			config: &ToleranceConfig{
+				defaults: map[string]decimal.Decimal{
+					"USD": decimal.NewFromFloat(0.02),
+				},
+				multiplier: decimal.NewFromFloat(0.5),
+			},
+			wantTol: "0.02", // max(inferred 0.005, default 0.02)
 		},
 		{
 			name:     "integer amounts without default",
