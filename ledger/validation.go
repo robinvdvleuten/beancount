@@ -196,6 +196,17 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
 			}
 		}
+		if posting.Cost.Total != nil {
+			if posting.Cost.IsTotal {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{{... # ...}}", fmt.Errorf("compound cost cannot use total cost syntax")))
+			} else if posting.Cost.Amount == nil {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{# ...}", fmt.Errorf("compound cost requires a per-unit amount")))
+			} else if posting.Cost.Total.Currency != posting.Cost.Amount.Currency {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", fmt.Errorf("compound cost currencies must match")))
+			} else if _, err := ParseAmount(posting.Cost.Total); err != nil {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", err))
+			}
+		}
 
 		// Validate ParseLotSpec can parse the cost
 		if _, err := ParseLotSpec(posting.Cost); err != nil {

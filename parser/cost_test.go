@@ -25,6 +25,14 @@ func TestParseCost(t *testing.T) {
 			},
 		},
 		{
+			name:  "CompoundCost",
+			input: "{502.12 # 9.95 USD}",
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "502.12", Value: "502.12", Currency: "USD"},
+				Total:  &ast.Amount{Raw: "9.95", Value: "9.95", Currency: "USD"},
+			},
+		},
+		{
 			name:  "TotalCostSimple",
 			input: "{{1000.00 USD}}",
 			expected: &ast.Cost{
@@ -203,6 +211,11 @@ func TestParseCost(t *testing.T) {
 		{
 			name:     "TotalCostWithoutAmount",
 			input:    "{{, 2020-01-01}}",
+			hasError: true,
+		},
+		{
+			name:     "CompoundInsideTotalCost",
+			input:    "{{502.12 # 9.95 USD}}",
 			hasError: true,
 		},
 	}

@@ -46,6 +46,23 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 	assert.Equal(t, "500", stockWeights[0].Amount.String())
 }
 
+func TestCalculateWeightsCompoundCost(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `2000-01-01 * "Buy"
+  Assets:Brokerage  10 HOOL {502.12 # 9.95 USD}
+  Assets:Cash  -5031.15 USD
+`)
+	txn := tree.Directives[0].(*ast.Transaction)
+	weights, err := calculateWeights(txn.Postings[0])
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(weights))
+	assert.Equal(t, "5031.15", weights[0].Amount.String())
+
+	lotSpec, err := ParseLotSpec(txn.Postings[0].Cost)
+	assert.NoError(t, err)
+	assert.NoError(t, normalizeLotSpecForPosting(lotSpec, txn.Postings[0]))
+	assert.Equal(t, "503.115", lotSpec.Cost.String())
+}
+
 func TestBalanceWeights(t *testing.T) {
 	// Test that balanceWeights correctly sums weights
 	allWeights := []weightSet{

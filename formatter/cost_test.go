@@ -32,6 +32,14 @@ func TestFormatCost(t *testing.T) {
 			expected: "{100.00 USD}",
 		},
 		{
+			name: "CompoundCost",
+			cost: &ast.Cost{
+				Amount: &ast.Amount{Value: "502.12", Currency: "USD"},
+				Total:  &ast.Amount{Value: "9.95", Currency: "USD"},
+			},
+			expected: "{502.12 # 9.95 USD}",
+		},
+		{
 			name: "TotalCostSimple",
 			cost: &ast.Cost{
 				IsTotal: true,

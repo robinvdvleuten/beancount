@@ -1311,6 +1311,10 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 	if cost.Amount != nil {
 		writeSeparator()
 		buf.WriteString(cost.Amount.Value)
+		if cost.Total != nil {
+			buf.WriteString(" # ")
+			buf.WriteString(cost.Total.Value)
+		}
 		buf.WriteByte(' ')
 		buf.WriteString(cost.Amount.Currency)
 	}

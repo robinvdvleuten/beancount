@@ -195,6 +195,23 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		// Calculate per-unit cost: total ÷ quantity
 		perUnitCost := lotSpec.Cost.Div(quantity.Abs())
 		lotSpec.Cost = &perUnitCost
+	} else if posting.Cost != nil && posting.Cost.Total != nil {
+		if posting.Amount == nil {
+			return fmt.Errorf("compound cost requires a quantity")
+		}
+		quantity, err := ParseAmount(posting.Amount)
+		if err != nil {
+			return fmt.Errorf("invalid quantity: %w", err)
+		}
+		if quantity.IsZero() {
+			return fmt.Errorf("cannot use compound cost with zero quantity")
+		}
+		total, err := ParseAmount(posting.Cost.Total)
+		if err != nil {
+			return fmt.Errorf("invalid compound total: %w", err)
+		}
+		perUnitCost := lotSpec.Cost.Add(total.Div(quantity.Abs()))
+		lotSpec.Cost = &perUnitCost
 	}
 
 	return nil

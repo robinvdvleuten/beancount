@@ -150,14 +150,32 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	for {
 		switch {
 		case p.check(NUMBER) || p.check(EXPRESSION):
-			if cost.Amount != nil {
+			if cost.Amount != nil || cost.Total != nil {
 				return nil, p.error("duplicate cost amount in cost spec")
 			}
-			amt, err := p.parseAmount()
+			valueTok, isExpression, value, err := p.parseAmountValueToken()
 			if err != nil {
 				return nil, err
 			}
-			cost.Amount = amt
+			if p.check(FLAG) && p.peek().String(p.source) == "#" {
+				if isTotal {
+					return nil, p.error("compound cost cannot use total cost syntax {{}}")
+				}
+				p.advance()
+				total, err := p.parseAmount()
+				if err != nil {
+					return nil, err
+				}
+				currTok := p.tokens[p.pos-1]
+				cost.Amount = p.amountFromValueToken(valueTok, currTok, isExpression, value)
+				cost.Total = total
+			} else {
+				if !p.check(IDENT) {
+					return nil, p.errorAtEndOfPrevious("expected currency")
+				}
+				currTok := p.advance()
+				cost.Amount = p.amountFromValueToken(valueTok, currTok, isExpression, value)
+			}
 
 		case p.check(DATE):
 			if cost.Date != nil {

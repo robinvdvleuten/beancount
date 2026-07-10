@@ -92,6 +92,7 @@ type Cost struct {
 	IsTotal  bool // True if specified with {{}} (total cost syntax)
 	Inferred bool // True if Amount was inferred by the ledger (not parsed)
 	Amount   *Amount
+	Total    *Amount // Additional total component after '#' in a compound cost
 	Date     *Date
 	Label    string
 }
@@ -99,7 +100,7 @@ type Cost struct {
 // IsEmpty returns true if this is an empty cost specification {}.
 // Distinguishes between nil (no cost) and empty cost (any lot selection).
 func (c *Cost) IsEmpty() bool {
-	return c != nil && !c.IsMerge && !c.IsTotal && c.Amount == nil && c.Date == nil && c.Label == ""
+	return c != nil && !c.IsMerge && !c.IsTotal && c.Amount == nil && c.Total == nil && c.Date == nil && c.Label == ""
 }
 
 // IsMergeCost returns true if this is a merge cost specification {*}.

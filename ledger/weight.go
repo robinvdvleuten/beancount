@@ -64,6 +64,16 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 		} else {
 			// Per-unit cost {X CURR} - multiply by quantity
 			totalCost = amount.Mul(costAmount)
+			if posting.Cost.Total != nil {
+				additionalTotal, err := ParseAmount(posting.Cost.Total)
+				if err != nil {
+					return nil, err
+				}
+				if amount.IsNegative() {
+					additionalTotal = additionalTotal.Neg()
+				}
+				totalCost = totalCost.Add(additionalTotal)
+			}
 		}
 
 		weights = weightSet{
