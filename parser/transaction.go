@@ -24,7 +24,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	if p.match(TXN) {
 		// Explicit 'txn' keyword defaults to cleared (*) and does not allow
 		// an additional flag token on the same line.
-		if p.peek().Line == pos.Line && (p.check(ASTERISK) || p.check(EXCLAIM)) {
+		if p.peek().Line == pos.Line && (p.check(ASTERISK) || p.check(EXCLAIM) || p.check(FLAG)) {
 			tok := p.peek()
 			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 		}
@@ -33,11 +33,10 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		txn.Flag = "*"
 	} else if p.match(EXCLAIM) {
 		txn.Flag = "!"
-	} else if p.check(IDENT) && p.peek().String(p.source) == "P" {
-		p.advance()
-		txn.Flag = "P"
+	} else if p.check(FLAG) {
+		txn.Flag = p.advance().String(p.source)
 	} else {
-		return nil, p.error("expected transaction flag (*, !, P) or 'txn'")
+		return nil, p.error("expected transaction flag or 'txn'")
 	}
 
 	// Parse payee and/or narration

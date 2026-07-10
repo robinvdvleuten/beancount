@@ -523,3 +523,13 @@ func TestParseTransactionRejectsMalformedCost(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expected '}'")
 }
+
+func TestParseAllTransactionFlags(t *testing.T) {
+	for _, flag := range []string{"*", "!", "P", "#", "&", "?", "%", "S", "T", "C", "U", "R", "M"} {
+		t.Run(flag, func(t *testing.T) {
+			tree, err := ParseString(context.Background(), "2000-01-01 "+flag+" \"flag\"\n")
+			assert.NoError(t, err)
+			assert.Equal(t, flag, tree.Directives[0].(*ast.Transaction).Flag)
+		})
+	}
+}

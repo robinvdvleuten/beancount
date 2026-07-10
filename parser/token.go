@@ -42,6 +42,7 @@ const (
 	// Special literals
 	TAG  // #tag
 	LINK // ^link
+	FLAG // transaction flag (#, &, ?, %, P, S, T, C, U, R, M)
 
 	// Symbols
 	ASTERISK // *
@@ -93,6 +94,7 @@ var tokenNames = map[TokenType]string{
 
 	TAG:  "TAG",
 	LINK: "LINK",
+	FLAG: "FLAG",
 
 	ASTERISK: "*",
 	EXCLAIM:  "!",

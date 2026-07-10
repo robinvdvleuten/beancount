@@ -440,13 +440,8 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 
 	// LL(1) lookahead - dispatch via registry
 	switch directiveTok.Type {
-	case TXN, ASTERISK, EXCLAIM:
+	case TXN, ASTERISK, EXCLAIM, FLAG:
 		return p.parseTransaction(pos, date)
-	case IDENT:
-		if directiveTok.String(p.source) == "P" {
-			return p.parseTransaction(pos, date)
-		}
-		return nil, p.error("unknown directive after date")
 	case BALANCE:
 		return p.parseBalance(pos, date)
 	case OPEN:

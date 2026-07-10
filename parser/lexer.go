@@ -187,6 +187,11 @@ func (l *Lexer) scanNextToken() Token {
 		}
 
 		ch := l.source[l.pos]
+		if l.column == 1 && l.shouldSkipNonDirectiveLine() {
+			l.skipPhysicalLine()
+			lineHasContent = false
+			continue
+		}
 
 		if ch == ' ' || ch == '\t' {
 			// Whitespace doesn't count as content
@@ -249,7 +254,11 @@ func (l *Lexer) scanToken() Token {
 
 	// Tags: #tag
 	case ch == '#':
-		tok = l.scanTag(start, startLine, startCol)
+		if l.pos < len(l.source) && isValidInTag(l.source[l.pos]) {
+			tok = l.scanTag(start, startLine, startCol)
+		} else {
+			tok = Token{FLAG, start, l.pos, startLine, startCol}
+		}
 
 	// Links: ^link
 	case ch == '^':
@@ -269,6 +278,8 @@ func (l *Lexer) scanToken() Token {
 		tok = Token{ASTERISK, start, l.pos, startLine, startCol}
 	case ch == '!':
 		tok = Token{EXCLAIM, start, l.pos, startLine, startCol}
+	case ch == '&' || ch == '?' || ch == '%':
+		tok = Token{FLAG, start, l.pos, startLine, startCol}
 	case ch == ':':
 		tok = Token{COLON, start, l.pos, startLine, startCol}
 	case ch == ',':
@@ -534,6 +545,14 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 		return Token{ACCOUNT, start, l.pos, line, col}
 	}
 
+	value := l.source[start:l.pos]
+	if len(value) == 1 && isLetterTransactionFlag(value[0]) {
+		return Token{FLAG, start, l.pos, line, col}
+	}
+	if isASCII(value) && !isValidCurrencyLiteral(value) {
+		return Token{ILLEGAL, start, l.pos, line, col}
+	}
+
 	return Token{IDENT, start, l.pos, line, col}
 }
 
@@ -691,7 +710,7 @@ func isUTF8Byte(ch byte) bool {
 }
 
 func isValidInTag(ch byte) bool {
-	return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '-'
+	return isLetter(ch) || isDigit(ch) || ch == '_' || ch == '-' || ch == '.' || ch == '/'
 }
 
 func isValidInIdentifier(ch byte) bool {
@@ -699,5 +718,63 @@ func isValidInIdentifier(ch byte) bool {
 }
 
 func isValidInAccountOrIdent(ch byte) bool {
-	return isLetter(ch) || isDigit(ch) || isUTF8Byte(ch) || ch == ':' || ch == '-'
+	return isLetter(ch) || isDigit(ch) || isUTF8Byte(ch) || ch == ':' || ch == '-' || ch == '_' || ch == '.' || ch == '\''
+}
+
+func isLetterTransactionFlag(ch byte) bool {
+	return ch == 'P' || ch == 'S' || ch == 'T' || ch == 'C' || ch == 'U' || ch == 'R' || ch == 'M'
+}
+
+func isASCII(value []byte) bool {
+	for _, ch := range value {
+		if ch >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
+func isValidCurrencyLiteral(value []byte) bool {
+	if len(value) < 2 || len(value) > 24 || !isUppercaseLetter(value[0]) {
+		return false
+	}
+	last := value[len(value)-1]
+	if !isUppercaseLetter(last) && !isDigit(last) {
+		return false
+	}
+	for _, ch := range value[1 : len(value)-1] {
+		if !isUppercaseLetter(ch) && !isDigit(ch) && ch != '\'' && ch != '.' && ch != '_' && ch != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func (l *Lexer) shouldSkipNonDirectiveLine() bool {
+	remaining := l.source[l.pos:]
+	if len(remaining) == 0 {
+		return false
+	}
+	if remaining[0] == ':' {
+		return len(remaining) > 1
+	}
+	if len(remaining) >= 2 && remaining[0] == '#' && remaining[1] == '+' {
+		return true
+	}
+	if remaining[0] == '!' || remaining[0] == '&' || remaining[0] == '?' || remaining[0] == '%' {
+		return len(remaining) > 1 && (remaining[1] == ' ' || remaining[1] == '\t')
+	}
+	if isLetterTransactionFlag(remaining[0]) {
+		return len(remaining) > 1 && (remaining[1] == ' ' || remaining[1] == '\t')
+	}
+	return false
+}
+
+func (l *Lexer) skipPhysicalLine() {
+	for l.pos < len(l.source) && l.lineBreakLenAt(l.pos) == 0 {
+		l.advance()
+	}
+	if l.lineBreakLenAt(l.pos) > 0 {
+		l.consumeLineBreak()
+	}
 }
