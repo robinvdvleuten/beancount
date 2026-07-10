@@ -55,7 +55,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 
 	ldr := loader.New(loader.WithFollowIncludes())
-	ast, err := cmd.File.LoadAST(runCtx, ldr)
+	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
 		renderer := NewErrorRenderer(sourceContent)
 		formatted := renderer.Render(err)
@@ -67,6 +67,10 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
+	for _, warning := range loadResult.Diagnostics {
+		printInfof(ctx.Stderr, "%s", warning)
+	}
+	ast := loadResult.AST
 
 	l := ledger.New()
 	if err := l.Process(runCtx, ast); err != nil {

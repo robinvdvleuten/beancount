@@ -148,14 +148,23 @@ func (f *FileOrStdin) GetAbsoluteFilename() string {
 
 // LoadAST loads the AST using LoadBytes for stdin or Load for files.
 func (f *FileOrStdin) LoadAST(ctx context.Context, ldr *loader.Loader) (*ast.AST, error) {
-	absFilename := f.GetAbsoluteFilename()
-
-	if f.Filename == "<stdin>" {
-		return ldr.LoadBytes(ctx, absFilename, f.Contents)
-	}
-	result, err := ldr.Load(ctx, absFilename)
+	result, err := f.LoadResult(ctx, ldr)
 	if err != nil {
 		return nil, err
 	}
 	return result.AST, nil
+}
+
+// LoadResult loads an AST together with non-fatal loader diagnostics.
+func (f *FileOrStdin) LoadResult(ctx context.Context, ldr *loader.Loader) (*loader.LoadResult, error) {
+	absFilename := f.GetAbsoluteFilename()
+
+	if f.Filename == "<stdin>" {
+		tree, err := ldr.LoadBytes(ctx, absFilename, f.Contents)
+		if err != nil {
+			return nil, err
+		}
+		return &loader.LoadResult{AST: tree, Root: absFilename}, nil
+	}
+	return ldr.Load(ctx, absFilename)
 }

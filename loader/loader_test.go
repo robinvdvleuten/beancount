@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 )
@@ -485,6 +486,10 @@ include "included.beancount"
 
 	assert.Equal(t, "Main File", optionsMap["title"])
 	assert.Equal(t, "USD", optionsMap["operating_currency"])
+	assert.Equal(t, 2, len(result.Diagnostics))
+	for _, item := range result.Diagnostics {
+		assert.Equal(t, diagnostic.SeverityWarning, diagnostic.SeverityOf(item))
+	}
 }
 
 func TestLoadPluginsMerged(t *testing.T) {

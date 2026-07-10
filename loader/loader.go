@@ -28,6 +28,7 @@ import (
 	"path/filepath"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
@@ -41,7 +42,25 @@ type LoadResult struct {
 	// Includes contains the absolute paths of all included files (not including the root).
 	// This is only populated when FollowIncludes is enabled.
 	Includes []string
+	// Diagnostics contains non-fatal warnings produced while loading.
+	Diagnostics []error
 }
+
+// IncludedOptionWarning reports an option ignored because it came from an included file.
+type IncludedOptionWarning struct {
+	Option *ast.Option
+}
+
+func (w *IncludedOptionWarning) Error() string {
+	position := w.Option.Position()
+	return fmt.Sprintf("%s:%d: option %q from included file is ignored", position.Filename, position.Line, w.Option.Name.Value)
+}
+
+func (w *IncludedOptionWarning) Severity() diagnostic.Severity {
+	return diagnostic.SeverityWarning
+}
+
+func (w *IncludedOptionWarning) GetPosition() ast.Position { return w.Option.Position() }
 
 // Loader handles loading and parsing of Beancount files with optional include resolution.
 // It provides configurable behavior for handling include directives, supporting both simple
@@ -129,6 +148,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 		visited:   make(map[string]bool),
 		collector: collector,
 		rootTimer: rootTimer,
+		root:      absPath,
 	}
 
 	ast, err := state.loadRecursive(ctx, filename)
@@ -145,9 +165,10 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 	}
 
 	return &LoadResult{
-		AST:      ast,
-		Root:     absPath,
-		Includes: includes,
+		AST:         ast,
+		Root:        absPath,
+		Includes:    includes,
+		Diagnostics: state.diagnostics,
 	}, nil
 }
 
@@ -233,9 +254,11 @@ func (l *Loader) MustLoadBytes(ctx context.Context, filename string, data []byte
 
 // loaderState tracks state during recursive loading.
 type loaderState struct {
-	visited   map[string]bool     // Absolute paths of files already loaded
-	collector telemetry.Collector // Telemetry collector for tracking load operations
-	rootTimer telemetry.Timer     // Root check timer from context
+	visited     map[string]bool     // Absolute paths of files already loaded
+	collector   telemetry.Collector // Telemetry collector for tracking load operations
+	rootTimer   telemetry.Timer     // Root check timer from context
+	root        string
+	diagnostics []error
 }
 
 // loadRecursive recursively loads a file and all its includes.
@@ -295,6 +318,12 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 	if err := prepareLoadedAST(result); err != nil {
 		loadTimer.End()
 		return nil, err
+	}
+
+	if absPath != l.root {
+		for _, option := range result.Options {
+			l.diagnostics = append(l.diagnostics, &IncludedOptionWarning{Option: option})
+		}
 	}
 
 	// If no includes, end and return

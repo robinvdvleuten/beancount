@@ -43,7 +43,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 
 	ldr := loader.New()
-	ast, err := cmd.File.LoadAST(runCtx, ldr)
+	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
 		renderer := NewErrorRenderer(sourceContent)
 		formatted := renderer.Render(err)
@@ -52,6 +52,10 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 		printError(ctx.Stderr, "parse error")
 		return NewCommandError(1)
 	}
+	for _, warning := range loadResult.Diagnostics {
+		printInfof(ctx.Stderr, "%s", warning)
+	}
+	ast := loadResult.AST
 
 	var opts []formatter.Option
 	if cmd.CurrencyColumn > 0 {
