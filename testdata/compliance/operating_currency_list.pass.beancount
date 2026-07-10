@@ -1,0 +1,4 @@
+option "operating_currency" "USD"
+option "operating_currency" "EUR"
+option "operating_currency" "USD"
+2020-01-01 open Assets:A

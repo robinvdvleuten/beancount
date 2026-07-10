@@ -50,6 +50,11 @@ type Config struct {
 	Tolerance     *Tolerance
 	BookingMethod string
 	AccountNames  *AccountNames
+
+	// OperatingCurrencies accumulates every operating_currency option in
+	// declaration order, matching beancount's list semantics (the option
+	// may be declared multiple times; duplicates are preserved).
+	OperatingCurrencies []string
 }
 
 // New returns configuration populated with official defaults.
@@ -176,6 +181,8 @@ func FromOptions(options map[string][]string) (*Config, error) {
 	setFirst(options, "name_equity", &cfg.AccountNames.Equity)
 	setFirst(options, "name_income", &cfg.AccountNames.Income)
 	setFirst(options, "name_expenses", &cfg.AccountNames.Expenses)
+
+	cfg.OperatingCurrencies = append(cfg.OperatingCurrencies, options["operating_currency"]...)
 
 	return cfg, nil
 }

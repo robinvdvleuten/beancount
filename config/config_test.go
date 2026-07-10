@@ -61,3 +61,17 @@ func TestFromASTOptionValidation(t *testing.T) {
 		})
 	}
 }
+
+func TestOperatingCurrenciesAccumulate(t *testing.T) {
+	tree := parser.MustParseString(context.Background(),
+		"option \"operating_currency\" \"USD\"\noption \"operating_currency\" \"EUR\"\noption \"operating_currency\" \"USD\"")
+	cfg, err := FromAST(tree)
+	assert.NoError(t, err)
+	// Declaration order, duplicates preserved, matching beancount's
+	// list-typed option semantics.
+	assert.Equal(t, []string{"USD", "EUR", "USD"}, cfg.OperatingCurrencies)
+
+	cfg, err = FromAST(parser.MustParseString(context.Background(), `option "title" "No currencies"`))
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(cfg.OperatingCurrencies))
+}
