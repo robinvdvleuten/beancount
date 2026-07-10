@@ -830,15 +830,8 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 		return errs
 	}
 
-	// 1. Validate account is open
-	accountName := string(balance.Account)
-	acc, exists := v.accounts[accountName]
-	if !exists {
-		errs = append(errs, NewAccountNotOpenError(balance, balance.Account))
-		return errs
-	}
-
-	if !acc.IsOpen(balance.Date()) {
+	// 1. Validate account is active (assertions are allowed after close)
+	if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
 		errs = append(errs, NewAccountNotOpenError(balance, balance.Account))
 		return errs
 	}
@@ -934,7 +927,7 @@ func (v *validator) validateNote(note *ast.Note) []error {
 	}
 
 	// 1. Validate account is open
-	if !v.isAccountOpen(note.Account, note.Date()) {
+	if !v.isAccountActiveAllowingClose(note.Account, note.Date()) {
 		errs = append(errs, NewAccountNotOpenError(note, note.Account))
 	}
 
@@ -961,7 +954,7 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 	}
 
 	// 1. Validate account is open
-	if !v.isAccountOpen(doc.Account, doc.Date()) {
+	if !v.isAccountActiveAllowingClose(doc.Account, doc.Date()) {
 		errs = append(errs, NewAccountNotOpenError(doc, doc.Account))
 	}
 
@@ -994,6 +987,19 @@ func (v *validator) isAccountOpen(account ast.Account, date *ast.Date) bool {
 		return false
 	}
 	return acc.IsOpen(date)
+}
+
+// isAccountActiveAllowingClose checks that an account exists and was opened
+// on or before the date, ignoring its close date. Beancount allows Balance,
+// Document, and Note directives after an account closes (ALLOW_AFTER_CLOSE
+// in ops/validation.py) — statements and assertions may arrive well after
+// closure — but never before the account opens.
+func (v *validator) isAccountActiveAllowingClose(account ast.Account, date *ast.Date) bool {
+	acc, ok := v.accounts[string(account)]
+	if !ok || acc.OpenDate == nil {
+		return false
+	}
+	return !acc.OpenDate.After(date.Time)
 }
 
 // validateOpen validates an open directive.
