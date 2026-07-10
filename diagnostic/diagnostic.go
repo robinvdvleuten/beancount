@@ -2,6 +2,8 @@
 // while loading, configuring, and validating Beancount files.
 package diagnostic
 
+import "errors"
+
 // Severity describes whether a diagnostic prevents successful processing.
 type Severity uint8
 
@@ -16,10 +18,12 @@ type Diagnostic interface {
 	Severity() Severity
 }
 
-// SeverityOf returns an error's declared severity. Ordinary errors are fatal by
+// SeverityOf returns an error's declared severity, unwrapping as needed so a
+// wrapped warning keeps its classification. Ordinary errors are fatal by
 // default so existing error types remain safe while being migrated.
 func SeverityOf(err error) Severity {
-	if d, ok := err.(Diagnostic); ok {
+	var d Diagnostic
+	if errors.As(err, &d) {
 		return d.Severity()
 	}
 	return SeverityError

@@ -2,6 +2,7 @@ package diagnostic
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -20,4 +21,12 @@ func TestClassify(t *testing.T) {
 	assert.Equal(t, SeverityWarning, SeverityOf(warn))
 	assert.Equal(t, []error{err}, Errors([]error{err, warn}))
 	assert.Equal(t, []error{warn}, Warnings([]error{err, warn}))
+}
+
+func TestClassifyWrapped(t *testing.T) {
+	wrapped := fmt.Errorf("loading ledger: %w", warning("notice"))
+
+	assert.Equal(t, SeverityWarning, SeverityOf(wrapped))
+	assert.Equal(t, []error{wrapped}, Warnings([]error{wrapped}))
+	assert.Equal(t, 0, len(Errors([]error{wrapped})))
 }
