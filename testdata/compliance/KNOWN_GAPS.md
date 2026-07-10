@@ -13,9 +13,6 @@ None. Every `.pass`/`.fail` fixture in this directory agrees with
 
 ## Deviations without fixtures
 
-- **Formatter alignment**: `bean-format` aligns `open` directive currency
-  lists to the currency column and indents metadata with 2 spaces (we use 4).
-  The format parity test compares whitespace-normalized output only.
 - **AVERAGE booking**: official v2 *rejects* AVERAGE at reduction time
   ("AVERAGE method is not supported"); we implement average-cost merging.
   Deviation by excess, kept deliberately (matches the v3 direction).

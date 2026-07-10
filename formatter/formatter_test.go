@@ -1071,8 +1071,9 @@ func TestFormatterWidthOptions(t *testing.T) {
 		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
-		// Currency column should be 40 + 12 = 52
-		assert.Equal(t, 52, f.CurrencyColumn)
+		// bean-format renders prefix(40) + 2 spaces + number(12) + 1 space,
+		// putting the currency at 1-based column 56.
+		assert.Equal(t, 56, f.CurrencyColumn)
 
 		output := buf.String()
 		assert.Contains(t, output, "Assets:Bank:Checking")

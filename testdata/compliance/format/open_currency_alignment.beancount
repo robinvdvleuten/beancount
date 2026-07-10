@@ -1,0 +1,6 @@
+2020-01-01 open Assets:US:BofA:Checking                        USD
+2020-01-01 open Assets:US:Vanguard:VMMXX                       VMMXX
+2020-01-01 open Equity:Opening-Balances
+2020-01-02 * "aligned opens preserved"
+  Assets:US:BofA:Checking   3456.82 USD
+  Equity:Opening-Balances  -3456.82 USD

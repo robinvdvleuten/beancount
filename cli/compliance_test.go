@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -115,22 +114,9 @@ func TestOfficialBeancountDifferential(t *testing.T) {
 	}
 }
 
-// collapseWhitespace normalizes indentation and alignment so the format
-// parity check compares content rather than column positions. Exact
-// column/indent parity with bean-format is a known gap; see KNOWN_GAPS.md.
-var whitespaceRuns = regexp.MustCompile(`[ \t]+`)
-
-func collapseWhitespace(s string) string {
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = whitespaceRuns.ReplaceAllString(strings.TrimLeft(line, " \t"), " ")
-	}
-	return strings.Join(lines, "\n")
-}
-
-// TestOfficialFormatParity compares our formatter's output with bean-format
-// on the fixtures under testdata/compliance/format, after whitespace
-// normalization. Runs whenever bean-format is installed.
+// TestOfficialFormatParity compares our formatter's output byte-for-byte
+// with bean-format on the fixtures under testdata/compliance/format.
+// Runs whenever bean-format is installed.
 func TestOfficialFormatParity(t *testing.T) {
 	if _, err := exec.LookPath("bean-format"); err != nil {
 		t.Skip("bean-format not found in PATH; install beancount 2.x to run the format parity suite")
@@ -155,7 +141,7 @@ func TestOfficialFormatParity(t *testing.T) {
 			official, err := exec.Command("bean-format", path).Output()
 			assert.NoError(t, err)
 
-			assert.Equal(t, collapseWhitespace(string(official)), collapseWhitespace(ours.String()))
+			assert.Equal(t, string(official), ours.String())
 		})
 	}
 }

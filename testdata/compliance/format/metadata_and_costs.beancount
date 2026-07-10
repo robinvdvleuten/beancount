@@ -1,0 +1,11 @@
+2020-01-01 commodity HOOL
+  name: "Hooli Corp"
+  export: "NASDAQ:HOOL"
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+2020-02-01 * "buy with cost and price"
+  lot: "first"
+  Assets:Brokerage  10 HOOL {502.12 USD} @ 510.00 USD
+  Assets:Cash      -5021.20 USD
+2020-03-01 balance Assets:Cash -5021.20 USD
+2020-03-02 price HOOL 512.00 USD

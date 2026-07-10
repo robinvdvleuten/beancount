@@ -227,61 +227,55 @@ type widthMetrics struct {
 func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 	metrics := widthMetrics{}
 
+	// bean-format decouples the two maxima: every number line is rendered as
+	// prefix ljust(maxPrefix) + two spaces + number rjust(maxNum) + space +
+	// currency, so the widest prefix and the widest number may come from
+	// different lines. Prefix widths exclude trailing spacing.
+	record := func(prefixWidth int, amount *ast.Amount) {
+		displayValue := amount.Value
+		if amount.HasRaw() {
+			displayValue = amount.Raw
+		}
+		metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
+		metrics.maxNumWidth = max(metrics.maxNumWidth, runewidth.StringWidth(displayValue))
+	}
+
 	for _, directive := range tree.Directives {
 		switch d := directive.(type) {
 		case *ast.Transaction:
 			for _, posting := range d.Postings {
-				if posting.Amount != nil {
-					// Calculate prefix width: indentation + flag + account + spacing
-					prefixWidth := f.Indentation
-					if posting.Flag != "" {
-						prefixWidth += 2 // flag + space
-					}
-					prefixWidth += runewidth.StringWidth(string(posting.Account)) + MinimumSpacing
-					metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
-
-					// Calculate number width (use raw if available for accurate width)
-					displayValue := posting.Amount.Value
-					if posting.Amount.HasRaw() {
-						displayValue = posting.Amount.Raw
-					}
-					numWidth := runewidth.StringWidth(displayValue)
-					metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
-
-					// Calculate total width for currency column
-					totalWidth := prefixWidth + numWidth
-					metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
+				if posting.Amount == nil || posting.Amount.Value == "" {
+					continue
 				}
+				// bean-format quirk: width maxima come from the original,
+				// un-normalized prefixes, even though emission uses the
+				// normalized indent.
+				indent := f.postingIndent()
+				if column := posting.Position().Column; column > 1 {
+					indent = column - 1
+				}
+				prefixWidth := indent
+				if posting.Flag != "" {
+					prefixWidth += 2 // flag + space
+				}
+				prefixWidth += runewidth.StringWidth(string(posting.Account))
+				record(prefixWidth, posting.Amount)
 			}
 
 		case *ast.Balance:
 			if d.Amount != nil {
-				// Calculate width: date + "balance" + account + spacing + number
-				width := DateWidth + 1 + directiveKeywordWidth(d) + runewidth.StringWidth(string(d.Account)) + MinimumSpacing
-				displayValue := d.Amount.Value
-				if d.Amount.HasRaw() {
-					displayValue = d.Amount.Raw
-				}
-				numWidth := runewidth.StringWidth(displayValue)
-				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
-				totalWidth := width + numWidth
-				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
+				record(DateWidth+1+directiveKeywordWidth(d)+runewidth.StringWidth(string(d.Account)), d.Amount)
 			}
 
 		case *ast.Price:
 			if d.Amount != nil {
-				// Calculate width: date + "price" + commodity + spacing + number
-				width := DateWidth + 1 + directiveKeywordWidth(d) + runewidth.StringWidth(d.Commodity) + MinimumSpacing
-				displayValue := d.Amount.Value
-				if d.Amount.HasRaw() {
-					displayValue = d.Amount.Raw
-				}
-				numWidth := runewidth.StringWidth(displayValue)
-				metrics.maxNumWidth = max(metrics.maxNumWidth, numWidth)
-				totalWidth := width + numWidth
-				metrics.currencyColumn = max(metrics.currencyColumn, totalWidth)
+				record(DateWidth+1+directiveKeywordWidth(d)+runewidth.StringWidth(d.Commodity), d.Amount)
 			}
 		}
+	}
+
+	if metrics.maxPrefixWidth > 0 {
+		metrics.currencyColumn = metrics.maxPrefixWidth + MinimumSpacing + metrics.maxNumWidth + 2
 	}
 
 	return metrics
@@ -292,7 +286,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 func (f *Formatter) calculateCurrencyColumn(tree *ast.AST) int {
 	metrics := f.calculateWidthMetrics(tree)
 	if metrics.currencyColumn > 0 {
-		return metrics.currencyColumn + MinimumSpacing
+		return metrics.currencyColumn
 	}
 	return DefaultCurrencyColumn
 }
@@ -314,13 +308,13 @@ func (f *Formatter) determineCurrencyColumn(tree *ast.AST) int {
 
 		numWidth := f.NumWidth
 		if numWidth == 0 {
-			numWidth = metrics.maxNumWidth + MinimumSpacing
-			if numWidth == MinimumSpacing {
+			numWidth = metrics.maxNumWidth
+			if numWidth == 0 {
 				numWidth = DefaultNumWidth
 			}
 		}
 
-		return prefixWidth + numWidth
+		return prefixWidth + MinimumSpacing + numWidth + 2
 	}
 
 	// Auto-calculate from content
@@ -532,15 +526,9 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	}
 	directiveTimer.End()
 
-	// Normalize output: trim leading/trailing blank lines to ensure idempotency
-	// This happens when directives are skipped or blank lines appear at edges
-	output := strings.Trim(buf.String(), "\n")
-	if output != "" {
-		output += "\n"
-	}
-
-	// Write all output at once
-	_, err := w.Write([]byte(output))
+	// bean-format preserves blank lines at the edges of the file; emit the
+	// items exactly as collected.
+	_, err := w.Write([]byte(buf.String()))
 	return err
 }
 
@@ -766,11 +754,12 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 
 // formatOpen formats an open directive.
 func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
-	// Only try to preserve the line if it contains the complete directive
-	// (no constraint currencies or booking method on separate lines)
-	if f.canPreserveDirectiveLine(o.Position().Line, o.Date()) && len(o.ConstraintCurrencies) == 0 && o.BookingMethod == "" {
+	// Open directives are single-line and carry no number to realign, so
+	// bean-format leaves them untouched; preserve the original line whenever
+	// it contains the whole directive.
+	if f.canPreserveDirectiveLine(o.Position().Line, o.Date()) {
 		originalLine := f.getOriginalLine(o.Position().Line)
-		if strings.Contains(originalLine, string(o.Account)) {
+		if strings.Contains(originalLine, string(o.Account)) && openLineComplete(originalLine, o) {
 			if f.tryPreserveOriginalLine(o.Position().Line, buf) {
 				f.formatMetadata(o.Metadata, buf)
 				return
@@ -800,6 +789,17 @@ func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
 
 	buf.WriteByte('\n')
 	f.formatMetadata(o.Metadata, buf)
+}
+
+// openLineComplete reports whether the original source line contains every
+// component of the open directive, so preserving it verbatim loses nothing.
+func openLineComplete(line string, o *ast.Open) bool {
+	for _, currency := range o.ConstraintCurrencies {
+		if !strings.Contains(line, currency) {
+			return false
+		}
+	}
+	return o.BookingMethod == "" || strings.Contains(line, `"`+o.BookingMethod+`"`)
 }
 
 // formatClose formats a close directive.
@@ -840,7 +840,7 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 				toleranceValue = b.Tolerance.Raw
 			}
 
-			padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amountValue) - runewidth.StringWidth(toleranceValue) - 4
+			padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amountValue) - runewidth.StringWidth(toleranceValue) - 5
 			if padding < MinimumSpacing {
 				padding = MinimumSpacing
 			}
@@ -1320,7 +1320,9 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 		return
 	}
 
-	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(displayValue) - 1
+	// CurrencyColumn is the 1-based column where the currency starts,
+	// matching bean-format's --currency-column semantics.
+	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(displayValue) - 2
 	if padding < MinimumSpacing {
 		padding = MinimumSpacing
 	}

@@ -1,0 +1,8 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-02 * "postings normalize to most frequent indent"
+  Assets:A   -10.00 USD
+      Expenses:B  10.00 USD
+2020-01-03 * "second"
+  Assets:A   -1.00 USD
+  Expenses:B  1.00 USD
