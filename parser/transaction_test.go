@@ -447,7 +447,8 @@ func TestParseTransactionWithExpressions(t *testing.T) {
 	assert.Equal(t, 2, len(txn.Postings))
 	assert.True(t, txn.Postings[0].Amount != nil)
 	assert.True(t, txn.Postings[1].Amount != nil)
-	assert.Equal(t, "-(100 + 50)", txn.Postings[1].Amount.Value)
+	assert.Equal(t, "-150", txn.Postings[1].Amount.Value)
+	assert.Equal(t, "-(100 + 50)", txn.Postings[1].Amount.Raw)
 }
 
 func TestParseTransactionWithPlusAmounts(t *testing.T) {

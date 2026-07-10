@@ -1170,7 +1170,7 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 				buf.WriteString(" @")
 			}
 			buf.WriteByte(' ')
-			buf.WriteString(p.Price.Value)
+			buf.WriteString(amountDisplayValue(p.Price))
 			buf.WriteByte(' ')
 			buf.WriteString(p.Price.Currency)
 		}
@@ -1251,10 +1251,7 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 	}
 
 	// Use raw value if available (preserves formatting like commas), otherwise use canonical value
-	displayValue := amount.Value
-	if amount.HasRaw() {
-		displayValue = amount.Raw
-	}
+	displayValue := amountDisplayValue(amount)
 
 	if !isValidNumericValue(amount.Value) {
 		buf.WriteString(strings.Repeat(" ", MinimumSpacing))
@@ -1273,6 +1270,16 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 	buf.WriteString(displayValue)
 	buf.WriteByte(' ')
 	buf.WriteString(amount.Currency)
+}
+
+func amountDisplayValue(amount *ast.Amount) string {
+	if amount != nil && amount.HasRaw() {
+		return amount.Raw
+	}
+	if amount == nil {
+		return ""
+	}
+	return amount.Value
 }
 
 // formatCost formats a cost specification.
@@ -1310,10 +1317,10 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 
 	if cost.Amount != nil {
 		writeSeparator()
-		buf.WriteString(cost.Amount.Value)
+		buf.WriteString(amountDisplayValue(cost.Amount))
 		if cost.Total != nil {
 			buf.WriteString(" # ")
-			buf.WriteString(cost.Total.Value)
+			buf.WriteString(amountDisplayValue(cost.Total))
 		}
 		buf.WriteByte(' ')
 		buf.WriteString(cost.Amount.Currency)

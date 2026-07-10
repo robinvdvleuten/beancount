@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
@@ -10,16 +9,10 @@ import (
 )
 
 // ParseAmount converts a ast.Amount to a decimal.Decimal.
-// Supports both plain numbers ("100.50") and arithmetic expressions ("(5 + 3)").
-// Expressions must be wrapped in parentheses and support +, -, *, / operators.
+// Arithmetic expressions are evaluated by the parser before reaching the ledger.
 func ParseAmount(amount *ast.Amount) (decimal.Decimal, error) {
 	if amount == nil {
 		return decimal.Zero, fmt.Errorf("amount is nil")
-	}
-
-	// Check if it's an expression (starts with '(')
-	if strings.HasPrefix(amount.Value, "(") {
-		return EvaluateExpression(amount.Value)
 	}
 
 	// Plain number - parse directly

@@ -49,19 +49,9 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 // Expressions are captured as-is (not evaluated) and stored in Amount.Value.
 // The ledger phase evaluates expressions when computing balances.
 func (p *Parser) parseAmount() (*ast.Amount, error) {
-	tok := p.peek()
-	if tok.Type == ILLEGAL && p.isExpressionStartToken(tok) {
-		return nil, p.errorAtToken(tok, "unmatched parentheses in expression")
-	}
-	if !p.check(NUMBER) && !p.check(EXPRESSION) {
-		return nil, p.errorAtToken(p.peek(), "expected number or expression")
-	}
-	valueTok := p.advance()
-	isExpression := valueTok.Type == EXPRESSION
-	value := valueTok.String(p.source)
-	if valueTok.Type == NUMBER {
-		// Remove commas from number (e.g., "1,000" -> "1000")
-		value = strings.ReplaceAll(value, ",", "")
+	valueTok, isExpression, value, err := p.parseAmountValueToken()
+	if err != nil {
+		return nil, err
 	}
 
 	if !p.check(IDENT) {
@@ -75,10 +65,7 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool, value string) *ast.Amount {
 	currency := p.internCurrency(currTok)
 
-	var raw string
-	if !isExpression && valueTok.Type == NUMBER {
-		raw = valueTok.String(p.source)
-	}
+	raw := valueTok.String(p.source)
 
 	return ast.NewAmountWithRaw(raw, value, currency)
 }
@@ -91,11 +78,21 @@ func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
 	if !p.check(NUMBER) && !p.check(EXPRESSION) {
 		return Token{}, false, "", p.errorAtToken(p.peek(), "expected number or expression")
 	}
-	valueTok := p.advance()
-	isExpression := valueTok.Type == EXPRESSION
-	value := valueTok.String(p.source)
-	if valueTok.Type == NUMBER {
-		value = strings.ReplaceAll(value, ",", "")
+	result, end, err := evaluateNumberExpression(p.source, tok.Start)
+	if err != nil {
+		return Token{}, false, "", p.errorAtToken(tok, "invalid number expression: %v", err)
+	}
+	isExpression := tok.Type == EXPRESSION || end > tok.End
+	valueTok := tok
+	valueTok.End = end
+	valueTok.Type = NUMBER
+	value := strings.ReplaceAll(tok.String(p.source), ",", "")
+	if isExpression {
+		valueTok.Type = EXPRESSION
+		value = canonicalExpressionValue(result)
+	}
+	for !p.isAtEnd() && p.peek().Start < end {
+		p.advance()
 	}
 	return valueTok, isExpression, value, nil
 }
@@ -447,21 +444,16 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 		}
 		return &ast.MetadataValue{Account: &account}, nil
 
-	case NUMBER:
-		// Could be Number or Amount - need LL(2) lookahead
-		nextTok := p.peekAhead(1)
-		if nextTok.Type == IDENT && nextTok.Line == tok.Line {
-			// Amount (number + currency) - both must be on same line
-			amount, err := p.parseAmount()
-			if err != nil {
-				return nil, err
-			}
-			return &ast.MetadataValue{Amount: amount}, nil
+	case NUMBER, EXPRESSION:
+		valueTok, isExpression, value, err := p.parseAmountValueToken()
+		if err != nil {
+			return nil, err
 		}
-		// Just a number - remove commas from thousands separators
-		numStr := strings.ReplaceAll(tok.String(p.source), ",", "")
-		p.advance()
-		return &ast.MetadataValue{Number: &numStr}, nil
+		if p.check(IDENT) && p.peek().Line == tok.Line {
+			currTok := p.advance()
+			return &ast.MetadataValue{Amount: p.amountFromValueToken(valueTok, currTok, isExpression, value)}, nil
+		}
+		return &ast.MetadataValue{Number: &value}, nil
 
 	case IDENT:
 		// Could be Account, Currency, or Boolean
@@ -542,17 +534,16 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 		p.advance()
 		return &ast.CustomValue{String: &account}, nil
 
-	case NUMBER:
-		if nextTok := p.peekAhead(1); nextTok.Type == IDENT && nextTok.Line == line {
-			amount, err := p.parseAmount()
-			if err != nil {
-				return nil, err
-			}
-			return &ast.CustomValue{Amount: amount}, nil
+	case NUMBER, EXPRESSION:
+		valueTok, isExpression, value, err := p.parseAmountValueToken()
+		if err != nil {
+			return nil, err
 		}
-		number := strings.ReplaceAll(tok.String(p.source), ",", "")
-		p.advance()
-		return &ast.CustomValue{Number: &number}, nil
+		if p.check(IDENT) && p.peek().Line == line {
+			currTok := p.advance()
+			return &ast.CustomValue{Amount: p.amountFromValueToken(valueTok, currTok, isExpression, value)}, nil
+		}
+		return &ast.CustomValue{Number: &value}, nil
 	}
 
 	return nil, nil
