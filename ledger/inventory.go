@@ -239,14 +239,9 @@ func (inv *Inventory) planReduction(
 		return inv.planBookingReduction(commodity, reduceAmount, bookingMethod)
 	}
 
-	if spec.Cost != nil {
-		return inv.planSpecificReduction(commodity, reduceAmount, spec, bookingMethod)
-	}
-
-	return &reductionPlan{
-		commodity: commodity,
-		addAmount: &amount,
-	}, nil
+	// Non-empty spec: any combination of cost, date, and label narrows
+	// the candidate lots via lotMatchesReductionSpec.
+	return inv.planSpecificReduction(commodity, reduceAmount, spec, bookingMethod)
 }
 
 func (inv *Inventory) planStrictReduction(

@@ -100,7 +100,9 @@ func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
 	return valueTok, isExpression, value, nil
 }
 
-// parseCost parses a cost specification: { [*] [AMOUNT] [, DATE] [, LABEL] } or {{ AMOUNT [, DATE] [, LABEL] }}
+// parseCost parses a cost specification: {} or {*} or a comma-separated list of
+// components (AMOUNT, DATE, LABEL) in any order, wrapped in {} (per-unit) or
+// {{}} (total). Total cost requires an amount.
 func (p *Parser) parseCost() (*ast.Cost, error) {
 	// Check for {{ or {
 	isTotal := false
@@ -142,47 +144,54 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		return cost, nil
 	}
 
-	// Parse amount (required for total cost)
-	if p.check(NUMBER) || p.check(EXPRESSION) {
-		amt, err := p.parseAmount()
-		if err != nil {
-			return nil, err
-		}
-		cost.Amount = amt
-	} else if isTotal {
-		return nil, p.error("total cost {{}} requires an amount")
-	}
+	// Parse comma-separated components (amount, date, label) in any order,
+	// matching the official beancount grammar. Duplicates are errors.
+	hasLabel := false
+	for {
+		switch {
+		case p.check(NUMBER) || p.check(EXPRESSION):
+			if cost.Amount != nil {
+				return nil, p.error("duplicate cost amount in cost spec")
+			}
+			amt, err := p.parseAmount()
+			if err != nil {
+				return nil, err
+			}
+			cost.Amount = amt
 
-	// Parse optional date and/or label
-	if p.match(COMMA) {
-		if p.check(DATE) {
-			// Parse date
+		case p.check(DATE):
+			if cost.Date != nil {
+				return nil, p.error("duplicate date in cost spec")
+			}
 			date, err := p.parseDate()
 			if err != nil {
 				return nil, err
 			}
 			cost.Date = date
 
-			// Check for another comma and label
-			if p.match(COMMA) {
-				if p.check(STRING) {
-					labelTok := p.advance()
-					label, err := p.unquoteString(labelTok.String(p.source))
-					if err != nil {
-						return nil, p.errorAtToken(labelTok, "invalid string literal: %v", err)
-					}
-					cost.Label = label
-				}
+		case p.check(STRING):
+			if hasLabel {
+				return nil, p.error("duplicate label in cost spec")
 			}
-		} else if p.check(STRING) {
-			// Parse label directly (no date)
 			labelTok := p.advance()
 			label, err := p.unquoteString(labelTok.String(p.source))
 			if err != nil {
 				return nil, p.errorAtToken(labelTok, "invalid string literal: %v", err)
 			}
 			cost.Label = label
+			hasLabel = true
+
+		default:
+			return nil, p.error("expected cost amount, date, or label")
 		}
+
+		if !p.match(COMMA) {
+			break
+		}
+	}
+
+	if isTotal && cost.Amount == nil {
+		return nil, p.error("total cost {{}} requires an amount")
 	}
 
 	// Consume closing brace(s)

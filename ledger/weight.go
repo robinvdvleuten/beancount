@@ -31,16 +31,18 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 
 	currency := posting.Amount.Currency
 
-	// Check for cost specification
-	hasExplicitCost := posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost()
-	hasEmptyCost := posting.Cost != nil && posting.Cost.IsEmpty()
+	// Check for cost specification. A cost spec without an amount (empty {},
+	// or date/label-only like {2020-02-01}) has its cost resolved from booked
+	// lots or inferred, so it contributes no weight here.
+	hasExplicitCost := posting.Cost != nil && posting.Cost.Amount != nil && !posting.Cost.IsMergeCost()
+	hasEmptyCost := posting.Cost != nil && posting.Cost.Amount == nil && !posting.Cost.IsMergeCost()
 	hasMergeCost := posting.Cost != nil && posting.Cost.IsMergeCost()
 	hasPrice := posting.Price != nil
 
 	var weights weightSet
 
 	if hasEmptyCost || hasMergeCost {
-		// Empty cost spec {} or merge cost {*} - cost will be inferred/calculated to balance the transaction
+		// Amount-less cost spec or merge cost {*} - cost will be inferred/calculated to balance the transaction
 		// Return empty weights; cost inference happens in processTransaction()
 		return weightSet{}, nil
 

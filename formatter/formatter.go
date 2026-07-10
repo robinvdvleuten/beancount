@@ -1295,19 +1295,31 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		return
 	}
 
+	// Emit present components separated by commas; any of amount, date,
+	// and label may be absent (e.g. a date-only spec {2020-02-01}).
+	first := true
+	writeSeparator := func() {
+		if !first {
+			buf.WriteString(", ")
+		}
+		first = false
+	}
+
 	if cost.Amount != nil {
+		writeSeparator()
 		buf.WriteString(cost.Amount.Value)
 		buf.WriteByte(' ')
 		buf.WriteString(cost.Amount.Currency)
 	}
 
 	if cost.Date != nil {
-		buf.WriteString(", ")
+		writeSeparator()
 		buf.WriteString(cost.Date.String())
 	}
 
 	if cost.Label != "" {
-		buf.WriteString(", \"")
+		writeSeparator()
+		buf.WriteByte('"')
 		buf.WriteString(f.escapeString(cost.Label))
 		buf.WriteByte('"')
 	}

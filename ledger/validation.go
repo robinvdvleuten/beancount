@@ -343,10 +343,14 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 		} else {
 			pc.withAmounts = append(pc.withAmounts, posting)
 
-			if posting.Cost != nil && posting.Cost.IsEmpty() {
-				pc.withEmptyCosts = append(pc.withEmptyCosts, posting)
-			} else if posting.Cost != nil && !posting.Cost.IsEmpty() && !posting.Cost.IsMergeCost() {
-				pc.withExplicitCost = append(pc.withExplicitCost, posting)
+			// Cost specs without an amount (empty {} or date/label-only)
+			// need their cost resolved from booked lots or inferred.
+			if posting.Cost != nil && !posting.Cost.IsMergeCost() {
+				if posting.Cost.Amount == nil {
+					pc.withEmptyCosts = append(pc.withEmptyCosts, posting)
+				} else {
+					pc.withExplicitCost = append(pc.withExplicitCost, posting)
+				}
 			}
 		}
 	}
@@ -372,14 +376,15 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			continue
 		}
 
-		// Check if this is an empty cost spec (returns empty weights)
-		if len(weights) == 0 && posting.Cost != nil && posting.Cost.IsEmpty() {
+		// Check if this is a cost spec without an amount (returns empty weights)
+		if len(weights) == 0 && posting.Cost != nil && posting.Cost.Amount == nil && !posting.Cost.IsMergeCost() {
 			// Reductions resolve their weight from the booked lots' cost basis,
-			// matching beancount, which books lots before interpolation.
+			// matching beancount, which books lots before interpolation. The
+			// spec's date/label (if any) narrows which lots are booked.
 			// Augmentations are handled in cost inference below.
 			amount, aerr := ParseAmount(posting.Amount)
 			if aerr == nil && amount.IsNegative() {
-				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Amount.Currency, amount); ok {
+				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
 					allWeights = append(allWeights, booked)
 				} else {
 					unresolvedEmptyCosts[posting] = true
@@ -1127,9 +1132,10 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 	return ParseAmount(balance.Tolerance)
 }
 
-// bookedReductionWeights resolves the balancing weights of an empty-cost {}
-// reduction from the lots selected by the account's booking method, matching
-// beancount, which books lots before interpolation.
+// bookedReductionWeights resolves the balancing weights of an amount-less
+// cost spec reduction (empty {} or date/label-only) from the lots selected by
+// the account's booking method, matching beancount, which books lots before
+// interpolation.
 //
 // The second return value reports whether the posting's cost is considered
 // resolved. It is false only when the cost must instead be inferred from the
@@ -1137,7 +1143,7 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 // Booking failures (ambiguous matches, insufficient lots) return true with no
 // weights: they are reported separately by validateInventoryOperations, and
 // the posting must not additionally participate in cost inference.
-func (v *validator) bookedReductionWeights(accountName ast.Account, commodity string, amount decimal.Decimal) (weightSet, bool) {
+func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Cost, commodity string, amount decimal.Decimal) (weightSet, bool) {
 	account, ok := v.accounts[string(accountName)]
 	if !ok {
 		return nil, true // Unopened account; reported by validateAccountsOpen
@@ -1148,7 +1154,12 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, commodity st
 		return nil, false
 	}
 
-	plan, err := account.Inventory.planReduction(commodity, amount, &lotSpec{}, bookingMethod)
+	spec, err := ParseLotSpec(cost)
+	if err != nil {
+		return nil, true // Invalid cost spec; reported by validateCosts
+	}
+
+	plan, err := account.Inventory.planReduction(commodity, amount, spec, bookingMethod)
 	if err != nil {
 		return nil, true // Booking error; reported by validateInventoryOperations
 	}

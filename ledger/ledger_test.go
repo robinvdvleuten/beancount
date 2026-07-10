@@ -792,6 +792,59 @@ func TestMergeCostBooking(t *testing.T) {
 	assert.True(t, lots[0].Spec.Cost != nil)
 	assert.Equal(t, "150", lots[0].Spec.Cost.String())
 }
+func TestDatedAndLabeledLotReduction(t *testing.T) {
+	// Two lots acquired on different dates with different labels. A reduction
+	// that specifies only a date or only a label must select the matching lot,
+	// mirroring official beancount behavior (bean-check 2.3.6).
+	prefix := `
+                2020-01-01 open Assets:Brokerage
+                2020-01-01 open Assets:Cash
+                2020-01-01 open Income:Gains
+
+                2020-02-01 * "Buy lot a"
+                Assets:Brokerage    5 HOOL {100.00 USD, "lot-a"}
+                Assets:Cash        -500.00 USD
+
+                2020-03-01 * "Buy lot b"
+                Assets:Brokerage    5 HOOL {110.00 USD, "lot-b"}
+                Assets:Cash        -550.00 USD
+        `
+
+	tests := []struct {
+		name          string
+		spec          string
+		remainingCost string // per-unit cost of the lot left behind
+	}{
+		{name: "DateOnly", spec: "{2020-02-01}", remainingCost: "110"},
+		{name: "LabelOnly", spec: `{"lot-b"}`, remainingCost: "100"},
+		{name: "DateAndAmountReversed", spec: "{2020-03-01, 110.00 USD}", remainingCost: "100"},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			input := prefix + `
+                2020-04-01 * "Sell"
+                Assets:Brokerage    -5 HOOL ` + test.spec + `
+                Assets:Cash         550.00 USD
+                Income:Gains
+        `
+			ast := parser.MustParseString(context.Background(), input)
+
+			l := New()
+			err := l.Process(context.Background(), ast)
+			assert.NoError(t, err)
+
+			acc, ok := l.GetAccount("Assets:Brokerage")
+			assert.True(t, ok)
+			lots := acc.Inventory.GetLots("HOOL")
+			assert.Equal(t, 1, len(lots))
+			assert.Equal(t, "5", lots[0].Amount.String())
+			assert.True(t, lots[0].Spec != nil && lots[0].Spec.Cost != nil)
+			assert.Equal(t, test.remainingCost, lots[0].Spec.Cost.String())
+		})
+	}
+}
+
 func TestMustProcess(t *testing.T) {
 	ctx := context.Background()
 

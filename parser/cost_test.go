@@ -89,6 +89,96 @@ func TestParseCost(t *testing.T) {
 			},
 		},
 		{
+			name:  "DateOnly",
+			input: "{2020-02-01}",
+			expected: &ast.Cost{
+				Date: &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+			},
+		},
+		{
+			name:  "LabelOnly",
+			input: `{"lot-a"}`,
+			expected: &ast.Cost{
+				Label: "lot-a",
+			},
+		},
+		{
+			name:  "DateAndLabelOnly",
+			input: `{2020-02-01, "lot-a"}`,
+			expected: &ast.Cost{
+				Date:  &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+				Label: "lot-a",
+			},
+		},
+		{
+			name:  "DateBeforeAmount",
+			input: "{2020-02-01, 100.00 USD}",
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
+				Date:   &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+			},
+		},
+		{
+			name:  "LabelBeforeAmount",
+			input: `{"lot-a", 100.00 USD}`,
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
+				Label:  "lot-a",
+			},
+		},
+		{
+			name:  "LabelBeforeDate",
+			input: `{100.00 USD, "lot-a", 2020-02-01}`,
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
+				Date:   &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+				Label:  "lot-a",
+			},
+		},
+		{
+			name:  "AllComponentsReversed",
+			input: `{"lot-a", 2020-02-01, 100.00 USD}`,
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
+				Date:   &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+				Label:  "lot-a",
+			},
+		},
+		{
+			name:  "TotalCostDateBeforeAmount",
+			input: "{{2020-02-01, 1000.00 USD}}",
+			expected: &ast.Cost{
+				IsTotal: true,
+				Amount:  &ast.Amount{Raw: "1000.00", Value: "1000.00", Currency: "USD"},
+				Date:    &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+			},
+		},
+		{
+			name:     "DuplicateAmount",
+			input:    "{100.00 USD, 100.00 USD}",
+			hasError: true,
+		},
+		{
+			name:     "DuplicateDate",
+			input:    "{2020-02-01, 2020-02-01}",
+			hasError: true,
+		},
+		{
+			name:     "DuplicateLabel",
+			input:    `{"lot-a", "lot-b"}`,
+			hasError: true,
+		},
+		{
+			name:     "TrailingComma",
+			input:    "{100.00 USD,}",
+			hasError: true,
+		},
+		{
+			name:     "TotalCostDateOnly",
+			input:    "{{2020-02-01}}",
+			hasError: true,
+		},
+		{
 			name:  "MergeCost",
 			input: "{*}",
 			expected: &ast.Cost{
