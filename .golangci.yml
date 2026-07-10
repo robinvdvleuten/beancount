@@ -1,14 +1,6 @@
 version: "2"
 run:
   tests: true
-linters:
-  exclusions:
-    rules:
-      # Common issues caused by Participle related tags.
-      - path: parser/
-        linters:
-          - govet
-        text: 'uses unkeyed fields'
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
