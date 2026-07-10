@@ -259,6 +259,8 @@ type Document struct {
 	date           *Date
 	Account        Account
 	PathToDocument RawString
+	Tags           []Tag
+	Links          []Link
 
 	withComment
 	withMetadata

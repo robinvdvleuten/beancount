@@ -928,7 +928,14 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 	buf.WriteString(string(d.Account))
 	buf.WriteByte(' ')
 	f.formatRawString(d.PathToDocument, buf)
-	// Append inline comment if present
+	for _, tag := range d.Tags {
+		buf.WriteString(" #")
+		buf.WriteString(string(tag))
+	}
+	for _, link := range d.Links {
+		buf.WriteString(" ^")
+		buf.WriteString(string(link))
+	}
 	buf.WriteByte('\n')
 	f.formatMetadata(d.Metadata, buf)
 }

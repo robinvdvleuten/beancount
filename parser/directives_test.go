@@ -194,6 +194,19 @@ func TestParseDocument(t *testing.T) {
 	assert.Equal(t, "/path/to/statement.pdf", doc.PathToDocument.Value)
 }
 
+func TestParseDocumentWithTagsAndLinks(t *testing.T) {
+	input := `2014-07-09 document Assets:Checking "/path/to/statement.pdf" #banking ^stmt-1 #archived`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Directives))
+
+	doc, ok := result.Directives[0].(*ast.Document)
+	assert.True(t, ok)
+	assert.Equal(t, []ast.Tag{"banking", "archived"}, doc.Tags)
+	assert.Equal(t, []ast.Link{"stmt-1"}, doc.Links)
+}
+
 // Price directive tests
 
 func TestParsePrice(t *testing.T) {
