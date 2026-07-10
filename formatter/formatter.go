@@ -1084,7 +1084,10 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 		f.formatRawString(t.Payee, buf)
 	}
 
-	if !t.Narration.IsEmpty() {
+	// When a payee is present, the narration must be emitted even if empty:
+	// a lone string after the flag is parsed as the narration, so dropping
+	// the empty narration would turn the payee into a narration.
+	if !t.Narration.IsEmpty() || !t.Payee.IsEmpty() {
 		buf.WriteByte(' ')
 		f.formatRawString(t.Narration, buf)
 	}

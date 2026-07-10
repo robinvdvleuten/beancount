@@ -836,6 +836,52 @@ func TestTransactionEdgeCases(t *testing.T) {
 		_ = output
 	})
 
+	t.Run("TransactionWithPayeeAndEmptyNarration", func(t *testing.T) {
+		source := `
+2021-01-01 * "EDISON POWER" ""
+  Assets:Checking  -5.50 USD
+  Expenses:Power  5.50 USD
+`
+		ast := parser.MustParseString(context.Background(), source)
+
+		f := New()
+		var buf bytes.Buffer
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		// The empty narration must be kept: without it, "EDISON POWER"
+		// would be re-parsed as the narration and the payee lost.
+		assert.Contains(t, buf.String(), `"EDISON POWER" ""`)
+	})
+
+	t.Run("PayeeRoundTrip", func(t *testing.T) {
+		source := `
+2021-01-01 * "EDISON POWER" ""
+  Assets:Checking  -5.50 USD
+  Expenses:Power  5.50 USD
+`
+		tree := parser.MustParseString(context.Background(), source)
+
+		f := New()
+		var buf bytes.Buffer
+		err := f.Format(context.Background(), tree, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		reparsed := parser.MustParseString(context.Background(), buf.String())
+		var txn *ast.Transaction
+		for _, d := range reparsed.Directives {
+			if tx, ok := d.(*ast.Transaction); ok {
+				txn = tx
+				break
+			}
+		}
+		if txn == nil {
+			t.Fatal("no transaction found in reformatted output")
+		}
+		assert.Equal(t, "EDISON POWER", txn.Payee.Value)
+		assert.Equal(t, "", txn.Narration.Value)
+	})
+
 	t.Run("ComplexCostSpecification", func(t *testing.T) {
 		source := `
 2021-01-01 * "Stock purchase with label"
