@@ -56,6 +56,7 @@ const (
 	BookingNONE    BookingMethod = "NONE"
 	BookingFIFO    BookingMethod = "FIFO"
 	BookingLIFO    BookingMethod = "LIFO"
+	BookingHIFO    BookingMethod = "HIFO"
 	BookingAVERAGE BookingMethod = "AVERAGE"
 )
 
@@ -455,7 +456,27 @@ func (inv *Inventory) applyReduction(plan *reductionPlan) {
 
 func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 	sortedLots := append([]*lot(nil), lots...)
-	lifo := defaultBookingMethod(bookingMethod) == BookingLIFO
+	method := defaultBookingMethod(bookingMethod)
+	lifo := method == BookingLIFO
+
+	if method == BookingHIFO {
+		// Highest cost basis first; lots without a cost sort last.
+		slices.SortStableFunc(sortedLots, func(a, b *lot) int {
+			aHasCost := a.Spec != nil && a.Spec.Cost != nil
+			bHasCost := b.Spec != nil && b.Spec.Cost != nil
+			if aHasCost != bHasCost {
+				if aHasCost {
+					return -1
+				}
+				return 1
+			}
+			if !aHasCost {
+				return 0
+			}
+			return b.Spec.Cost.Cmp(*a.Spec.Cost)
+		})
+		return sortedLots
+	}
 
 	slices.SortStableFunc(sortedLots, func(a, b *lot) int {
 		aHasDate := a.Spec != nil && a.Spec.Date != nil
