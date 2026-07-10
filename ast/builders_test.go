@@ -538,38 +538,6 @@ func Example_investmentTransaction() {
 	_ = txn // Use formatter.FormatTransaction(txn, os.Stdout)
 }
 
-func TestAccountType(t *testing.T) {
-	tests := []struct {
-		account Account
-		want    AccountType
-	}{
-		{"Assets:Checking", AccountTypeAssets},
-		{"Liabilities:CreditCard", AccountTypeLiabilities},
-		{"Equity:Opening-Balances", AccountTypeEquity},
-		{"Income:Salary", AccountTypeIncome},
-		{"Expenses:Rent", AccountTypeExpenses},
-	}
-
-	for _, tt := range tests {
-		t.Run(string(tt.account), func(t *testing.T) {
-			got := tt.account.Type()
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
-func TestAccountTypePanicsOnInvalidPrefix(t *testing.T) {
-	assert.Panics(t, func() {
-		Account("Invalid:Account").Type()
-	})
-}
-
-func TestAccountTypePanicsOnMissingColon(t *testing.T) {
-	assert.Panics(t, func() {
-		Account("Assets").Type()
-	})
-}
-
 func TestAccountTypeStringPanicsOnInvalid(t *testing.T) {
 	assert.Panics(t, func() {
 		_ = AccountType(0).String()

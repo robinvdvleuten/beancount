@@ -189,30 +189,6 @@ func (a Account) Root() string {
 	return string(a)[:idx]
 }
 
-// Type returns the account type based on the first segment.
-// Panics if the account has an invalid type prefix or missing colon (indicates validation was bypassed).
-func (a Account) Type() AccountType {
-	// Check that account has at least two segments (type:name format)
-	if !strings.ContainsRune(string(a), ':') {
-		panic(fmt.Sprintf("invalid account format %q: must have at least type:name segments", a))
-	}
-	root := a.Root()
-	switch root {
-	case "Assets":
-		return AccountTypeAssets
-	case "Liabilities":
-		return AccountTypeLiabilities
-	case "Equity":
-		return AccountTypeEquity
-	case "Income":
-		return AccountTypeIncome
-	case "Expenses":
-		return AccountTypeExpenses
-	default:
-		panic(fmt.Sprintf("invalid account type prefix %q in account %q", root, a))
-	}
-}
-
 // accountSegmentRegex validates account segments (after first).
 // Must start with uppercase Unicode letter, digit, or any non-ASCII Unicode character.
 // Can contain Unicode letters, digits, and hyphens.
