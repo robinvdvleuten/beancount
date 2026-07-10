@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -967,6 +969,18 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 	if doc.PathToDocument.IsEmpty() {
 		// This is already enforced by the parser, but check anyway
 		errs = append(errs, fmt.Errorf("document path cannot be empty"))
+		return errs
+	}
+
+	// 3. Validate the referenced file exists, matching beancount's
+	// verify_document_files_exist plugin. Relative paths resolve against
+	// the directory of the file declaring the directive.
+	docPath := doc.PathToDocument.Value
+	if !filepath.IsAbs(docPath) {
+		docPath = filepath.Join(filepath.Dir(doc.Position().Filename), docPath)
+	}
+	if _, err := os.Stat(docPath); err != nil {
+		errs = append(errs, NewDocumentFileError(doc, docPath))
 	}
 
 	return errs

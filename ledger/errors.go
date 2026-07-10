@@ -795,6 +795,31 @@ func NewUnusedPadWarning(pad *ast.Pad) *UnusedPadWarning {
 	}
 }
 
+// DocumentFileError is returned when a document directive references a file
+// that does not exist, matching beancount's verify_document_files_exist.
+type DocumentFileError struct {
+	Path      string
+	Pos       ast.Position
+	Directive *ast.Document
+}
+
+func (e *DocumentFileError) Error() string {
+	return fmt.Sprintf("%s:%d: File does not exist: %q", e.Pos.Filename, e.Pos.Line, e.Path)
+}
+
+func (e *DocumentFileError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+// NewDocumentFileError creates an error for a document referencing a missing file.
+func NewDocumentFileError(doc *ast.Document, path string) *DocumentFileError {
+	return &DocumentFileError{
+		Path:      path,
+		Pos:       doc.Position(),
+		Directive: doc,
+	}
+}
+
 // InvalidDirectivePriceError indicates a price directive has invalid data
 type InvalidDirectivePriceError struct {
 	Message   string

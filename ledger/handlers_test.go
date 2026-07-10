@@ -2,6 +2,10 @@ package ledger
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -255,10 +259,15 @@ func TestNoteHandler(t *testing.T) {
 
 func TestDocumentHandler(t *testing.T) {
 	ctx := context.Background()
-	source := `
+
+	// Beancount verifies the referenced file exists; use a real one.
+	docFile := filepath.Join(t.TempDir(), "2020-07.pdf")
+	assert.NoError(t, os.WriteFile(docFile, nil, 0o644))
+
+	source := fmt.Sprintf(`
 		2020-01-01 open Assets:Checking
-		2020-07-09 document Assets:Checking "/documents/bank-statements/2020-07.pdf"
-	`
+		2020-07-09 document Assets:Checking %q
+	`, docFile)
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -275,6 +284,26 @@ func TestDocumentHandler(t *testing.T) {
 
 	docHandler.Apply(ctx, ledger, docDirective, nil)
 	// Document handler doesn't mutate state
+}
+
+func TestDocumentHandlerMissingFile(t *testing.T) {
+	ctx := context.Background()
+	source := `
+		2020-01-01 open Assets:Checking
+		2020-07-09 document Assets:Checking "/documents/does-not-exist.pdf"
+	`
+	tree := parser.MustParseString(ctx, source)
+	ledger := New()
+
+	openHandler := &OpenHandler{}
+	_, delta := openHandler.Validate(ctx, ledger, tree.Directives[0])
+	openHandler.Apply(ctx, ledger, tree.Directives[0], delta)
+
+	docHandler := &DocumentHandler{}
+	errs, _ := docHandler.Validate(ctx, ledger, tree.Directives[1])
+	assert.Equal(t, 1, len(errs), "missing file should be an error like bean-check")
+	var fileErr *DocumentFileError
+	assert.True(t, errors.As(errs[0], &fileErr))
 }
 
 func TestPriceHandler(t *testing.T) {
