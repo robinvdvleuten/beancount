@@ -1,0 +1,11 @@
+2020-01-01 open Assets:A
+2020-01-01 open Income:I
+2020-01-02 * "special currencies"
+  Assets:A  1 MY-STOCK2
+  Assets:A  2 X_Y
+  Assets:A  3 AB.CD
+  Assets:A  4 V'X
+  Income:I -1 MY-STOCK2
+  Income:I -2 X_Y
+  Income:I -3 AB.CD
+  Income:I -4 V'X

@@ -1,0 +1,6 @@
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Job
+2020-01-02 * "pay"
+  Assets:Checking  100.00 USD
+  Income:Job      -100.00 USD
+2020-01-03 balance Assets:Checking  100.01 USD

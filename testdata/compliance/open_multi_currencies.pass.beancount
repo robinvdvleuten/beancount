@@ -1,0 +1,5 @@
+2020-01-01 open Assets:Multi USD,EUR,CHF "STRICT"
+2020-01-01 open Expenses:B
+2020-01-02 * "use one"
+  Expenses:B      1.00 EUR
+  Assets:Multi   -1.00 EUR

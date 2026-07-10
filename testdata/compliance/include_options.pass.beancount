@@ -1,0 +1,5 @@
+include "included_options_helper.beancount"
+2020-01-01 open Assets:Main
+2020-01-02 * "cross-file"
+  Assets:Main       5.00 USD
+  Assets:Included  -5.00 USD

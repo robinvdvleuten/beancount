@@ -1,0 +1,5 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-02 * "boundary residual equals tolerance"
+  Expenses:B  50.001 USD
+  Assets:A   -50.0005 USD

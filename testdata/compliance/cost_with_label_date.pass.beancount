@@ -1,0 +1,8 @@
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+2020-02-01 * "buy with label and date"
+  Assets:Brokerage  10 HOOL {100.00 USD, 2020-02-01, "first-lot"}
+  Assets:Cash      -1000.00 USD
+2020-03-01 * "sell by label"
+  Assets:Brokerage  -5 HOOL {"first-lot"}
+  Assets:Cash        500.00 USD

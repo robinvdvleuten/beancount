@@ -1,0 +1,5 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:EUR
+2020-01-02 * "price interpolated"
+  Assets:EUR  100.00 EUR @
+  Assets:A   -110.00 USD

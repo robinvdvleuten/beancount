@@ -1,0 +1,8 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:EUR
+2020-01-02 * "per-unit price"
+  Assets:EUR  100.00 EUR @ 1.10 USD
+  Assets:A   -110.00 USD
+2020-01-03 * "total price"
+  Assets:EUR  100.00 EUR @@ 110.00 USD
+  Assets:A   -110.00 USD

@@ -1,0 +1,8 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-01 open Expenses:C
+2020-01-02 * "two groups, two autos"
+  Assets:A   -10.00 USD
+  Assets:A   -20.00 EUR
+  Expenses:B
+  Expenses:C

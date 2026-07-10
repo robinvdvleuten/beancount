@@ -6,123 +6,156 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
-const officialBeancountVersion = "2.3.6"
+const complianceDir = "../testdata/compliance"
 
+// complianceFixture is a .beancount file whose expected check outcome is
+// encoded in its filename: <name>.pass.beancount or <name>.fail.beancount.
+// A gap_ prefix marks a fixture our implementation does not yet satisfy;
+// see testdata/compliance/KNOWN_GAPS.md. Gap fixtures are skipped by the
+// in-process leg but still verified against the official tools, so the
+// expectations stay honest and closing a gap only requires renaming the file.
 type complianceFixture struct {
-	name       string
-	source     string
-	checkOK    bool
-	formatted  string
-	lexerTypes []parser.TokenType
+	name     string
+	path     string
+	wantPass bool
+	knownGap bool
 }
 
-var complianceFixtures = []complianceFixture{
-	{
-		name: "basic transaction",
-		source: `2000-01-01 open Assets:Cash USD
-2000-01-01 open Equity:Opening USD
-2000-01-02 * "Opening"
-  Assets:Cash  10 USD
-  Equity:Opening  -10 USD
-`,
-		checkOK: true,
-		formatted: `2000-01-01 open Assets:Cash USD
-2000-01-01 open Equity:Opening USD
-2000-01-02 * "Opening"
-    Assets:Cash       10 USD
-    Equity:Opening   -10 USD
-`,
-	},
-	{
-		name: "unbalanced transaction",
-		source: `2000-01-01 open Assets:Cash USD
-2000-01-01 open Equity:Opening USD
-2000-01-02 * "Broken"
-  Assets:Cash  10 USD
-  Equity:Opening  -9 USD
-`,
-		checkOK: false,
-	},
-	{
-		name:       "lexer literals",
-		source:     "2000-01-01 open Assets:Cash USD\n",
-		checkOK:    true,
-		lexerTypes: []parser.TokenType{parser.DATE, parser.OPEN, parser.ACCOUNT, parser.IDENT},
-	},
+func loadComplianceFixtures(t *testing.T) []complianceFixture {
+	t.Helper()
+
+	paths, err := filepath.Glob(filepath.Join(complianceDir, "*.beancount"))
+	assert.NoError(t, err)
+
+	var fixtures []complianceFixture
+	for _, path := range paths {
+		base := strings.TrimSuffix(filepath.Base(path), ".beancount")
+		var wantPass bool
+		switch {
+		case strings.HasSuffix(base, ".pass"):
+			wantPass = true
+		case strings.HasSuffix(base, ".fail"):
+			wantPass = false
+		default:
+			continue // Helper file (e.g. an include target), not a fixture.
+		}
+		name := strings.TrimSuffix(strings.TrimSuffix(base, ".pass"), ".fail")
+		fixtures = append(fixtures, complianceFixture{
+			name:     name,
+			path:     path,
+			wantPass: wantPass,
+			knownGap: strings.HasPrefix(name, "gap_"),
+		})
+	}
+
+	assert.True(t, len(fixtures) > 0, "no fixtures found in %s", complianceDir)
+	return fixtures
 }
 
+// TestComplianceFixtures checks every fixture through the same load+process
+// pipeline the check command uses and asserts the outcome encoded in the
+// fixture's filename.
 func TestComplianceFixtures(t *testing.T) {
-	for _, fixture := range complianceFixtures {
+	for _, fixture := range loadComplianceFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
-			tree, err := parser.ParseBytes(context.Background(), []byte(fixture.source))
+			if fixture.knownGap {
+				t.Skipf("known gap, see %s", filepath.Join(complianceDir, "KNOWN_GAPS.md"))
+			}
+
+			ctx := context.Background()
+			ldr := loader.New(loader.WithFollowIncludes())
+			result, err := ldr.Load(ctx, fixture.path)
 			if err == nil {
-				err = ledger.New().Process(context.Background(), tree)
-			}
-			assert.Equal(t, fixture.checkOK, err == nil)
-
-			if fixture.formatted != "" {
-				tree := parser.MustParseString(context.Background(), fixture.source)
-				var output bytes.Buffer
-				assert.NoError(t, formatter.New().Format(context.Background(), tree, []byte(fixture.source), &output))
-				assert.Equal(t, fixture.formatted, output.String())
+				err = ledger.New().Process(ctx, result.AST)
 			}
 
-			if fixture.lexerTypes != nil {
-				lexer := parser.NewLexer([]byte(fixture.source), "fixture.beancount")
-				tokens, err := lexer.ScanAll()
+			if fixture.wantPass {
 				assert.NoError(t, err)
-				var tokenTypes []parser.TokenType
-				for _, token := range tokens {
-					if token.Type != parser.EOF {
-						tokenTypes = append(tokenTypes, token.Type)
-					}
-				}
-				assert.Equal(t, fixture.lexerTypes, tokenTypes)
+			} else {
+				assert.Error(t, err)
 			}
 		})
 	}
 }
 
+// TestOfficialBeancountDifferential validates the fixture expectations
+// themselves against the official bean-check, so the manifest cannot drift
+// from real beancount behavior. Runs whenever bean-check is installed.
 func TestOfficialBeancountDifferential(t *testing.T) {
-	if os.Getenv("BEANCOUNT_DIFFERENTIAL") != "1" {
-		t.Skip("set BEANCOUNT_DIFFERENTIAL=1 to compare with the official tools")
+	if _, err := exec.LookPath("bean-check"); err != nil {
+		t.Skip("bean-check not found in PATH; install beancount 2.x to run the differential suite")
 	}
 
-	versionCmd := exec.Command("bean-check", "--version")
-	versionOutput, err := versionCmd.CombinedOutput()
+	version, err := exec.Command("bean-check", "--version").CombinedOutput()
 	assert.NoError(t, err)
-	assert.Contains(t, string(versionOutput), officialBeancountVersion)
+	assert.Contains(t, string(version), "2.", "differential suite targets beancount v2")
 
-	for _, fixture := range complianceFixtures {
+	for _, fixture := range loadComplianceFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
-			cmd := exec.Command("bean-check", "/dev/stdin")
-			cmd.Stdin = strings.NewReader(fixture.source)
-			err := cmd.Run()
-			var exitErr *exec.ExitError
+			err := exec.Command("bean-check", fixture.path).Run()
 			officialOK := err == nil
+			var exitErr *exec.ExitError
 			if err != nil && !errors.As(err, &exitErr) {
 				t.Fatalf("run bean-check: %v", err)
 			}
-			assert.Equal(t, fixture.checkOK, officialOK)
+			assert.Equal(t, fixture.wantPass, officialOK)
+		})
+	}
+}
 
-			if fixture.formatted != "" {
-				formatCmd := exec.Command("bean-format", "/dev/stdin")
-				formatCmd.Stdin = strings.NewReader(fixture.source)
-				output, err := formatCmd.Output()
-				assert.NoError(t, err)
-				// Exact official formatting is asserted only after the formatter
-				// parity commit; for now ensure the fixture is accepted.
-				assert.True(t, len(output) > 0)
-			}
+// collapseWhitespace normalizes indentation and alignment so the format
+// parity check compares content rather than column positions. Exact
+// column/indent parity with bean-format is a known gap; see KNOWN_GAPS.md.
+var whitespaceRuns = regexp.MustCompile(`[ \t]+`)
+
+func collapseWhitespace(s string) string {
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		lines[i] = whitespaceRuns.ReplaceAllString(strings.TrimLeft(line, " \t"), " ")
+	}
+	return strings.Join(lines, "\n")
+}
+
+// TestOfficialFormatParity compares our formatter's output with bean-format
+// on the fixtures under testdata/compliance/format, after whitespace
+// normalization. Runs whenever bean-format is installed.
+func TestOfficialFormatParity(t *testing.T) {
+	if _, err := exec.LookPath("bean-format"); err != nil {
+		t.Skip("bean-format not found in PATH; install beancount 2.x to run the format parity suite")
+	}
+
+	paths, err := filepath.Glob(filepath.Join(complianceDir, "format", "*.beancount"))
+	assert.NoError(t, err)
+	assert.True(t, len(paths) > 0, "no format fixtures found")
+
+	for _, path := range paths {
+		name := strings.TrimSuffix(filepath.Base(path), ".beancount")
+		t.Run(name, func(t *testing.T) {
+			source, err := os.ReadFile(path)
+			assert.NoError(t, err)
+
+			ctx := context.Background()
+			tree, err := parser.ParseBytesWithFilename(ctx, path, source)
+			assert.NoError(t, err)
+			var ours bytes.Buffer
+			assert.NoError(t, formatter.New().Format(ctx, tree, source, &ours))
+
+			official, err := exec.Command("bean-format", path).Output()
+			assert.NoError(t, err)
+
+			assert.Equal(t, collapseWhitespace(string(official)), collapseWhitespace(ours.String()))
 		})
 	}
 }

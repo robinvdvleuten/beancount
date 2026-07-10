@@ -1,0 +1,11 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-02 * "math"
+  Expenses:B  2 * 3.50 USD
+  Assets:A   -7.00 USD
+2020-01-03 * "parens and division"
+  Expenses:B  (10 + 4) / 2 USD
+  Assets:A   -7.00 USD
+2020-01-04 * "unary minus"
+  Expenses:B  -(-7.00) USD
+  Assets:A   -7.00 USD

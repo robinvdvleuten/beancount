@@ -1,0 +1,5 @@
+2020-01-01 open Assets:Café
+2020-01-01 open Expenses:Ausgaben:Bücher
+2020-01-02 * "unicode"
+  Expenses:Ausgaben:Bücher  5.00 EUR
+  Assets:Café              -5.00 EUR

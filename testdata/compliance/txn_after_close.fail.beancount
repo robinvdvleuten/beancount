@@ -1,0 +1,6 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-02-01 close Assets:A
+2020-03-01 * "use closed"
+  Expenses:B  1.00 USD
+  Assets:A   -1.00 USD

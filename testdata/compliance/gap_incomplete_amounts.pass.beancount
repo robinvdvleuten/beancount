@@ -1,0 +1,9 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:C
+2020-01-01 open Expenses:B
+2020-01-02 * "number without currency"
+  Expenses:B  1.00 USD
+  Assets:A   -1.00
+2020-01-03 * "currency without number"
+  Expenses:B  1.00 USD
+  Assets:A          USD

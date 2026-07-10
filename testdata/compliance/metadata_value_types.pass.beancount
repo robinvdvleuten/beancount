@@ -1,0 +1,16 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-02 * "metadata types"
+  mstring: "text"
+  maccount: Assets:A
+  mdate: 2020-06-01
+  mcurrency: USD
+  mtag: #some-tag
+  mbool: TRUE
+  mnone: NULL
+  mnumber: 42.5
+  mexpr: 2 * 21
+  mamount: 10.00 USD
+  memptyval:
+  Expenses:B  1.00 USD
+  Assets:A   -1.00 USD

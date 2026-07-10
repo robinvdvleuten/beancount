@@ -1,0 +1,5 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-02 * "c"
+  Expenses:B  1.00 MY-STOCK
+  Assets:A   -1.00 MY-STOCK

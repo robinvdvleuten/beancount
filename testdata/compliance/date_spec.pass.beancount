@@ -1,0 +1,13 @@
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Gains
+2020-02-01 * "buy lot 1"
+  Assets:Brokerage  10 HOOL {100.00 USD}
+  Assets:Cash      -1000.00 USD
+2020-03-01 * "buy lot 2"
+  Assets:Brokerage  10 HOOL {110.00 USD}
+  Assets:Cash      -1100.00 USD
+2020-04-01 * "sell by date"
+  Assets:Brokerage  -5 HOOL {2020-02-01}
+  Assets:Cash        600.00 USD
+  Income:Gains      -100.00 USD

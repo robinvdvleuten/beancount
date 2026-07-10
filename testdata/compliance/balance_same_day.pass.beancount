@@ -1,0 +1,9 @@
+2020-01-01 open Assets:A
+2020-01-01 open Income:I
+2020-03-01 * "earn"
+  Assets:A  100.00 USD
+  Income:I -100.00 USD
+2020-03-02 * "earn more"
+  Assets:A  50.00 USD
+  Income:I -50.00 USD
+2020-03-02 balance Assets:A 100.00 USD

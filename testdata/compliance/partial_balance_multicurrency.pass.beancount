@@ -1,0 +1,8 @@
+2020-01-01 open Assets:A
+2020-01-01 open Income:I
+2020-01-02 * "two currencies"
+  Assets:A  100.00 USD
+  Assets:A   50.00 EUR
+  Income:I -100.00 USD
+  Income:I  -50.00 EUR
+2020-01-03 balance Assets:A 100.00 USD

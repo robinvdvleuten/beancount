@@ -1,0 +1,5 @@
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+2020-01-02 * "compound per-unit # total"
+  Assets:Brokerage  10 HOOL {502.12 # 9.95 USD}
+  Assets:Cash      -5031.15 USD

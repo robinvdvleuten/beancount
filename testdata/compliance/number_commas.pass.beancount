@@ -1,0 +1,5 @@
+2020-01-01 open Assets:A
+2020-01-01 open Income:I
+2020-01-02 * "big"
+  Assets:A  1,234.56 USD
+  Income:I -1,234.56 USD
