@@ -107,6 +107,15 @@ type Formatter struct {
 	// Default: DefaultIndentation
 	Indentation int
 
+	// indentationExplicit is true when Indentation was set via WithIndentation;
+	// otherwise the posting indent follows the source (bean-format behavior).
+	indentationExplicit bool
+
+	// resolvedIndent is the posting indent used for this Format run: the most
+	// frequent posting indent found in the source (ties broken by the widest,
+	// matching bean-format), or Indentation when explicit or undeterminable.
+	resolvedIndent int
+
 	// StringEscapeStyle controls how strings are escaped in the output.
 	// Default: EscapeStyleCStyle
 	StringEscapeStyle StringEscapeStyle
@@ -161,10 +170,12 @@ func WithPreserveBlanks(preserve bool) Option {
 	}
 }
 
-// WithIndentation sets the indentation level for postings and metadata.
+// WithIndentation sets the indentation level for postings and metadata,
+// overriding the source-derived indent.
 func WithIndentation(indent int) Option {
 	return func(f *Formatter) {
 		f.Indentation = indent
+		f.indentationExplicit = true
 	}
 }
 
@@ -331,6 +342,46 @@ type astItem struct {
 	blankLine *ast.BlankLine
 }
 
+// resolveIndent returns the posting indent for a Format run. Unless an
+// explicit indentation was configured, it follows bean-format: the most
+// frequent posting indent in the source wins, with ties broken by the
+// widest indent.
+func (f *Formatter) resolveIndent(tree *ast.AST) int {
+	if f.indentationExplicit {
+		return f.Indentation
+	}
+
+	frequencies := make(map[int]int)
+	for _, directive := range tree.Directives {
+		txn, ok := directive.(*ast.Transaction)
+		if !ok {
+			continue
+		}
+		for _, posting := range txn.Postings {
+			if column := posting.Position().Column; column > 1 {
+				frequencies[column-1]++
+			}
+		}
+	}
+
+	indent, count := f.Indentation, 0
+	for width, frequency := range frequencies {
+		if frequency > count || (frequency == count && width > indent) {
+			indent, count = width, frequency
+		}
+	}
+	return indent
+}
+
+// postingIndent returns the resolved posting indent, falling back to the
+// configured indentation outside a Format run (e.g. FormatTransaction).
+func (f *Formatter) postingIndent() int {
+	if f.resolvedIndent > 0 {
+		return f.resolvedIndent
+	}
+	return f.Indentation
+}
+
 // getOriginalLine returns the original line from source by line number (1-indexed).
 // Returns empty string if line number is out of bounds.
 func (f *Formatter) getOriginalLine(lineNum int) string {
@@ -440,6 +491,7 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 
 	// Determine the currency column based on the configuration
 	widthTimer := collector.Start("formatter.width_calculation")
+	f.resolvedIndent = f.resolveIndent(tree)
 	if f.CurrencyColumn == 0 {
 		f.CurrencyColumn = f.determineCurrencyColumn(tree)
 	}
@@ -1130,7 +1182,7 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 		f.formatPosting(item.Posting, buf)
 	case item.Comment != nil:
 		if f.PreserveComments {
-			buf.WriteString(strings.Repeat(" ", f.Indentation))
+			buf.WriteString(strings.Repeat(" ", f.postingIndent()))
 			f.formatComment(item.Comment, buf)
 		}
 	case item.BlankLine != nil:
@@ -1142,9 +1194,10 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 
 // formatPosting formats a single posting with proper alignment.
 func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	buf.WriteString(strings.Repeat(" ", f.Indentation))
+	indent := f.postingIndent()
+	buf.WriteString(strings.Repeat(" ", indent))
 
-	currentWidth := f.Indentation
+	currentWidth := indent
 
 	if p.Flag != "" {
 		buf.WriteString(p.Flag)
@@ -1397,6 +1450,15 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 		// Skip inline metadata - it's already been formatted on the directive line
 		if m.Inline {
 			continue
+		}
+		// bean-format leaves metadata lines untouched; preserve the original
+		// line (indentation and spacing) whenever it is available.
+		if line := m.Position().Line; line > 0 && !f.linesWithMultipleItems[line] {
+			if original := f.getOriginalLine(line); original != "" && !hasOpenStringLiteral(original) {
+				buf.WriteString(original)
+				buf.WriteByte('\n')
+				continue
+			}
 		}
 		buf.WriteString(strings.Repeat(" ", f.Indentation))
 		buf.WriteString(m.Key)

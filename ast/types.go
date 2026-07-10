@@ -441,4 +441,12 @@ type Metadata struct {
 	// Inline is true if the metadata appeared on the same line as its owner
 	// (directive or posting), rather than on a separate indented line.
 	Inline bool
+
+	pos Position
 }
+
+// Position returns the source position of the metadata key.
+func (m *Metadata) Position() Position { return m.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (m *Metadata) SetPosition(pos Position) { m.pos = pos }

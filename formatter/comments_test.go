@@ -194,7 +194,8 @@ func TestFormatPreservesTransactionBodyCommentsAndBlankLines(t *testing.T) {
 	assert.True(t, before >= 0 && before < firstPosting)
 	assert.True(t, firstPosting < between && between < secondPosting)
 	assert.True(t, secondPosting < after)
-	assert.True(t, bytes.Contains([]byte(result), []byte("; comment between postings\n\n    Expenses:Food")))
+	// Postings keep the source's indent (2 spaces here), like bean-format.
+	assert.True(t, bytes.Contains([]byte(result), []byte("; comment between postings\n\n  Expenses:Food")))
 }
 
 func TestFormatCanDropTransactionBodyTrivia(t *testing.T) {

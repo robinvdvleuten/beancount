@@ -401,11 +401,13 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 		// Determine if this metadata is inline (on the same line as owner)
 		inline := ownerLine > 0 && keyTok.Line == ownerLine
 
-		metadata = append(metadata, &ast.Metadata{
+		md := &ast.Metadata{
 			Key:    keyTok.String(p.source),
 			Value:  value,
 			Inline: inline,
-		})
+		}
+		md.SetPosition(tokenPosition(keyTok, p.filename))
+		metadata = append(metadata, md)
 	}
 
 	return metadata, nil
