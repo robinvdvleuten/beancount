@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
@@ -74,10 +75,16 @@ func TestComplianceFixtures(t *testing.T) {
 			}
 
 			ctx := context.Background()
-			ldr := loader.New(loader.WithFollowIncludes())
+			ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
 			result, err := ldr.Load(ctx, fixture.path)
 			if err == nil {
 				err = ledger.New().Process(ctx, result.AST)
+			}
+			if err == nil {
+				// Fatal load diagnostics fail a check like validation errors do.
+				if loadErrs := diagnostic.Errors(result.Diagnostics); len(loadErrs) > 0 {
+					err = errors.Join(loadErrs...)
+				}
 			}
 
 			if fixture.wantPass {

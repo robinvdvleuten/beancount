@@ -201,7 +201,7 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 // Caller must NOT hold the mutex - this method acquires it internally.
 // Returns the old include files for comparison by the caller.
 func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err error) {
-	ldr := loader.New(loader.WithFollowIncludes())
+	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
 
 	result, err := ldr.Load(ctx, s.inputFile)
 	if err != nil {

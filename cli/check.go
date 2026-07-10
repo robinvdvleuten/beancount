@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -54,7 +55,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return fmt.Errorf("failed to read file for error context: %w", err)
 	}
 
-	ldr := loader.New(loader.WithFollowIncludes())
+	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
 		renderer := NewErrorRenderer(sourceContent)
@@ -67,8 +68,12 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
-	for _, warning := range loadResult.Diagnostics {
+	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
 		printInfof(ctx.Stderr, "%s", warning)
+	}
+	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
+	for _, loadErr := range loadErrors {
+		printError(ctx.Stderr, loadErr.Error())
 	}
 	ast := loadResult.AST
 
@@ -81,12 +86,18 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 			_, _ = fmt.Fprintln(ctx.Stderr, formatted)
 
 			_, _ = fmt.Fprintln(ctx.Stderr)
-			printError(ctx.Stderr, fmt.Sprintf("%d validation error(s) found", len(validationErrors.Errors)))
+			total := len(validationErrors.Errors) + len(loadErrors)
+			printError(ctx.Stderr, fmt.Sprintf("%d validation error(s) found", total))
 
 			reportTelemetry()
 			return NewCommandError(1)
 		}
 		return err
+	}
+
+	if len(loadErrors) > 0 {
+		reportTelemetry()
+		return NewCommandError(1)
 	}
 
 	printSuccess(ctx.Stdout, "Check passed")

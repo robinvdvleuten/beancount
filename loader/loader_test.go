@@ -492,6 +492,57 @@ include "included.beancount"
 	}
 }
 
+func TestDocumentsDiscovery(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	docDir := filepath.Join(tmpDir, "docs", "Assets", "Checking")
+	assert.NoError(t, os.MkdirAll(docDir, 0o755))
+	docFile := filepath.Join(docDir, "2020-03-14.statement.pdf")
+	assert.NoError(t, os.WriteFile(docFile, nil, 0o644))
+	// Files without a dated name, in unknown accounts, or at the root are skipped.
+	assert.NoError(t, os.WriteFile(filepath.Join(docDir, "notes.txt"), nil, 0o644))
+	unknownDir := filepath.Join(tmpDir, "docs", "Assets", "Unknown")
+	assert.NoError(t, os.MkdirAll(unknownDir, 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(unknownDir, "2020-03-14.x.pdf"), nil, 0o644))
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
+option "documents" "docs"
+2020-01-01 open Assets:Checking
+`), 0o644))
+
+	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(result.Diagnostics))
+
+	var docs []*ast.Document
+	for _, directive := range result.AST.Directives {
+		if doc, ok := directive.(*ast.Document); ok {
+			docs = append(docs, doc)
+		}
+	}
+	assert.Equal(t, 1, len(docs))
+	assert.Equal(t, "Assets:Checking", string(docs[0].Account))
+	assert.Equal(t, docFile, docs[0].PathToDocument.Value)
+	assert.Equal(t, "2020-03-14", docs[0].Date().String())
+}
+
+func TestDocumentsDiscoveryMissingRoot(t *testing.T) {
+	tmpDir := t.TempDir()
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
+option "documents" "no-such-dir"
+2020-01-01 open Assets:Checking
+`), 0o644))
+
+	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Diagnostics))
+	assert.Equal(t, diagnostic.SeverityError, diagnostic.SeverityOf(result.Diagnostics[0]))
+	var rootErr *DocumentRootError
+	assert.True(t, errors.As(result.Diagnostics[0], &rootErr))
+}
+
 func TestLoadPluginsMerged(t *testing.T) {
 	tmpDir := t.TempDir()
 

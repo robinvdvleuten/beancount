@@ -24,8 +24,11 @@ package loader
 import (
 	"context"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
@@ -62,6 +65,22 @@ func (w *IncludedOptionWarning) Severity() diagnostic.Severity {
 
 func (w *IncludedOptionWarning) GetPosition() ast.Position { return w.Option.Position() }
 
+// DocumentRootError reports a documents option pointing at a missing directory.
+type DocumentRootError struct {
+	Option *ast.Option
+	Dir    string
+}
+
+func (e *DocumentRootError) Error() string {
+	pos := e.Option.Position()
+	return fmt.Sprintf("%s:%d: Document root '%s' does not exist", pos.Filename, pos.Line, e.Dir)
+}
+
+// Severity is fatal: official beancount reports a missing document root as an error.
+func (e *DocumentRootError) Severity() diagnostic.Severity { return diagnostic.SeverityError }
+
+func (e *DocumentRootError) GetPosition() ast.Position { return e.Option.Position() }
+
 // Loader handles loading and parsing of Beancount files with optional include resolution.
 // It provides configurable behavior for handling include directives, supporting both simple
 // single-file parsing and recursive loading with file merging.
@@ -74,6 +93,12 @@ type Loader struct {
 	// When false, only the specified file is parsed and ast.Includes is preserved.
 	// When true, all included files are recursively loaded and merged into a single AST.
 	FollowIncludes bool
+
+	// DiscoverDocuments generates Document directives from the directory
+	// trees declared by the documents option, like beancount's default
+	// beancount.ops.documents plugin. Formatting-only consumers should
+	// leave this off: bean-format never runs document discovery.
+	DiscoverDocuments bool
 }
 
 // Option configures how files are loaded.
@@ -93,6 +118,14 @@ type Option func(*Loader)
 func WithFollowIncludes() Option {
 	return func(l *Loader) {
 		l.FollowIncludes = true
+	}
+}
+
+// WithDocumentsDiscovery enables generation of Document directives from the
+// directory trees declared by the documents option.
+func WithDocumentsDiscovery() Option {
+	return func(l *Loader) {
+		l.DiscoverDocuments = true
 	}
 }
 
@@ -134,10 +167,15 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 			// Wrap parser errors for consistent formatting
 			return nil, parser.NewParseErrorWithSource(filename, err, data)
 		}
+		var diagnostics []error
+		if l.DiscoverDocuments {
+			diagnostics = discoverDocuments(result, absPath)
+		}
 		return &LoadResult{
-			AST:      result,
-			Root:     absPath,
-			Includes: nil,
+			AST:         result,
+			Root:        absPath,
+			Includes:    nil,
+			Diagnostics: diagnostics,
 		}, nil
 	}
 
@@ -164,12 +202,87 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 		}
 	}
 
+	if l.DiscoverDocuments {
+		state.diagnostics = append(state.diagnostics, discoverDocuments(ast, absPath)...)
+	}
+
 	return &LoadResult{
 		AST:         ast,
 		Root:        absPath,
 		Includes:    includes,
 		Diagnostics: state.diagnostics,
 	}, nil
+}
+
+// documentFilenamePattern matches dated document filenames, using the same
+// expression as beancount's ops/documents.py (the separator after the date
+// is deliberately any character).
+var documentFilenamePattern = regexp.MustCompile(`^(\d\d\d\d)-(\d\d)-(\d\d).(.*)$`)
+
+// discoverDocuments generates Document directives from the directory trees
+// declared by the documents option, mirroring beancount's default
+// beancount.ops.documents plugin: directories resolve relative to the root
+// ledger file, dated files under account-shaped subpaths become Document
+// directives for accounts the ledger mentions, and a missing root directory
+// is a fatal diagnostic.
+func discoverDocuments(tree *ast.AST, rootFile string) []error {
+	var diagnostics []error
+	var accounts map[string]bool
+
+	for _, option := range tree.Options {
+		if option.Name.Value != "documents" {
+			continue
+		}
+
+		dir := option.Value.Value
+		if !filepath.IsAbs(dir) {
+			dir = filepath.Join(filepath.Dir(rootFile), dir)
+		}
+		dir = filepath.Clean(dir)
+
+		info, err := os.Stat(dir)
+		if err != nil || !info.IsDir() {
+			diagnostics = append(diagnostics, &DocumentRootError{Option: option, Dir: dir})
+			continue
+		}
+
+		if accounts == nil {
+			accounts = tree.Enrich().Accounts
+		}
+
+		_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil || entry.IsDir() {
+				return nil
+			}
+			match := documentFilenamePattern.FindStringSubmatch(entry.Name())
+			if match == nil {
+				return nil
+			}
+			relDir, err := filepath.Rel(dir, filepath.Dir(path))
+			if err != nil || relDir == "." {
+				return nil
+			}
+			accountName := strings.ReplaceAll(relDir, string(filepath.Separator), ":")
+			if !accounts[accountName] {
+				return nil // Like beancount's non-strict mode: skip unknown accounts.
+			}
+			date, err := ast.NewDate(fmt.Sprintf("%s-%s-%s", match[1], match[2], match[3]))
+			if err != nil {
+				return nil
+			}
+
+			doc := &ast.Document{
+				Account:        ast.Account(accountName),
+				PathToDocument: ast.NewRawString(path),
+			}
+			doc.SetDate(date)
+			doc.SetPosition(ast.Position{Filename: rootFile})
+			tree.Directives = append(tree.Directives, doc)
+			return nil
+		})
+	}
+
+	return diagnostics
 }
 
 // MustLoad loads a beancount file, panicking on error.
