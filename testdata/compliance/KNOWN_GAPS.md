@@ -11,11 +11,14 @@ them. Closing a gap means making the fixture pass and renaming it to drop the
 None. Every `.pass`/`.fail` fixture in this directory agrees with
 `bean-check` 2.3.x; the differential suite enforces it.
 
-## Deviations without fixtures
+## Deliberate deviations
 
 - **AVERAGE booking**: official v2 *rejects* AVERAGE at reduction time
-  ("AVERAGE method is not supported"); we implement average-cost merging.
-  Deviation by excess, kept deliberately (matches the v3 direction).
+  ("AVERAGE method is not supported"); we implement average-cost merging
+  via the `{*}` merge spec. Deviation by excess, kept deliberately (matches
+  the v3 direction). The `average_account.fail` fixture pins the common
+  ground: an ambiguous reduction under AVERAGE fails in both
+  implementations (with different messages), so check exit codes agree.
 
 ## Declared non-goals
 
