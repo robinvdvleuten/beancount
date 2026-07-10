@@ -46,10 +46,12 @@ func validateDateRange(date *ast.Date) error {
 // postingClassification groups postings by their characteristics
 // This makes the processing logic clearer and prevents misclassification
 type postingClassification struct {
-	withAmounts      []*ast.Posting
-	withoutAmounts   []*ast.Posting
-	withEmptyCosts   []*ast.Posting
-	withExplicitCost []*ast.Posting
+	withAmounts       []*ast.Posting
+	withoutAmounts    []*ast.Posting
+	incompleteAmounts []*ast.Posting // amount present but missing number or currency
+	incompletePrices  []*ast.Posting // complete amount, price annotation missing number or currency
+	withEmptyCosts    []*ast.Posting
+	withExplicitCost  []*ast.Posting
 }
 
 // validateAccountsOpen checks all posting accounts are open at transaction date.
@@ -92,7 +94,7 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 func (v *validator) validateAmounts(txn *ast.Transaction) []error {
 	var errs []error
 	for _, posting := range txn.Postings {
-		if posting.Amount == nil {
+		if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
 			continue // Will be inferred, checked later
 		}
 		if _, err := ParseAmount(posting.Amount); err != nil {
@@ -268,8 +270,8 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 func (v *validator) validatePrices(txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
-		if posting.Price == nil {
-			continue // No price specification
+		if posting.Price == nil || isIncompleteAmount(posting.Price) {
+			continue // Absent or interpolated price specification
 		}
 
 		// Validate price amount
@@ -345,14 +347,27 @@ func validateMetadataEntries(
 	return errs
 }
 
+// isIncompleteAmount reports whether an amount omits its number or currency
+// (official grammar: incomplete_amount); interpolation completes it.
+func isIncompleteAmount(a *ast.Amount) bool {
+	return a != nil && (a.Value == "" || a.Currency == "")
+}
+
 // classifyPostings categorizes postings for different processing paths
 func classifyPostings(postings []*ast.Posting) postingClassification {
 	var pc postingClassification
 	for _, posting := range postings {
-		if posting.Amount == nil {
+		switch {
+		case posting.Amount == nil:
 			pc.withoutAmounts = append(pc.withoutAmounts, posting)
-		} else {
+		case isIncompleteAmount(posting.Amount):
+			pc.incompleteAmounts = append(pc.incompleteAmounts, posting)
+		default:
 			pc.withAmounts = append(pc.withAmounts, posting)
+
+			if posting.Price != nil && isIncompleteAmount(posting.Price) {
+				pc.incompletePrices = append(pc.incompletePrices, posting)
+			}
 
 			// Cost specs without an amount (empty {} or date/label-only)
 			// need their cost resolved from booked lots or inferred.
@@ -381,6 +396,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// booking (e.g. NONE booking); their cost must be inferred from the residual.
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
 	for _, posting := range pc.withAmounts {
+		// A partial price annotation leaves the posting's weight unknown;
+		// it is resolved from the residual during interpolation below.
+		if posting.Price != nil && isIncompleteAmount(posting.Price) {
+			continue
+		}
+
 		weights, err := calculateWeights(posting)
 		if err != nil {
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
@@ -417,11 +438,79 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	delta := &TransactionDelta{
 		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
 		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
+		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
 	}
 
-	// An unresolved cost and a missing amount are two unknowns; beancount
-	// reports "too many missing numbers" and cannot interpolate.
-	if len(unresolvedEmptyCosts) > 0 && len(pc.withoutAmounts) > 0 {
+	// A number-only amount or price is not a missing number in beancount:
+	// only its currency is inferred, from the single currency in use. Their
+	// weights are known, so resolve them before counting unknowns.
+	var currencyOnlyAmounts []*ast.Posting
+	for _, posting := range pc.incompleteAmounts {
+		if posting.Amount.Value == "" {
+			currencyOnlyAmounts = append(currencyOnlyAmounts, posting)
+			continue
+		}
+		if len(balance) != 1 {
+			return delta, unbalancedValidation(balance), nil
+		}
+		number, nerr := decimal.NewFromString(posting.Amount.Value)
+		if nerr != nil {
+			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, nerr))
+			return nil, nil, errs
+		}
+		for currency := range balance {
+			delta.InferredAmounts[posting] = &ast.Amount{
+				Value:    posting.Amount.Value,
+				Currency: currency,
+			}
+			balance[currency] = balance[currency].Add(number)
+		}
+	}
+
+	var valuelessPrices []*ast.Posting
+	for _, posting := range pc.incompletePrices {
+		if posting.Price.Value == "" {
+			valuelessPrices = append(valuelessPrices, posting)
+			continue
+		}
+		units, uerr := ParseAmount(posting.Amount)
+		if uerr != nil {
+			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr))
+			return nil, nil, errs
+		}
+		priceNumber, perr := decimal.NewFromString(posting.Price.Value)
+		if perr != nil {
+			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Price.Value, perr))
+			return nil, nil, errs
+		}
+		currency := posting.Price.Currency
+		if currency == "" {
+			if len(balance) != 1 {
+				return delta, unbalancedValidation(balance), nil
+			}
+			for c := range balance {
+				currency = c
+			}
+		}
+		weight := units.Mul(priceNumber)
+		if posting.PriceTotal {
+			weight = priceNumber
+			if units.IsNegative() {
+				weight = priceNumber.Neg()
+			}
+		}
+		delta.InferredPrices[posting] = &ast.Amount{Value: posting.Price.Value, Currency: currency}
+		balance[currency] = balance[currency].Add(weight)
+	}
+
+	// Beancount interpolates at most one missing number per transaction;
+	// more unknowns (missing amounts, currency-only amounts, value-less
+	// prices, or an unresolved cost) are "too many missing numbers".
+	unknowns := len(pc.withoutAmounts) + len(currencyOnlyAmounts) + len(valuelessPrices)
+	if unknowns > 0 && len(unresolvedEmptyCosts) > 0 {
+		return delta, unbalancedValidation(balance), nil
+	}
+	if unknowns > 1 {
 		return delta, unbalancedValidation(balance), nil
 	}
 
@@ -449,9 +538,49 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			return delta, unbalancedValidation(balance), nil
 		}
 		// else: len(balance) == 0 means already balanced, no inference needed
-	} else if len(pc.withoutAmounts) > 1 {
-		// Multiple postings without amounts - ambiguous, can't infer
-		return delta, unbalancedValidation(balance), nil
+	}
+
+	// Complete a currency-only amount: the missing number is the residual
+	// of its declared currency.
+	if len(currencyOnlyAmounts) == 1 {
+		posting := currencyOnlyAmounts[0]
+		currency := posting.Amount.Currency
+		needed := balance[currency].Neg()
+		delta.InferredAmounts[posting] = &ast.Amount{
+			Value:    needed.String(),
+			Currency: currency,
+		}
+		balance[currency] = balance[currency].Add(needed)
+	}
+
+	// Complete a value-less price annotation (bare @ or currency-only): the
+	// posting's weight is whatever zeroes the residual, and the price is
+	// derived from it.
+	if len(valuelessPrices) == 1 {
+		posting := valuelessPrices[0]
+		units, err := ParseAmount(posting.Amount)
+		if err != nil {
+			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
+			return nil, nil, errs
+		}
+
+		currency := posting.Price.Currency
+		if currency == "" {
+			if len(balance) != 1 {
+				return delta, unbalancedValidation(balance), nil
+			}
+			for c := range balance {
+				currency = c
+			}
+		}
+
+		weight := balance[currency].Neg()
+		priceNumber := weight.Abs()
+		if !posting.PriceTotal && !units.IsZero() {
+			priceNumber = weight.Div(units).Abs()
+		}
+		delta.InferredPrices[posting] = &ast.Amount{Value: priceNumber.String(), Currency: currency}
+		balance[currency] = balance[currency].Add(weight)
 	}
 
 	// Infer costs for empty cost specs {}

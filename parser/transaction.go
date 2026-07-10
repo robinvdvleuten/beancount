@@ -199,15 +199,13 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	}
 	posting.Account = account
 
-	// Optional amount (either NUMBER or parenthesized expression)
-	hasAmount := p.check(NUMBER) || p.check(EXPRESSION) || p.isExpressionStartToken(p.peek())
-	if hasAmount {
-		amount, err := p.parseAmount()
-		if err != nil {
-			return nil, err
-		}
-		posting.Amount = amount
+	// Optional amount; number, currency, or both may be absent and are
+	// completed by interpolation (official grammar: incomplete_amount).
+	amount, err := p.parseIncompleteAmount(postingLine)
+	if err != nil {
+		return nil, err
 	}
+	posting.Amount = amount
 
 	// Optional cost specification
 	if p.check(LBRACE) || p.check(LDBRACE) {
@@ -218,27 +216,19 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 		posting.Cost = cost
 	}
 
-	// Optional price (@ or @@)
-	if p.match(ATAT) {
-		// Total price (@@)
-		posting.PriceTotal = true
+	// Optional price (@ or @@). The annotation may be empty or partial
+	// (bare "@", number-only, currency-only); interpolation completes it.
+	if isTotal := p.match(ATAT); isTotal || p.match(AT) {
+		posting.PriceTotal = isTotal
 
-		// Parse price amount
-		amount, err := p.parseAmount()
+		price, err := p.parseIncompleteAmount(postingLine)
 		if err != nil {
 			return nil, err
 		}
-		posting.Price = amount
-	} else if p.match(AT) {
-		// Unit price (@)
-		posting.PriceTotal = false
-
-		// Parse price amount
-		amount, err := p.parseAmount()
-		if err != nil {
-			return nil, err
+		if price == nil {
+			price = &ast.Amount{}
 		}
-		posting.Price = amount
+		posting.Price = price
 	}
 
 	metadata, err := p.finishMetadataLine(posting, postingLine)

@@ -70,6 +70,29 @@ func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool
 	return ast.NewAmountWithRaw(raw, value, currency)
 }
 
+// parseIncompleteAmount parses posting amounts where the number, the currency,
+// or both may be absent (official grammar: maybe_number maybe_currency).
+// Interpolation completes the missing part during validation. Returns nil
+// when neither part is present on the given line.
+func (p *Parser) parseIncompleteAmount(line int) (*ast.Amount, error) {
+	if p.check(NUMBER) || p.check(EXPRESSION) || p.isExpressionStartToken(p.peek()) {
+		valueTok, isExpression, value, err := p.parseAmountValueToken()
+		if err != nil {
+			return nil, err
+		}
+		if p.check(IDENT) && p.peek().Line == line {
+			return p.amountFromValueToken(valueTok, p.advance(), isExpression, value), nil
+		}
+		return ast.NewAmountWithRaw(valueTok.String(p.source), value, ""), nil
+	}
+
+	if p.check(IDENT) && p.peek().Line == line {
+		return ast.NewAmount("", p.internCurrency(p.advance())), nil
+	}
+
+	return nil, nil
+}
+
 func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
 	tok := p.peek()
 	if tok.Type == ILLEGAL && p.isExpressionStartToken(tok) {

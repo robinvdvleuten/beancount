@@ -25,11 +25,10 @@ func TestErrorPositioning(t *testing.T) {
 		expectedMsg  string
 	}{
 		{
-			name: "missing currency after number",
-			source: `2023-01-01 * "test"
-    Assets:Checking    100.00
-    Expenses:Food`,
-			expectedLine: 2,
+			name: "missing currency in balance amount",
+			source: `2023-01-01 balance Assets:Checking 100.00
+`,
+			expectedLine: 1,
 			expectedMsg:  "expected currency",
 		},
 		{

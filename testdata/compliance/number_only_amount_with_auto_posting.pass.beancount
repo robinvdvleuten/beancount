@@ -1,0 +1,7 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-01 open Income:I
+2020-01-02 * "number-only plus auto posting"
+  Expenses:B  10.00 USD
+  Assets:A   -10.00
+  Income:I

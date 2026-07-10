@@ -1169,10 +1169,16 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 			} else {
 				buf.WriteString(" @")
 			}
-			buf.WriteByte(' ')
-			buf.WriteString(amountDisplayValue(p.Price))
-			buf.WriteByte(' ')
-			buf.WriteString(p.Price.Currency)
+			// Partial annotations (bare @, number-only, currency-only) print
+			// only the components present in the source.
+			if value := amountDisplayValue(p.Price); value != "" {
+				buf.WriteByte(' ')
+				buf.WriteString(value)
+			}
+			if p.Price.Currency != "" {
+				buf.WriteByte(' ')
+				buf.WriteString(p.Price.Currency)
+			}
 		}
 	}
 

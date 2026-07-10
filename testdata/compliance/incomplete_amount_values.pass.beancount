@@ -1,0 +1,9 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-02 * "missing currency inferred as USD"
+  Expenses:B  1.00 USD
+  Assets:A   -1.00
+2020-01-03 * "missing number inferred from residual"
+  Expenses:B  2.50 USD
+  Assets:A          USD
+2020-01-04 balance Assets:A -3.50 USD

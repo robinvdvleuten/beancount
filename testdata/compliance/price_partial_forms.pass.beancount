@@ -1,0 +1,11 @@
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euros
+2020-01-02 * "currency-only price annotation"
+  Assets:Euros  100.00 EUR @ USD
+  Assets:Cash  -110.00 USD
+2020-01-03 * "number-only price annotation"
+  Assets:Euros  100.00 EUR @ 1.10
+  Assets:Cash  -110.00 USD
+2020-01-04 * "bare total price"
+  Assets:Euros  100.00 EUR @@
+  Assets:Cash  -110.00 USD

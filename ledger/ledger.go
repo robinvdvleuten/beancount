@@ -769,6 +769,9 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 		posting.Cost.Amount = amount
 		posting.Cost.Inferred = true
 	}
+	for posting, price := range delta.InferredPrices {
+		posting.Price = price
+	}
 
 	for _, posting := range txn.Postings {
 		if posting.Amount == nil {

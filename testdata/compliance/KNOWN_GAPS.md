@@ -8,10 +8,8 @@ them. Closing a gap means making the fixture pass and renaming it to drop the
 
 ## Open gaps (fixture-backed)
 
-| Gap | Fixture | Official behavior |
-|-----|---------|-------------------|
-| Incomplete amounts (`Assets:A -1.00` without currency, `Assets:A USD` without number) | `gap_incomplete_amounts` | Parsed and completed by interpolation |
-| Bare price annotation (`100.00 EUR @`) | `gap_empty_price_annotation` | Price interpolated from the residual |
+None. Every `.pass`/`.fail` fixture in this directory agrees with
+`bean-check` 2.3.x; the differential suite enforces it.
 
 ## Deviations without fixtures
 
