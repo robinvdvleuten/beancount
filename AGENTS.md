@@ -92,6 +92,8 @@ context7_get_library_docs(context7CompatibleLibraryID: "/shopspring/decimal", to
 
 When changing Beancount semantics, parsing, lexing, formatting, or query behavior, validate against the relevant official tools: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Purely internal refactors and unrelated infrastructure changes do not require an official-tool comparison.
 
+The differential suite in `cli/compliance_test.go` runs every fixture in `testdata/compliance/` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`). Add a fixture (`<name>.pass.beancount` / `<name>.fail.beancount`) for any semantics change; known divergences are documented in `testdata/compliance/KNOWN_GAPS.md`.
+
 ```bash
 # Debug parser / lexer issues or inconsistencies
 bean-doctor lex input.beancount
@@ -159,13 +161,12 @@ Directives dispatch via `handlerRegistry` map (DirectiveKind → Handler), not s
 
 ```go
 var handlerRegistry = map[ast.DirectiveKind]Handler{
-    ast.KindTransaction: &TransactionHandler{}, // ... 11 total
+    ast.KindTransaction: &TransactionHandler{}, // ... 12 total
 }
 
 type TransactionHandler struct{}
 func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
-    cfg := ConfigFromContext(ctx)
-    v := newValidator(l.accounts, cfg) // Stable read-only lookup; do not copy via Accounts().
+    v := newValidator(l.accounts, l.config) // Stable read-only lookup; do not copy via Accounts().
     return v.validateTransaction(ctx, d.(*ast.Transaction))
 }
 func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
@@ -260,10 +261,13 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 | **ast** | All AST node types, `Directive` interface. Use functional options for builders. |
 | **parser** | Parsing only, returns `*ast.AST`. No type definitions. |
 | **formatter** | Use `runewidth.StringWidth()` for display width. Preserve comments/blanks. |
-| **ledger** | `decimal.Decimal` for amounts. Validation errors have `Pos`/`Directive` fields. |
-| **loader** | Recursive includes with deduplication by absolute path. |
+| **ledger** | `decimal.Decimal` for amounts. Validation errors have `Pos`/`Directive` fields. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `AVERAGE`. |
+| **loader** | Recursive includes with deduplication by absolute path. Non-fatal issues go to `LoadResult.Diagnostics`. |
+| **config** | Beancount option parsing and typed processing configuration. Unknown option names are rejected (bean-check parity). |
+| **diagnostic** | Severity classification (`SeverityError`/`SeverityWarning`) for errors from loading and validation. Warnings never affect exit codes. |
 | **web** | **Local dev only**. Bind to localhost. No auth. Path traversal protection. |
-| **errors** | Formatting infrastructure. `TextFormatter` for CLI, `JSONFormatter` for APIs. |
+
+Error *formatting* (text for CLI, JSON for APIs) lives in `cli/errors.go`.
 
 ## Frontend (assets/)
 
