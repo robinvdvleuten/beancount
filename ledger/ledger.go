@@ -102,6 +102,7 @@ func New() *Ledger {
 	return &Ledger{
 		graph:       NewGraph(),
 		accounts:    make(map[string]*Account),
+		config:      NewConfig(),
 		errors:      make([]error, 0),
 		padEntries:  make(map[string]*ast.Pad),
 		usedPads:    make(map[string]bool),
@@ -151,8 +152,6 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		cfg = NewConfig() // Use defaults if parsing fails
 	}
 	l.config = cfg
-	// Attach config to context for use throughout processing
-	ctx = cfg.WithContext(ctx)
 
 	// Process directives in semantic date order.
 	processTimer := collector.StartStructured(telemetry.TimerConfig{

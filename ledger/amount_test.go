@@ -48,10 +48,10 @@ func TestInferTolerance(t *testing.T) {
 			amounts:  []string{"100.00"},
 			currency: "USD",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"*": decimal.NewFromFloat(0.005),
 				},
-				multiplier: decimal.NewFromFloat(0.6),
+				Multiplier: decimal.NewFromFloat(0.6),
 			},
 			wantTol: "0.006", // 10^-2 * 0.6 = 0.006
 		},
@@ -74,10 +74,10 @@ func TestInferTolerance(t *testing.T) {
 			amounts:  []string{"100.00"},
 			currency: "USD",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"USD": decimal.NewFromFloat(0.02),
 				},
-				multiplier: decimal.NewFromFloat(0.5),
+				Multiplier: decimal.NewFromFloat(0.5),
 			},
 			wantTol: "0.02", // max(inferred 0.005, default 0.02)
 		},
@@ -93,10 +93,10 @@ func TestInferTolerance(t *testing.T) {
 			amounts:  []string{"100", "200"},
 			currency: "USD",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"USD": decimal.NewFromFloat(0.5),
 				},
-				multiplier: decimal.NewFromFloat(0.5),
+				Multiplier: decimal.NewFromFloat(0.5),
 			},
 			wantTol: "0.5",
 		},
@@ -105,11 +105,11 @@ func TestInferTolerance(t *testing.T) {
 			amounts:  []string{},
 			currency: "USD",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"USD": decimal.NewFromFloat(0.003),
 					"*":   decimal.NewFromFloat(0.005),
 				},
-				multiplier: decimal.NewFromFloat(0.5),
+				Multiplier: decimal.NewFromFloat(0.5),
 			},
 			wantTol: "0.003", // Currency-specific default
 		},
@@ -134,7 +134,7 @@ func TestInferTolerance(t *testing.T) {
 	}
 }
 
-func TestGetDefaultTolerance(t *testing.T) {
+func TestGetDefault(t *testing.T) {
 	tests := []struct {
 		name     string
 		config   *ToleranceConfig
@@ -150,12 +150,12 @@ func TestGetDefaultTolerance(t *testing.T) {
 		{
 			name: "currency-specific default",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"USD": decimal.NewFromFloat(0.003),
 					"EUR": decimal.NewFromFloat(0.002),
 					"*":   decimal.NewFromFloat(0.005),
 				},
-				multiplier: decimal.NewFromFloat(0.5),
+				Multiplier: decimal.NewFromFloat(0.5),
 			},
 			currency: "USD",
 			want:     "0.003",
@@ -163,11 +163,11 @@ func TestGetDefaultTolerance(t *testing.T) {
 		{
 			name: "wildcard default",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"USD": decimal.NewFromFloat(0.003),
 					"*":   decimal.NewFromFloat(0.005),
 				},
-				multiplier: decimal.NewFromFloat(0.5),
+				Multiplier: decimal.NewFromFloat(0.5),
 			},
 			currency: "CAD",
 			want:     "0.005",
@@ -175,10 +175,10 @@ func TestGetDefaultTolerance(t *testing.T) {
 		{
 			name: "no wildcard - final fallback",
 			config: &ToleranceConfig{
-				defaults: map[string]decimal.Decimal{
+				Defaults: map[string]decimal.Decimal{
 					"USD": decimal.NewFromFloat(0.003),
 				},
-				multiplier: decimal.NewFromFloat(0.5),
+				Multiplier: decimal.NewFromFloat(0.5),
 			},
 			currency: "EUR",
 			want:     "0",
@@ -187,11 +187,11 @@ func TestGetDefaultTolerance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := tt.config.GetDefaultTolerance(tt.currency)
+			got := tt.config.GetDefault(tt.currency)
 			want, err := decimal.NewFromString(tt.want)
 			assert.NoError(t, err, "failed to parse expected tolerance %q", tt.want)
 
-			assert.True(t, got.Equal(want), "GetDefaultTolerance() mismatch: got %s, want %s", got, want)
+			assert.True(t, got.Equal(want), "GetDefault() mismatch: got %s, want %s", got, want)
 		})
 	}
 }
@@ -200,7 +200,7 @@ func TestNewToleranceConfig(t *testing.T) {
 	config := NewToleranceConfig()
 
 	assert.True(t, config != nil, "NewToleranceConfig() should not return nil")
-	assert.Equal(t, decimal.NewFromFloat(0.5), config.multiplier)
-	assert.Equal(t, 0, len(config.defaults))
-	assert.False(t, config.inferFromCost)
+	assert.Equal(t, decimal.NewFromFloat(0.5), config.Multiplier)
+	assert.Equal(t, 0, len(config.Defaults))
+	assert.False(t, config.InferFromCost)
 }

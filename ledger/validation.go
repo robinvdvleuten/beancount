@@ -1127,7 +1127,7 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 		// Beancount allows twice the multiplier on balance and pad assertions,
 		// as user-provided balances may be rounded further off than the amounts
 		// within a single transaction (see beancount ops/balance.py).
-		return decimal.New(1, exp).Mul(v.config.Tolerance.multiplier).Mul(decimal.NewFromInt(2)), nil
+		return decimal.New(1, exp).Mul(v.config.Tolerance.Multiplier).Mul(decimal.NewFromInt(2)), nil
 	}
 	return ParseAmount(balance.Tolerance)
 }

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/shopspring/decimal"
 )
 
@@ -40,24 +41,13 @@ func MustParseAmount(amount *ast.Amount) decimal.Decimal {
 	return d
 }
 
-// ToleranceConfig holds configuration for tolerance inference
-type ToleranceConfig struct {
-	// defaults maps currency to default tolerance (supports "*" wildcard)
-	defaults map[string]decimal.Decimal
-	// multiplier is applied to inferred tolerance (default 0.5)
-	multiplier decimal.Decimal
-	// inferFromCost includes costs/prices in tolerance inference
-	inferFromCost bool
-}
+// ToleranceConfig aliases the shared tolerance configuration.
+type ToleranceConfig = sharedconfig.Tolerance
 
 // NewToleranceConfig creates a default tolerance configuration
 // Default: no configured default tolerances, 0.5 multiplier
 func NewToleranceConfig() *ToleranceConfig {
-	return &ToleranceConfig{
-		defaults:      make(map[string]decimal.Decimal),
-		multiplier:    decimal.NewFromFloat(0.5),
-		inferFromCost: false,
-	}
+	return sharedconfig.NewTolerance()
 }
 
 // InferTolerance calculates tolerance from amount precision.
@@ -82,7 +72,7 @@ func InferTolerance(amounts []decimal.Decimal, currency string, config *Toleranc
 			continue // Integer precision does not contribute
 		}
 
-		tolerance := decimal.New(1, exp).Mul(config.multiplier)
+		tolerance := decimal.New(1, exp).Mul(config.Multiplier)
 		if !foundAny || tolerance.GreaterThan(inferred) {
 			inferred = tolerance
 			foundAny = true
@@ -90,36 +80,15 @@ func InferTolerance(amounts []decimal.Decimal, currency string, config *Toleranc
 	}
 
 	if !foundAny {
-		return config.GetDefaultTolerance(currency)
+		return config.GetDefault(currency)
 	}
 
 	// The currency-specific configured default participates in the maximum.
-	if def, ok := config.defaults[currency]; ok && def.GreaterThan(inferred) {
+	if def, ok := config.Defaults[currency]; ok && def.GreaterThan(inferred) {
 		return def
 	}
 
 	return inferred
-}
-
-// GetDefaultTolerance returns the default tolerance for a currency
-// Checks currency-specific default first, then wildcard "*"
-func (c *ToleranceConfig) GetDefaultTolerance(currency string) decimal.Decimal {
-	if c == nil {
-		return decimal.Zero
-	}
-
-	// Check currency-specific default
-	if tolerance, ok := c.defaults[currency]; ok {
-		return tolerance
-	}
-
-	// Fall back to wildcard
-	if tolerance, ok := c.defaults["*"]; ok {
-		return tolerance
-	}
-
-	// Final fallback
-	return decimal.Zero
 }
 
 // AmountEqual checks if two amounts are equal within tolerance

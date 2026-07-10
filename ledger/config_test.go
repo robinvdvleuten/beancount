@@ -19,9 +19,9 @@ func TestConfigFromOptions(t *testing.T) {
 			options: map[string][]string{},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.Equal(t, decimal.NewFromFloat(0.5), config.Tolerance.multiplier)
-				assert.Equal(t, 0, len(config.Tolerance.defaults))
-				assert.False(t, config.Tolerance.inferFromCost)
+				assert.Equal(t, decimal.NewFromFloat(0.5), config.Tolerance.Multiplier)
+				assert.Equal(t, 0, len(config.Tolerance.Defaults))
+				assert.False(t, config.Tolerance.InferFromCost)
 				assert.Equal(t, "STRICT", config.BookingMethod)
 			},
 		},
@@ -32,7 +32,7 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.Equal(t, decimal.NewFromFloat(0.6), config.Tolerance.multiplier)
+				assert.Equal(t, decimal.NewFromFloat(0.6), config.Tolerance.Multiplier)
 			},
 		},
 		{
@@ -42,7 +42,7 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.Equal(t, decimal.NewFromFloat(0.001), config.Tolerance.defaults["*"])
+				assert.Equal(t, decimal.NewFromFloat(0.001), config.Tolerance.Defaults["*"])
 			},
 		},
 		{
@@ -52,8 +52,8 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.Equal(t, decimal.NewFromFloat(0.003), config.Tolerance.defaults["USD"])
-				_, ok := config.Tolerance.defaults["*"]
+				assert.Equal(t, decimal.NewFromFloat(0.003), config.Tolerance.Defaults["USD"])
+				_, ok := config.Tolerance.Defaults["*"]
 				assert.False(t, ok)
 			},
 		},
@@ -64,7 +64,7 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.True(t, config.Tolerance.inferFromCost)
+				assert.True(t, config.Tolerance.InferFromCost)
 			},
 		},
 		{
@@ -74,7 +74,7 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.False(t, config.Tolerance.inferFromCost)
+				assert.False(t, config.Tolerance.InferFromCost)
 			},
 		},
 		{
@@ -87,9 +87,9 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.Equal(t, decimal.NewFromFloat(0.75), config.Tolerance.multiplier)
-				assert.Equal(t, decimal.NewFromFloat(0.002), config.Tolerance.defaults["EUR"])
-				assert.True(t, config.Tolerance.inferFromCost)
+				assert.Equal(t, decimal.NewFromFloat(0.75), config.Tolerance.Multiplier)
+				assert.Equal(t, decimal.NewFromFloat(0.002), config.Tolerance.Defaults["EUR"])
+				assert.True(t, config.Tolerance.InferFromCost)
 				assert.Equal(t, "AVERAGE", config.BookingMethod)
 			},
 		},
@@ -138,10 +138,10 @@ func TestConfigFromOptions(t *testing.T) {
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
-				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.defaults["USD"])
-				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.defaults["EUR"])
-				assert.Equal(t, decimal.NewFromFloat(0.0001), config.Tolerance.defaults["BTC"])
-				_, ok := config.Tolerance.defaults["*"]
+				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.Defaults["USD"])
+				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.Defaults["EUR"])
+				assert.Equal(t, decimal.NewFromFloat(0.0001), config.Tolerance.Defaults["BTC"])
+				_, ok := config.Tolerance.Defaults["*"]
 				assert.False(t, ok)
 			},
 		},

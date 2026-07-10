@@ -31,7 +31,7 @@ type OpenHandler struct{}
 
 func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	open := d.(*ast.Open)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	return v.validateOpen(ctx, open)
 }
@@ -39,7 +39,7 @@ func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) 
 func (h *OpenHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	open := d.(*ast.Open)
 	openDelta := delta.(*OpenDelta)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	l.applyOpen(open, openDelta, cfg)
 }
 
@@ -48,7 +48,7 @@ type CloseHandler struct{}
 
 func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	close := d.(*ast.Close)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs, delta := v.validateClose(ctx, close)
 	return errs, delta
@@ -64,7 +64,7 @@ type TransactionHandler struct{}
 
 func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	txn := d.(*ast.Transaction)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	return v.validateTransaction(ctx, txn)
 }
@@ -80,7 +80,7 @@ type BalanceHandler struct{}
 
 func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	balance := d.(*ast.Balance)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 
 	// Basic validation
@@ -122,7 +122,7 @@ type PadHandler struct{}
 
 func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	pad := d.(*ast.Pad)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validatePad(pad)
 	return errs, pad
@@ -139,7 +139,7 @@ type NoteHandler struct{}
 
 func (h *NoteHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	note := d.(*ast.Note)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validateNote(note)
 	return errs, nil
@@ -154,7 +154,7 @@ type DocumentHandler struct{}
 
 func (h *DocumentHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	doc := d.(*ast.Document)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validateDocument(doc)
 	return errs, nil
@@ -184,7 +184,7 @@ type CommodityHandler struct{}
 
 func (h *CommodityHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	commodity := d.(*ast.Commodity)
-	cfg := ConfigFromContext(ctx)
+	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validateCommodity(commodity)
 	if len(errs) > 0 {
