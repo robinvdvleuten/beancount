@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -68,11 +69,86 @@ func New() *Config {
 
 // FromAST extracts and parses options from an AST.
 func FromAST(tree *ast.AST) (*Config, error) {
+	var errs []error
 	options := make(map[string][]string)
 	for _, option := range tree.Options {
+		if err := validateOptionName(option); err != nil {
+			errs = append(errs, err)
+			continue
+		}
 		options[option.Name.Value] = append(options[option.Name.Value], option.Value.Value)
 	}
+	if len(errs) > 0 {
+		return nil, errors.Join(errs...)
+	}
 	return FromOptions(options)
+}
+
+// knownOptions are the user-settable option names of official beancount v2
+// (transcribed from beancount/parser/options.py). Options in this set that we
+// do not consume are accepted and ignored, exactly like official beancount.
+var knownOptions = map[string]bool{
+	"title":                                    true,
+	"name_assets":                              true,
+	"name_liabilities":                         true,
+	"name_equity":                              true,
+	"name_income":                              true,
+	"name_expenses":                            true,
+	"account_previous_balances":                true,
+	"account_previous_earnings":                true,
+	"account_previous_conversions":             true,
+	"account_current_earnings":                 true,
+	"account_current_conversions":              true,
+	"account_rounding":                         true,
+	"conversion_currency":                      true,
+	"inferred_tolerance_default":               true,
+	"inferred_tolerance_multiplier":            true,
+	"infer_tolerance_from_cost":                true,
+	"documents":                                true,
+	"operating_currency":                       true,
+	"render_commas":                            true,
+	"plugin_processing_mode":                   true,
+	"long_string_maxlines":                     true,
+	"booking_method":                           true,
+	"allow_pipe_separator":                     true,
+	"allow_deprecated_none_for_tags_and_links": true,
+	"insert_pythonpath":                        true,
+}
+
+// reservedOptions exist in official beancount but are derived outputs (or the
+// deprecated plugin option) that may not be set from a ledger file.
+var reservedOptions = map[string]bool{
+	"filename":    true,
+	"include":     true,
+	"input_hash":  true,
+	"dcontext":    true,
+	"commodities": true,
+	"plugin":      true,
+}
+
+// InvalidOptionError reports an option directive official beancount rejects.
+type InvalidOptionError struct {
+	Option   *ast.Option
+	Reserved bool
+}
+
+func (e *InvalidOptionError) Error() string {
+	pos := e.Option.Position()
+	if e.Reserved {
+		return fmt.Sprintf("%s:%d: option %q may not be set", pos.Filename, pos.Line, e.Option.Name.Value)
+	}
+	return fmt.Sprintf("%s:%d: invalid option: %q", pos.Filename, pos.Line, e.Option.Name.Value)
+}
+
+// GetPosition returns the source position of the offending option directive.
+func (e *InvalidOptionError) GetPosition() ast.Position { return e.Option.Position() }
+
+func validateOptionName(option *ast.Option) error {
+	name := option.Name.Value
+	if knownOptions[name] {
+		return nil
+	}
+	return &InvalidOptionError{Option: option, Reserved: reservedOptions[name]}
 }
 
 // FromOptions parses supported option values.

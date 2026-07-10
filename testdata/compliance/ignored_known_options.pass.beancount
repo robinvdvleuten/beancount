@@ -1,0 +1,4 @@
+option "operating_currency" "USD"
+option "title" "My Ledger"
+option "render_commas" "TRUE"
+2020-01-01 open Assets:A
