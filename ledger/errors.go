@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 )
 
 // directiveError embeds common fields from directives, providing a consistent
@@ -722,6 +723,11 @@ func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account,
 type UnusedPadWarning struct {
 	Pad     *ast.Pad
 	Account string
+}
+
+// Severity is fatal because official bean-check rejects unused pad entries.
+func (e *UnusedPadWarning) Severity() diagnostic.Severity {
+	return diagnostic.SeverityError
 }
 
 func (e *UnusedPadWarning) Error() string {

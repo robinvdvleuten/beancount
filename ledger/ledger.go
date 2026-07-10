@@ -41,6 +41,7 @@ import (
 	"sync"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
@@ -261,7 +262,17 @@ func (l *Ledger) MustProcess(ctx context.Context, tree *ast.AST) {
 
 // Errors returns all collected errors
 func (l *Ledger) Errors() []error {
-	return l.errors
+	return diagnostic.Errors(l.errors)
+}
+
+// Warnings returns non-fatal diagnostics collected while processing.
+func (l *Ledger) Warnings() []error {
+	return diagnostic.Warnings(l.errors)
+}
+
+// Diagnostics returns all diagnostics in processing order.
+func (l *Ledger) Diagnostics() []error {
+	return slices.Clone(l.errors)
 }
 
 // GetAccount returns an account by name
