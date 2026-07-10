@@ -13,6 +13,11 @@ None. Every `.pass`/`.fail` fixture in this directory agrees with
 
 ## Empirically pinned option behavior
 
+- **documents** and **operating_currency** are implemented (directory
+  discovery incl. the missing-root error; accumulating list semantics),
+  and **bean-format parity is byte-exact** — the format leg of the
+  compliance suite compares output byte-for-byte.
+
 - **account_rounding** is accepted but inert, exactly like official v2:
   despite the option's documentation, v2's load pipeline never inserts
   rounding postings (`fill_residual_posting` only runs in ledger-export
