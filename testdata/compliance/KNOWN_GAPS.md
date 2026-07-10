@@ -11,6 +11,14 @@ them. Closing a gap means making the fixture pass and renaming it to drop the
 None. Every `.pass`/`.fail` fixture in this directory agrees with
 `bean-check` 2.3.x; the differential suite enforces it.
 
+## Empirically pinned option behavior
+
+- **account_rounding** is accepted but inert, exactly like official v2:
+  despite the option's documentation, v2's load pipeline never inserts
+  rounding postings (`fill_residual_posting` only runs in ledger-export
+  reports). The `account_rounding_inert` / `account_rounding_no_posting`
+  fixtures prove both implementations leave the rounding account empty.
+
 ## Deliberate deviations
 
 - **AVERAGE booking**: official v2 *rejects* AVERAGE at reduction time

@@ -1,0 +1,8 @@
+option "account_rounding" "Equity:Rounding"
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-01 open Equity:Rounding
+2020-01-02 * "sub-tolerance residual"
+  Expenses:B  33.335 USD
+  Assets:A   -33.34 USD
+2020-01-03 balance Equity:Rounding 0.005 USD
