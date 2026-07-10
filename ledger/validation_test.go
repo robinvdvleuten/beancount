@@ -1361,7 +1361,7 @@ func TestPadTiming(t *testing.T) {
 			errMsg:  "Balance mismatch",
 		},
 		{
-			name: "multiple pads for same account - only last one before balance applies",
+			name: "multiple pads for same account - superseded pads are unused errors",
 			input: `
 				2020-01-01 open Assets:Checking USD
 				2020-01-01 open Equity:Opening
@@ -1371,7 +1371,7 @@ func TestPadTiming(t *testing.T) {
 				2020-01-04 pad Assets:Checking Equity:Opening
 				2020-01-05 balance Assets:Checking 100 USD
 			`,
-			wantErr: false,
+			wantErr: true, // bean-check: "Unused Pad entry" for each superseded pad
 		},
 		{
 			name: "pad without subsequent balance - generates warning",

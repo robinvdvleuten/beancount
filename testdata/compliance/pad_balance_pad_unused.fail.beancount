@@ -1,0 +1,5 @@
+2020-01-01 open Assets:A
+2020-01-01 open Equity:Opening
+2020-01-02 pad Assets:A Equity:Opening
+2020-01-10 balance Assets:A 100.00 USD
+2020-02-01 pad Assets:A Equity:Opening

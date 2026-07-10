@@ -12,7 +12,6 @@ them. Closing a gap means making the fixture pass and renaming it to drop the
 |-----|---------|-------------------|
 | Incomplete amounts (`Assets:A -1.00` without currency, `Assets:A USD` without number) | `gap_incomplete_amounts` | Parsed and completed by interpolation |
 | Bare price annotation (`100.00 EUR @`) | `gap_empty_price_annotation` | Price interpolated from the residual |
-| Repeated `pad` without intervening balance | `gap_pad_then_second_pad` | Error: the first pad is unused |
 
 ## Deviations without fixtures
 

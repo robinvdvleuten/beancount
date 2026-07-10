@@ -125,6 +125,14 @@ func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) (
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validatePad(pad)
+
+	// A new pad supersedes an earlier one that no balance assertion has
+	// consumed yet; beancount reports the superseded pad as unused.
+	accountName := string(pad.Account)
+	if previous, ok := l.padEntries[accountName]; ok && !l.usedPads[accountName] {
+		errs = append(errs, NewUnusedPadWarning(previous))
+	}
+
 	return errs, pad
 }
 
@@ -132,6 +140,8 @@ func (h *PadHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delt
 	pad := delta.(*ast.Pad)
 	accountName := string(pad.Account)
 	l.padEntries[accountName] = pad
+	// The new pad must be consumed by its own balance assertion.
+	delete(l.usedPads, accountName)
 }
 
 // NoteHandler processes Note directives.
