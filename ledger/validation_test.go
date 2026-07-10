@@ -434,20 +434,18 @@ func TestCalculateBalance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			v := newTestValidator(nil) // calculateBalance doesn't need accounts
-			_, validation, errs := v.calculateBalance(tt.txn)
+			delta, validation, errs := v.calculateBalance(tt.txn)
 
 			assert.Equal(t, 0, len(errs))
 
 			assert.Equal(t, tt.wantBalanced, validation.isBalanced)
 
-			// Count inferred amounts by checking posting.Inferred flag
-			inferredCount := 0
-			for _, posting := range tt.txn.Postings {
-				if posting.Inferred {
-					inferredCount++
-				}
-			}
+			inferredCount := len(delta.InferredAmounts)
 			assert.Equal(t, tt.wantInferred, inferredCount)
+			for posting := range delta.InferredAmounts {
+				assert.False(t, posting.Inferred, "validation must not mutate postings")
+				assert.True(t, posting.Amount == nil, "validation must leave inferred amount unapplied")
+			}
 
 			// Check residuals if specified
 			for currency, expected := range tt.wantResiduals {
@@ -792,20 +790,21 @@ func TestImplicitPostings(t *testing.T) {
 
 			assert.Equal(t, tt.wantErrCount, len(errs), fmt.Sprintf("errors: %v", errs))
 
-			// Check if any posting was inferred
 			inferredCount := 0
-			var inferredPosting *ast.Posting
-			for _, posting := range tt.txn.Postings {
-				if posting.Inferred {
-					inferredCount++
-					inferredPosting = posting
+			var inferredAmount *ast.Amount
+			if result != nil {
+				inferredCount = len(result.InferredAmounts)
+				for posting, amount := range result.InferredAmounts {
+					assert.False(t, posting.Inferred)
+					assert.True(t, posting.Amount == nil)
+					inferredAmount = amount
 				}
 			}
 
 			if tt.wantInferred {
 				assert.Equal(t, 1, inferredCount, "expected exactly 1 inferred posting")
-				if inferredPosting != nil && inferredPosting.Amount != nil {
-					assert.Equal(t, tt.wantInferredAmt, inferredPosting.Amount.Value)
+				if inferredAmount != nil {
+					assert.Equal(t, tt.wantInferredAmt, inferredAmount.Value)
 				}
 			} else {
 				assert.Equal(t, 0, inferredCount, "expected no inferred postings")

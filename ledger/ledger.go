@@ -761,6 +761,15 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 // applyTransaction mutates ledger state (inventory updates) and records posting history.
 // Only called after validation passes. Panics on bugs (invariant violations).
 func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta) {
+	for posting, amount := range delta.InferredAmounts {
+		posting.Amount = amount
+		posting.Inferred = true
+	}
+	for posting, amount := range delta.InferredCosts {
+		posting.Cost.Amount = amount
+		posting.Cost.Inferred = true
+	}
+
 	for _, posting := range txn.Postings {
 		if posting.Amount == nil {
 			continue

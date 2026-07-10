@@ -403,7 +403,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	balance := balanceWeights(allWeights)
 	defer putBalanceMap(balance)
 
-	delta := &TransactionDelta{}
+	delta := &TransactionDelta{
+		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
+		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
+	}
 
 	// An unresolved cost and a missing amount are two unknowns; beancount
 	// reports "too many missing numbers" and cannot interpolate.
@@ -421,12 +424,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			// Exactly 1 currency - can infer the amount uniquely
 			for currency, residual := range balance {
 				needed := residual.Neg()
-				// Set amount directly on posting and mark as inferred
-				posting.Amount = &ast.Amount{
+				delta.InferredAmounts[posting] = &ast.Amount{
 					Value:    needed.String(),
 					Currency: currency,
 				}
-				posting.Inferred = true
 				// Update balance to reflect the inferred amount
 				balance[currency] = balance[currency].Add(needed)
 			}
@@ -478,12 +479,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			if len(balance) == 1 {
 				for currency, residual := range balance {
 					costPerUnit := residual.Neg().Div(amount)
-					// Set cost amount directly on the posting's Cost struct and mark as inferred
-					posting.Cost.Amount = &ast.Amount{
+					delta.InferredCosts[posting] = &ast.Amount{
 						Value:    costPerUnit.String(),
 						Currency: currency,
 					}
-					posting.Cost.Inferred = true
 
 					totalCost := amount.Mul(costPerUnit)
 					balance[currency] = balance[currency].Add(totalCost)
@@ -500,12 +499,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 	// Collect all amounts (explicit and inferred) for tolerance calculation
 	for _, posting := range txn.Postings {
-		if posting.Amount != nil {
-			amount, err := ParseAmount(posting.Amount)
+		if amountValue := delta.amountFor(posting); amountValue != nil {
+			amount, err := ParseAmount(amountValue)
 			if err != nil {
 				continue
 			}
-			currency := posting.Amount.Currency
+			currency := amountValue.Currency
 			amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
 		}
 	}
@@ -1205,19 +1204,21 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 	for _, posting := range txn.Postings {
 		// Skip postings without amounts (should not happen after inference)
-		if posting.Amount == nil {
+		amountValue := delta.amountFor(posting)
+		if amountValue == nil {
 			continue
 		}
 
-		amount, _ := ParseAmount(posting.Amount)
-		currency := posting.Amount.Currency
+		amount, _ := ParseAmount(amountValue)
+		currency := amountValue.Currency
 
 		// Check if this is a lot reduction
-		if posting.Cost != nil && amount.IsNegative() {
+		costValue := delta.costFor(posting)
+		if costValue != nil && amount.IsNegative() {
 			accountName := string(posting.Account)
 			account := v.accounts[accountName]
 
-			lotSpec, err := ParseLotSpec(posting.Cost)
+			lotSpec, err := ParseLotSpec(costValue)
 			if err != nil {
 				// Should already be validated by validateCosts
 				continue
@@ -1274,10 +1275,11 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction, delta *Tr
 		}
 
 		// Get currency (amount is always set after inference)
-		if posting.Amount == nil {
+		amount := delta.amountFor(posting)
+		if amount == nil {
 			continue
 		}
-		currency := posting.Amount.Currency
+		currency := amount.Currency
 
 		// Check if currency is allowed
 		allowed := false
