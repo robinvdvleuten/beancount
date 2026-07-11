@@ -1,0 +1,68 @@
+option "title" "Query Compliance Ledger"
+option "operating_currency" "USD"
+
+2022-12-28 open Assets:Cash USD
+2022-12-28 open Assets:Bank:Checking USD
+2022-12-28 open Assets:Invest:HOOL HOOL
+2022-12-28 open Assets:Invest:Cash USD
+2022-12-28 open Liabilities:CreditCard USD
+2022-12-28 open Income:Acme:Salary USD
+2022-12-28 open Income:Gains USD
+2022-12-28 open Expenses:Food:Coffee USD
+2022-12-28 open Expenses:Food:Restaurant USD
+2022-12-28 open Expenses:Travel USD
+2022-12-28 open Equity:Opening-Balances USD
+
+2023-01-01 * "Opening balances"
+  Assets:Cash  200.00 USD
+  Assets:Bank:Checking  3000.00 USD
+  Equity:Opening-Balances
+
+2023-01-15 * "Acme" "January salary" #salary
+  Assets:Bank:Checking  2500.00 USD
+  Income:Acme:Salary
+
+2023-02-01 * "Blue Bottle" "Morning coffee" #coffee
+  category: "drinks"
+  Expenses:Food:Coffee  4.50 USD
+  Assets:Cash
+
+2023-02-14 * "Chez Panisse" "Valentine dinner" #restaurant ^date-night
+  Expenses:Food:Restaurant  120.00 USD
+  Liabilities:CreditCard
+
+2023-03-10 * "Broker" "Buy HOOL"
+  Assets:Invest:HOOL  8 HOOL {520.00 USD}
+  Assets:Invest:Cash  -4160.00 USD
+
+2023-03-15 balance Assets:Cash  195.50 USD
+
+2023-04-02 ! "Airline" "Flight to Berlin" #trip ^bl-2023
+  Expenses:Travel  450.00 USD
+  Liabilities:CreditCard
+
+2023-05-20 * "Broker" "Sell some HOOL"
+  Assets:Invest:HOOL  -3 HOOL {520.00 USD} @ 610.00 USD
+  Assets:Invest:Cash  1830.00 USD
+  Income:Gains  -270.00 USD
+
+2023-06-01 price HOOL 640.00 USD
+
+2023-07-04 * "Cafe" "Espresso" #coffee
+  Expenses:Food:Coffee  3.75 USD
+  Assets:Cash
+
+2024-01-15 * "Acme" "January salary" #salary
+  Assets:Bank:Checking  2600.00 USD
+  Income:Acme:Salary
+
+2024-02-11 * "Blue Bottle" "Coffee beans" #coffee
+  category: "groceries"
+  Expenses:Food:Coffee  18.00 USD
+  Assets:Cash
+
+2024-03-01 close Expenses:Travel
+
+2024-04-01 event "location" "Berlin"
+
+2024-05-01 note Assets:Cash "Counted the drawer"

@@ -14,7 +14,7 @@ A fast, lightweight [Beancount](https://beancount.github.io/) parser and formatt
 
 [Beancount](https://beancount.github.io/) is a double-entry bookkeeping system that uses plain text files to track personal or business finances. It allows you to maintain your accounting ledger as readable text files, making it easy to version control, search, and programmatically manipulate your financial data. The Beancount file format uses a simple, human-readable syntax to record transactions, accounts, and other financial directives.
 
-This project is a Go implementation of a Beancount file parser, formatter, and validator. While the official Beancount implementation is written in Python and includes a full accounting engine with balance calculations, reports, queries, and a web interface, this Go version focuses on parsing, formatting, and ledger validation. It's designed to be fast and lightweight, making it ideal for tooling, text editors, build pipelines, or any situation where you need to validate Beancount files without the overhead of the full accounting system.
+This project is a Go implementation of a Beancount file parser, formatter, validator, and query engine. While the official Beancount implementation is written in Python and includes a full accounting engine with balance calculations, reports, queries, and a web interface, this Go version focuses on parsing, formatting, ledger validation, and BQL queries. It's designed to be fast and lightweight, making it ideal for tooling, text editors, build pipelines, or any situation where you need to work with Beancount files without the overhead of the full accounting system.
 
 ## Features
 
@@ -25,9 +25,10 @@ This implementation currently supports:
 - **Validation**: Balance checks, account lifecycle, assertions
 - **Inventory**: Lot-based tracking with cost basis (FIFO/LIFO)
 - **Includes**: Recursive loading of modular Beancount files
+- **Queries**: The Beancount Query Language (BQL), compatible with `bean-query`
 - **CLI Interface**: Simple command-line tools for common operations
 
-**Note**: This implementation includes ledger validation with transaction balancing, account management, and inventory tracking. It does not include reporting, queries, or a web interface like the official Python implementation.
+**Note**: This implementation includes ledger validation with transaction balancing, account management, inventory tracking, and BQL queries. It does not include reporting or plugins like the official Python implementation.
 
 ## Compatibility
 
@@ -114,6 +115,45 @@ Or read from stdin (omit filename or use `-`):
 ```sh
 echo "2024-01-01 open Assets:Checking USD" | beancount format
 ```
+
+### Query a Beancount file
+
+Run [Beancount Query Language](https://beancount.github.io/docs/beancount_query_language.html) (BQL) queries against a ledger, just like `bean-query`:
+
+```sh
+beancount query example.beancount "SELECT account, sum(position) GROUP BY account ORDER BY account"
+```
+
+```
+        account                sum_position
+----------------------- --------------------------
+Assets:Checking          3495.50 USD
+Assets:Invest              10    HOOL {500.00 USD}
+Equity:Opening-Balances -1000.00 USD
+...
+```
+
+The full SELECT grammar is supported (FROM with OPEN/CLOSE/CLEAR summarization, WHERE, GROUP BY, ORDER BY, LIMIT, DISTINCT), along with the aggregate functions, the simple-function library, and the `BALANCES`, `JOURNAL`, and `PRINT` shortcut statements:
+
+```sh
+# Balances per account, at cost
+beancount query example.beancount "BALANCES AT cost"
+
+# A running journal for accounts matching a regex
+beancount query example.beancount 'JOURNAL "Checking"'
+
+# CSV output, with amounts split into per-currency number columns
+beancount query -f csv -m example.beancount "SELECT account, sum(position) GROUP BY account"
+```
+
+Omit the query to start an interactive shell, or pipe one in:
+
+```sh
+beancount query example.beancount
+echo "SELECT payee, narration WHERE 'trip' IN tags" | beancount query example.beancount
+```
+
+Output is byte-for-byte compatible with `bean-query` from beancount v2; the compliance suite in `testdata/compliance/query` enforces this against the official tool.
 
 ### Telemetry
 

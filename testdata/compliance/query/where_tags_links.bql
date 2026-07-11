@@ -1,0 +1,1 @@
+SELECT date, narration WHERE 'coffee' in tags OR 'bl-2023' in links ORDER BY date

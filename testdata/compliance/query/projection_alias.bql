@@ -1,0 +1,1 @@
+SELECT date, account AS acc, narration LIMIT 8

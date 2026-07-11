@@ -1,0 +1,1 @@
+SELECT date, narration, balance WHERE account = 'Assets:Cash'

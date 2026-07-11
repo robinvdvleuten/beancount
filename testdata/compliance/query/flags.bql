@@ -1,0 +1,1 @@
+SELECT flag, count(date) GROUP BY flag ORDER BY flag

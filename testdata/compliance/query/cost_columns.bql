@@ -1,0 +1,1 @@
+SELECT date, cost_number, cost_currency, cost_date WHERE currency = 'HOOL' ORDER BY date

@@ -1,0 +1,1 @@
+SELECT account, sum(position) FROM OPEN ON 2023-06-01 CLOSE ON 2024-03-01 CLEAR GROUP BY account ORDER BY account

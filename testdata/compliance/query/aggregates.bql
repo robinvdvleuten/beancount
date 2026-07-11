@@ -1,0 +1,1 @@
+SELECT count(date), min(date), max(date), first(account), last(account)
