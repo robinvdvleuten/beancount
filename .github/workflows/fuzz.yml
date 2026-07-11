@@ -51,3 +51,17 @@ jobs:
           fuzz-regexp: FuzzFormatter
           fuzz-minimize-time: 1m
           go-version: "1.25"
+
+  fuzz-query-parser:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: jidicula/go-fuzz-action@0ec28329e946c7eea228784a83f26d73f3bfdb23
+        with:
+          packages: ./query/bql
+          fuzz-time: 30s
+          fuzz-regexp: FuzzParseQuery
+          fuzz-minimize-time: 1m
+          go-version: "1.25"
