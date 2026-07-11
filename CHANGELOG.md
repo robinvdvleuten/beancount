@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.11.0](https://github.com/robinvdvleuten/beancount/compare/v0.10.0...v0.11.0) (2026-07-11)
+
+
+### Features
+
+* **formatter:** match bean-format column alignment exactly ([7b1488e](https://github.com/robinvdvleuten/beancount/commit/7b1488e744fa9eb6ed56d11b49987485091566c9))
+* **ledger:** implement STRICT and NONE booking semantics ([73697e7](https://github.com/robinvdvleuten/beancount/commit/73697e7a770166f576f18fbceb46c5827e56a9ba))
+* **ledger:** support HIFO booking ([b08b733](https://github.com/robinvdvleuten/beancount/commit/b08b733627a87e8d381b273b78bcfc746488d3d6))
+* **loader:** generate document directives from the documents option ([ea77a16](https://github.com/robinvdvleuten/beancount/commit/ea77a16bdf7120fb9c9c923773a8dea94cf9c30a))
+* **parser:** align lexer character classes with Beancount v2 ([7f9eb31](https://github.com/robinvdvleuten/beancount/commit/7f9eb314a13512abe812647a7ad394e934dae9c9))
+* **parser:** evaluate number expressions at parse time ([9a4ece3](https://github.com/robinvdvleuten/beancount/commit/9a4ece34b0cc99eb07e70c054824c7d7104685f2))
+* **parser:** support compound per-unit and total costs ([160d1e8](https://github.com/robinvdvleuten/beancount/commit/160d1e89880251159422a51038f403143e42eb34))
+* **parser:** support date and label components in cost specs ([4c5c21a](https://github.com/robinvdvleuten/beancount/commit/4c5c21a771f1f51037a054605d09a49148b6e039))
+* **parser:** support incomplete amounts and price interpolation ([23be333](https://github.com/robinvdvleuten/beancount/commit/23be3332eb51b2af15f9fbe8f5d76e24f7b3ce76))
+* **query:** implement bean-query (BQL) with byte parity against beancount v2 ([#290](https://github.com/robinvdvleuten/beancount/issues/290)) ([768e3d3](https://github.com/robinvdvleuten/beancount/commit/768e3d3dd863b5db424edcc8067f1d0c9687c5bb))
+
+
+### Bug Fixes
+
+* **ast:** match official beancount same-date directive ordering ([c3e8b5b](https://github.com/robinvdvleuten/beancount/commit/c3e8b5bafc60d9a22f5b81de60d18e60b3e6933c))
+* **config:** accumulate operating_currency as a list ([cf6d11a](https://github.com/robinvdvleuten/beancount/commit/cf6d11aacad60c025e7e43f26f89066be51c3690))
+* **config:** reject unknown option names like official beancount ([8a93170](https://github.com/robinvdvleuten/beancount/commit/8a93170ae0e116eb5d22eebc33ec23cf7bb8128c))
+* **diagnostic:** classify wrapped errors with errors.As ([f8b575f](https://github.com/robinvdvleuten/beancount/commit/f8b575f739200fdbe1ae86ace9c5dafd901f6e18))
+* **formatter:** keep empty narration when payee is present ([76d8320](https://github.com/robinvdvleuten/beancount/commit/76d8320700e7658d2350ff14a7fe9451b4d45111))
+* **formatter:** match bean-format indentation behavior ([5b27dd1](https://github.com/robinvdvleuten/beancount/commit/5b27dd1dd075abaf9be34c3cac5fde5fd6b2ac03))
+* **ledger:** allow balance, note and document directives after close ([a28f489](https://github.com/robinvdvleuten/beancount/commit/a28f4895b26a129b2acb880ab8f2b8cefe63aa96))
+* **ledger:** double the multiplier for inferred balance assertion tolerance ([4ce37b1](https://github.com/robinvdvleuten/beancount/commit/4ce37b1c32ff938d2d285546a68de015261959dc))
+* **ledger:** infer transaction tolerance from coarsest precision ([6ba6619](https://github.com/robinvdvleuten/beancount/commit/6ba6619ccd6875c12a79e4c20ec7e50d52ea1c97))
+* **ledger:** remove non-standard global 0.005 tolerance default ([3fb7649](https://github.com/robinvdvleuten/beancount/commit/3fb76490134ca6f8212cb59b8eac75569e9efb22))
+* **ledger:** report superseded pads as unused like official beancount ([523603c](https://github.com/robinvdvleuten/beancount/commit/523603c9b00cae2d20a7e443e4be89000ee2f11c))
+* **ledger:** resolve empty-spec reduction weights from booked lots ([a7e5932](https://github.com/robinvdvleuten/beancount/commit/a7e59328a78d258fc5d1cf38d425ebc23ddaf9dc))
+* **ledger:** use official beancount booking_method vocabulary and STRICT default ([9600e92](https://github.com/robinvdvleuten/beancount/commit/9600e927f6865b4a114600b96d4312255df58ccb))
+* **ledger:** verify document files exist like official beancount ([5658e6a](https://github.com/robinvdvleuten/beancount/commit/5658e6af709f5db33a6f4a88f1aa2432a09225c6))
+* **loader:** warn about options in included files ([bdedec2](https://github.com/robinvdvleuten/beancount/commit/bdedec23512182742b8bfba453730a1f2ebc88d8))
+* **parser:** accept tags and links on document directives ([0d72c45](https://github.com/robinvdvleuten/beancount/commit/0d72c4568df0f371978d61b2065f77b7c4a5219b))
+* **parser:** enforce line-scoped grammar elements found by fuzzing ([dcecffa](https://github.com/robinvdvleuten/beancount/commit/dcecffaa15324aefa27d94f81dcebced25601310))
+
 ## [0.10.0](https://github.com/robinvdvleuten/beancount/compare/v0.9.0...v0.10.0) (2026-06-22)
 
 
