@@ -253,17 +253,19 @@ func (c *compiler) resolvePivotBy(sel *bql.Select, compiled *Compiled) error {
 // hidden targets.
 func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, allowAgg bool) (int, error) {
 	if lit, ok := item.(*bql.Int); ok {
-		visible := 0
-		for _, target := range compiled.Targets {
-			if !target.Hidden {
-				visible++
+		// Walk the visible targets to the 1-based index; no int64-to-int
+		// narrowing needed.
+		var n int64
+		for i, target := range compiled.Targets {
+			if target.Hidden {
+				continue
+			}
+			n++
+			if n == lit.Value {
+				return i, nil
 			}
 		}
-		// Range-check the int64 literal before narrowing to int.
-		if lit.Value < 1 || lit.Value > int64(visible) {
-			return 0, compileErrorf(item, "Invalid GROUP-BY column index %d", lit.Value)
-		}
-		return int(lit.Value) - 1, nil
+		return 0, compileErrorf(item, "Invalid GROUP-BY column index %d", lit.Value)
 	}
 
 	if ident, ok := item.(*bql.Ident); ok {
