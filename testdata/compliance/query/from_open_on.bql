@@ -1,0 +1,1 @@
+SELECT date, flag, payee, narration, account, position FROM OPEN ON 2024-01-01 ORDER BY date, account

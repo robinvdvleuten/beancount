@@ -1,0 +1,1 @@
+SELECT upper(narration), lower(payee), length(account), maxwidth(narration, 6) LIMIT 5

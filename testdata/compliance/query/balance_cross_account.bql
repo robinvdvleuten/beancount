@@ -1,0 +1,1 @@
+SELECT account, balance WHERE number < 0 ORDER BY date LIMIT 6

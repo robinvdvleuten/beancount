@@ -1,0 +1,1 @@
+SELECT date, account, sum(position) GROUP BY 1, 2 PIVOT BY date, account

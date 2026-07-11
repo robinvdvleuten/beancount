@@ -1,0 +1,1 @@
+SELECT date, narration FROM has_account('Invest')

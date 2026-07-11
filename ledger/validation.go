@@ -527,7 +527,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			for currency, residual := range balance {
 				needed := residual.Neg()
 				delta.InferredAmounts[posting] = &ast.Amount{
-					Value:    needed.String(),
+					Value:    formatInferredNumber(needed),
 					Currency: currency,
 				}
 				// Update balance to reflect the inferred amount
@@ -549,7 +549,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		currency := posting.Amount.Currency
 		needed := balance[currency].Neg()
 		delta.InferredAmounts[posting] = &ast.Amount{
-			Value:    needed.String(),
+			Value:    formatInferredNumber(needed),
 			Currency: currency,
 		}
 		balance[currency] = balance[currency].Add(needed)

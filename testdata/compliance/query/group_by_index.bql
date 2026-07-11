@@ -1,0 +1,1 @@
+SELECT year(date) AS year, sum(number) GROUP BY 1 ORDER BY 1

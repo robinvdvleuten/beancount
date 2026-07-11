@@ -1,0 +1,1 @@
+SELECT DISTINCT year(date), month(date), quarter(date), weekday(date) ORDER BY 1, 2 LIMIT 8

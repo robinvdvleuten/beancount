@@ -1,0 +1,1 @@
+SELECT currency, sum(number) GROUP BY currency ORDER BY currency
