@@ -2,6 +2,8 @@
 
 Project-specific conventions for the beancount Go implementation.
 
+**Keep this file current**: when a change alters the architecture — a new package, a changed phase pipeline, a new pattern or convention, a new compliance suite — update AGENTS.md in the same change. Stale conventions are worse than missing ones.
+
 ## Feature Evaluation: Question First, Plan Second
 
 **CRITICAL**: Before diving into implementation planning, critically evaluate whether a feature is actually needed for this project's use case.
@@ -93,6 +95,20 @@ context7_get_library_docs(context7CompatibleLibraryID: "/shopspring/decimal", to
 When changing Beancount semantics, parsing, lexing, formatting, or query behavior, validate against the relevant official tools: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Purely internal refactors and unrelated infrastructure changes do not require an official-tool comparison.
 
 The differential suite in `cli/compliance_test.go` runs every fixture in `testdata/compliance/` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`). Add a fixture (`<name>.pass.beancount` / `<name>.fail.beancount`) for any semantics change; known divergences are documented in `testdata/compliance/KNOWN_GAPS.md`.
+
+**BQL / bean-query**: `cli/query_compliance_test.go` runs every `testdata/compliance/query/*.bql` fixture through both implementations (`go test ./cli -run 'QueryFixtures|OfficialQueryParity'`), comparing stdout **byte-for-byte** in text and csv. Fixture name prefixes: `err_` expects an `ERROR:` line, `numberify_` adds `-m`, `gap_` skips the parity leg (document in KNOWN_GAPS.md). Any query semantics change needs a fixture.
+
+**Pin first, implement second**: bean-query has many undocumented quirks (column naming like `sum_position`/`c42`, header truncation, padded CSV cells, implicit GROUP BY, per-currency precision). Never guess—probe the official tool with a small ledger and match the observed bytes:
+
+```bash
+# Pin behavior empirically before writing code
+bean-query testdata/compliance/query/ledger.beancount "select account, sum(position) group by account"
+bean-query -f csv ledger.beancount "select 1 + 2"   # csv shows untruncated headers
+bean-query ledger.beancount "help targets"           # official column/function reference
+
+# Diff an end-to-end query against the official tool
+diff <(go run ./cmd/beancount query f.beancount "$Q") <(bean-query f.beancount "$Q")
+```
 
 ```bash
 # Debug parser / lexer issues or inconsistencies
@@ -264,6 +280,8 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 | **ledger** | `decimal.Decimal` for amounts. Validation errors have `Pos`/`Directive` fields. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `AVERAGE`. |
 | **loader** | Recursive includes with deduplication by absolute path. Non-fatal issues go to `LoadResult.Diagnostics`. |
 | **config** | Beancount option parsing and typed processing configuration. Unknown option names are rejected (bean-check parity). |
+| **query/bql** | BQL lexer + recursive-descent parser, syntax only (mirrors parser rules: zero-copy tokens, positioned errors, fuzz test). No semantic knowledge. |
+| **query** | Parse → compile → execute → render. Columns/functions/aggregates live in registry maps (`env.go`, `functions.go`, `aggregates.go`), never switch statements. Compiler resolves names and types with bean-query-parity error messages; executor consumes the ledger-processed `*ast.AST` (interpolated amounts) and never mutates it; renderers reproduce official output byte-for-byte. |
 | **diagnostic** | Severity classification (`SeverityError`/`SeverityWarning`) for errors from loading and validation. Warnings never affect exit codes. |
 | **web** | **Local dev only**. Bind to localhost. No auth. Path traversal protection. |
 
