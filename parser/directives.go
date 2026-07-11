@@ -243,8 +243,8 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 	}
 
 	// Documents are the only non-transaction directive that accepts
-	// tags and links in the official grammar.
-	for p.check(TAG) || p.check(LINK) {
+	// tags and links in the official grammar; they end at EOL.
+	for (p.check(TAG) || p.check(LINK)) && p.continuesPreviousLine() {
 		if p.check(TAG) {
 			tag, err := p.parseTag()
 			if err != nil {

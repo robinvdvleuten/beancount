@@ -129,6 +129,11 @@ type Formatter struct {
 	// as it may contain content from multiple directives.
 	// This is set during Format() and cleared after.
 	linesWithMultipleItems map[int]bool
+
+	// verbatimLines tracks source lines already emitted verbatim (metadata
+	// preservation), so trivia parsed from those lines (inline comments) is
+	// not emitted a second time. Set during Format() and cleared after.
+	verbatimLines map[int]bool
 }
 
 // Option is a functional option for configuring a Formatter.
@@ -494,9 +499,11 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Store source lines for preserving original spacing.
 	// Must split on \r\n, \r, and \n to match the lexer's lineBreakLenAt semantics.
 	f.sourceLines = ast.SplitSourceLines(string(sourceContent))
+	f.verbatimLines = make(map[int]bool)
 	defer func() {
 		f.sourceLines = nil            // Clear after formatting
 		f.linesWithMultipleItems = nil // Clear after formatting
+		f.verbatimLines = nil          // Clear after formatting
 	}()
 
 	// Use a string builder to buffer all output, then write once
@@ -616,6 +623,9 @@ func (f *Formatter) collectItems(tree *ast.AST) []astItem {
 func (f *Formatter) formatItem(item astItem, buf *strings.Builder) {
 	switch {
 	case item.comment != nil:
+		if f.verbatimLines[item.comment.Position().Line] {
+			return // Already contained in a verbatim-preserved line.
+		}
 		f.formatComment(item.comment, buf)
 	case item.blankLine != nil:
 		buf.WriteByte('\n')
@@ -1188,7 +1198,7 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 	case item.Posting != nil:
 		f.formatPosting(item.Posting, buf)
 	case item.Comment != nil:
-		if f.PreserveComments {
+		if f.PreserveComments && !f.verbatimLines[item.Comment.Position().Line] {
 			buf.WriteString(strings.Repeat(" ", f.postingIndent()))
 			f.formatComment(item.Comment, buf)
 		}
@@ -1455,17 +1465,31 @@ func (f *Formatter) formatMetadata(metadata []*ast.Metadata, buf *strings.Builde
 		return
 	}
 
+	lastVerbatimLine := 0
 	for _, m := range metadata {
 		// Skip inline metadata - it's already been formatted on the directive line
 		if m.Inline {
 			continue
 		}
 		// bean-format leaves metadata lines untouched; preserve the original
-		// line (indentation and spacing) whenever it is available.
+		// line (indentation and spacing) whenever it is available. A single
+		// source line may hold several metadata entries; emit it only once.
 		if line := m.Position().Line; line > 0 && !f.linesWithMultipleItems[line] {
-			if original := f.getOriginalLine(line); original != "" && !hasOpenStringLiteral(original) {
+			if line == lastVerbatimLine {
+				continue
+			}
+			original := f.getOriginalLine(line)
+			// Only preserve lines that actually begin with this metadata key;
+			// the line's start may belong to another construct (e.g. the tail
+			// of a multiline string) that is rendered separately.
+			indent := len(original) - len(strings.TrimLeft(original, " \t"))
+			startsAtKey := original != "" && indent == m.Position().Column-1 &&
+				strings.HasPrefix(original[indent:], m.Key)
+			if startsAtKey && !hasOpenStringLiteral(original) {
 				buf.WriteString(original)
 				buf.WriteByte('\n')
+				lastVerbatimLine = line
+				f.verbatimLines[line] = true
 				continue
 			}
 		}

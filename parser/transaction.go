@@ -42,13 +42,15 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	// Parse payee and/or narration
 	// If one string: it's the narration
 	// If two strings: first is payee, second is narration
-	if p.check(STRING) {
+	// Strings belong to the transaction header, which ends at EOL in the
+	// official grammar; never absorb strings from following lines.
+	if p.check(STRING) && p.continuesPreviousLine() {
 		first, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
 
-		if p.check(STRING) {
+		if p.check(STRING) && p.continuesPreviousLine() {
 			// Two strings: payee and narration
 			second, err := p.parseString()
 			if err != nil {
@@ -62,8 +64,9 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
-	// Parse tags and links (can be intermixed)
-	for p.check(TAG) || p.check(LINK) {
+	// Parse tags and links (can be intermixed); they end at EOL in the
+	// official grammar, so never absorb tokens from following lines.
+	for (p.check(TAG) || p.check(LINK)) && p.continuesPreviousLine() {
 		if p.check(TAG) {
 			tag, err := p.parseTag()
 			if err != nil {

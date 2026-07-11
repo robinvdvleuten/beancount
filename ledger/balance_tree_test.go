@@ -271,13 +271,28 @@ func TestGetBalanceTree_MixedNilDates(t *testing.T) {
 
 	date, _ := ast.NewDate("2024-01-01")
 
-	// Only startDate set should return an error, not panic.
-	_, err = l.GetBalanceTree(nil, date, nil)
-	assert.Error(t, err)
+	tests := []struct {
+		name      string
+		startDate *ast.Date
+		endDate   *ast.Date
+		wantError bool
+	}{
+		{name: "both nil"},
+		{name: "only start date", startDate: date, wantError: true},
+		{name: "only end date", endDate: date, wantError: true},
+		{name: "both set", startDate: date, endDate: date},
+	}
 
-	// Only endDate set should return an error, not panic.
-	_, err = l.GetBalanceTree(nil, nil, date)
-	assert.Error(t, err)
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			_, err := l.GetBalanceTree(nil, test.startDate, test.endDate)
+			if test.wantError {
+				assert.Error(t, err)
+				return
+			}
+			assert.NoError(t, err)
+		})
+	}
 }
 
 func TestGetBalanceTree_NoTransactions(t *testing.T) {

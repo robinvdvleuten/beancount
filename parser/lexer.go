@@ -513,6 +513,11 @@ func (l *Lexer) scanTag(start, line, col int) Token {
 		l.advance()
 	}
 
+	// The official lexer requires at least one name character (#[A-Za-z0-9-_/.]+).
+	if l.pos == start+1 {
+		return Token{ILLEGAL, start, l.pos, line, col}
+	}
+
 	return Token{TAG, start, l.pos, line, col}
 }
 
@@ -522,6 +527,11 @@ func (l *Lexer) scanLink(start, line, col int) Token {
 
 	for l.pos < len(l.source) && isValidInTag(l.source[l.pos]) {
 		l.advance()
+	}
+
+	// The official lexer requires at least one name character (^[A-Za-z0-9-_/.]+).
+	if l.pos == start+1 {
+		return Token{ILLEGAL, start, l.pos, line, col}
 	}
 
 	return Token{LINK, start, l.pos, line, col}

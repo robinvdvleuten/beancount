@@ -70,6 +70,27 @@ func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool
 	return ast.NewAmountWithRaw(raw, value, currency)
 }
 
+// continuesPreviousLine reports whether the next token continues the previous
+// token's line, i.e. there is no line break between them. Used to keep
+// line-scoped elements (tags and links) from absorbing tokens of following
+// lines, matching the official grammar where tags_links end at EOL.
+func (p *Parser) continuesPreviousLine() bool {
+	prev := p.previous()
+	next := p.peek()
+	// COMMENT tokens include their trailing newline in their bounds.
+	if prev.End > prev.Start && prev.End <= len(p.source) {
+		if c := p.source[prev.End-1]; c == '\n' || c == '\r' {
+			return false
+		}
+	}
+	for i := prev.End; i < next.Start && i < len(p.source); i++ {
+		if p.source[i] == '\n' || p.source[i] == '\r' {
+			return false
+		}
+	}
+	return true
+}
+
 // parseIncompleteAmount parses posting amounts where the number, the currency,
 // or both may be absent (official grammar: maybe_number maybe_currency).
 // Interpolation completes the missing part during validation. Returns nil
@@ -408,13 +429,29 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 		}
 		md.SetPosition(tokenPosition(keyTok, p.filename))
 		metadata = append(metadata, md)
+
+		// A trailing comment belongs to the metadata line; consume it so the
+		// block can continue with further metadata lines.
+		if p.check(COMMENT) && p.continuesPreviousLine() {
+			p.advance()
+		}
+
+		// A metadata entry owns the rest of its line: official beancount
+		// requires an EOL after the value, so any further content on the
+		// same line (another key, an account, ...) is a syntax error.
+		if next := p.peek(); next.Type != EOF && next.Type != NEWLINE && p.continuesPreviousLine() {
+			return nil, p.errorAtToken(next, "unexpected content after metadata value")
+		}
 	}
 
 	return metadata, nil
 }
 
 func (p *Parser) isMetadataKeyStart(tok Token) bool {
+	// The official lexer requires keys of at least two characters
+	// ([a-z][a-zA-Z0-9-_]+); a single-letter key is an invalid token.
 	return (tok.Type == IDENT || p.isKeyword(tok.Type)) &&
+		tok.Len() >= 2 &&
 		p.peekAhead(1).Type == COLON &&
 		tok.Column+tok.Len() == p.peekAhead(1).Column
 }

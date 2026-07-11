@@ -404,7 +404,7 @@ func (l *Ledger) forEachAccount(fn func(*Account) bool) {
 //   - startDate == endDate: Point-in-time balance (balance sheet).
 //   - startDate < endDate: Period change (income statement).
 //
-// Returns error if startDate > endDate.
+// Returns an error if only one date is provided or startDate > endDate.
 //
 // The tree is organized with account types as virtual root nodes. Balances are
 // aggregated bottom-up so parent nodes include the sum of all their descendants.
