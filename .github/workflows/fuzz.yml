@@ -16,7 +16,7 @@ jobs:
       contents: write
       issues: write
     steps:
-      - uses: jidicula/go-fuzz-action@0ec28329e946c7eea228784a83f26d73f3bfdb23
+      - uses: jidicula/go-fuzz-action@ca499a56cc3e3aa7c221d30d8b525cfc6b52f185
         with:
           packages: ./parser
           fuzz-time: 30s
@@ -30,7 +30,7 @@ jobs:
       contents: write
       issues: write
     steps:
-      - uses: jidicula/go-fuzz-action@0ec28329e946c7eea228784a83f26d73f3bfdb23
+      - uses: jidicula/go-fuzz-action@ca499a56cc3e3aa7c221d30d8b525cfc6b52f185
         with:
           packages: ./parser
           fuzz-time: 30s
@@ -44,7 +44,7 @@ jobs:
       contents: write
       issues: write
     steps:
-      - uses: jidicula/go-fuzz-action@0ec28329e946c7eea228784a83f26d73f3bfdb23
+      - uses: jidicula/go-fuzz-action@ca499a56cc3e3aa7c221d30d8b525cfc6b52f185
         with:
           packages: ./formatter
           fuzz-time: 30s
@@ -58,7 +58,7 @@ jobs:
       contents: write
       issues: write
     steps:
-      - uses: jidicula/go-fuzz-action@0ec28329e946c7eea228784a83f26d73f3bfdb23
+      - uses: jidicula/go-fuzz-action@ca499a56cc3e3aa7c221d30d8b525cfc6b52f185
         with:
           packages: ./query/bql
           fuzz-time: 30s
