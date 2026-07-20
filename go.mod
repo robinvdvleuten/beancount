@@ -12,7 +12,7 @@ require (
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/mattn/go-runewidth v0.0.24
 	github.com/shopspring/decimal v1.4.0
-	golang.org/x/term v0.44.0
+	golang.org/x/term v0.45.0
 )
 
 require (
@@ -41,6 +41,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	golang.org/x/sync v0.15.0 // indirect
-	golang.org/x/sys v0.46.0 // indirect
+	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 )
