@@ -27,7 +27,7 @@
   "devDependencies": {
     "@playwright/test": "^1.59.1",
     "@tailwindcss/vite": "^4.3.2",
-    "@types/node": "^26.0.0",
+    "@types/node": "^26.1.1",
     "eslint-plugin-solid": "^0.14.5",
     "oxfmt": "^0.56.0",
     "oxlint": "^1.73.0",
