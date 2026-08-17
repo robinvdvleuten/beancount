@@ -29,7 +29,7 @@
     "@tailwindcss/vite": "^4.3.2",
     "@types/node": "^26.2.0",
     "eslint-plugin-solid": "^0.14.5",
-    "oxfmt": "^0.60.0",
+    "oxfmt": "^0.63.0",
     "oxlint": "^1.76.0",
     "oxlint-tsgolint": "^7.0.2001",
     "tailwindcss": "^4.3.3",
