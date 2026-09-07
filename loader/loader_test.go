@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -425,6 +426,117 @@ include "common.beancount"
 	// Verify Root and Includes (common.beancount only appears once)
 	assert.Equal(t, absMainFile, result.Root)
 	assert.Equal(t, 1, len(result.Includes))
+}
+
+func TestLoadWithIncludeGlob(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	subDir := filepath.Join(tmpDir, "accounts")
+	assert.NoError(t, os.MkdirAll(subDir, 0755))
+
+	// Named so that lexicographic sort differs from creation order.
+	assert.NoError(t, os.WriteFile(filepath.Join(subDir, "b.beancount"), []byte(`
+2024-01-02 open Assets:Savings USD
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(subDir, "a.beancount"), []byte(`
+2024-01-01 open Assets:Checking USD
+`), 0644))
+	// Non-matching file should be ignored by the pattern.
+	assert.NoError(t, os.WriteFile(filepath.Join(subDir, "notes.txt"), []byte("ignored"), 0644))
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
+include "accounts/*.beancount"
+
+2024-01-03 open Income:Salary USD
+`), 0644))
+
+	absA, err := filepath.Abs(filepath.Join(subDir, "a.beancount"))
+	assert.NoError(t, err)
+	absB, err := filepath.Abs(filepath.Join(subDir, "b.beancount"))
+	assert.NoError(t, err)
+
+	ldr := New(WithFollowIncludes())
+	result, err := ldr.Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+
+	// All 3 directives merged (2 matched files + main).
+	assert.Equal(t, 3, len(result.AST.Directives))
+	assert.Equal(t, 0, len(result.Diagnostics))
+
+	// Both glob matches should be resolved into Includes, sorted.
+	assert.Equal(t, 2, len(result.Includes))
+	slices.Sort(result.Includes)
+	assert.Equal(t, []string{absA, absB}, result.Includes)
+}
+
+func TestLoadWithIncludeGlobNoMatches(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
+include "accounts/*.beancount"
+
+2024-01-01 open Assets:Checking USD
+`), 0644))
+
+	ldr := New(WithFollowIncludes())
+	result, err := ldr.Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+
+	// No files matched, so only the main file's directive is present.
+	assert.Equal(t, 1, len(result.AST.Directives))
+	assert.Equal(t, 0, len(result.Includes))
+
+	// An empty-match warning should be reported instead of a hard failure.
+	assert.Equal(t, 1, len(result.Diagnostics))
+	assert.Equal(t, diagnostic.SeverityWarning, diagnostic.SeverityOf(result.Diagnostics[0]))
+	var globWarning *EmptyIncludeGlobWarning
+	assert.True(t, errors.As(result.Diagnostics[0], &globWarning))
+	assert.Equal(t, "accounts/*.beancount", globWarning.Include.Filename.Value)
+}
+
+func TestLoadWithIncludeGlobInvalidPattern(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
+include "accounts/[.beancount"
+
+2024-01-01 open Assets:Checking USD
+`), 0644))
+
+	ldr := New(WithFollowIncludes())
+	_, err := ldr.Load(context.Background(), mainFile)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid include pattern")
+}
+
+func TestLoadWithIncludeGlobAbsolutePattern(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	subDir := filepath.Join(tmpDir, "accounts")
+	assert.NoError(t, os.MkdirAll(subDir, 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(subDir, "a.beancount"), []byte(`
+2024-01-01 open Assets:Checking USD
+`), 0644))
+	assert.NoError(t, os.WriteFile(filepath.Join(subDir, "b.beancount"), []byte(`
+2024-01-02 open Assets:Savings USD
+`), 0644))
+
+	pattern := filepath.ToSlash(filepath.Join(subDir, "*.beancount"))
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
+include "`+pattern+`"
+`), 0644))
+
+	ldr := New(WithFollowIncludes())
+	result, err := ldr.Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+
+	assert.Equal(t, 2, len(result.AST.Directives))
+	assert.Equal(t, 2, len(result.Includes))
+	assert.Equal(t, 0, len(result.Diagnostics))
 }
 
 func TestLoadNonExistentFile(t *testing.T) {
