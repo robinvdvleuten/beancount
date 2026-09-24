@@ -482,22 +482,30 @@ func deriveName(e bql.Expr) string {
 	case *bql.Int:
 		return fmt.Sprintf("c%d", node.Value)
 	case *bql.Dec:
-		return "c" + sanitizeName(node.Value.String())
+		return "c" + sanitizeName(decimalLiteral(node.Value))
 	case *bql.DateLit:
 		return "c" + sanitizeName(node.Value.String())
 	case *bql.Bool:
+		// Python's str(True) is "True"; the sanitizer turns the capital
+		// into an underscore.
 		if node.Value {
-			return "ctrue"
+			return "c" + sanitizeName("True")
 		}
-		return "cfalse"
+		return "c" + sanitizeName("False")
 	case *bql.Null:
-		return "cnone"
+		return "c" + sanitizeName("None")
 	case *bql.Unary:
-		prefix := "neg"
 		if node.Op == bql.NOT {
-			prefix = "not"
+			return "not_" + deriveName(node.X)
 		}
-		return prefix + "_" + deriveName(node.X)
+		// bean-query lexes a signed number as one constant: -1.5 is c_1_5.
+		switch x := node.X.(type) {
+		case *bql.Int:
+			return "c" + sanitizeName(fmt.Sprintf("-%d", x.Value))
+		case *bql.Dec:
+			return "c" + sanitizeName("-"+decimalLiteral(x.Value))
+		}
+		return "neg_" + deriveName(node.X)
 	case *bql.Binary:
 		return binaryOpNames[node.Op] + "_" + deriveName(node.L) + "_" + deriveName(node.R)
 	}
@@ -516,7 +524,7 @@ var binaryOpNames = map[bql.TokenType]string{
 	bql.GT:       "greater",
 	bql.GTE:      "greater_eq",
 	bql.TILDE:    "match",
-	bql.IN:       "in",
+	bql.IN:       "contains",
 	bql.AND:      "and",
 	bql.OR:       "or",
 }
@@ -528,6 +536,12 @@ var nameSanitizer = regexp.MustCompile(`[^a-z0-9_]+`)
 
 func sanitizeName(s string) string {
 	return nameSanitizer.ReplaceAllString(s, "_")
+}
+
+// decimalLiteral renders a decimal constant with the digits it was written
+// with, like Python's str(Decimal): 2500.00 stays "2500.00".
+func decimalLiteral(d decimal.Decimal) string {
+	return d.StringFixed(max(-d.Exponent(), 0))
 }
 
 // exprKey builds a canonical key for structural expression matching, used

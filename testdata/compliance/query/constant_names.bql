@@ -1,0 +1,1 @@
+SELECT -1.5, 2500.00, TRUE, 'x' IN tags, number * -1 LIMIT 2

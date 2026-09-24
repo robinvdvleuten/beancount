@@ -21,14 +21,10 @@ func RenderText(result *Result, w io.Writer) error {
 		if i > 0 {
 			b.WriteByte(' ')
 		}
-		width := renderers[i].width()
-		name := col.Name
-		if columnAllNull(result, i) {
-			// Columns with only NULL values render a blank header in the
-			// official output.
-			name = ""
-		}
-		b.WriteString(center(truncate(name, width), width))
+		// Like bean-query, the header takes the column's content width,
+		// which may be 0 (all values empty), while cells take at least 1.
+		width := renderers[i].contentWidth()
+		b.WriteString(center(truncate(col.Name, width), width))
 	}
 	b.WriteByte('\n')
 
@@ -45,7 +41,8 @@ func RenderText(result *Result, w io.Writer) error {
 			if i > 0 {
 				b.WriteByte(' ')
 			}
-			b.WriteString(renderers[i].format(value))
+			// Cells are at least one character wide in text output.
+			b.WriteString(padRight(renderers[i].format(value), renderers[i].width()))
 		}
 		b.WriteByte('\n')
 	}
@@ -100,15 +97,6 @@ func writeCSVRecord(b *strings.Builder, fields []string) {
 		}
 	}
 	b.WriteString("\r\n")
-}
-
-func columnAllNull(result *Result, col int) bool {
-	for _, row := range result.Rows {
-		if row[col] != nil {
-			return false
-		}
-	}
-	return true
 }
 
 func prepareRenderers(result *Result, forCSV bool) []columnRenderer {
@@ -244,6 +232,9 @@ func currencyNumber(v any, currency string) (decimal.Decimal, bool) {
 // prepare, then formats each value padded to the column width.
 type columnRenderer interface {
 	prepare(v any)
+	// contentWidth is the width the values need, 0 when all are empty;
+	// width is the cell width, at least 1.
+	contentWidth() int
 	width() int
 	format(v any) string
 }
@@ -328,19 +319,21 @@ func (r *stringRenderer) prepare(v any) {
 	}
 }
 
-func (r *stringRenderer) width() int { return max(r.w, 1) }
+func (r *stringRenderer) contentWidth() int { return r.w }
+func (r *stringRenderer) width() int        { return max(r.w, 1) }
 
 func (r *stringRenderer) format(v any) string {
 	if r.unpadded {
 		return r.toString(v)
 	}
-	return padRight(r.toString(v), r.width())
+	return padRight(r.toString(v), r.contentWidth())
 }
 
 type dateRenderer struct{}
 
-func (r *dateRenderer) prepare(any) {}
-func (r *dateRenderer) width() int  { return 10 }
+func (r *dateRenderer) prepare(any)       {}
+func (r *dateRenderer) contentWidth() int { return 10 }
+func (r *dateRenderer) width() int        { return 10 }
 
 func (r *dateRenderer) format(v any) string {
 	if date, ok := v.(*ast.Date); ok && date != nil {
@@ -384,30 +377,44 @@ func (r *intRenderer) prepare(v any) {
 	}
 }
 
-func (r *intRenderer) width() int { return max(r.integral.width(), 1) }
+func (r *intRenderer) contentWidth() int { return r.integral.width() }
+func (r *intRenderer) width() int        { return max(r.integral.width(), 1) }
 
 func (r *intRenderer) format(v any) string {
 	if n, ok := v.(int64); ok {
-		return padLeft(fmt.Sprintf("%d", n), r.width())
+		return padLeft(fmt.Sprintf("%d", n), r.contentWidth())
 	}
-	return strings.Repeat(" ", r.width())
+	return strings.Repeat(" ", r.contentWidth())
 }
 
-// boolRenderer renders TRUE/FALSE with the official fixed width of 5.
-type boolRenderer struct{}
+// boolRenderer renders TRUE/FALSE like bean-query's BoolRenderer: the column
+// is 5 wide if it holds a TRUE and 4 otherwise, so FALSE alone is cut to
+// "FALS", and a NULL renders as FALSE.
+type boolRenderer struct {
+	seenTrue bool
+}
 
-func (r *boolRenderer) prepare(any) {}
-func (r *boolRenderer) width() int  { return 5 }
+func (r *boolRenderer) prepare(v any) {
+	if b, ok := v.(bool); ok && b {
+		r.seenTrue = true
+	}
+}
+
+func (r *boolRenderer) contentWidth() int {
+	if r.seenTrue {
+		return 5
+	}
+	return 4
+}
+
+func (r *boolRenderer) width() int { return r.contentWidth() }
 
 func (r *boolRenderer) format(v any) string {
-	b, ok := v.(bool)
-	if !ok {
-		return strings.Repeat(" ", 5)
+	text := "FALSE"
+	if b, ok := v.(bool); ok && b {
+		text = "TRUE"
 	}
-	if b {
-		return padRight("TRUE", 5)
-	}
-	return "FALSE"
+	return padRight(truncate(text, r.contentWidth()), r.contentWidth())
 }
 
 // decimalRenderer renders a plain decimal column. Its numbers have no
@@ -422,6 +429,8 @@ func (r *decimalRenderer) prepare(v any) {
 	}
 }
 
+func (r *decimalRenderer) contentWidth() int { return r.numbers.width() }
+
 func (r *decimalRenderer) width() int {
 	return max(r.numbers.width(), 1)
 }
@@ -429,9 +438,9 @@ func (r *decimalRenderer) width() int {
 func (r *decimalRenderer) format(v any) string {
 	d, ok := v.(decimal.Decimal)
 	if !ok {
-		return strings.Repeat(" ", r.width())
+		return strings.Repeat(" ", r.contentWidth())
 	}
-	return padRight(r.numbers.format(d), r.width())
+	return padRight(r.numbers.format(d), r.contentWidth())
 }
 
 func decimalParts(d decimal.Decimal) (string, string) {
@@ -547,6 +556,8 @@ func (r *amountRenderer) prepare(v any) {
 	}
 }
 
+func (r *amountRenderer) contentWidth() int { return r.amounts.width() }
+
 func (r *amountRenderer) width() int {
 	return max(r.amounts.width(), 1)
 }
@@ -554,9 +565,9 @@ func (r *amountRenderer) width() int {
 func (r *amountRenderer) format(v any) string {
 	a, ok := v.(*Amount)
 	if !ok || a == nil {
-		return strings.Repeat(" ", r.width())
+		return strings.Repeat(" ", r.contentWidth())
 	}
-	return padRight(r.amounts.format(a.Number, a.Currency), r.width())
+	return padRight(r.amounts.format(a.Number, a.Currency), r.contentWidth())
 }
 
 // positionRenderer renders positions and inventories like bean-query's
@@ -600,6 +611,8 @@ func (r *positionRenderer) subWidth() int {
 	return w
 }
 
+func (r *positionRenderer) contentWidth() int { return r.subWidth() }
+
 func (r *positionRenderer) width() int {
 	return max(r.subWidth(), 1)
 }
@@ -613,7 +626,7 @@ func (r *positionRenderer) formatPosition(p *Position) string {
 }
 
 func (r *positionRenderer) format(v any) string {
-	width := r.width()
+	width := r.contentWidth()
 	positions := r.positions(v)
 	if len(positions) == 0 {
 		return strings.Repeat(" ", width)

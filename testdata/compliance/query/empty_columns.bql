@@ -1,0 +1,1 @@
+SELECT date, flag, payee, tags, links, close_date(account) LIMIT 3
