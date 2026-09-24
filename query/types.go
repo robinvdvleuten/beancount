@@ -174,33 +174,6 @@ func (inv *Inventory) Copy() *Inventory {
 	return copied
 }
 
-// matchLotDate returns the cost date of an existing lot that a reduction
-// matches by currency and cost basis, or nil. Used to inherit lot dates the
-// way official booking does.
-func (inv *Inventory) matchLotDate(p *Position) *ast.Date {
-	if p.Cost == nil {
-		return nil
-	}
-	var best *ast.Date
-	for _, lot := range inv.positions {
-		if lot.Cost == nil || lot.Cost.Date == nil {
-			continue
-		}
-		if lot.Units.Currency != p.Units.Currency ||
-			lot.Cost.Currency != p.Cost.Currency ||
-			!lot.Cost.Number.Equal(p.Cost.Number) {
-			continue
-		}
-		if lot.Units.Number.Sign() == 0 || lot.Units.Number.Sign() == p.Units.Number.Sign() {
-			continue
-		}
-		if best == nil || lot.Cost.Date.Before(best.Time) {
-			best = lot.Cost.Date
-		}
-	}
-	return best
-}
-
 // Neg returns a new inventory with all unit numbers negated.
 func (inv *Inventory) Neg() *Inventory {
 	negated := NewInventory()

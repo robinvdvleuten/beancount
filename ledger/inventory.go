@@ -22,6 +22,15 @@ type lotReduction struct {
 	amount decimal.Decimal
 }
 
+// BookedLot is the share of a reducing posting booked against one lot.
+type BookedLot struct {
+	Units        decimal.Decimal  // Signed change applied to the lot
+	Cost         *decimal.Decimal // Per-unit cost; nil for a lot held without cost
+	CostCurrency string
+	Date         *ast.Date
+	Label        string
+}
+
 type reductionPlan struct {
 	commodity       string
 	reductions      []lotReduction
@@ -123,19 +132,32 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 // holds an opposite-signed position in the commodity (see isReducedBy);
 // otherwise it augments, which is how short positions at cost are opened.
 // An augmenting lot without an explicit date is acquired on acquisitionDate.
+//
+// For a reduction, Book returns the lots it was booked against in booking
+// order; an augmentation returns none.
 func (inv *Inventory) Book(
 	commodity string,
 	amount decimal.Decimal,
 	spec *lotSpec,
 	bookingMethod BookingMethod,
 	acquisitionDate *ast.Date,
-) error {
+) ([]BookedLot, error) {
 	plan, err := inv.planBooking(commodity, amount, spec, bookingMethod, acquisitionDate)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	var booked []BookedLot
+	for _, reduction := range plan.reductions {
+		lot := BookedLot{Units: reduction.amount}
+		if s := reduction.lot.Spec; s != nil {
+			lot.Cost, lot.CostCurrency, lot.Date, lot.Label = s.Cost, s.CostCurrency, s.Date, s.Label
+		}
+		booked = append(booked, lot)
+	}
+
 	inv.applyReduction(plan)
-	return nil
+	return booked, nil
 }
 
 // isReducedBy reports whether adding amount of commodity would reduce the

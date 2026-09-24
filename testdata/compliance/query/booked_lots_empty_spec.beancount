@@ -1,0 +1,20 @@
+; A reduction with an empty cost spec is booked against the lots chosen by
+; the booking method; each booked lot becomes its own row.
+2020-01-01 open Assets:Stock "FIFO"
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock   10 HOOL {100.00 USD}
+  Assets:Cash
+
+2020-01-03 * "Buy"
+  Assets:Stock   10 HOOL {120.00 USD}
+  Assets:Cash
+
+2020-01-04 * "Buy"
+  Assets:Stock   10 HOOL {130.00 USD}
+  Assets:Cash
+
+2020-01-05 * "Sell across two lots"
+  Assets:Stock  -15 HOOL {}
+  Assets:Cash

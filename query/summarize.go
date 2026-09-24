@@ -43,7 +43,7 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 				kept = append(kept, entry)
 				continue
 			}
-			bookTransaction(accounts, txn)
+			bookTransaction(qctx, accounts, txn)
 			continue
 		}
 		kept = append(kept, entry)
@@ -108,7 +108,7 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 			lastDate = entry.Date().Time
 		}
 		if txn, ok := entry.(*ast.Transaction); ok {
-			bookTransaction(accounts, txn)
+			bookTransaction(qctx, accounts, txn)
 		}
 	}
 
@@ -131,24 +131,17 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 }
 
 // bookTransaction books a transaction's postings into the per-account
-// inventories with the same lot-date semantics as row generation.
-func bookTransaction(accounts map[string]*Inventory, txn *ast.Transaction) {
+// inventories, using the same booked positions as row generation.
+func bookTransaction(qctx *Context, accounts map[string]*Inventory, txn *ast.Transaction) {
 	for _, posting := range txn.Postings {
 		inventory, ok := accounts[string(posting.Account)]
 		if !ok {
 			inventory = NewInventory()
 			accounts[string(posting.Account)] = inventory
 		}
-		position := postingPosition(posting, txn.Date())
-		if position == nil {
-			continue
+		for _, position := range postingPositions(qctx, posting, txn.Date()) {
+			inventory.AddPosition(position)
 		}
-		if position.Cost != nil && (posting.Cost == nil || posting.Cost.Date == nil) {
-			if inherited := inventory.matchLotDate(position); inherited != nil {
-				position.Cost.Date = inherited
-			}
-		}
-		inventory.AddPosition(position)
 	}
 }
 

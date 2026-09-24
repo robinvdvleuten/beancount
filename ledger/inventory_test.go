@@ -220,7 +220,7 @@ func TestReduceLotLIFO(t *testing.T) {
 		Date:         date2,
 	})
 
-	err = inv.Book("STOCK", decimal.NewFromInt(-5), &lotSpec{}, "LIFO", nil)
+	_, err = inv.Book("STOCK", decimal.NewFromInt(-5), &lotSpec{}, "LIFO", nil)
 	assert.NoError(t, err)
 
 	lots := inv.GetLots("STOCK")
@@ -239,7 +239,7 @@ func TestReduceLotDoesNotMutateOnFailure(t *testing.T) {
 	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{Date: date1})
 	inv.AddLot("STOCK", decimal.NewFromInt(20), &lotSpec{Date: date2})
 
-	err = inv.Book("STOCK", decimal.NewFromInt(-40), &lotSpec{}, "FIFO", nil)
+	_, err = inv.Book("STOCK", decimal.NewFromInt(-40), &lotSpec{}, "FIFO", nil)
 	assert.Error(t, err)
 
 	lots := inv.GetLots("STOCK")
@@ -260,7 +260,7 @@ func TestBookShortPositionAtCost(t *testing.T) {
 			inv := NewInventory()
 
 			// Selling without holdings opens a short lot dated like an acquisition.
-			err := inv.Book("HOOL", decimal.NewFromInt(-3), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, shortDate)
+			_, err := inv.Book("HOOL", decimal.NewFromInt(-3), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, shortDate)
 			assert.NoError(t, err)
 			lots := inv.GetLots("HOOL")
 			assert.Equal(t, 1, len(lots))
@@ -268,17 +268,40 @@ func TestBookShortPositionAtCost(t *testing.T) {
 			assert.True(t, lots[0].Spec.Date.Equal(shortDate.Time))
 
 			// A positive posting now reduces the short lot instead of adding a lot.
-			err = inv.Book("HOOL", decimal.NewFromInt(2), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, coverDate)
+			_, err = inv.Book("HOOL", decimal.NewFromInt(2), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, coverDate)
 			assert.NoError(t, err)
 			lots = inv.GetLots("HOOL")
 			assert.Equal(t, 1, len(lots))
 			assert.Equal(t, "-1", lots[0].Amount.String())
 
-			err = inv.Book("HOOL", decimal.NewFromInt(1), &lotSpec{}, method, coverDate)
+			_, err = inv.Book("HOOL", decimal.NewFromInt(1), &lotSpec{}, method, coverDate)
 			assert.NoError(t, err)
 			assert.True(t, inv.IsEmpty())
 		})
 	}
+}
+
+func TestBookReturnsBookedLots(t *testing.T) {
+	date1, err := ast.NewDate("2024-01-15")
+	assert.NoError(t, err)
+	date2, err := ast.NewDate("2024-02-15")
+	assert.NoError(t, err)
+	cost100 := decimal.NewFromInt(100)
+	cost120 := decimal.NewFromInt(120)
+
+	inv := NewInventory()
+	booked, err := inv.Book("HOOL", decimal.NewFromInt(10), &lotSpec{Cost: &cost100, CostCurrency: "USD"}, BookingFIFO, date1)
+	assert.NoError(t, err)
+	assert.Zero(t, booked, "augmentations book no existing lots")
+	_, err = inv.Book("HOOL", decimal.NewFromInt(10), &lotSpec{Cost: &cost120, CostCurrency: "USD", Label: "b"}, BookingFIFO, date2)
+	assert.NoError(t, err)
+
+	booked, err = inv.Book("HOOL", decimal.NewFromInt(-15), &lotSpec{}, BookingFIFO, date2)
+	assert.NoError(t, err)
+	assert.Equal(t, []BookedLot{
+		{Units: decimal.NewFromInt(-10), Cost: &cost100, CostCurrency: "USD", Date: date1},
+		{Units: decimal.NewFromInt(-5), Cost: &cost120, CostCurrency: "USD", Date: date2, Label: "b"},
+	}, booked)
 }
 
 func TestInventoryStringSortsCommodities(t *testing.T) {
@@ -809,7 +832,7 @@ func TestNoneBookingReduction(t *testing.T) {
 	inv := NewInventory()
 	inv.AddLot("STOCK", d("10"), &lotSpec{Date: date1})
 
-	err := inv.Book("STOCK", d("-5"), &lotSpec{}, BookingNONE, nil)
+	_, err := inv.Book("STOCK", d("-5"), &lotSpec{}, BookingNONE, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "5", inv.Get("STOCK").String())
 }

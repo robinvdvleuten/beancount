@@ -29,18 +29,10 @@ type Row struct {
 	Posting   *ast.Posting
 	Balance   *Inventory
 	AggValues []any
-	// CostDate is the effective cost-basis date for this posting: lot
-	// reductions inherit the matched lot's date (official booking behavior),
-	// everything else gets the transaction date.
-	CostDate *ast.Date
-}
-
-// costDate returns the effective cost date, defaulting to the entry date.
-func (row *Row) costDate() *ast.Date {
-	if row.CostDate != nil {
-		return row.CostDate
-	}
-	return row.Entry.Date()
+	// Position is what this row books: the posting's own position, or for a
+	// reduction the share booked against one lot. Nil for postings without
+	// an amount.
+	Position *Position
 }
 
 // columnDef declares a column available in an environment: its result type
@@ -75,17 +67,17 @@ var entryColumns = map[string]*columnDef{
 // postingColumns is the targets/WHERE environment: columns on posting rows.
 var postingColumns = map[string]*columnDef{
 	"account":       {TString, func(row *Row) any { return string(row.Posting.Account) }},
-	"position":      {TPosition, func(row *Row) any { return postingPosition(row.Posting, row.costDate()) }},
-	"change":        {TPosition, func(row *Row) any { return postingPosition(row.Posting, row.costDate()) }},
+	"position":      {TPosition, func(row *Row) any { return row.Position }},
+	"change":        {TPosition, func(row *Row) any { return row.Position }},
 	"balance":       {TInventory, func(row *Row) any { return row.Balance }},
-	"number":        {TDecimal, func(row *Row) any { return postingNumber(row.Posting) }},
-	"currency":      {TString, func(row *Row) any { return postingCurrency(row.Posting) }},
+	"number":        {TDecimal, unitsColumn(func(units Amount) any { return units.Number })},
+	"currency":      {TString, unitsColumn(func(units Amount) any { return units.Currency })},
 	"cost_number":   {TDecimal, costColumn(func(c *Cost) any { return c.Number })},
 	"cost_currency": {TString, costColumn(func(c *Cost) any { return c.Currency })},
 	"cost_date":     {TDate, costColumn(func(c *Cost) any { return c.Date })},
 	"cost_label":    {TString, costColumn(func(c *Cost) any { return c.Label })},
 	"price":         {TAmount, func(row *Row) any { return postingPrice(row.Posting) }},
-	"weight":        {TAmount, func(row *Row) any { return postingWeight(row.Posting, row.Entry.Date()) }},
+	"weight":        {TAmount, func(row *Row) any { return postingWeight(row.Posting, row.Position) }},
 	"posting_flag":  {TString, func(row *Row) any { return row.Posting.Flag }},
 	"other_accounts": {TSet, func(row *Row) any {
 		others := make(Set)
@@ -140,15 +132,25 @@ func txnColumn(eval func(txn *ast.Transaction) any) func(row *Row) any {
 	}
 }
 
+// unitsColumn wraps a units accessor into a column that yields NULL for
+// postings without an amount.
+func unitsColumn(eval func(units Amount) any) func(row *Row) any {
+	return func(row *Row) any {
+		if row.Position == nil {
+			return nil
+		}
+		return eval(row.Position.Units)
+	}
+}
+
 // costColumn wraps a cost accessor into a column that yields NULL for
 // postings without a cost basis.
 func costColumn(eval func(c *Cost) any) func(row *Row) any {
 	return func(row *Row) any {
-		position := postingPosition(row.Posting, row.costDate())
-		if position == nil || position.Cost == nil {
+		if row.Position == nil || row.Position.Cost == nil {
 			return nil
 		}
-		return eval(position.Cost)
+		return eval(row.Position.Cost)
 	}
 }
 
@@ -188,6 +190,30 @@ func entryID(entry ast.Directive) string {
 	pos := entry.Position()
 	sum := md5.Sum(fmt.Appendf(nil, "%s:%d", pos.Filename, pos.Line))
 	return hex.EncodeToString(sum[:])
+}
+
+// postingPositions returns the positions a posting books. A reduction becomes
+// one position per lot the ledger booked it against, like the booked
+// postings beancount replaces it with; any other posting books its own
+// position.
+func postingPositions(qctx *Context, posting *ast.Posting, entryDate *ast.Date) []*Position {
+	lots := qctx.Ledger.BookedLots(posting)
+	if len(lots) == 0 {
+		if position := postingPosition(posting, entryDate); position != nil {
+			return []*Position{position}
+		}
+		return nil
+	}
+
+	positions := make([]*Position, 0, len(lots))
+	for _, lot := range lots {
+		position := &Position{Units: Amount{Number: lot.Units, Currency: posting.Amount.Currency}}
+		if lot.Cost != nil {
+			position.Cost = &Cost{Number: *lot.Cost, Currency: lot.CostCurrency, Date: lot.Date, Label: lot.Label}
+		}
+		positions = append(positions, position)
+	}
+	return positions
 }
 
 // postingPosition converts an AST posting into a query Position with a
@@ -234,24 +260,6 @@ func postingPosition(posting *ast.Posting, entryDate *ast.Date) *Position {
 	return position
 }
 
-func postingNumber(posting *ast.Posting) any {
-	if posting.Amount == nil {
-		return nil
-	}
-	number, err := ledger.ParseAmount(posting.Amount)
-	if err != nil {
-		return nil
-	}
-	return number
-}
-
-func postingCurrency(posting *ast.Posting) any {
-	if posting.Amount == nil {
-		return nil
-	}
-	return posting.Amount.Currency
-}
-
 // postingPrice returns the per-unit price attached to a posting. Total
 // prices (@@) are normalized to per-unit, matching the official booking
 // behavior.
@@ -273,11 +281,10 @@ func postingPrice(posting *ast.Posting) any {
 	return &Amount{Number: number, Currency: posting.Price.Currency}
 }
 
-// postingWeight computes the booking weight of a posting: units at cost if a
-// cost basis is attached, converted at price if a price is attached, and the
-// plain units otherwise.
-func postingWeight(posting *ast.Posting, entryDate *ast.Date) any {
-	position := postingPosition(posting, entryDate)
+// postingWeight computes the booking weight of a booked position: units at
+// cost if a cost basis is attached, converted at the posting's price if one
+// is attached, and the plain units otherwise.
+func postingWeight(posting *ast.Posting, position *Position) any {
 	if position == nil {
 		return nil
 	}

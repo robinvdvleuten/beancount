@@ -70,10 +70,9 @@ func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compil
 }
 
 // generateRows applies the FROM filter to the directive stream and flattens
-// the surviving transactions into posting rows. Per-account inventories are
-// tracked for booking-style lot-date inheritance; the balance column is a
-// single running inventory over the rows that survive WHERE, matching the
-// official executor.
+// the surviving transactions into posting rows, one per booked position (see
+// postingPositions). The balance column is a single running inventory over
+// the rows that survive WHERE, matching the official executor.
 func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compiled) ([]*Row, error) {
 	entries := []ast.Directive(tree.Directives)
 	if compiled.From != nil {
@@ -81,7 +80,6 @@ func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 	}
 
 	var rows []*Row
-	accounts := make(map[string]*Inventory)
 	running := NewInventory()
 
 	for i, entry := range entries {
@@ -106,38 +104,24 @@ func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		}
 
 		for _, posting := range txn.Postings {
-			row := &Row{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting}
-
-			account := string(posting.Account)
-			inventory, ok := accounts[account]
-			if !ok {
-				inventory = NewInventory()
-				accounts[account] = inventory
+			positions := postingPositions(qctx, posting, entry.Date())
+			if len(positions) == 0 {
+				positions = []*Position{nil}
 			}
-			position := postingPosition(posting, entry.Date())
-			if position != nil {
-				// Reductions without an explicit cost date inherit the
-				// matched lot's date, like official booking, so lots merge
-				// when summed.
-				if position.Cost != nil && (posting.Cost == nil || posting.Cost.Date == nil) {
-					if inherited := inventory.matchLotDate(position); inherited != nil {
-						row.CostDate = inherited
-						position.Cost.Date = inherited
+
+			for _, position := range positions {
+				row := &Row{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position}
+				if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
+					continue
+				}
+				if compiled.UsesBalance {
+					if position != nil {
+						running.AddPosition(position)
 					}
+					row.Balance = running.Copy()
 				}
-				inventory.AddPosition(position)
+				rows = append(rows, row)
 			}
-
-			if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
-				continue
-			}
-			if compiled.UsesBalance {
-				if position != nil {
-					running.AddPosition(position)
-				}
-				row.Balance = running.Copy()
-			}
-			rows = append(rows, row)
 		}
 	}
 	return rows, nil

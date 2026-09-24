@@ -66,6 +66,7 @@ type Ledger struct {
 	padEntries            map[string]*ast.Pad // account -> pad directive
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
+	bookedLots            map[*ast.Posting][]BookedLot
 	priceGraphMu          sync.RWMutex
 	priceGraphs           map[string]*Graph
 }
@@ -107,6 +108,7 @@ func New() *Ledger {
 		padEntries:  make(map[string]*ast.Pad),
 		usedPads:    make(map[string]bool),
 		priceGraphs: make(map[string]*Graph),
+		bookedLots:  make(map[*ast.Posting][]BookedLot),
 	}
 }
 
@@ -272,6 +274,13 @@ func (l *Ledger) Warnings() []error {
 // Diagnostics returns all diagnostics in processing order.
 func (l *Ledger) Diagnostics() []error {
 	return slices.Clone(l.errors)
+}
+
+// BookedLots returns the lots a reducing posting was booked against, in
+// booking order, or nil when the posting augmented its inventory. Beancount
+// replaces such a posting with one booked posting per lot.
+func (l *Ledger) BookedLots(posting *ast.Posting) []BookedLot {
+	return l.bookedLots[posting]
 }
 
 // GetAccount returns an account by name
@@ -809,10 +818,13 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 			// Beancount records an acquisition date on every new lot,
 			// defaulting to the transaction date; LIFO/FIFO ordering and
 			// dated lot specs depend on it.
-			err = account.Inventory.Book(currency, amount, lotSpec, account.BookingMethod, txn.Date())
+			booked, err := account.Inventory.Book(currency, amount, lotSpec, account.BookingMethod, txn.Date())
 			if err != nil {
 				// This should never happen after validateInventoryOperations - panic to catch bugs
 				panic(fmt.Sprintf("BUG: lot booking failed after validation: %v", err))
+			}
+			if len(booked) > 0 {
+				l.bookedLots[posting] = booked
 			}
 		} else {
 			account.Inventory.Add(currency, amount)
