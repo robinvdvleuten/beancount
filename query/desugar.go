@@ -22,9 +22,9 @@ func Desugar(stmt bql.Statement) bql.Statement {
 	return stmt
 }
 
-// desugarBalances expands BALANCES [AT fn] into
+// desugarBalances expands BALANCES [AT fn] [FROM ...] [WHERE ...] into
 //
-//	SELECT account, sum([fn(]position[)])
+//	SELECT account, sum([fn(]position[)]) [FROM ...] [WHERE ...]
 //	GROUP BY account ORDER BY account_sortkey(account)
 func desugarBalances(b *bql.Balances) *bql.Select {
 	account := &bql.Ident{Name: "account"}
@@ -34,6 +34,7 @@ func desugarBalances(b *bql.Balances) *bql.Select {
 			{Expr: call("sum", summarize(b.Summary, &bql.Ident{Name: "position"}))},
 		},
 		From:    b.From,
+		Where:   b.Where,
 		GroupBy: []bql.Expr{account},
 		OrderBy: []bql.Expr{call("account_sortkey", account)},
 	}

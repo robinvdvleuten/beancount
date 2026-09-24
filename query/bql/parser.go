@@ -289,6 +289,15 @@ func (p *parser) parseBalances() (*Balances, error) {
 		}
 		stmt.From = from
 	}
+
+	// Unlike JOURNAL, the official grammar gives BALANCES a WHERE clause.
+	if p.accept(WHERE) {
+		expr, err := p.parseExpr()
+		if err != nil {
+			return nil, err
+		}
+		stmt.Where = expr
+	}
 	return stmt, nil
 }
 

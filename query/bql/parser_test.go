@@ -250,6 +250,23 @@ func TestParseBalancesBare(t *testing.T) {
 	assert.Zero(t, balances.From)
 }
 
+func TestParseBalancesWhere(t *testing.T) {
+	stmt, err := Parse("BALANCES AT cost FROM year = 2014 WHERE account ~ 'Assets'")
+	assert.NoError(t, err)
+	balances := stmt.(*Balances)
+	assert.NotZero(t, balances.From)
+	assert.NotZero(t, balances.Where)
+
+	// Only BALANCES takes WHERE; JOURNAL and trailing clauses do not.
+	for _, query := range []string{
+		"JOURNAL 'Assets' WHERE number > 0",
+		"BALANCES WHERE account ~ 'Assets' ORDER BY account",
+	} {
+		_, err := Parse(query)
+		assert.Error(t, err, query)
+	}
+}
+
 func TestParseJournal(t *testing.T) {
 	stmt, err := Parse(`JOURNAL "Assets:Checking" AT units FROM year = 2014`)
 	assert.NoError(t, err)

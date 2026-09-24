@@ -68,6 +68,7 @@ type Balances struct {
 	position
 	Summary string // AT <function>, empty if absent
 	From    *From
+	Where   Expr // optional WHERE filter
 }
 
 func (*Balances) stmt() {}
