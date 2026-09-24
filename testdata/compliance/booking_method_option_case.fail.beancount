@@ -1,0 +1,2 @@
+; The booking_method option names a method case-sensitively.
+option "booking_method" "fifo"

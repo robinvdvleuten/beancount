@@ -167,7 +167,7 @@ func FromOptions(options map[string][]string) (*Config, error) {
 	}
 
 	if values := options["booking_method"]; len(values) > 0 {
-		method := strings.ToUpper(values[0])
+		method := values[0]
 		if !IsBookingMethod(method) {
 			return nil, fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, HIFO, or AVERAGE", values[0])
 		}

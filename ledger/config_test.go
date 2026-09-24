@@ -96,12 +96,19 @@ func TestConfigFromOptions(t *testing.T) {
 		{
 			name: "official booking methods",
 			options: map[string][]string{
-				"booking_method": {"none"},
+				"booking_method": {"NONE"},
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
 				assert.Equal(t, "NONE", config.BookingMethod)
 			},
+		},
+		{
+			name: "booking method names are case-sensitive",
+			options: map[string][]string{
+				"booking_method": {"none"},
+			},
+			wantErr: true,
 		},
 		{
 			name: "invalid multiplier",
