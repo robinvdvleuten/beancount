@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -15,6 +16,9 @@ import (
 type Result struct {
 	Columns []ResultColumn
 	Rows    [][]any
+	// Display holds the ledger's per-currency display precision, which the
+	// renderers size number columns with; nil renders numbers as written.
+	Display *ledger.DisplayContext
 }
 
 // ResultColumn describes one output column for the renderers.
@@ -60,7 +64,7 @@ func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compil
 		output = output[:*compiled.Limit]
 	}
 
-	result := &Result{Rows: output}
+	result := &Result{Rows: output, Display: qctx.Ledger.DisplayContext()}
 	for _, target := range compiled.Targets {
 		if !target.Hidden {
 			result.Columns = append(result.Columns, ResultColumn{Name: target.Name, Type: target.Type})

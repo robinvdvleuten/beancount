@@ -98,6 +98,7 @@ type AST struct {
 // WithMetadata is an interface for AST nodes that can have metadata attached.
 type WithMetadata interface {
 	AddMetadata(...*Metadata)
+	GetMetadata() []*Metadata
 }
 
 // WithComment is an interface for AST nodes that can have an inline comment attached.
@@ -114,6 +115,8 @@ type withMetadata struct {
 func (w *withMetadata) AddMetadata(m ...*Metadata) {
 	w.Metadata = append(w.Metadata, m...)
 }
+
+func (w *withMetadata) GetMetadata() []*Metadata { return w.Metadata }
 
 func (w *withMetadata) HasMetadata() bool {
 	return len(w.Metadata) > 0

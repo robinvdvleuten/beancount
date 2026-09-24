@@ -67,6 +67,7 @@ type Ledger struct {
 	usedPads              map[string]bool     // account -> whether pad was used
 	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
 	bookedLots            map[*ast.Posting][]BookedLot
+	display               *DisplayContext
 	priceGraphMu          sync.RWMutex
 	priceGraphs           map[string]*Graph
 }
@@ -109,6 +110,7 @@ func New() *Ledger {
 		usedPads:    make(map[string]bool),
 		priceGraphs: make(map[string]*Graph),
 		bookedLots:  make(map[*ast.Posting][]BookedLot),
+		display:     newDisplayContext(),
 	}
 }
 
@@ -162,12 +164,14 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		Unit:  "directives",
 	})
 
-	// Count transactions and create validation summary timer
+	// Count transactions, and record the source amounts' precisions before
+	// interpolation writes inferred amounts into the AST.
 	transactionCount := 0
 	for _, directive := range tree.Directives {
 		if _, ok := directive.(*ast.Transaction); ok {
 			transactionCount++
 		}
+		l.display.updateFromDirective(directive)
 	}
 
 	var validationTimer telemetry.Timer
@@ -281,6 +285,12 @@ func (l *Ledger) Diagnostics() []error {
 // replaces such a posting with one booked posting per lot.
 func (l *Ledger) BookedLots(posting *ast.Posting) []BookedLot {
 	return l.bookedLots[posting]
+}
+
+// DisplayContext returns the per-currency display precision of the
+// ledger's source amounts.
+func (l *Ledger) DisplayContext() *DisplayContext {
+	return l.display
 }
 
 // GetAccount returns an account by name
