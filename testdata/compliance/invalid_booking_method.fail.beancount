@@ -1,0 +1,3 @@
+; An open directive's booking method must be one of beancount's names,
+; matched case-sensitively.
+2020-01-01 open Assets:Stock "fifo"

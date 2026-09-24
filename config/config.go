@@ -168,12 +168,10 @@ func FromOptions(options map[string][]string) (*Config, error) {
 
 	if values := options["booking_method"]; len(values) > 0 {
 		method := strings.ToUpper(values[0])
-		switch method {
-		case "STRICT", "NONE", "FIFO", "LIFO", "HIFO", "AVERAGE":
-			cfg.BookingMethod = method
-		default:
+		if !IsBookingMethod(method) {
 			return nil, fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, HIFO, or AVERAGE", values[0])
 		}
+		cfg.BookingMethod = method
 	}
 
 	setFirst(options, "name_assets", &cfg.AccountNames.Assets)
@@ -263,4 +261,14 @@ func (c *Config) GetAccountTypeFromName(name string) (ast.AccountType, bool) {
 	default:
 		return 0, false
 	}
+}
+
+// IsBookingMethod reports whether name is one of beancount's booking method
+// names, which are case-sensitive: STRICT, NONE, FIFO, LIFO, HIFO, AVERAGE.
+func IsBookingMethod(name string) bool {
+	switch name {
+	case "STRICT", "NONE", "FIFO", "LIFO", "HIFO", "AVERAGE":
+		return true
+	}
+	return false
 }

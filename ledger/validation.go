@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/shopspring/decimal"
 )
 
@@ -1060,6 +1061,13 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	// Check if account already exists - duplicate open is always an error
 	if existing, ok := v.accounts[accountName]; ok {
 		errs = append(errs, NewAccountAlreadyOpenError(open, existing.OpenDate))
+		return errs, nil
+	}
+
+	// A per-account booking method must name one of beancount's methods,
+	// matched case-sensitively.
+	if open.BookingMethod != "" && !sharedconfig.IsBookingMethod(open.BookingMethod) {
+		errs = append(errs, NewInvalidBookingMethodError(open))
 		return errs, nil
 	}
 

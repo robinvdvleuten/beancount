@@ -260,6 +260,43 @@ func NewNegativeCostError(txn *ast.Transaction, account ast.Account, cost decima
 	}
 }
 
+// InvalidBookingMethodError is returned for an open directive naming an
+// unknown booking method.
+type InvalidBookingMethodError struct {
+	directiveError
+	Account ast.Account
+	Method  string
+}
+
+func (e *InvalidBookingMethodError) Error() string {
+	return fmt.Sprintf("%s: Invalid booking method: %s", e.formatLocation(), e.Method)
+}
+
+func (e *InvalidBookingMethodError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *InvalidBookingMethodError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "InvalidBookingMethodError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"method":   e.Method,
+		"date":     e.Date().String(),
+	})
+}
+
+// NewInvalidBookingMethodError creates an error for an open directive with an
+// unknown booking method.
+func NewInvalidBookingMethodError(open *ast.Open) *InvalidBookingMethodError {
+	return &InvalidBookingMethodError{
+		directiveError: newDirectiveError(open),
+		Account:        open.Account,
+		Method:         open.BookingMethod,
+	}
+}
+
 // TransactionNotBalancedError is returned when a transaction doesn't balance
 type TransactionNotBalancedError struct {
 	directiveError
