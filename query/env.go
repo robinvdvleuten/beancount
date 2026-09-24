@@ -110,16 +110,54 @@ var postingColumns = map[string]*columnDef{
 	"links":       {TSet, func(row *Row) any { return linkSet(row.Txn) }},
 }
 
-// environment names a column set for compilation and error messages.
+// environment is what one clause compiles against, like bean-query's
+// compilation environments: its columns, which functions it registers, and
+// the context named in its error messages.
 type environment struct {
 	columns map[string]*columnDef
 	context string
+	// withAggregates registers the aggregate functions (targets only).
+	withAggregates bool
+	// withEntryFilters registers has_account (FROM only).
+	withEntryFilters bool
 }
 
 var (
-	targetsEnv = &environment{columns: postingColumns, context: "targets/column context"}
-	filterEnv  = &environment{columns: entryColumns, context: "filter context"}
+	// targetsEnv compiles SELECT targets, GROUP BY, ORDER BY and PIVOT BY.
+	targetsEnv = &environment{columns: postingColumns, context: "targets/column context", withAggregates: true}
+	// whereEnv compiles the WHERE clause, over postings.
+	whereEnv = &environment{columns: postingColumns, context: "WHERE clause context"}
+	// fromEnv compiles the FROM clause, over entries.
+	fromEnv = &environment{columns: entryColumns, context: "FROM clause context", withEntryFilters: true}
 )
+
+// entryFilters are the functions only the FROM environment registers.
+var entryFilters = map[string]bool{"has_account": true}
+
+// aggregate returns the aggregate function registered under name, if any.
+func (e *environment) aggregate(name string) *aggDef {
+	if !e.withAggregates {
+		return nil
+	}
+	return aggregates[name]
+}
+
+// function returns the simple function registered under name, if any.
+func (e *environment) function(name string) *funcDef {
+	if entryFilters[name] && !e.withEntryFilters {
+		return nil
+	}
+	return functions[name]
+}
+
+// fallback returns the by-name class bean-query registers for name in
+// this environment, if any.
+func (e *environment) fallback(name string) *fallbackClass {
+	if aggregates[name] != nil && !e.withAggregates || entryFilters[name] && !e.withEntryFilters {
+		return nil
+	}
+	return fallbackClasses[name]
+}
 
 // txnColumn wraps a transaction accessor into an entry-environment column
 // that yields NULL for non-transaction directives.

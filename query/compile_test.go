@@ -198,7 +198,7 @@ func TestCompileGroupByIndexOutOfRange(t *testing.T) {
 func TestCompileGroupByAggregate(t *testing.T) {
 	ctx, _ := newTestContext(t)
 	err := compileError(t, ctx, "SELECT account, sum(position) GROUP BY 2")
-	assert.Equal(t, "GROUP-BY expressions may not be aggregates.", err.Error())
+	assert.Equal(t, "GROUP-BY expressions may not reference aggregates: '2'.", err.Error())
 }
 
 func TestCompileOrderByHiddenTarget(t *testing.T) {
@@ -220,10 +220,28 @@ func TestCompileOrderByMatchesTarget(t *testing.T) {
 	assert.True(t, compiled.OrderDesc)
 }
 
-func TestCompileAggregateInWhere(t *testing.T) {
+func TestCompileClauseEnvironments(t *testing.T) {
+	// Like bean-query, each clause compiles in its own environment: only
+	// targets have aggregates, only FROM has has_account, and errors name
+	// the clause.
 	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT account WHERE sum(number) > 0")
-	assert.Contains(t, err.Error(), "Aggregates are disallowed")
+	for query, want := range map[string]string{
+		"SELECT account WHERE sum(number) > 0":                  "Invalid function 'sum(Decimal)' in WHERE clause context.",
+		"SELECT account WHERE has_account('x')":                 "Invalid function 'has_account(str)' in WHERE clause context.",
+		"SELECT account WHERE bogus":                            "Invalid column name 'bogus' in WHERE clause context.",
+		"SELECT account FROM bogus":                             "Invalid column name 'bogus' in FROM clause context.",
+		"SELECT account FROM count(date) > 0":                   "Invalid function 'count(date)' in FROM clause context.",
+		"SELECT sum(sum(number))":                               "Aggregates of aggregates are not allowed.",
+		"SELECT sum(number) + number":                           "Mixed aggregates and non-aggregates are not allowed.",
+		"SELECT account GROUP BY sum(number) != 1.50":           "GROUP-BY expressions may not be aggregates: 'Not(operand=Equal(left=Function(fname='sum', operands=[Column(name='number')]), right=Constant(value=Decimal('1.50'))))'.",
+		"SELECT sum(number) AS s GROUP BY s":                    "GROUP-BY expressions may not reference aggregates: 'Column(name='s')'.",
+		"SELECT account, balance GROUP BY account, balance":     "GROUP-BY a non-hashable type is not supported: 'Column(name='balance')'.",
+		"SELECT account ORDER BY 5":                             "Invalid ORDER-BY column index 5.",
+		"SELECT account GROUP BY count(date) = 2014-01-02 OR 1": "GROUP-BY expressions may not be aggregates: 'Or(left=Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=datetime.date(2014, 1, 2))), right=Constant(value=1))'.",
+	} {
+		assert.Equal(t, want, compileError(t, ctx, query).Error(), query)
+	}
+	mustCompile(t, ctx, "SELECT account, sum(number) + 1 GROUP BY account")
 }
 
 func TestCompileFromUsesEntryEnvironment(t *testing.T) {

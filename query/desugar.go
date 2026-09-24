@@ -96,8 +96,8 @@ func CompilePrint(ctx *Context, p *bql.Print) (*CompiledPrint, error) {
 			Clear:   p.From.Clear,
 		}
 		if p.From.Expr != nil {
-			c := &compiler{ctx: ctx, env: filterEnv}
-			expr, err := c.compileExpr(p.From.Expr, false)
+			c := &compiler{ctx: ctx, env: fromEnv}
+			expr, err := c.compileExpr(p.From.Expr)
 			if err != nil {
 				return nil, err
 			}

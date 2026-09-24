@@ -1,0 +1,1 @@
+SELECT account, balance GROUP BY account, balance

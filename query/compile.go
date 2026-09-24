@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
 )
@@ -109,8 +110,8 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 			Clear:   sel.From.Clear,
 		}
 		if sel.From.Expr != nil {
-			c.env = filterEnv
-			expr, err := c.compileExpr(sel.From.Expr, false)
+			c.env = fromEnv
+			expr, err := c.compileExpr(sel.From.Expr)
 			if err != nil {
 				return nil, err
 			}
@@ -130,8 +131,7 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 		}
 	}
 	for _, target := range targets {
-		before := len(c.aggs)
-		expr, err := c.compileExpr(target.Expr, true)
+		expr, err := c.compileExpr(target.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -142,22 +142,34 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 		compiled.Targets = append(compiled.Targets, CompiledTarget{
 			Name:  name,
 			Type:  expr.typ(),
-			IsAgg: len(c.aggs) > before,
+			IsAgg: c.isAggregate(target.Expr),
 			expr:  expr,
 			key:   exprKey(target.Expr),
 		})
 	}
+	// Like bean-query, check aggregate placement once every target compiled.
+	for _, target := range targets {
+		columns, aggs := c.columnsAndAggregates(target.Expr)
+		if columns > 0 && len(aggs) > 0 {
+			return nil, compileErrorf(target.Expr, "Mixed aggregates and non-aggregates are not allowed.")
+		}
+		for _, agg := range aggs {
+			for _, arg := range agg.Args {
+				if c.isAggregate(arg) {
+					return nil, compileErrorf(agg, "Aggregates of aggregates are not allowed.")
+				}
+			}
+		}
+	}
 
 	if sel.Where != nil {
-		before := len(c.aggs)
-		expr, err := c.compileExpr(sel.Where, false)
+		c.env = whereEnv
+		expr, err := c.compileExpr(sel.Where)
 		if err != nil {
 			return nil, err
 		}
-		if len(c.aggs) > before {
-			return nil, compileErrorf(sel.Where, "Aggregates are disallowed in WHERE clause.")
-		}
 		compiled.Where = expr
+		c.env = targetsEnv
 	}
 
 	if err := c.resolveGroupBy(sel, compiled); err != nil {
@@ -213,16 +225,44 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *Compiled) error {
 	}
 
 	for _, item := range sel.GroupBy {
-		idx, err := c.resolveTargetRef(item, compiled, false)
+		idx, err := c.resolveGroupByItem(item, compiled)
 		if err != nil {
 			return err
 		}
+		// bean-query quotes an index as a bare number: its grammar keeps
+		// a top-level GROUP BY integer as a Python int.
+		ref := pyExprRepr(item)
+		if lit, ok := item.(*bql.Int); ok {
+			ref = strconv.FormatInt(lit.Value, 10)
+		}
 		if compiled.Targets[idx].IsAgg {
-			return compileErrorf(item, "GROUP-BY expressions may not be aggregates.")
+			return compileErrorf(item, "GROUP-BY expressions may not reference aggregates: '%s'.", ref)
+		}
+		if compiled.Targets[idx].Type == TInventory {
+			return compileErrorf(item, "GROUP-BY a non-hashable type is not supported: '%s'.", ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)
 	}
 	return nil
+}
+
+// resolveGroupByItem resolves a GROUP BY item like bean-query: an index or
+// a target name refers to that target; any other expression, which may
+// not be an aggregate, matches a target structurally or becomes a hidden
+// one.
+func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *Compiled) (int, error) {
+	switch ref := item.(type) {
+	case *bql.Int:
+		return c.targetIndex(ref, compiled, "GROUP-BY")
+	case *bql.Ident:
+		if idx, ok := targetNamed(ref.Name, compiled); ok {
+			return idx, nil
+		}
+	}
+	if c.isAggregate(item) {
+		return 0, compileErrorf(item, "GROUP-BY expressions may not be aggregates: '%s'.", pyExprRepr(item))
+	}
+	return c.resolveTargetRef(item, compiled, "GROUP-BY")
 }
 
 // resolveOrderBy maps ORDER BY expressions to target indices, appending
@@ -231,7 +271,7 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *Compiled) error {
 func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *Compiled) error {
 	compiled.OrderDesc = sel.OrderDesc
 	for _, item := range sel.OrderBy {
-		idx, err := c.resolveTargetRef(item, compiled, true)
+		idx, err := c.resolveTargetRef(item, compiled, "ORDER-BY")
 		if err != nil {
 			return err
 		}
@@ -242,7 +282,7 @@ func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *Compiled) error {
 
 func (c *compiler) resolvePivotBy(sel *bql.Select, compiled *Compiled) error {
 	for _, item := range sel.PivotBy {
-		idx, err := c.resolveTargetRef(item, compiled, false)
+		idx, err := c.resolveTargetRef(item, compiled, "PIVOT-BY")
 		if err != nil {
 			return err
 		}
@@ -254,29 +294,14 @@ func (c *compiler) resolvePivotBy(sel *bql.Select, compiled *Compiled) error {
 // resolveTargetRef resolves a clause item to a target index. Integer
 // literals are 1-based indices into the visible targets; identifiers match
 // aliases; other expressions match targets structurally or are appended as
-// hidden targets.
-func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, allowAgg bool) (int, error) {
+// hidden targets. clause names the clause in index errors.
+func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, clause string) (int, error) {
 	if lit, ok := item.(*bql.Int); ok {
-		// Walk the visible targets to the 1-based index; no int64-to-int
-		// narrowing needed.
-		var n int64
-		for i, target := range compiled.Targets {
-			if target.Hidden {
-				continue
-			}
-			n++
-			if n == lit.Value {
-				return i, nil
-			}
-		}
-		return 0, compileErrorf(item, "Invalid GROUP-BY column index %d", lit.Value)
+		return c.targetIndex(lit, compiled, clause)
 	}
-
 	if ident, ok := item.(*bql.Ident); ok {
-		for i, target := range compiled.Targets {
-			if !target.Hidden && target.Name == ident.Name {
-				return i, nil
-			}
+		if idx, ok := targetNamed(ident.Name, compiled); ok {
+			return idx, nil
 		}
 	}
 
@@ -287,8 +312,7 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, allowAgg 
 		}
 	}
 
-	before := len(c.aggs)
-	expr, err := c.compileExpr(item, allowAgg)
+	expr, err := c.compileExpr(item)
 	if err != nil {
 		return 0, err
 	}
@@ -296,11 +320,71 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, allowAgg 
 		Name:   deriveName(item),
 		Type:   expr.typ(),
 		Hidden: true,
-		IsAgg:  len(c.aggs) > before,
+		IsAgg:  c.isAggregate(item),
 		expr:   expr,
 		key:    key,
 	})
 	return len(compiled.Targets) - 1, nil
+}
+
+// targetIndex resolves a 1-based index into the visible targets.
+func (c *compiler) targetIndex(lit *bql.Int, compiled *Compiled, clause string) (int, error) {
+	// Walk the visible targets to the index; no int64-to-int narrowing.
+	var n int64
+	for i, target := range compiled.Targets {
+		if target.Hidden {
+			continue
+		}
+		n++
+		if n == lit.Value {
+			return i, nil
+		}
+	}
+	return 0, compileErrorf(lit, "Invalid %s column index %d.", clause, lit.Value)
+}
+
+// targetNamed finds the visible target with the given name or alias.
+func targetNamed(name string, compiled *Compiled) (int, bool) {
+	for i, target := range compiled.Targets {
+		if !target.Hidden && target.Name == name {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// columnsAndAggregates counts the column references in e and collects its
+// aggregate calls, without looking inside aggregates, like bean-query's
+// get_columns_and_aggregates.
+func (c *compiler) columnsAndAggregates(e bql.Expr) (columns int, aggs []*bql.Call) {
+	var walk func(bql.Expr)
+	walk = func(e bql.Expr) {
+		switch node := e.(type) {
+		case *bql.Ident:
+			columns++
+		case *bql.Call:
+			if c.env.aggregate(strings.ToLower(node.Func)) != nil {
+				aggs = append(aggs, node)
+				return
+			}
+			for _, arg := range node.Args {
+				walk(arg)
+			}
+		case *bql.Unary:
+			walk(node.X)
+		case *bql.Binary:
+			walk(node.L)
+			walk(node.R)
+		}
+	}
+	walk(e)
+	return columns, aggs
+}
+
+// isAggregate reports whether e contains an aggregate call.
+func (c *compiler) isAggregate(e bql.Expr) bool {
+	_, aggs := c.columnsAndAggregates(e)
+	return len(aggs) > 0
 }
 
 // checkGroupCoverage enforces that grouped queries cover every visible
@@ -328,7 +412,7 @@ func checkGroupCoverage(sel *bql.Select, compiled *Compiled) error {
 }
 
 // compileExpr compiles a BQL expression against the current environment.
-func (c *compiler) compileExpr(e bql.Expr, allowAgg bool) (cexpr, error) {
+func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 	switch node := e.(type) {
 	case *bql.Str:
 		return &cLiteral{v: node.Value, t: TString}, nil
@@ -354,30 +438,25 @@ func (c *compiler) compileExpr(e bql.Expr, allowAgg bool) (cexpr, error) {
 		return &cColumn{def: def}, nil
 
 	case *bql.Call:
-		return c.compileCall(node, allowAgg)
+		return c.compileCall(node)
 
 	case *bql.Unary:
-		return c.compileUnary(node, allowAgg)
+		return c.compileUnary(node)
 
 	case *bql.Binary:
-		return c.compileBinary(node, allowAgg)
+		return c.compileBinary(node)
 	}
 	return nil, compileErrorf(e, "unsupported expression")
 }
 
-func (c *compiler) compileCall(node *bql.Call, allowAgg bool) (cexpr, error) {
+func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
 	name := strings.ToLower(node.Func)
-	aggregate, isAgg := aggregates[name]
-	if isAgg && !allowAgg {
-		return nil, compileErrorf(node, "Aggregates are disallowed in this context.")
-	}
 
 	// Like bean-query, compile the arguments before resolving the function.
 	args := make([]cexpr, len(node.Args))
 	argTypes := make([]DType, len(node.Args))
 	for i, argNode := range node.Args {
-		// Aggregates do not nest.
-		arg, err := c.compileExpr(argNode, allowAgg && !isAgg)
+		arg, err := c.compileExpr(argNode)
 		if err != nil {
 			return nil, err
 		}
@@ -385,14 +464,14 @@ func (c *compiler) compileCall(node *bql.Call, allowAgg bool) (cexpr, error) {
 		argTypes[i] = arg.typ()
 	}
 
-	if isAgg && len(args) == 1 {
+	if aggregate := c.env.aggregate(name); aggregate != nil && len(args) == 1 {
 		if result, ok := aggregate.resultType(argTypes[0]); ok {
 			agg := &cAgg{def: aggregate, arg: args[0], result: result, slot: len(c.aggs)}
 			c.aggs = append(c.aggs, agg)
 			return agg, nil
 		}
 	}
-	if def := functions[name]; def != nil && !isAgg {
+	if def := c.env.function(name); def != nil {
 		if overload := def.matchOverload(argTypes); overload != nil {
 			return &cCall{overload: overload, args: args}, nil
 		}
@@ -400,7 +479,7 @@ func (c *compiler) compileCall(node *bql.Call, allowAgg bool) (cexpr, error) {
 
 	// No signature matches: bean-query falls back to the function's
 	// by-name class, whose constructor rejects the arguments.
-	if fallback := fallbackClasses[name]; fallback != nil {
+	if fallback := c.env.fallback(name); fallback != nil {
 		if message := fallback.rejection(args); message != "" {
 			return nil, compileErrorf(node, "%s", message)
 		}
@@ -421,8 +500,8 @@ func argTypeList(args []cexpr) string {
 	return strings.Join(names, ", ")
 }
 
-func (c *compiler) compileUnary(node *bql.Unary, allowAgg bool) (cexpr, error) {
-	x, err := c.compileExpr(node.X, allowAgg)
+func (c *compiler) compileUnary(node *bql.Unary) (cexpr, error) {
+	x, err := c.compileExpr(node.X)
 	if err != nil {
 		return nil, err
 	}
@@ -432,12 +511,12 @@ func (c *compiler) compileUnary(node *bql.Unary, allowAgg bool) (cexpr, error) {
 	return &cNot{x: x}, nil
 }
 
-func (c *compiler) compileBinary(node *bql.Binary, allowAgg bool) (cexpr, error) {
-	l, err := c.compileExpr(node.L, allowAgg)
+func (c *compiler) compileBinary(node *bql.Binary) (cexpr, error) {
+	l, err := c.compileExpr(node.L)
 	if err != nil {
 		return nil, err
 	}
-	r, err := c.compileExpr(node.R, allowAgg)
+	r, err := c.compileExpr(node.R)
 	if err != nil {
 		return nil, err
 	}
@@ -526,6 +605,69 @@ func sanitizeName(s string) string {
 // with, like Python's str(Decimal): 2500.00 stays "2500.00".
 func decimalLiteral(d decimal.Decimal) string {
 	return d.StringFixed(max(-d.Exponent(), 0))
+}
+
+// pyOpClasses names bean-query's parser node class for each operator.
+var pyOpClasses = map[bql.TokenType]string{
+	bql.AND:      "And",
+	bql.OR:       "Or",
+	bql.EQ:       "Equal",
+	bql.GT:       "Greater",
+	bql.GTE:      "GreaterEq",
+	bql.LT:       "Less",
+	bql.LTE:      "LessEq",
+	bql.TILDE:    "Match",
+	bql.IN:       "Contains",
+	bql.ASTERISK: "Mul",
+	bql.SLASH:    "Div",
+	bql.PLUS:     "Add",
+	bql.MINUS:    "Sub",
+}
+
+// pyExprRepr renders a clause item like Python's repr() of bean-query's
+// parse tree, which some of its errors quote: an index is its number, a
+// name is Column(name='x'), a call is Function(fname='f', operands=[...]).
+func pyExprRepr(e bql.Expr) string {
+	switch node := e.(type) {
+	case *bql.Ident:
+		return fmt.Sprintf("Column(name=%s)", pyrepr.String(node.Name))
+	case *bql.Call:
+		operands := make([]string, len(node.Args))
+		for i, arg := range node.Args {
+			operands[i] = pyExprRepr(arg)
+		}
+		return fmt.Sprintf("Function(fname=%s, operands=[%s])", pyrepr.String(strings.ToLower(node.Func)), strings.Join(operands, ", "))
+	case *bql.Unary:
+		return fmt.Sprintf("Not(operand=%s)", pyExprRepr(node.X))
+	case *bql.Binary:
+		if node.Op == bql.NE {
+			// The parser turns a != b into Not(Equal(a, b)).
+			return fmt.Sprintf("Not(operand=Equal(left=%s, right=%s))", pyExprRepr(node.L), pyExprRepr(node.R))
+		}
+		return fmt.Sprintf("%s(left=%s, right=%s)", pyOpClasses[node.Op], pyExprRepr(node.L), pyExprRepr(node.R))
+	}
+	return fmt.Sprintf("Constant(value=%s)", pyConstantRepr(e))
+}
+
+// pyConstantRepr renders a literal like Python's repr() of its value.
+func pyConstantRepr(e bql.Expr) string {
+	switch node := e.(type) {
+	case *bql.Int:
+		return strconv.FormatInt(node.Value, 10)
+	case *bql.Dec:
+		return fmt.Sprintf("Decimal('%s')", decimalLiteral(node.Value))
+	case *bql.Str:
+		return pyrepr.String(node.Value)
+	case *bql.DateLit:
+		t := node.Value.Time
+		return fmt.Sprintf("datetime.date(%d, %d, %d)", t.Year(), t.Month(), t.Day())
+	case *bql.Bool:
+		if node.Value {
+			return "True"
+		}
+		return "False"
+	}
+	return "None"
 }
 
 // exprKey builds a canonical key for structural expression matching, used

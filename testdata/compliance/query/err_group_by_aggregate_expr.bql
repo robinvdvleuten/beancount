@@ -1,0 +1,1 @@
+SELECT account GROUP BY count('x') != 2014-01-01

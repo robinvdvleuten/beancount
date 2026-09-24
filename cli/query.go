@@ -16,6 +16,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/query"
@@ -224,7 +225,7 @@ func printQueryError(out io.Writer, queryText string, err error) error {
 	case bql.ErrUnterminated:
 		message = "ERROR: unterminated statement. Missing a semicolon?"
 	case bql.ErrUnknownToken:
-		message = fmt.Sprintf("Unknown token: LexToken(error,%s,1,%d)", pythonRepr(queryText[parseErr.Pos.Offset:]), offset)
+		message = fmt.Sprintf("Unknown token: LexToken(error,%s,1,%d)", pyrepr.String(queryText[parseErr.Pos.Offset:]), offset)
 	case bql.ErrEmptyFrom:
 		message = "Empty FROM expression is not allowed"
 	default:
@@ -232,34 +233,4 @@ func printQueryError(out io.Writer, queryText string, err error) error {
 	}
 	_, printErr := fmt.Fprintln(out, message)
 	return printErr
-}
-
-// pythonRepr quotes s like Python's repr(), which bean-query uses to show
-// the text its lexer rejected.
-func pythonRepr(s string) string {
-	quote := '\''
-	if strings.ContainsRune(s, '\'') && !strings.ContainsRune(s, '"') {
-		quote = '"'
-	}
-	var b strings.Builder
-	b.WriteRune(quote)
-	for _, r := range s {
-		switch {
-		case r == quote || r == '\\':
-			b.WriteRune('\\')
-			b.WriteRune(r)
-		case r == '\n':
-			b.WriteString(`\n`)
-		case r == '\r':
-			b.WriteString(`\r`)
-		case r == '\t':
-			b.WriteString(`\t`)
-		case r < 0x20 || r == 0x7f:
-			fmt.Fprintf(&b, `\x%02x`, r)
-		default:
-			b.WriteRune(r)
-		}
-	}
-	b.WriteRune(quote)
-	return b.String()
 }
