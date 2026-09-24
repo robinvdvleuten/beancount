@@ -1,6 +1,8 @@
 .gocache/
+.vale/styles/*
+!.vale/styles/Beancount/
 .vite/
-beancount
+/beancount
 dist/
 node_modules/
 test-results/

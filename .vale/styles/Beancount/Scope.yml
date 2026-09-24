@@ -1,0 +1,4 @@
+extends: Commitlint.Scope
+message: "'%s' is not one of the scopes: ast, cli, config, deps, deps-dev, diagnostic, formatter, ledger, loader, main, parser, query, telemetry, web."
+raw:
+  - '(?<=^\w+\()(?!(?:ast|cli|config|deps|deps-dev|diagnostic|formatter|ledger|loader|main|parser|query|telemetry|web)\))[^()]+(?=\))'
