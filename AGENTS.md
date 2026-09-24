@@ -84,6 +84,7 @@ beancount format f.beancount | bean-check /dev/stdin  # round-trip
 | **config** | Beancount option parsing into typed configuration. Rejects unknown option names (bean-check parity). |
 | **query/bql** | BQL lexer + recursive-descent parser, syntax only, held to the parser's rules: zero-copy tokens, positioned errors, fuzz test. |
 | **query** | Parse → compile → execute → render. Compiler resolves names and types with bean-query-parity error messages; executor reads the ledger-processed `*ast.AST` (interpolated amounts) read-only and takes booked lots from `Ledger.BookedLots` rather than re-deriving booking; renderers reproduce official output byte-for-byte. |
+| **internal/pydecimal** | Python `decimal` behaviour beancount depends on and shopspring lacks (exact-division exponents, `normalize`). Use it wherever a number must keep beancount's precision. |
 | **diagnostic** | `SeverityError`/`SeverityWarning` for load and validation errors. Only errors affect exit codes. |
 | **web** | Local dev tool: binds to localhost, no auth, guards against path traversal. |
 

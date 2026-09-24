@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -1511,20 +1511,11 @@ func roundInterpolated(number, tolerance decimal.Decimal) decimal.Decimal {
 		return number
 	}
 	// Normalize the quantum (strip trailing zeros), as beancount does.
-	quantum := tolerance.Mul(decimal.NewFromInt(2))
-	coefficient, exponent := quantum.Coefficient(), quantum.Exponent()
-	ten, remainder := big.NewInt(10), new(big.Int)
-	for coefficient.Sign() != 0 {
-		quotient, rem := new(big.Int).QuoRem(coefficient, ten, remainder)
-		if rem.Sign() != 0 {
-			break
-		}
-		coefficient, exponent = quotient, exponent+1
-	}
-	if len(coefficient.String()) >= maxQuantumDigits {
+	quantum := pydecimal.Normalize(tolerance.Mul(decimal.NewFromInt(2)))
+	if len(quantum.Coefficient().String()) >= maxQuantumDigits {
 		return number
 	}
-	return number.RoundBank(-exponent)
+	return number.RoundBank(-quantum.Exponent())
 }
 
 // residualCurrencies returns the currencies with a non-zero residual, in the

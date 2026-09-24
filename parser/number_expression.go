@@ -2,9 +2,9 @@ package parser
 
 import (
 	"fmt"
-	"math/big"
 	"strings"
 
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -130,7 +130,7 @@ func (p *numberExpressionParser) parseExpr(minPrecedence int) (decimal.Decimal, 
 			if right.IsZero() {
 				return decimal.Zero, fmt.Errorf("division by zero")
 			}
-			left = divide(left, right)
+			left = pydecimal.Quo(left, right)
 		}
 	}
 	return left, nil
@@ -145,32 +145,6 @@ func numberOperatorPrecedence(operator byte) int {
 	default:
 		return -1
 	}
-}
-
-// divide follows Python's decimal division, which beancount evaluates
-// amounts with: an exact quotient takes the ideal exponent exp(a) - exp(b),
-// or as few more fractional digits as it needs (10.00 / 2 = 5.00,
-// 10 / 4 = 2.5). An inexact quotient keeps shopspring's division precision
-// (#392 tracks Python's 28 significant digits).
-func divide(a, b decimal.Decimal) decimal.Decimal {
-	q := a.Div(b)
-	if !q.Mul(b).Equal(a) {
-		return q
-	}
-	ideal := a.Exponent() - b.Exponent()
-	coefficient, exponent := q.Coefficient(), q.Exponent()
-	ten, remainder := big.NewInt(10), new(big.Int)
-	for exponent < ideal && coefficient.Sign() != 0 {
-		quotient, rem := new(big.Int).QuoRem(coefficient, ten, remainder)
-		if rem.Sign() != 0 {
-			break
-		}
-		coefficient, exponent = quotient, exponent+1
-	}
-	if coefficient.Sign() == 0 {
-		exponent = ideal
-	}
-	return decimal.NewFromBigInt(coefficient, exponent)
 }
 
 // canonicalExpressionValue renders an evaluated amount keeping its exponent,
