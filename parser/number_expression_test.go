@@ -69,3 +69,25 @@ func TestNumberExpressionErrors(t *testing.T) {
 		assert.Error(t, err)
 	}
 }
+
+func TestNumberTrailingDotAndSigns(t *testing.T) {
+	// Values as beancount computes them.
+	for expr, want := range map[string]string{
+		"5.":     "5",
+		"1,000.": "1000",
+		"(5.)":   "5",
+		"5. + 1": "6",
+		"--1":    "1",
+		"---1":   "-1",
+		"+-1":    "-1",
+		"- 1":    "-1",
+	} {
+		tree, err := ParseString(context.Background(), "2000-01-01 balance Assets:A "+expr+" USD\n")
+		assert.NoError(t, err, expr)
+		assert.Equal(t, want, tree.Directives[0].(*ast.Balance).Amount.Value, expr)
+	}
+	for _, expr := range []string{".5", "1.5.", "5.00."} {
+		_, err := ParseString(context.Background(), "2000-01-01 balance Assets:A "+expr+" USD\n")
+		assert.Error(t, err, expr)
+	}
+}

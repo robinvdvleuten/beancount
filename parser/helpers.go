@@ -130,7 +130,8 @@ func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
 	valueTok := tok
 	valueTok.End = end
 	valueTok.Type = NUMBER
-	value := strings.ReplaceAll(tok.String(p.source), ",", "")
+	// A trailing dot states no fraction digits: "5." is 5.
+	value := strings.TrimSuffix(strings.ReplaceAll(tok.String(p.source), ",", ""), ".")
 	if isExpression {
 		valueTok.Type = EXPRESSION
 		value = canonicalExpressionValue(result)

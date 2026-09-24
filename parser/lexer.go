@@ -248,6 +248,10 @@ func (l *Lexer) scanToken() Token {
 		tok = l.scanNumber(start, startLine, startCol)
 	case ch == '-' && l.peek() == '(':
 		tok = l.scanExpression(start, startLine, startCol, ch)
+	case (ch == '+' || ch == '-') && l.signedValueAhead():
+		// A sign followed by more signs or spaces (--1, +-1, - 1): the
+		// parser evaluates the whole expression from here.
+		tok = Token{EXPRESSION, start, l.pos, startLine, startCol}
 
 	// Strings: "..."
 	case ch == '"':
@@ -376,8 +380,9 @@ func (l *Lexer) scanDate(start, line, col int) Token {
 	return Token{DATE, start, l.pos, line, col}
 }
 
-// scanNumber scans a number: [-+]?[0-9]+(,[0-9]{3})*(\.[0-9]+)?
-// Commas are allowed as thousands separators within the integer part.
+// scanNumber scans a number: [-+]?[0-9]+(,[0-9]{3})*(\.[0-9]*)?
+// Commas are allowed as thousands separators within the integer part, and,
+// like beancount, a trailing dot without fraction digits ("5.").
 func (l *Lexer) scanNumber(start, line, col int) Token {
 	digitStart := start
 	if l.source[start] == '+' || l.source[start] == '-' {
@@ -412,16 +417,31 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 
 	// Scan optional decimal part
 	if l.pos < len(l.source) && l.source[l.pos] == '.' {
-		// Look ahead to ensure next char is digit
-		if l.pos+1 < len(l.source) && isDigit(l.source[l.pos+1]) {
-			l.advance() // consume '.'
-			for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
-				l.advance()
-			}
+		l.advance() // consume '.'
+		for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
+			l.advance()
 		}
 	}
 
 	return Token{NUMBER, start, l.pos, line, col}
+}
+
+// signedValueAhead reports whether the sign just consumed starts a number
+// expression through further signs or spaces: after them comes a digit or an
+// opening parenthesis on the same line.
+func (l *Lexer) signedValueAhead() bool {
+	sawSeparator := false
+	for i := l.pos; i < len(l.source); i++ {
+		switch ch := l.source[i]; {
+		case ch == '+' || ch == '-' || ch == ' ' || ch == '\t':
+			sawSeparator = true
+		case isDigit(ch) || ch == '(':
+			return sawSeparator
+		default:
+			return false
+		}
+	}
+	return false
 }
 
 func (l *Lexer) consumeNumberRemainder() {

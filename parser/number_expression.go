@@ -77,7 +77,7 @@ func (p *numberExpressionParser) parsePrimary() (decimal.Decimal, error) {
 func (p *numberExpressionParser) parseNumber() (decimal.Decimal, error) {
 	p.skipWhitespace()
 	start := p.pos
-	foundDigit := false
+	foundDigit, seenDot := false, false
 	for p.pos < p.lineEnd {
 		ch := p.source[p.pos]
 		if isDigit(ch) || ch == ',' {
@@ -85,7 +85,9 @@ func (p *numberExpressionParser) parseNumber() (decimal.Decimal, error) {
 			p.pos++
 			continue
 		}
-		if ch == '.' && p.pos+1 < p.lineEnd && isDigit(p.source[p.pos+1]) {
+		if ch == '.' && !seenDot && foundDigit {
+			// A fraction, or like beancount a bare trailing dot ("5.")
+			seenDot = true
 			p.pos++
 			continue
 		}

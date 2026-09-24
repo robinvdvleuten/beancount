@@ -1,0 +1,17 @@
+; A trailing dot states no fraction digits, and unary signs may repeat or
+; be followed by spaces.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Trailing dot"
+  Assets:A  5. USD
+  Assets:A  1,000. USD
+  Assets:B
+
+2020-01-03 * "Repeated and spaced signs"
+  Assets:A  --1 USD
+  Assets:A  +-2 USD
+  Assets:A  - 3 USD
+  Assets:B
+
+2020-01-04 balance Assets:A 1001 USD
