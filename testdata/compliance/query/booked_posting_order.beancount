@@ -1,0 +1,31 @@
+; Booking groups a transaction's postings by the currency they balance in
+; (cost, else price, else units currency). Groups are ordered by their first
+; posting whose currency the source states; each group keeps source order.
+2020-01-01 open Assets:Stock "FIFO"
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euro
+2020-01-01 open Expenses:Travel
+
+2020-01-02 * "Units currencies interleaved"
+  Expenses:Travel   200.00 EUR
+  Expenses:Travel    50.00 USD
+  Assets:Euro      -200.00 EUR
+  Assets:Cash
+
+2020-01-03 * "A cost balances in its cost currency"
+  Expenses:Travel     5.00 EUR
+  Assets:Stock          2 HOOL {10.00 USD}
+  Assets:Euro        -5.00 EUR
+  Assets:Cash
+
+2020-01-04 * "A price balances in its price currency"
+  Assets:Euro        10.00 EUR @ 1.10 USD
+  Expenses:Travel     3.00 GBP
+  Assets:Cash       -11.00 USD
+  Expenses:Travel    -3.00 GBP
+
+2020-01-05 * "An empty cost's currency is inferred, so it does not place its group"
+  Assets:Stock         -1 HOOL {}
+  Expenses:Travel     3.00 EUR
+  Assets:Cash        10.00 USD
+  Assets:Euro        -3.00 EUR

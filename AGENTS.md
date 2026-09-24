@@ -79,7 +79,7 @@ beancount format f.beancount | bean-check /dev/stdin  # round-trip
 | **ast** | All AST node types, `Directive` interface. Builders use functional options. |
 | **parser** | Parsing only, returns `*ast.AST`. Types live in `ast`. |
 | **formatter** | `runewidth.StringWidth()` for display width. Preserves comments and blank lines. |
-| **ledger** | `decimal.Decimal` for amounts. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `HIFO`, `AVERAGE`; `Inventory.Book` decides augment vs. reduce (beancount's `is_reduced_by`). Apply leaves booked postings in `txn.Postings` (an amount-less posting becomes one posting per residual currency); `BodyItems` keeps the source layout for the formatter. |
+| **ledger** | `decimal.Decimal` for amounts. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `HIFO`, `AVERAGE`; `Inventory.Book` decides augment vs. reduce (beancount's `is_reduced_by`). Apply leaves booked postings in `txn.Postings`, in beancount's booked order (grouped by the currency each posting balances in; an amount-less posting becomes one posting per residual currency); `BodyItems` keeps the source layout for the formatter. |
 | **loader** | Recursive includes, deduplicated by absolute path. Non-fatal issues go to `LoadResult.Diagnostics`. |
 | **config** | Beancount option parsing into typed configuration. Rejects unknown option names (bean-check parity). |
 | **query/bql** | BQL lexer + recursive-descent parser, syntax only, held to the parser's rules: zero-copy tokens, positioned errors, fuzz test. |

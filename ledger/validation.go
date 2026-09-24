@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -400,6 +401,8 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// booking); the latter's cost must be inferred from the residual.
 	reducingEmptyCosts := make(map[*ast.Posting]bool)
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
+	// Cost currencies of reductions resolved from booked lots.
+	reductionCurrencies := make(map[*ast.Posting]string)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
 		// it is resolved from the residual during interpolation below.
@@ -424,6 +427,9 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 				reducingEmptyCosts[posting] = true
 				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
 					allWeights = append(allWeights, booked)
+					if len(booked) > 0 {
+						reductionCurrencies[posting] = booked[0].Currency
+					}
 				} else {
 					unresolvedEmptyCosts[posting] = true
 				}
@@ -524,24 +530,22 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// transaction. It absorbs the residual of every weight currency, so it
 	// is booked once per currency with a non-zero residual, in the order the
 	// currencies first appear.
+	var autoPosting *ast.Posting
+	var autoAmounts []*ast.Amount
 	if len(pc.withoutAmounts) == 1 {
-		posting := pc.withoutAmounts[0]
+		autoPosting = pc.withoutAmounts[0]
 
-		var amounts []*ast.Amount
 		for _, currency := range residualCurrencies(allWeights, balance) {
 			needed := balance[currency].Neg()
-			amounts = append(amounts, &ast.Amount{
+			autoAmounts = append(autoAmounts, &ast.Amount{
 				Value:    formatInferredNumber(needed),
 				Currency: currency,
 			})
 			balance[currency] = balance[currency].Add(needed)
 		}
 
-		if len(amounts) > 0 {
-			delta.InferredAmounts[posting] = amounts[0]
-		}
-		if len(amounts) != 1 {
-			delta.Postings = bookAutoPosting(txn.Postings, posting, amounts)
+		if len(autoAmounts) > 0 {
+			delta.InferredAmounts[autoPosting] = autoAmounts[0]
 		}
 	}
 
@@ -669,6 +673,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		isBalanced: len(residuals) == 0,
 		residuals:  residuals,
 	}
+
+	delta.Postings = bookedPostings(txn.Postings, autoPosting, autoAmounts, func(p *ast.Posting) string {
+		return balanceCurrency(p, delta, reductionCurrencies)
+	})
 
 	return delta, validation, nil
 }
@@ -1323,28 +1331,123 @@ func residualCurrencies(allWeights []weightSet, balance map[string]decimal.Decim
 	return currencies
 }
 
-// bookAutoPosting returns the postings with the amount-less posting booked
-// once per amount: the posting itself carries the first (set on apply) and a
-// copy follows it for each other; without amounts it is dropped.
-func bookAutoPosting(postings []*ast.Posting, auto *ast.Posting, amounts []*ast.Amount) []*ast.Posting {
-	booked := make([]*ast.Posting, 0, len(postings)+len(amounts))
-	for _, posting := range postings {
-		if posting != auto {
-			booked = append(booked, posting)
+// bookedPostings returns the transaction's postings in the order beancount
+// books them, or nil when that is the source order. Postings are grouped by
+// the currency they balance in; groups are ordered by their first posting
+// whose currency the source states (else their first posting whose currency
+// was inferred, else the amount-less posting), and each group keeps source
+// order. The amount-less posting auto is booked once per amount, at its
+// source position in that amount's currency group (the posting itself for
+// the first amount, a copy for each other), and dropped without amounts.
+func bookedPostings(postings []*ast.Posting, auto *ast.Posting, autoAmounts []*ast.Amount, currencyOf func(*ast.Posting) string) []*ast.Posting {
+	// rank orders how a posting's currency is known: stated in the source,
+	// inferred, or taken from the residual by the amount-less posting.
+	const (
+		stated = iota
+		inferred
+		residual
+	)
+	type entry struct {
+		posting  *ast.Posting
+		index    int
+		rank     int
+		currency string
+	}
+
+	entries := make([]entry, 0, len(postings)+len(autoAmounts))
+	for i, p := range postings {
+		if p != auto {
+			rank := inferred
+			if statesCurrency(p) {
+				rank = stated
+			}
+			entries = append(entries, entry{p, i, rank, currencyOf(p)})
 			continue
 		}
-		if len(amounts) == 0 {
-			continue
-		}
-		booked = append(booked, posting)
-		for _, amount := range amounts[1:] {
-			copied := *auto
-			copied.Amount = amount
-			copied.Inferred = true
-			booked = append(booked, &copied)
+		for j, amount := range autoAmounts {
+			booked := p
+			if j > 0 {
+				copied := *p
+				copied.Amount = amount
+				copied.Inferred = true
+				booked = &copied
+			}
+			entries = append(entries, entry{booked, i, residual, amount.Currency})
 		}
 	}
+
+	// Each group is placed at the first posting of its best-known rank.
+	groupAt := make(map[string]entry, len(entries))
+	for _, e := range entries {
+		if first, ok := groupAt[e.currency]; !ok || e.rank < first.rank {
+			groupAt[e.currency] = e
+		}
+	}
+	slices.SortStableFunc(entries, func(a, b entry) int {
+		if c := cmp.Compare(groupAt[a.currency].index, groupAt[b.currency].index); c != 0 {
+			return c
+		}
+		return cmp.Compare(a.index, b.index)
+	})
+
+	booked := make([]*ast.Posting, len(entries))
+	for i, e := range entries {
+		booked[i] = e.posting
+	}
+	if slices.Equal(booked, postings) {
+		return nil
+	}
 	return booked
+}
+
+// statesCurrency reports whether the source states the currency a posting
+// balances in: its cost currency (or the price currency standing in for a
+// cost without one), its price currency, or else its units currency.
+func statesCurrency(p *ast.Posting) bool {
+	priceStated := p.Price != nil && p.Price.Currency != ""
+	switch {
+	case p.Cost != nil:
+		return costCurrency(p.Cost) != "" || priceStated
+	case p.Price != nil:
+		return priceStated
+	default:
+		return p.Amount != nil && p.Amount.Currency != ""
+	}
+}
+
+// balanceCurrency returns the currency a posting balances in after
+// inference: its cost currency, else its price currency, else its units
+// currency. Reductions against booked lots take the lots' cost currency.
+func balanceCurrency(p *ast.Posting, delta *TransactionDelta, reductionCurrencies map[*ast.Posting]string) string {
+	if cost := delta.costFor(p); cost != nil {
+		if currency := costCurrency(cost); currency != "" {
+			return currency
+		}
+		if currency, ok := reductionCurrencies[p]; ok {
+			return currency
+		}
+	}
+	price := p.Price
+	if inferred := delta.InferredPrices[p]; inferred != nil {
+		price = inferred
+	}
+	if price != nil && price.Currency != "" {
+		return price.Currency
+	}
+	if amount := delta.amountFor(p); amount != nil {
+		return amount.Currency
+	}
+	return ""
+}
+
+func costCurrency(cost *ast.Cost) string {
+	if cost.Amount != nil && cost.Amount.Currency != "" {
+		return cost.Amount.Currency
+	}
+	if cost.Total != nil {
+		return cost.Total.Currency
+	}
+	return ""
 }
 
 // reducesInventory reports whether a posting of amount commodity reduces the
