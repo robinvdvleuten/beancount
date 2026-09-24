@@ -402,8 +402,8 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// booking); the latter's cost must be inferred from the residual.
 	reducingEmptyCosts := make(map[*ast.Posting]bool)
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
-	// Cost currencies of reductions resolved from booked lots.
-	reductionCurrencies := make(map[*ast.Posting]string)
+	// Lots that reductions with an amount-less cost spec are booked against.
+	bookedLots := make(map[*ast.Posting][]lotReduction)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
 		// it is resolved from the residual during interpolation below.
@@ -426,11 +426,16 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			amount, aerr := ParseAmount(posting.Amount)
 			if aerr == nil && v.reducesInventory(posting.Account, posting.Amount.Currency, amount) {
 				reducingEmptyCosts[posting] = true
-				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
-					allWeights = append(allWeights, booked)
-					if len(booked) > 0 {
-						reductionCurrencies[posting] = booked[0].Currency
+				if lots, ok := v.bookedReductions(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
+					var booked weightSet
+					for _, lot := range lots {
+						booked = append(booked, weight{
+							Amount:   lot.amount.Mul(*lot.lot.Spec.Cost),
+							Currency: lot.lot.Spec.CostCurrency,
+						})
 					}
+					allWeights = append(allWeights, booked)
+					bookedLots[posting] = lots
 				} else {
 					unresolvedEmptyCosts[posting] = true
 				}
@@ -532,13 +537,14 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// is booked once per currency with a non-zero residual, in the order the
 	// currencies first appear.
 	stated := statedUnits(pc.withAmounts)
+	specCostTolerances := v.costTolerances(specToleranceShares(pc.withAmounts))
 	var autoPosting *ast.Posting
 	var autoAmounts []*ast.Amount
 	if len(pc.withoutAmounts) == 1 {
 		autoPosting = pc.withoutAmounts[0]
 
 		for _, currency := range residualCurrencies(allWeights, balance) {
-			needed := v.roundInterpolated(balance[currency].Neg(), currency, stated)
+			needed := roundInterpolated(balance[currency].Neg(), v.transactionTolerance(currency, stated[currency], specCostTolerances))
 			autoAmounts = append(autoAmounts, &ast.Amount{
 				Value:    formatInferredNumber(needed),
 				Currency: currency,
@@ -556,7 +562,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	if len(currencyOnlyAmounts) == 1 {
 		posting := currencyOnlyAmounts[0]
 		currency := posting.Amount.Currency
-		needed := v.roundInterpolated(balance[currency].Neg(), currency, stated)
+		needed := roundInterpolated(balance[currency].Neg(), v.transactionTolerance(currency, stated[currency], specCostTolerances))
 		delta.InferredAmounts[posting] = &ast.Amount{
 			Value:    formatInferredNumber(needed),
 			Currency: currency,
@@ -659,11 +665,12 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		}
 	}
 
-	// Check each currency balance with inferred tolerance
+	// Check each currency balance with inferred tolerance. Costs count as
+	// booked: per unit, with inferred cost numbers resolved.
+	bookedCostTolerances := v.costTolerances(bookedToleranceShares(txn.Postings, delta, bookedLots))
 	residuals := make(map[string]decimal.Decimal)
 	for currency, residual := range balance {
-		amounts := amountsByCurrency[currency]
-		tolerance := InferTolerance(amounts, currency, v.config.Tolerance)
+		tolerance := v.transactionTolerance(currency, amountsByCurrency[currency], bookedCostTolerances)
 
 		// Always check residuals against tolerance (even with inferred amounts)
 		if residual.Abs().GreaterThan(tolerance) {
@@ -677,7 +684,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	}
 
 	delta.Postings = bookedPostings(txn.Postings, autoPosting, autoAmounts, func(p *ast.Posting) string {
-		return balanceCurrency(p, delta, reductionCurrencies)
+		return balanceCurrency(p, delta, bookedLots)
 	})
 
 	return delta, validation, nil
@@ -1323,14 +1330,171 @@ func statedUnits(postings []*ast.Posting) map[string][]decimal.Decimal {
 // this many significant digits is not a neat, user-like step to round to.
 const maxQuantumDigits = 5
 
+// maxCostTolerance mirrors beancount's MAXIMUM_TOLERANCE, the cap on what one
+// posting held at cost or price adds to a tolerance.
+var maxCostTolerance = decimal.RequireFromString("0.5")
+
+// transactionTolerance returns a transaction's tolerance for currency: the
+// one inferred from its units amounts, widened by what postings at cost or
+// price add under infer_tolerance_from_cost.
+func (v *validator) transactionTolerance(currency string, amounts []decimal.Decimal, costTolerances map[string]decimal.Decimal) decimal.Decimal {
+	tolerance := InferTolerance(amounts, currency, v.config.Tolerance)
+	if fromCost, ok := costTolerances[currency]; ok && fromCost.GreaterThan(tolerance) {
+		return fromCost
+	}
+	return tolerance
+}
+
+// toleranceShare is what one posting, as beancount sees it at some stage,
+// can add to a transaction's tolerances under infer_tolerance_from_cost.
+type toleranceShare struct {
+	units        decimal.Decimal
+	hasCost      bool
+	costNumbers  []decimal.Decimal // numbers the cost states; none widens by the cap
+	costCurrency string
+	price        *priceAmount
+}
+
+// costTolerances returns what postings held at cost or price add to a
+// transaction's tolerances when infer_tolerance_from_cost is set, like
+// beancount's infer_tolerances(use_cost=True). A share whose units have
+// fractional digits, with units tolerance t, adds min(t × n, 0.5) to its
+// cost currency (n the smallest cost number, or just 0.5 without one) and
+// to its price currency (n the per-unit price). Contributions sum per
+// currency.
+func (v *validator) costTolerances(shares []toleranceShare) map[string]decimal.Decimal {
+	if !v.config.Tolerance.InferFromCost {
+		return nil
+	}
+	tolerances := make(map[string]decimal.Decimal)
+	for _, share := range shares {
+		if share.units.Exponent() >= 0 {
+			continue
+		}
+		unitsTolerance := decimal.New(1, share.units.Exponent()).Mul(v.config.Tolerance.Multiplier)
+		if share.hasCost && share.costCurrency != "" {
+			contribution := maxCostTolerance
+			for _, n := range share.costNumbers {
+				contribution = decimal.Min(contribution, unitsTolerance.Mul(n))
+			}
+			tolerances[share.costCurrency] = tolerances[share.costCurrency].Add(contribution)
+		}
+		if share.price != nil {
+			contribution := decimal.Min(maxCostTolerance, unitsTolerance.Mul(share.price.number))
+			tolerances[share.price.currency] = tolerances[share.price.currency].Add(contribution)
+		}
+	}
+	return tolerances
+}
+
+// statedUnitsNumber returns a posting's units number when the source states
+// it with its currency; interpolated amounts never contribute tolerance.
+func statedUnitsNumber(posting *ast.Posting) (decimal.Decimal, bool) {
+	if posting.Inferred || posting.Amount == nil || posting.Amount.Value == "" || posting.Amount.Currency == "" {
+		return decimal.Decimal{}, false
+	}
+	units, err := ParseAmount(posting.Amount)
+	return units, err == nil
+}
+
+// specToleranceShares describes postings as beancount sees them before
+// booking, when it rounds interpolated amounts: a cost spec contributes the
+// numbers it states (per-unit, or total for {{...}}, and a compound total).
+func specToleranceShares(postings []*ast.Posting) []toleranceShare {
+	var shares []toleranceShare
+	for _, posting := range postings {
+		units, ok := statedUnitsNumber(posting)
+		if !ok {
+			continue
+		}
+		share := toleranceShare{units: units, price: perUnitPrice(posting, units)}
+		if posting.Cost != nil {
+			share.hasCost = true
+			share.costCurrency = costCurrency(posting.Cost)
+			for _, amount := range []*ast.Amount{posting.Cost.Amount, posting.Cost.Total} {
+				if amount == nil || amount.Value == "" {
+					continue
+				}
+				if n, err := ParseAmount(amount); err == nil {
+					share.costNumbers = append(share.costNumbers, n)
+				}
+			}
+		}
+		shares = append(shares, share)
+	}
+	return shares
+}
+
+// bookedToleranceShares describes postings as beancount books them, when it
+// checks the balance: a cost is its per-unit number, with inferred costs
+// resolved, and a reduction against lots becomes one share per lot, like
+// the booked postings beancount replaces it with.
+func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, bookedLots map[*ast.Posting][]lotReduction) []toleranceShare {
+	var shares []toleranceShare
+	for _, posting := range postings {
+		units, ok := statedUnitsNumber(posting)
+		if !ok {
+			continue
+		}
+		price := perUnitPrice(posting, units)
+
+		if lots, ok := bookedLots[posting]; ok {
+			for _, lot := range lots {
+				shares = append(shares, toleranceShare{
+					units:        lot.amount,
+					hasCost:      true,
+					costNumbers:  []decimal.Decimal{*lot.lot.Spec.Cost},
+					costCurrency: lot.lot.Spec.CostCurrency,
+					price:        price,
+				})
+			}
+			continue
+		}
+
+		share := toleranceShare{units: units, price: price}
+		if cost := delta.costFor(posting); cost != nil {
+			share.hasCost = true
+			if spec, err := ParseLotSpec(cost); err == nil && spec != nil && spec.Cost != nil &&
+				normalizeLotSpecForPosting(spec, &ast.Posting{Amount: posting.Amount, Cost: cost}) == nil {
+				share.costNumbers = []decimal.Decimal{*spec.Cost}
+				share.costCurrency = spec.CostCurrency
+			}
+		}
+		shares = append(shares, share)
+	}
+	return shares
+}
+
+type priceAmount struct {
+	number   decimal.Decimal
+	currency string
+}
+
+// perUnitPrice returns a posting's stated price per unit, or nil; beancount's
+// parser turns a total price (@@) into a per-unit one.
+func perUnitPrice(posting *ast.Posting, units decimal.Decimal) *priceAmount {
+	if posting.Price == nil || posting.Price.Value == "" || posting.Price.Currency == "" {
+		return nil
+	}
+	number, err := ParseAmount(posting.Price)
+	if err != nil {
+		return nil
+	}
+	if posting.PriceTotal {
+		if units.IsZero() {
+			return nil
+		}
+		number = number.Div(units.Abs())
+	}
+	return &priceAmount{number: number.Abs(), currency: posting.Price.Currency}
+}
+
 // roundInterpolated rounds an interpolated units number like beancount's
 // quantize_with_tolerance: half-to-even to twice the transaction's tolerance
-// for its currency (inferred from the stated amounts), when that step is a
-// neat number. Without a tolerance the number is left as computed, so
-// 10.00 USD - 3.333 USD books -6.67 USD while a price conversion keeps all
-// its digits.
-func (v *validator) roundInterpolated(number decimal.Decimal, currency string, stated map[string][]decimal.Decimal) decimal.Decimal {
-	tolerance := InferTolerance(stated[currency], currency, v.config.Tolerance)
+// for its currency, when that step is a neat number. Without a tolerance
+// the number is left as computed, so 10.00 USD - 3.333 USD books -6.67 USD
+// while a price conversion keeps all its digits.
+func roundInterpolated(number, tolerance decimal.Decimal) decimal.Decimal {
 	if !tolerance.IsPositive() {
 		return number
 	}
@@ -1468,13 +1632,13 @@ func statesCurrency(p *ast.Posting) bool {
 // balanceCurrency returns the currency a posting balances in after
 // inference: its cost currency, else its price currency, else its units
 // currency. Reductions against booked lots take the lots' cost currency.
-func balanceCurrency(p *ast.Posting, delta *TransactionDelta, reductionCurrencies map[*ast.Posting]string) string {
+func balanceCurrency(p *ast.Posting, delta *TransactionDelta, bookedLots map[*ast.Posting][]lotReduction) string {
 	if cost := delta.costFor(p); cost != nil {
 		if currency := costCurrency(cost); currency != "" {
 			return currency
 		}
-		if currency, ok := reductionCurrencies[p]; ok {
-			return currency
+		if lots := bookedLots[p]; len(lots) > 0 {
+			return lots[0].lot.Spec.CostCurrency
 		}
 	}
 	price := p.Price
@@ -1507,18 +1671,18 @@ func (v *validator) reducesInventory(accountName ast.Account, commodity string, 
 	return ok && account.Inventory.isReducedBy(commodity, amount)
 }
 
-// bookedReductionWeights resolves the balancing weights of an amount-less
-// cost spec reduction (empty {} or date/label-only) from the lots selected by
-// the account's booking method, matching beancount, which books lots before
-// interpolation.
+// bookedReductions resolves the lots an amount-less cost spec reduction
+// (empty {} or date/label-only) is booked against, selected by the account's
+// booking method; their costs give the posting's balancing weights, matching
+// beancount, which books lots before interpolation.
 //
 // The second return value reports whether the posting's cost is considered
 // resolved. It is false only when the cost must instead be inferred from the
 // transaction residual (NONE booking, or booked lots without a cost basis).
 // Booking failures (ambiguous matches, insufficient lots) return true with no
-// weights: they are reported separately by validateInventoryOperations, and
+// lots: they are reported separately by validateInventoryOperations, and
 // the posting must not additionally participate in cost inference.
-func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Cost, commodity string, amount decimal.Decimal) (weightSet, bool) {
+func (v *validator) bookedReductions(accountName ast.Account, cost *ast.Cost, commodity string, amount decimal.Decimal) ([]lotReduction, bool) {
 	account, ok := v.accounts[string(accountName)]
 	if !ok {
 		return nil, true // Unopened account; reported by validateAccountsOpen
@@ -1542,19 +1706,13 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 		return nil, false
 	}
 
-	var weights weightSet
 	for _, reduction := range plan.reductions {
-		spec := reduction.lot.Spec
-		if spec == nil || spec.Cost == nil {
+		if spec := reduction.lot.Spec; spec == nil || spec.Cost == nil {
 			return nil, false // Lot held without cost basis; infer from residual
 		}
-		weights = append(weights, weight{
-			Amount:   reduction.amount.Mul(*spec.Cost),
-			Currency: spec.CostCurrency,
-		})
 	}
 
-	return weights, true
+	return plan.reductions, true
 }
 
 // validateInventoryOperations validates that inventory operations (lot reductions) are possible.

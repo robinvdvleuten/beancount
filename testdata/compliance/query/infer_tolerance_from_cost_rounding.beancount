@@ -1,0 +1,14 @@
+; With infer_tolerance_from_cost, a posting at cost widens the USD tolerance
+; to 0.01548, so the amount-less posting is rounded to the step 0.03096 and
+; keeps its five decimals (0.01088, rendered 0.010 at USD's display
+; precision) instead of rounding to 0.011.
+option "infer_tolerance_from_cost" "TRUE"
+
+2006-01-01 open Assets:Invest
+2006-01-01 open Assets:Cash
+2006-01-01 open Assets:Rounding
+
+2006-01-17 * "Contribution"
+  Assets:Invest    18.572 VWELX {30.96 USD}
+  Assets:Cash    -575.000 USD
+  Assets:Rounding
