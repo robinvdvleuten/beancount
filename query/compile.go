@@ -190,6 +190,9 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 // explicit GROUP BY, an aggregate query implicitly groups by all
 // non-aggregate targets (official behavior).
 func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *Compiled) error {
+	if sel.Having != nil {
+		return compileErrorf(sel.Having, "The HAVING clause is not supported yet.")
+	}
 	if len(sel.GroupBy) == 0 {
 		hasAgg := false
 		for _, target := range compiled.Targets {
@@ -377,17 +380,14 @@ func (c *compiler) compileCall(node *bql.Call, allowAgg bool) (cexpr, error) {
 		}
 		result, ok := aggregate.resultType(arg.typ())
 		if !ok {
-			return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, arg.typ(), c.env.context)
+			return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList([]cexpr{arg}), c.env.context)
 		}
 		agg := &cAgg{def: aggregate, arg: arg, result: result, slot: len(c.aggs)}
 		c.aggs = append(c.aggs, agg)
 		return agg, nil
 	}
 
-	def, ok := functions[name]
-	if !ok {
-		return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList(nil, node.Args), c.env.context)
-	}
+	def := functions[name]
 	args := make([]cexpr, len(node.Args))
 	argTypes := make([]DType, len(node.Args))
 	for i, argNode := range node.Args {
@@ -398,28 +398,27 @@ func (c *compiler) compileCall(node *bql.Call, allowAgg bool) (cexpr, error) {
 		args[i] = arg
 		argTypes[i] = arg.typ()
 	}
-	overload := def.matchOverload(argTypes)
+	var overload *funcOverload
+	if def != nil {
+		overload = def.matchOverload(argTypes)
+	}
 	if overload == nil {
-		return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList(argTypes, nil), c.env.context)
+		return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList(args), c.env.context)
 	}
 	return &cCall{overload: overload, args: args}, nil
 }
 
-// argTypeList renders argument types for error messages, falling back to
-// argument text when types are unknown.
-func argTypeList(types []DType, nodes []bql.Expr) string {
-	if types != nil {
-		names := make([]string, len(types))
-		for i, t := range types {
-			names[i] = t.String()
+// argTypeList renders compiled arguments' types by their Python names, as
+// bean-query lists them in an invalid function's signature.
+func argTypeList(args []cexpr) string {
+	names := make([]string, len(args))
+	for i, arg := range args {
+		names[i] = arg.typ().String()
+		if lit, ok := arg.(*cLiteral); ok && lit.v == nil {
+			names[i] = "NoneType"
 		}
-		return strings.Join(names, ",")
 	}
-	names := make([]string, len(nodes))
-	for i, node := range nodes {
-		names[i] = deriveName(node)
-	}
-	return strings.Join(names, ",")
+	return strings.Join(names, ", ")
 }
 
 func (c *compiler) compileUnary(node *bql.Unary, allowAgg bool) (cexpr, error) {

@@ -1,0 +1,1 @@
+SELECT account GROUP BY account HAVING count(account) > 1

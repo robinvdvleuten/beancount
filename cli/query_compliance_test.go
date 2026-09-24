@@ -86,20 +86,27 @@ func runOurQuery(t *testing.T, fixture queryFixture, format string, numberify bo
 
 // TestQueryFixtures runs every fixture through our engine in both formats,
 // so the suite exercises the fixtures even without bean-query installed.
-// Error fixtures (err_ prefix) must produce an ERROR: line.
+// Error fixtures (err_ prefix) must produce an error message.
 func TestQueryFixtures(t *testing.T) {
 	for _, fixture := range loadQueryFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
 			for _, format := range []string{"text", "csv"} {
 				output := runOurQuery(t, fixture, format, fixture.numberify)
-				if strings.HasPrefix(fixture.name, "err_") {
-					assert.True(t, strings.HasPrefix(output, "ERROR: "), "expected an error, got: %s", output)
-				} else {
-					assert.False(t, strings.HasPrefix(output, "ERROR: "), "unexpected error: %s", output)
-				}
+				assert.Equal(t, strings.HasPrefix(fixture.name, "err_"), isQueryError(output), "output: %s", output)
 			}
 		})
 	}
+}
+
+// isQueryError reports whether output is an error message. bean-query
+// prints most errors behind "ERROR: ", but a few parse errors without it.
+func isQueryError(output string) bool {
+	for _, prefix := range []string{"ERROR: ", "Empty FROM expression", "Unknown token: "} {
+		if strings.HasPrefix(output, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query

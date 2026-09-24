@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"strings"
+	"unicode/utf8"
 
 	"golang.org/x/term"
 
@@ -169,27 +170,27 @@ func printShellBanner(out io.Writer, tree *ast.AST) {
 func runQuery(ctx context.Context, qctx *query.Context, tree *ast.AST, queryText, format string, numberify bool, out io.Writer) error {
 	stmt, err := bql.Parse(queryText)
 	if err != nil {
-		return printQueryError(out, err)
+		return printQueryError(out, queryText, err)
 	}
 
 	if print, ok := stmt.(*bql.Print); ok {
 		compiled, err := query.CompilePrint(qctx, print)
 		if err != nil {
-			return printQueryError(out, err)
+			return printQueryError(out, queryText, err)
 		}
 		if err := query.ExecutePrint(ctx, qctx, tree, compiled, out); err != nil {
-			return printQueryError(out, err)
+			return printQueryError(out, queryText, err)
 		}
 		return nil
 	}
 
 	compiled, err := query.Compile(qctx, stmt)
 	if err != nil {
-		return printQueryError(out, err)
+		return printQueryError(out, queryText, err)
 	}
 	result, err := query.Execute(ctx, qctx, tree, compiled)
 	if err != nil {
-		return printQueryError(out, err)
+		return printQueryError(out, queryText, err)
 	}
 
 	// Like bean-query's shell, an empty result is reported before any
@@ -207,14 +208,58 @@ func runQuery(ctx context.Context, qctx *query.Context, tree *ast.AST, queryText
 	}
 }
 
-func printQueryError(out io.Writer, err error) error {
-	message := err.Error()
-	// Positioned parse errors render as plain messages here; the position
-	// prefix only makes sense for multi-line shell input.
+// printQueryError prints a query error like bean-query: parse errors verbatim
+// as its parser raises them, compilation errors behind "ERROR: ".
+func printQueryError(out io.Writer, queryText string, err error) error {
 	var parseErr *bql.ParseError
-	if stdErrors.As(err, &parseErr) {
-		message = fmt.Sprintf("Syntax error: %s", parseErr.Message)
+	if !stdErrors.As(err, &parseErr) {
+		_, printErr := fmt.Fprintf(out, "ERROR: %s\n", err.Error())
+		return printErr
 	}
-	_, printErr := fmt.Fprintf(out, "ERROR: %s\n", message)
+
+	// bean-query's lexer positions are character offsets.
+	offset := utf8.RuneCountInString(queryText[:min(parseErr.Pos.Offset, len(queryText))])
+	var message string
+	switch parseErr.Kind {
+	case bql.ErrUnterminated:
+		message = "ERROR: unterminated statement. Missing a semicolon?"
+	case bql.ErrUnknownToken:
+		message = fmt.Sprintf("Unknown token: LexToken(error,%s,1,%d)", pythonRepr(queryText[parseErr.Pos.Offset:]), offset)
+	case bql.ErrEmptyFrom:
+		message = "Empty FROM expression is not allowed"
+	default:
+		message = fmt.Sprintf("ERROR: Syntax error near '%s' (at %d)\n  %s\n  %s^", parseErr.Near, offset, queryText, strings.Repeat(" ", offset))
+	}
+	_, printErr := fmt.Fprintln(out, message)
 	return printErr
+}
+
+// pythonRepr quotes s like Python's repr(), which bean-query uses to show
+// the text its lexer rejected.
+func pythonRepr(s string) string {
+	quote := '\''
+	if strings.ContainsRune(s, '\'') && !strings.ContainsRune(s, '"') {
+		quote = '"'
+	}
+	var b strings.Builder
+	b.WriteRune(quote)
+	for _, r := range s {
+		switch {
+		case r == quote || r == '\\':
+			b.WriteRune('\\')
+			b.WriteRune(r)
+		case r == '\n':
+			b.WriteString(`\n`)
+		case r == '\r':
+			b.WriteString(`\r`)
+		case r == '\t':
+			b.WriteString(`\t`)
+		case r < 0x20 || r == 0x7f:
+			fmt.Fprintf(&b, `\x%02x`, r)
+		default:
+			b.WriteRune(r)
+		}
+	}
+	b.WriteRune(quote)
+	return b.String()
 }

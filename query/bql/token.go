@@ -19,6 +19,7 @@ const (
 	FROM
 	WHERE
 	GROUP
+	HAVING
 	ORDER
 	PIVOT
 	BY
@@ -81,6 +82,7 @@ var tokenNames = map[TokenType]string{
 	FROM:     "FROM",
 	WHERE:    "WHERE",
 	GROUP:    "GROUP",
+	HAVING:   "HAVING",
 	ORDER:    "ORDER",
 	PIVOT:    "PIVOT",
 	BY:       "BY",
@@ -144,6 +146,7 @@ var keywords = map[string]TokenType{
 	"FROM":     FROM,
 	"WHERE":    WHERE,
 	"GROUP":    GROUP,
+	"HAVING":   HAVING,
 	"ORDER":    ORDER,
 	"PIVOT":    PIVOT,
 	"BY":       BY,

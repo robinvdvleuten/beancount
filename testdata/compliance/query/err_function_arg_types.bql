@@ -1,0 +1,1 @@
+SELECT bogusfn(date, position, units(position), tags, 2.7, TRUE, NULL)

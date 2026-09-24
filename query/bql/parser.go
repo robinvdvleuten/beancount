@@ -75,10 +75,43 @@ func (p *parser) pos(tok Token) ast.Position {
 }
 
 func (p *parser) errorf(tok Token, format string, args ...any) *ParseError {
-	return &ParseError{
+	err := &ParseError{
 		Pos:     p.pos(tok),
 		Message: fmt.Sprintf(format, args...),
+		Near:    p.tokenValue(tok),
 	}
+	switch tok.Type {
+	case EOF:
+		err.Kind = ErrUnterminated
+	case ILLEGAL:
+		err.Kind = ErrUnknownToken
+	}
+	return err
+}
+
+// tokenValue renders a token's value like bean-query's lexer, which names
+// the offending token in syntax errors.
+func (p *parser) tokenValue(tok Token) string {
+	text := tok.String(p.source)
+	switch tok.Type {
+	case IDENT:
+		return strings.ToLower(text)
+	case STRING:
+		return text[1 : len(text)-1]
+	case INTEGER:
+		if n, err := strconv.ParseInt(text, 10, 64); err == nil {
+			return strconv.FormatInt(n, 10)
+		}
+	case DECIMAL:
+		if d, err := decimal.NewFromString(text); err == nil && d.Exponent() < 0 {
+			return d.StringFixed(-d.Exponent())
+		}
+		return strings.TrimSuffix(text, ".")
+	}
+	if _, ok := keywords[strings.ToUpper(text)]; ok {
+		return strings.ToUpper(text)
+	}
+	return text
 }
 
 func (p *parser) describe(tok Token) string {
@@ -155,6 +188,13 @@ func (p *parser) parseSelect() (*Select, error) {
 			return nil, err
 		}
 		sel.GroupBy = exprs
+		if p.accept(HAVING) {
+			having, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			sel.Having = having
+		}
 	}
 
 	if p.cur.Type == ORDER {
@@ -265,7 +305,14 @@ func (p *parser) parseFrom() (*From, error) {
 	}
 
 	if from.Expr == nil && from.OpenOn == nil && !from.Close && !from.Clear {
-		return nil, p.errorf(p.cur, "expected expression, OPEN, CLOSE or CLEAR after FROM, found %s", p.describe(p.cur))
+		err := p.errorf(p.cur, "expected expression, OPEN, CLOSE or CLEAR after FROM, found %s", p.describe(p.cur))
+		// bean-query accepts an empty FROM grammatically and rejects it
+		// once the clause ends; any other token is a plain syntax error.
+		switch p.cur.Type {
+		case EOF, SEMICOLON, RPAREN, WHERE, GROUP, ORDER, PIVOT, LIMIT:
+			err.Kind = ErrEmptyFrom
+		}
+		return nil, err
 	}
 
 	return from, nil

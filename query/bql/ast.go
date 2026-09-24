@@ -36,7 +36,10 @@ type Select struct {
 	From     *From
 	Where    Expr
 	GroupBy  []Expr // column names, aliases, or 1-based integer indices
-	OrderBy  []Expr
+	// Having is parsed like bean-query's grammar, which the compiler then
+	// rejects as not supported yet.
+	Having  Expr
+	OrderBy []Expr
 	// OrderDesc applies to the whole ORDER BY list; the official grammar
 	// accepts a single trailing ASC or DESC, not one per term.
 	OrderDesc bool

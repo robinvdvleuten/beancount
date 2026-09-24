@@ -318,6 +318,40 @@ func TestParseErrorHasPosition(t *testing.T) {
 	assert.NotZero(t, parseErr.GetPosition())
 }
 
+func TestParseErrorKindAndNear(t *testing.T) {
+	// Near is the offending token's value as bean-query's lexer yields it.
+	for _, tc := range []struct {
+		query  string
+		kind   ErrorKind
+		near   string
+		offset int
+	}{
+		{"SELECT count(*)", ErrSyntax, "*", 13},
+		{"SELECT a WHERE b Where", ErrSyntax, "WHERE", 17},
+		{"SELECT a WHERE b Foo", ErrSyntax, "foo", 17},
+		{"SELECT a WHERE b 'x'", ErrSyntax, "x", 17},
+		{"SELECT a WHERE b 007", ErrSyntax, "7", 17},
+		{"SELECT a WHERE b 1.50", ErrSyntax, "1.50", 17},
+		{"SELECT a WHERE", ErrUnterminated, "", 14},
+		{"SELECT 'abc", ErrUnknownToken, "'abc", 7},
+		{"SELECT a FROM LIMIT 1", ErrEmptyFrom, "LIMIT", 14},
+		{"SELECT a FROM , b", ErrSyntax, ",", 14},
+	} {
+		_, err := Parse(tc.query)
+		parseErr, ok := err.(*ParseError)
+		assert.True(t, ok, tc.query)
+		assert.Equal(t, tc.kind, parseErr.Kind, tc.query)
+		assert.Equal(t, tc.near, parseErr.Near, tc.query)
+		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
+	}
+}
+
+func TestParseHaving(t *testing.T) {
+	stmt, err := Parse("SELECT account GROUP BY account HAVING count(account) > 1")
+	assert.NoError(t, err)
+	assert.NotZero(t, stmt.(*Select).Having)
+}
+
 func TestParseMultilineQuery(t *testing.T) {
 	stmt, err := Parse("SELECT\n  account,\n  sum(position)\nGROUP BY account\nORDER BY account")
 	assert.NoError(t, err)
