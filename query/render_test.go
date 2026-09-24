@@ -107,10 +107,6 @@ func TestRenderTextSignColumn(t *testing.T) {
 		"select lineno * 3 - 31, number, position where account = 'Assets:Checking' and number > -10"))
 }
 
-func TestRenderTextEmpty(t *testing.T) {
-	assert.Equal(t, "(empty)\n", renderText(t, "select account where account = 'NOPE'"))
-}
-
 func TestRenderCSVPadsValues(t *testing.T) {
 	expected := "account\r\n" +
 		"Assets:Checking        \r\n" +

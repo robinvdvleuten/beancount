@@ -11,13 +11,8 @@ import (
 
 // RenderText writes a result as bean-query's default text table: headers
 // centered and truncated to the data width, a dashed rule, and per-type
-// value alignment. Empty results render as "(empty)".
+// value alignment.
 func RenderText(result *Result, w io.Writer) error {
-	if len(result.Rows) == 0 {
-		_, err := io.WriteString(w, "(empty)\n")
-		return err
-	}
-
 	renderers := prepareRenderers(result, false)
 
 	var b strings.Builder

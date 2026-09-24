@@ -194,6 +194,13 @@ func runQuery(ctx context.Context, qctx *query.Context, tree *ast.AST, queryText
 		return printQueryError(out, err)
 	}
 
+	// Like bean-query's shell, an empty result is reported before any
+	// renderer runs, whatever the output format.
+	if len(result.Rows) == 0 {
+		_, err := io.WriteString(out, "(empty)\n")
+		return err
+	}
+
 	switch format {
 	case "csv":
 		return query.RenderCSV(result, out, numberify)
