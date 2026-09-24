@@ -1,0 +1,12 @@
+; A pad whose balance assertion already holds inserts nothing and is
+; reported as unused.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening-Balances
+2020-01-01 open Income:Salary
+
+2020-01-01 * "Salary"
+  Assets:Cash      5 USD
+  Income:Salary
+
+2020-01-02 pad Assets:Cash Equity:Opening-Balances
+2020-01-03 balance Assets:Cash 5 USD

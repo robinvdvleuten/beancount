@@ -199,7 +199,7 @@ func TestBalanceHandler_PadNotMarkedUsedOnFailure(t *testing.T) {
 	// Validation should fail (pad date not before balance date)
 	assert.True(t, len(errs) > 0, "validation should fail")
 	// Pad should NOT be marked as used since validation failed
-	assert.False(t, ledger.usedPads["Assets:Checking"], "pad should not be marked used on validation failure")
+	assert.False(t, ledger.pads["Assets:Checking"].used, "pad should not be marked used on validation failure")
 }
 
 func TestPadHandler(t *testing.T) {
@@ -229,7 +229,7 @@ func TestPadHandler(t *testing.T) {
 
 	// Verify pad was stored
 	accountName := string(padDirective.(*ast.Pad).Account)
-	storedPad := ledger.padEntries[accountName]
+	storedPad := ledger.pads[accountName]
 	assert.NotZero(t, storedPad)
 }
 

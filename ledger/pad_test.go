@@ -142,11 +142,16 @@ func TestPadWithinTolerance(t *testing.T) {
 
 	ledger := New()
 	err := ledger.Process(context.Background(), tree)
-	assert.NoError(t, err)
 
-	// No padding needed - balance already matches
+	// No padding needed - balance already matches, so the pad inserts
+	// nothing and beancount reports it as unused.
 	paddingTxns := findPaddingTransactions(tree)
 	assert.Equal(t, 0, len(paddingTxns), "Expected no padding transactions when balance already matches")
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(err, &validationErrors))
+	assert.Equal(t, 1, len(validationErrors.Errors))
+	var unused *UnusedPadWarning
+	assert.True(t, errors.As(validationErrors.Errors[0], &unused))
 }
 
 func TestUnusedPadWarning(t *testing.T) {

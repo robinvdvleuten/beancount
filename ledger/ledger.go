@@ -34,6 +34,7 @@
 package ledger
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -63,9 +64,9 @@ type Ledger struct {
 	accounts              map[string]*Account
 	config                *Config
 	errors                []error
-	padEntries            map[string]*ast.Pad // account -> pad directive
-	usedPads              map[string]bool     // account -> whether pad was used
-	syntheticTransactions []*ast.Transaction  // Padding transactions to insert into AST
+	pads                  map[string]*padState // account -> its latest pad
+	unusedPads            []*ast.Pad           // superseded pads that inserted no padding
+	syntheticTransactions []*ast.Transaction   // Padding transactions to insert into AST
 	bookedLots            map[*ast.Posting][]BookedLot
 	display               *DisplayContext
 	priceGraphMu          sync.RWMutex
@@ -106,8 +107,7 @@ func New() *Ledger {
 		accounts:    make(map[string]*Account),
 		config:      NewConfig(),
 		errors:      make([]error, 0),
-		padEntries:  make(map[string]*ast.Pad),
-		usedPads:    make(map[string]bool),
+		pads:        make(map[string]*padState),
 		priceGraphs: make(map[string]*Graph),
 		bookedLots:  make(map[*ast.Posting][]BookedLot),
 		display:     newDisplayContext(),
@@ -235,11 +235,18 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		insertTimer.End()
 	}
 
-	// Check for unused pad directives (pads that were never referenced by any balance)
-	for accountName, pad := range l.padEntries {
-		if !l.usedPads[accountName] {
-			l.errors = append(l.errors, NewUnusedPadWarning(pad))
+	// Report pads that inserted no padding, in source order.
+	unused := l.unusedPads
+	for _, state := range l.pads {
+		if !state.used {
+			unused = append(unused, state.pad)
 		}
+	}
+	slices.SortFunc(unused, func(a, b *ast.Pad) int {
+		return cmp.Or(strings.Compare(a.Position().Filename, b.Position().Filename), cmp.Compare(a.Position().Offset, b.Position().Offset))
+	})
+	for _, pad := range unused {
+		l.errors = append(l.errors, NewUnusedPadWarning(pad))
 	}
 
 	// Return collected errors
@@ -850,6 +857,24 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 			Posting:     posting,
 		})
 	}
+}
+
+// padState tracks an account's latest pad. Like beancount's ops/pad.py, a pad
+// pads each currency at most once, at the first balance assertion for that
+// currency after it, and counts as used only if it inserted padding.
+type padState struct {
+	pad      *ast.Pad
+	consumed map[string]bool // currencies whose first balance assertion was seen
+	used     bool
+}
+
+// activePad returns the pad that applies to a balance assertion of account
+// in currency, or nil when there is none or its currency was consumed.
+func (l *Ledger) activePad(account, currency string) *ast.Pad {
+	if state, ok := l.pads[account]; ok && !state.consumed[currency] {
+		return state.pad
+	}
+	return nil
 }
 
 // applyBalance applies the balance delta to the ledger (mutation only)

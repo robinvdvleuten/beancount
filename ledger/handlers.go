@@ -91,7 +91,7 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 
 	// Get pad entry if exists
 	accountName := string(balance.Account)
-	padEntry := l.padEntries[accountName]
+	padEntry := l.activePad(accountName, balance.Amount.Currency)
 
 	// Calculate delta (returns error separately, not in delta)
 	delta, err := v.calculateBalanceDelta(balance, padEntry)
@@ -106,9 +106,13 @@ func (h *BalanceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, 
 	balanceDelta := delta.(*BalanceDelta)
 	l.applyBalance(balanceDelta)
 
-	// Mark pad as used only after successful validation
-	if _, hasPad := l.padEntries[balanceDelta.AccountName]; hasPad {
-		l.usedPads[balanceDelta.AccountName] = true
+	// The first assertion per currency after a pad consumes it for that
+	// currency; the pad is used once it inserts padding.
+	if state, ok := l.pads[balanceDelta.AccountName]; ok && !state.consumed[balanceDelta.Currency] {
+		state.consumed[balanceDelta.Currency] = true
+		if balanceDelta.SyntheticTransaction != nil {
+			state.used = true
+		}
 	}
 
 	// Store synthetic transaction for AST insertion if it exists
@@ -125,23 +129,21 @@ func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) (
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validatePad(pad)
-
-	// A new pad supersedes an earlier one that no balance assertion has
-	// consumed yet; beancount reports the superseded pad as unused.
-	accountName := string(pad.Account)
-	if previous, ok := l.padEntries[accountName]; ok && !l.usedPads[accountName] {
-		errs = append(errs, NewUnusedPadWarning(previous))
+	if len(errs) > 0 {
+		return errs, nil
 	}
-
-	return errs, pad
+	return nil, pad
 }
 
 func (h *PadHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	pad := delta.(*ast.Pad)
 	accountName := string(pad.Account)
-	l.padEntries[accountName] = pad
-	// The new pad must be consumed by its own balance assertion.
-	delete(l.usedPads, accountName)
+	// A new pad supersedes the previous one; beancount reports that one as
+	// unused if it never inserted padding.
+	if previous, ok := l.pads[accountName]; ok && !previous.used {
+		l.unusedPads = append(l.unusedPads, previous.pad)
+	}
+	l.pads[accountName] = &padState{pad: pad, consumed: make(map[string]bool)}
 }
 
 // NoteHandler processes Note directives.

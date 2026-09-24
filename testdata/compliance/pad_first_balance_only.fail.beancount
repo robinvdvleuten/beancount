@@ -1,0 +1,8 @@
+; A pad fills only the first balance assertion per currency after it; a
+; later assertion is checked without padding.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-02 pad Assets:Cash Equity:Opening-Balances
+2020-01-03 balance Assets:Cash 5 USD
+2020-01-04 balance Assets:Cash 7 USD
