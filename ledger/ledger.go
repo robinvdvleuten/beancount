@@ -806,23 +806,13 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta)
 				panic(fmt.Sprintf("BUG: lot spec normalization failed after validation: %v", err))
 			}
 
-			if amount.IsZero() {
-				// Zero amount with cost spec is a no-op for inventory
-			} else if amount.GreaterThan(decimal.Zero) {
-				// Beancount records an acquisition date on every lot,
-				// defaulting to the transaction date; LIFO/FIFO ordering
-				// and dated lot specs depend on it.
-				if lotSpec != nil && lotSpec.Date == nil {
-					lotSpec.Date = txn.Date()
-				}
-				account.Inventory.AddLot(currency, amount, lotSpec)
-			} else {
-				bookingMethod := defaultBookingMethod(account.BookingMethod)
-				err := account.Inventory.ReduceLot(currency, amount, lotSpec, bookingMethod)
-				if err != nil {
-					// This should never happen after validateInventoryOperations - panic to catch bugs
-					panic(fmt.Sprintf("BUG: lot reduction failed after validation: %v", err))
-				}
+			// Beancount records an acquisition date on every new lot,
+			// defaulting to the transaction date; LIFO/FIFO ordering and
+			// dated lot specs depend on it.
+			err = account.Inventory.Book(currency, amount, lotSpec, account.BookingMethod, txn.Date())
+			if err != nil {
+				// This should never happen after validateInventoryOperations - panic to catch bugs
+				panic(fmt.Sprintf("BUG: lot booking failed after validation: %v", err))
 			}
 		} else {
 			account.Inventory.Add(currency, amount)

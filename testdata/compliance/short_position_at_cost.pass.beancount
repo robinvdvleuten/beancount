@@ -1,0 +1,27 @@
+; Selling at cost without holdings opens a short lot; later purchases
+; reduce it, and an empty cost spec books against the short lots.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:PnL
+
+2020-01-02 * "Open short"
+  Assets:Stock  -2 HOOL {10 USD}
+  Assets:Cash   20 USD
+
+2020-01-03 * "Cover one at a profit"
+  Assets:Stock   1 HOOL {10 USD} @ 8 USD
+  Assets:Cash   -8 USD
+  Income:PnL    -2 USD
+
+2020-01-04 * "Cover the rest against the lot"
+  Assets:Stock   1 HOOL {}
+  Assets:Cash
+
+2020-01-05 balance Assets:Stock  0 HOOL
+2020-01-05 balance Assets:Cash   2 USD
+
+2020-01-06 * "Short again after closing out"
+  Assets:Stock  -1 HOOL {12 USD}
+  Assets:Cash   12 USD
+
+2020-01-07 balance Assets:Stock -1 HOOL

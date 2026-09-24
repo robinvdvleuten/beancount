@@ -394,8 +394,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 	// Calculate weights for postings with amounts
 	var allWeights []weightSet
-	// Negative empty-cost postings whose lot cost could not be resolved via
-	// booking (e.g. NONE booking); their cost must be inferred from the residual.
+	// Empty-cost postings that reduce their account's inventory, and the
+	// subset whose lot cost could not be resolved via booking (e.g. NONE
+	// booking); the latter's cost must be inferred from the residual.
+	reducingEmptyCosts := make(map[*ast.Posting]bool)
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
@@ -417,7 +419,8 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			// spec's date/label (if any) narrows which lots are booked.
 			// Augmentations are handled in cost inference below.
 			amount, aerr := ParseAmount(posting.Amount)
-			if aerr == nil && amount.IsNegative() {
+			if aerr == nil && v.reducesInventory(posting.Account, posting.Amount.Currency, amount) {
+				reducingEmptyCosts[posting] = true
 				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
 					allWeights = append(allWeights, booked)
 				} else {
@@ -591,11 +594,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		// plus reductions whose lot cost could not be resolved via booking.
 		inferableEmptyCosts := 0
 		for _, posting := range pc.withEmptyCosts {
-			amount, err := ParseAmount(posting.Amount)
-			if err != nil {
+			if _, err := ParseAmount(posting.Amount); err != nil {
 				continue
 			}
-			if !amount.IsNegative() || unresolvedEmptyCosts[posting] {
+			if !reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting] {
 				inferableEmptyCosts++
 			}
 		}
@@ -614,7 +616,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 			// Infer cost for augmentations, and for reductions whose cost was
 			// not resolved from booked lots (e.g. NONE booking)
-			if amount.IsZero() || (amount.IsNegative() && !unresolvedEmptyCosts[posting]) {
+			if amount.IsZero() || (reducingEmptyCosts[posting] && !unresolvedEmptyCosts[posting]) {
 				continue
 			}
 
@@ -1291,6 +1293,13 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 	return ParseAmount(balance.Tolerance)
 }
 
+// reducesInventory reports whether a posting of amount commodity reduces the
+// account's inventory rather than augmenting it (see Inventory.isReducedBy).
+func (v *validator) reducesInventory(accountName ast.Account, commodity string, amount decimal.Decimal) bool {
+	account, ok := v.accounts[string(accountName)]
+	return ok && account.Inventory.isReducedBy(commodity, amount)
+}
+
 // bookedReductionWeights resolves the balancing weights of an amount-less
 // cost spec reduction (empty {} or date/label-only) from the lots selected by
 // the account's booking method, matching beancount, which books lots before
@@ -1318,7 +1327,7 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 		return nil, true // Invalid cost spec; reported by validateCosts
 	}
 
-	plan, err := account.Inventory.planReduction(commodity, amount, spec, bookingMethod)
+	plan, err := account.Inventory.planBooking(commodity, amount, spec, bookingMethod, nil)
 	if err != nil {
 		return nil, true // Booking error; reported by validateInventoryOperations
 	}
@@ -1333,7 +1342,7 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 			return nil, false // Lot held without cost basis; infer from residual
 		}
 		weights = append(weights, weight{
-			Amount:   reduction.amount.Mul(*spec.Cost).Neg(),
+			Amount:   reduction.amount.Mul(*spec.Cost),
 			Currency: spec.CostCurrency,
 		})
 	}
@@ -1344,7 +1353,7 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 // validateInventoryOperations validates that inventory operations (lot reductions) are possible.
 //
 // It validates that:
-//   - For lot reductions (negative amounts with cost specs), sufficient inventory exists
+//   - For lot reductions (cost-spec postings opposing the held position), sufficient inventory exists
 //   - Booking method constraints are satisfied
 //   - Both explicit and inferred amounts are checked
 //
@@ -1372,9 +1381,9 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 		amount, _ := ParseAmount(amountValue)
 		currency := amountValue.Currency
 
-		// Check if this is a lot reduction
+		// Check if this is a lot booking
 		costValue := delta.costFor(posting)
-		if costValue != nil && amount.IsNegative() {
+		if costValue != nil {
 			accountName := string(posting.Account)
 			account := v.accounts[accountName]
 
@@ -1386,8 +1395,8 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 			bookingMethod := defaultBookingMethod(account.BookingMethod)
 
-			// Check if reduction is possible (read-only)
-			if err := account.Inventory.CanReduceLot(currency, amount, lotSpec, bookingMethod); err != nil {
+			// Check if booking is possible (read-only)
+			if err := account.Inventory.CanBook(currency, amount, lotSpec, bookingMethod); err != nil {
 				var ambiguousErr *ambiguousBookingMatchError
 				if errors.As(err, &ambiguousErr) {
 					errs = append(errs, NewAmbiguousBookingError(txn, posting.Account, ambiguousErr))
