@@ -2,6 +2,8 @@ package ledger
 
 import (
 	"context"
+	"errors"
+	"slices"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -238,4 +240,21 @@ func stringContains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestPadFromItselfDoesNotSatisfyBalance(t *testing.T) {
+	// Both legs of the padding post to the same account, so the balance
+	// assertion fails, as in beancount.
+	source := `
+		2020-01-01 open Assets:Cash
+		2020-01-02 pad Assets:Cash Assets:Cash
+		2020-01-03 balance Assets:Cash 5 USD
+	`
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	err := New().Process(context.Background(), tree)
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(err, &validationErrors))
+	var mismatch *BalanceMismatchError
+	assert.True(t, slices.ContainsFunc(validationErrors.Errors, func(err error) bool { return errors.As(err, &mismatch) }))
 }

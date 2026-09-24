@@ -1,0 +1,5 @@
+; Padding an account from itself posts both legs to it, so the balance
+; assertion that follows still fails.
+2020-01-01 open Assets:Cash
+2020-01-02 pad Assets:Cash Assets:Cash
+2020-01-03 balance Assets:Cash 5 USD

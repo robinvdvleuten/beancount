@@ -1273,8 +1273,12 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 				balance.Amount.Value,                  // Original string for expected amount
 			)
 
-			// Calculate what actual will be after padding
-			actualAmountAfterPadding = actualAmount.Add(difference)
+			// Calculate what actual will be after padding. Padding an
+			// account from itself posts both legs to it, so nothing changes
+			// and the assertion fails, as in beancount.
+			if padEntry.AccountPad != balance.Account {
+				actualAmountAfterPadding = actualAmount.Add(difference)
+			}
 		}
 
 		// Mark pad as used (but don't remove it yet - may be needed for other currencies)
