@@ -51,6 +51,11 @@ indent). The content is equivalent beancount text that round-trips through
   ground: an ambiguous reduction under AVERAGE fails in both
   implementations (with different messages), so check exit codes agree.
 
+- **Negative zero**: an interpolated amount rounded to zero from a negative
+  residual is `-0.00` in beancount (Python decimal keeps the sign); our
+  decimals have no signed zero, so it books and renders as `0.00`. The value
+  is the same; only the sign of zero differs.
+
 ## Declared non-goals
 
 - **Plugin execution**: `plugin` directives are parsed but never run

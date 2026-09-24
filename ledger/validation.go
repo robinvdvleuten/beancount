@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"slices"
@@ -530,13 +531,14 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	// transaction. It absorbs the residual of every weight currency, so it
 	// is booked once per currency with a non-zero residual, in the order the
 	// currencies first appear.
+	stated := statedUnits(pc.withAmounts)
 	var autoPosting *ast.Posting
 	var autoAmounts []*ast.Amount
 	if len(pc.withoutAmounts) == 1 {
 		autoPosting = pc.withoutAmounts[0]
 
 		for _, currency := range residualCurrencies(allWeights, balance) {
-			needed := balance[currency].Neg()
+			needed := v.roundInterpolated(balance[currency].Neg(), currency, stated)
 			autoAmounts = append(autoAmounts, &ast.Amount{
 				Value:    formatInferredNumber(needed),
 				Currency: currency,
@@ -554,7 +556,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	if len(currencyOnlyAmounts) == 1 {
 		posting := currencyOnlyAmounts[0]
 		currency := posting.Amount.Currency
-		needed := balance[currency].Neg()
+		needed := v.roundInterpolated(balance[currency].Neg(), currency, stated)
 		delta.InferredAmounts[posting] = &ast.Amount{
 			Value:    formatInferredNumber(needed),
 			Currency: currency,
@@ -1299,6 +1301,54 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 		return decimal.New(1, exp).Mul(v.config.Tolerance.Multiplier).Mul(decimal.NewFromInt(2)), nil
 	}
 	return ParseAmount(balance.Tolerance)
+}
+
+// statedUnits collects the units numbers written in full (number and
+// currency) per currency, which beancount infers a transaction's tolerances
+// from before interpolating.
+func statedUnits(postings []*ast.Posting) map[string][]decimal.Decimal {
+	stated := make(map[string][]decimal.Decimal)
+	for _, posting := range postings {
+		if posting.Amount == nil || posting.Amount.Value == "" || posting.Amount.Currency == "" {
+			continue
+		}
+		if number, err := ParseAmount(posting.Amount); err == nil {
+			stated[posting.Amount.Currency] = append(stated[posting.Amount.Currency], number)
+		}
+	}
+	return stated
+}
+
+// maxQuantumDigits mirrors beancount's MAX_TOLERANCE_DIGITS: a quantum with
+// this many significant digits is not a neat, user-like step to round to.
+const maxQuantumDigits = 5
+
+// roundInterpolated rounds an interpolated units number like beancount's
+// quantize_with_tolerance: half-to-even to twice the transaction's tolerance
+// for its currency (inferred from the stated amounts), when that step is a
+// neat number. Without a tolerance the number is left as computed, so
+// 10.00 USD - 3.333 USD books -6.67 USD while a price conversion keeps all
+// its digits.
+func (v *validator) roundInterpolated(number decimal.Decimal, currency string, stated map[string][]decimal.Decimal) decimal.Decimal {
+	tolerance := InferTolerance(stated[currency], currency, v.config.Tolerance)
+	if !tolerance.IsPositive() {
+		return number
+	}
+	// Normalize the quantum (strip trailing zeros), as beancount does.
+	quantum := tolerance.Mul(decimal.NewFromInt(2))
+	coefficient, exponent := quantum.Coefficient(), quantum.Exponent()
+	ten, remainder := big.NewInt(10), new(big.Int)
+	for coefficient.Sign() != 0 {
+		quotient, rem := new(big.Int).QuoRem(coefficient, ten, remainder)
+		if rem.Sign() != 0 {
+			break
+		}
+		coefficient, exponent = quotient, exponent+1
+	}
+	if len(coefficient.String()) >= maxQuantumDigits {
+		return number
+	}
+	return number.RoundBank(-exponent)
 }
 
 // residualCurrencies returns the currencies with a non-zero residual, in the

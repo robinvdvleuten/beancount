@@ -1,0 +1,25 @@
+; An interpolated amount is rounded to twice the transaction's tolerance
+; for its currency (here 0.01, from the coarsest stated USD amount), so the
+; account holds -6.67 USD, not -6.667. A precise balance tells them apart.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+2020-01-01 open Assets:D
+
+2020-01-02 * "Amount-less posting"
+  Assets:A  10.00 USD
+  Assets:B  -3.333 USD
+  Assets:C
+
+2020-01-03 * "Currency-only amount"
+  Assets:A  10.00 USD
+  Assets:B  -3.333 USD
+  Assets:D  USD
+
+2020-01-04 * "No stated USD amount: nothing to round to"
+  Assets:A  10.00 EUR @ 1.1111 USD
+  Assets:B
+
+2020-01-05 balance Assets:C  -6.670 USD
+2020-01-05 balance Assets:D  -6.670 USD
+2020-01-05 balance Assets:B -17.7770 USD

@@ -2400,3 +2400,29 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 		})
 	}
 }
+
+func TestRoundInterpolated(t *testing.T) {
+	// Expected values follow beancount's quantize_with_tolerance, computed
+	// with Python decimal for a transaction stating 10.00 USD: the step is
+	// twice the tolerance, and a step of five or more significant digits
+	// leaves the number unrounded.
+	stated := map[string][]decimal.Decimal{"USD": {decimal.RequireFromString("10.00")}}
+	number := decimal.RequireFromString("-6.666666666")
+	for multiplier, want := range map[string]string{
+		"0.5":     "-6.67",
+		"1.1":     "-6.667",
+		"0.3333":  "-6.666667",
+		"0.33333": "-6.666666666",
+	} {
+		v := newTestValidator(nil)
+		v.config.Tolerance.Multiplier = decimal.RequireFromString(multiplier)
+		assert.Equal(t, want, formatInferredNumber(v.roundInterpolated(number, "USD", stated)), multiplier)
+	}
+
+	// Without a stated amount or default there is nothing to round to; a
+	// configured default gives a step even for whole-number transactions.
+	v := newTestValidator(nil)
+	assert.Equal(t, "-6.666666666", formatInferredNumber(v.roundInterpolated(number, "EUR", stated)))
+	v.config.Tolerance.Defaults["EUR"] = decimal.RequireFromString("0.005")
+	assert.Equal(t, "-6.67", formatInferredNumber(v.roundInterpolated(number, "EUR", stated)))
+}
