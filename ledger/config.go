@@ -14,7 +14,7 @@ type AccountNamesConfig = sharedconfig.AccountNames
 // NewConfig returns configuration populated with official defaults.
 func NewConfig() *Config { return sharedconfig.New() }
 
-func configFromAST(tree *ast.AST) (*Config, error) { return sharedconfig.FromAST(tree) }
+func configFromAST(tree *ast.AST) (*Config, []error) { return sharedconfig.ParseOptions(tree) }
 
 func configFromOptions(options map[string][]string) (*Config, error) {
 	return sharedconfig.FromOptions(options)

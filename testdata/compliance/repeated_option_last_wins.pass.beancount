@@ -1,0 +1,19 @@
+; A repeated scalar option takes its last value: LIFO books the sale
+; against the 12 USD lot.
+option "booking_method" "FIFO"
+option "booking_method" "LIFO"
+
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock   1 HOOL {10 USD}
+  Assets:Cash
+
+2020-01-03 * "Buy"
+  Assets:Stock   1 HOOL {12 USD}
+  Assets:Cash
+
+2020-01-04 * "Sell"
+  Assets:Stock  -1 HOOL {}
+  Assets:Cash   12 USD

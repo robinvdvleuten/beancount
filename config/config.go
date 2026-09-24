@@ -72,21 +72,31 @@ func New() *Config {
 	}
 }
 
-// FromAST extracts and parses options from an AST.
-func FromAST(tree *ast.AST) (*Config, error) {
+// ParseOptions builds the configuration from an AST's option directives.
+// Like beancount, each option is applied on its own, in order: a scalar
+// option's last valid value wins, and an unknown name or invalid value is
+// reported at its directive while every other option still applies.
+func ParseOptions(tree *ast.AST) (*Config, []error) {
+	cfg := New()
 	var errs []error
-	options := make(map[string][]string)
 	for _, option := range tree.Options {
 		if err := validateOptionName(option); err != nil {
 			errs = append(errs, err)
 			continue
 		}
-		options[option.Name.Value] = append(options[option.Name.Value], option.Value.Value)
+		if err := cfg.apply(option.Name.Value, option.Value.Value); err != nil {
+			errs = append(errs, &OptionValueError{Option: option, Err: err})
+		}
 	}
-	if len(errs) > 0 {
-		return nil, errors.Join(errs...)
-	}
-	return FromOptions(options)
+	return cfg, errs
+}
+
+// FromAST builds the configuration from an AST's options, returning the
+// per-option errors of ParseOptions joined. The configuration is usable
+// even when an error is returned.
+func FromAST(tree *ast.AST) (*Config, error) {
+	cfg, errs := ParseOptions(tree)
+	return cfg, errors.Join(errs...)
 }
 
 // knownOptions are the user-settable option names of official beancount v2
@@ -156,68 +166,77 @@ func validateOptionName(option *ast.Option) error {
 	return &InvalidOptionError{Option: option, Reserved: reservedOptions[name]}
 }
 
-// FromOptions parses supported option values.
+// FromOptions builds the configuration from option values by name, failing
+// on the first invalid value.
 func FromOptions(options map[string][]string) (*Config, error) {
 	cfg := New()
-
-	var err error
-	cfg.Tolerance, err = parseTolerance(options)
-	if err != nil {
-		return nil, err
-	}
-
-	if values := options["booking_method"]; len(values) > 0 {
-		method := values[0]
-		if !IsBookingMethod(method) {
-			return nil, fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, HIFO, or AVERAGE", values[0])
+	for name, values := range options {
+		for _, value := range values {
+			if err := cfg.apply(name, value); err != nil {
+				return nil, err
+			}
 		}
-		cfg.BookingMethod = method
 	}
-
-	setFirst(options, "name_assets", &cfg.AccountNames.Assets)
-	setFirst(options, "name_liabilities", &cfg.AccountNames.Liabilities)
-	setFirst(options, "name_equity", &cfg.AccountNames.Equity)
-	setFirst(options, "name_income", &cfg.AccountNames.Income)
-	setFirst(options, "name_expenses", &cfg.AccountNames.Expenses)
-
-	cfg.OperatingCurrencies = append(cfg.OperatingCurrencies, options["operating_currency"]...)
-
 	return cfg, nil
 }
 
-func setFirst(options map[string][]string, name string, target *string) {
-	if values := options[name]; len(values) > 0 {
-		*target = values[0]
-	}
+// OptionValueError reports an option directive whose value is invalid.
+type OptionValueError struct {
+	Option *ast.Option
+	Err    error
 }
 
-func parseTolerance(options map[string][]string) (*Tolerance, error) {
-	config := NewTolerance()
-	if values := options["inferred_tolerance_multiplier"]; len(values) > 0 {
-		multiplier, err := decimal.NewFromString(values[0])
-		if err != nil {
-			return nil, fmt.Errorf("invalid inferred_tolerance_multiplier %q: %w", values[0], err)
-		}
-		config.Multiplier = multiplier
-	}
+func (e *OptionValueError) Error() string {
+	pos := e.Option.Position()
+	return fmt.Sprintf("%s:%d: Error for option '%s': %v", pos.Filename, pos.Line, e.Option.Name.Value, e.Err)
+}
 
-	for _, value := range options["inferred_tolerance_default"] {
+func (e *OptionValueError) Unwrap() error { return e.Err }
+
+// GetPosition returns the source position of the offending option directive.
+func (e *OptionValueError) GetPosition() ast.Position { return e.Option.Position() }
+
+// apply sets one option value. Scalar options take the latest value, list
+// options accumulate; options this implementation does not use are ignored.
+func (c *Config) apply(name, value string) error {
+	switch name {
+	case "booking_method":
+		if !IsBookingMethod(value) {
+			return fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, HIFO, or AVERAGE", value)
+		}
+		c.BookingMethod = value
+	case "name_assets":
+		c.AccountNames.Assets = value
+	case "name_liabilities":
+		c.AccountNames.Liabilities = value
+	case "name_equity":
+		c.AccountNames.Equity = value
+	case "name_income":
+		c.AccountNames.Income = value
+	case "name_expenses":
+		c.AccountNames.Expenses = value
+	case "operating_currency":
+		c.OperatingCurrencies = append(c.OperatingCurrencies, value)
+	case "inferred_tolerance_multiplier":
+		multiplier, err := decimal.NewFromString(value)
+		if err != nil {
+			return fmt.Errorf("invalid inferred_tolerance_multiplier %q: %w", value, err)
+		}
+		c.Tolerance.Multiplier = multiplier
+	case "inferred_tolerance_default":
 		parts := strings.SplitN(value, ":", 2)
 		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid inferred_tolerance_default format %q, expected CURRENCY:TOLERANCE", value)
+			return fmt.Errorf("invalid inferred_tolerance_default format %q, expected CURRENCY:TOLERANCE", value)
 		}
-		currency := strings.TrimSpace(parts[0])
 		tolerance, err := decimal.NewFromString(strings.TrimSpace(parts[1]))
 		if err != nil {
-			return nil, fmt.Errorf("invalid tolerance value in %q: %w", value, err)
+			return fmt.Errorf("invalid tolerance value in %q: %w", value, err)
 		}
-		config.Defaults[currency] = tolerance
+		c.Tolerance.Defaults[strings.TrimSpace(parts[0])] = tolerance
+	case "infer_tolerance_from_cost":
+		c.Tolerance.InferFromCost = strings.ToUpper(value) == "TRUE"
 	}
-
-	if values := options["infer_tolerance_from_cost"]; len(values) > 0 {
-		config.InferFromCost = strings.ToUpper(values[0]) == "TRUE"
-	}
-	return config, nil
+	return nil
 }
 
 // IsValidAccountName reports whether an account starts with a configured root.

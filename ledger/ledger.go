@@ -148,12 +148,10 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		l.graph.AddNode(currency, NodeCurrency, nil)
 	}
 
-	// Parse configuration from AST options
-	cfg, err := configFromAST(tree)
-	if err != nil {
-		l.errors = append(l.errors, err)
-		cfg = NewConfig() // Use defaults if parsing fails
-	}
+	// Parse configuration from AST options; an invalid option is reported
+	// and keeps its default while the others apply.
+	cfg, optionErrs := configFromAST(tree)
+	l.errors = append(l.errors, optionErrs...)
 	l.config = cfg
 
 	// Process directives in semantic date order.

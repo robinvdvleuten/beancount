@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -74,4 +75,27 @@ func TestOperatingCurrenciesAccumulate(t *testing.T) {
 	cfg, err = FromAST(parser.MustParseString(context.Background(), `option "title" "No currencies"`))
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(cfg.OperatingCurrencies))
+}
+
+func TestParseOptionsAppliesEachOptionOnItsOwn(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `option "booking_method" "FIFO"
+option "booking_method" "LIFO"
+option "booking_method" "BOGUS"
+option "inferred_tolerance_default" "USD:0.5"
+option "inferred_tolerance_multiplier" "abc"
+option "bogus_name" "x"
+`)
+	cfg, errs := ParseOptions(tree)
+
+	// Like beancount: the last valid scalar value wins, and each invalid
+	// option is reported at its line without affecting the others.
+	assert.Equal(t, "LIFO", cfg.BookingMethod)
+	assert.Equal(t, "0.5", cfg.Tolerance.Defaults["USD"].String())
+	assert.Equal(t, "0.5", cfg.Tolerance.Multiplier.String())
+	assert.Equal(t, 3, len(errs))
+	lines := make([]int, len(errs))
+	for i, err := range errs {
+		lines[i] = err.(interface{ GetPosition() ast.Position }).GetPosition().Line
+	}
+	assert.Equal(t, []int{3, 5, 6}, lines)
 }

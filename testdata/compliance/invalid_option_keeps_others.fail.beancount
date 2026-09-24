@@ -1,0 +1,11 @@
+; An invalid option value is an error for that option only: the tolerance
+; option still applies, so the transaction balances.
+option "inferred_tolerance_default" "USD:0.5"
+option "booking_method" "BOGUS"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Residual within the configured tolerance"
+  Assets:A   1 USD
+  Assets:B  -1.4 USD

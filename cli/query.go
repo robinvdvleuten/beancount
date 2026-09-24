@@ -64,10 +64,8 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 		}
 	}
 
-	cfg, err := config.FromAST(tree)
-	if err != nil {
-		return err
-	}
+	// Invalid options were reported by the ledger above.
+	cfg, _ := config.ParseOptions(tree)
 
 	qctx := &query.Context{Ledger: l, Config: cfg}
 
