@@ -197,6 +197,10 @@ func (h *CommodityHandler) Validate(ctx context.Context, l *Ledger, d ast.Direct
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs := v.validateCommodity(commodity)
+	// Like beancount, a currency may be declared only once.
+	if node := l.graph.GetNode(commodity.Currency); node != nil && node.Kind == NodeCommodity {
+		errs = append(errs, NewDuplicateCommodityError(commodity))
+	}
 	if len(errs) > 0 {
 		return errs, nil
 	}

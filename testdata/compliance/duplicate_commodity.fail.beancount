@@ -1,0 +1,4 @@
+; A currency may be declared by only one commodity directive.
+2020-01-01 commodity USD
+2020-01-01 commodity EUR
+2020-02-01 commodity USD

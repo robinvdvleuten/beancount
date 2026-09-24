@@ -191,6 +191,35 @@ func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
 	})
 }
 
+// DuplicateCommodityError is returned for a second commodity directive of the
+// same currency.
+type DuplicateCommodityError struct {
+	directiveError
+	Currency string
+}
+
+func (e *DuplicateCommodityError) Error() string {
+	return fmt.Sprintf("%s: Duplicate commodity directives for '%s'", e.formatLocation(), e.Currency)
+}
+
+func (e *DuplicateCommodityError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "DuplicateCommodityError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"currency": e.Currency,
+		"date":     e.Date().String(),
+	})
+}
+
+// NewDuplicateCommodityError creates an error for a repeated commodity directive.
+func NewDuplicateCommodityError(commodity *ast.Commodity) *DuplicateCommodityError {
+	return &DuplicateCommodityError{
+		directiveError: newDirectiveError(commodity),
+		Currency:       commodity.Currency,
+	}
+}
+
 // TransactionNotBalancedError is returned when a transaction doesn't balance
 type TransactionNotBalancedError struct {
 	directiveError
