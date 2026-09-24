@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -186,4 +187,16 @@ func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {
 
 	// Should not panic and should include source lines
 	assert.Contains(t, output, "2024-01-15")
+}
+
+func TestErrorRenderer_UnusedPadShowsPadOnce(t *testing.T) {
+	tree := parser.MustParseString(t.Context(), "2020-01-02 pad Assets:Cash Equity:Opening\n")
+	pad := tree.Directives[0].(*ast.Pad)
+
+	output := NewErrorRenderer(nil).Render(ledger.NewUnusedPadWarning(pad))
+
+	assert.Equal(t, 1, strings.Count(output, "pad Assets:Cash Equity:Opening"))
+	for _, line := range strings.Split(output, "\n") {
+		assert.Equal(t, strings.TrimRight(line, " "), line, "no trailing padding")
+	}
 }

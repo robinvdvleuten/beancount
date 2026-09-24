@@ -843,12 +843,8 @@ func (e *UnusedPadWarning) Error() string {
 		location = e.Pad.Date().String()
 	}
 
-	return fmt.Sprintf("%s: Unused Pad entry\n\n   %s pad %s %s",
-		location,
-		e.Pad.Date().String(),
-		e.Pad.Account,
-		e.Pad.AccountPad,
-	)
+	// The pad itself is shown by renderers through GetDirective.
+	return fmt.Sprintf("%s: Unused Pad entry", location)
 }
 
 func (e *UnusedPadWarning) GetPosition() ast.Position {
