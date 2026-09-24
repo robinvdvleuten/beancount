@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -193,7 +194,7 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		}
 
 		// Calculate per-unit cost: total ÷ quantity
-		perUnitCost := lotSpec.Cost.Div(quantity.Abs())
+		perUnitCost := pydecimal.Quo(*lotSpec.Cost, quantity.Abs())
 		lotSpec.Cost = &perUnitCost
 	} else if posting.Cost != nil && posting.Cost.Total != nil {
 		if posting.Amount == nil {
@@ -210,9 +211,24 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		if err != nil {
 			return fmt.Errorf("invalid compound total: %w", err)
 		}
-		perUnitCost := lotSpec.Cost.Add(total.Div(quantity.Abs()))
+		perUnitCost := lotSpec.Cost.Add(pydecimal.Quo(total, quantity.Abs()))
 		lotSpec.Cost = &perUnitCost
 	}
 
 	return nil
+}
+
+// PerUnitCost returns the per-unit cost a posting is booked at: its cost
+// number, a total cost ({{...}}) spread over the units, or a compound cost's
+// per-unit part plus its total spread over the units. ok is false when the
+// posting states no cost number.
+func PerUnitCost(posting *ast.Posting) (number decimal.Decimal, currency string, ok bool) {
+	spec, err := ParseLotSpec(posting.Cost)
+	if err != nil || spec == nil || spec.Cost == nil {
+		return decimal.Zero, "", false
+	}
+	if normalizeLotSpecForPosting(spec, posting) != nil {
+		return decimal.Zero, "", false
+	}
+	return *spec.Cost, spec.CostCurrency, true
 }

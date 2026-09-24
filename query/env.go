@@ -216,10 +216,9 @@ func postingPositions(qctx *Context, posting *ast.Posting, entryDate *ast.Date) 
 	return positions
 }
 
-// postingPosition converts an AST posting into a query Position with a
-// normalized per-unit cost. The ledger resolves interpolated amounts and
-// inferred costs in place, but total costs ({{...}}) keep their original
-// form in the AST, so per-unit normalization happens here. Cost bases
+// postingPosition converts an AST posting into a query Position with the
+// per-unit cost the ledger books it at (ledger.PerUnitCost spreads total and
+// compound costs over the units). Cost bases
 // without an explicit date are stamped with the transaction date, matching
 // official booking (the date shows in cost_date but not in rendered
 // positions).
@@ -238,22 +237,8 @@ func postingPosition(posting *ast.Posting, entryDate *ast.Date) *Position {
 		if cost.Date == nil {
 			cost.Date = entryDate
 		}
-		costAmount := posting.Cost.Amount
-		if costAmount == nil {
-			costAmount = posting.Cost.Total
-		}
-		if costAmount != nil {
-			costNumber, err := ledger.ParseAmount(costAmount)
-			if err != nil {
-				return nil
-			}
-			if posting.Cost.IsTotal || posting.Cost.Total != nil {
-				if !number.IsZero() {
-					costNumber = costNumber.Div(number.Abs())
-				}
-			}
-			cost.Number = costNumber
-			cost.Currency = costAmount.Currency
+		if costNumber, currency, ok := ledger.PerUnitCost(posting); ok {
+			cost.Number, cost.Currency = costNumber, currency
 		}
 		position.Cost = cost
 	}

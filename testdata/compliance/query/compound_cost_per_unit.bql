@@ -1,0 +1,1 @@
+SELECT account, position, weight, cost_number

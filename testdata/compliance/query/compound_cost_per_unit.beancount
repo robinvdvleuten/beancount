@@ -1,0 +1,7 @@
+; A compound cost {per # total} costs per + total / units per unit.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy with a commission in the cost"
+  Assets:Stock  1.50 HOOL {10 # 3 USD}
+  Assets:Cash  -18.00 USD

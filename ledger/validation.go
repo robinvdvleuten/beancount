@@ -1482,10 +1482,9 @@ func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, boo
 		share := toleranceShare{units: units, price: price}
 		if cost := delta.costFor(posting); cost != nil {
 			share.hasCost = true
-			if spec, err := ParseLotSpec(cost); err == nil && spec != nil && spec.Cost != nil &&
-				normalizeLotSpecForPosting(spec, &ast.Posting{Amount: posting.Amount, Cost: cost}) == nil {
-				share.costNumbers = []decimal.Decimal{*spec.Cost}
-				share.costCurrency = spec.CostCurrency
+			if number, currency, ok := PerUnitCost(&ast.Posting{Amount: posting.Amount, Cost: cost}); ok {
+				share.costNumbers = []decimal.Decimal{number}
+				share.costCurrency = currency
 			}
 		}
 		shares = append(shares, share)
@@ -1810,13 +1809,10 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 			// Like beancount, a booked cost may be zero but never negative;
 			// the check applies per unit, after a total or compound cost is
 			// spread over the units.
-			if lotSpec != nil && lotSpec.Cost != nil {
-				perUnit := *lotSpec
-				booked := &ast.Posting{Amount: amountValue, Cost: costValue}
-				if normalizeLotSpecForPosting(&perUnit, booked) == nil && perUnit.Cost.IsNegative() {
-					errs = append(errs, NewNegativeCostError(txn, posting.Account, *perUnit.Cost, perUnit.CostCurrency))
-					continue
-				}
+			booked := &ast.Posting{Amount: amountValue, Cost: costValue}
+			if perUnit, costCurrency, ok := PerUnitCost(booked); ok && perUnit.IsNegative() {
+				errs = append(errs, NewNegativeCostError(txn, posting.Account, perUnit, costCurrency))
+				continue
 			}
 
 			bookingMethod := defaultBookingMethod(account.BookingMethod)
