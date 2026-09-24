@@ -1,0 +1,5 @@
+; Pushed metadata is a stack per key: two pushes need two pops.
+pushmeta location: "home"
+pushmeta location: "work"
+2020-01-01 open Assets:Cash
+popmeta location:

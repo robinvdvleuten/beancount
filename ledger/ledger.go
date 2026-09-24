@@ -130,10 +130,9 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	collector := telemetry.FromContext(ctx)
 
 	prepareTimer := collector.Start("ledger.prepare_ast")
-	if err := ast.ApplyPushPopDirectives(tree); err != nil {
-		prepareTimer.End()
-		return err
-	}
+	// Unbalanced pushes and pops are reported like validation errors; the
+	// ledger is still processed.
+	l.errors = append(l.errors, ast.ApplyPushPopDirectives(tree)...)
 	if err := ast.SortDirectives(tree); err != nil {
 		prepareTimer.End()
 		return err

@@ -443,10 +443,13 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		return nil, parser.NewParseErrorWithSource(filename, err, data)
 	}
 
-	if err := prepareLoadedAST(result); err != nil {
+	// Unbalanced pushes and pops are non-fatal load errors, per file.
+	pushPopErrors, err := prepareLoadedAST(result)
+	if err != nil {
 		loadTimer.End()
 		return nil, err
 	}
+	l.diagnostics = append(l.diagnostics, pushPopErrors...)
 
 	if absPath != l.root {
 		for _, option := range result.Options {
@@ -557,9 +560,7 @@ func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 	return result
 }
 
-func prepareLoadedAST(tree *ast.AST) error {
-	if err := ast.ApplyPushPopDirectives(tree); err != nil {
-		return err
-	}
-	return ast.SortDirectives(tree)
+func prepareLoadedAST(tree *ast.AST) ([]error, error) {
+	pushPopErrors := ast.ApplyPushPopDirectives(tree)
+	return pushPopErrors, ast.SortDirectives(tree)
 }

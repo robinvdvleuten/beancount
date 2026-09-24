@@ -1,0 +1,3 @@
+; A tag pushed and never popped is an error at the end of the file.
+pushtag #trip
+2020-01-01 open Assets:Cash

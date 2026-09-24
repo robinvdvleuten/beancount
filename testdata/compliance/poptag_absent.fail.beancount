@@ -1,0 +1,3 @@
+; Popping a tag that is not pushed is an error.
+poptag #trip
+2020-01-01 open Assets:Cash

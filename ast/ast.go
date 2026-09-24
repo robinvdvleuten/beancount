@@ -6,7 +6,11 @@
 // programmatically for generating Beancount output.
 package ast
 
-import "slices"
+import (
+	"fmt"
+	"slices"
+	"strings"
+)
 
 // Directives is a slice of Directive that implements sort.Interface.
 type Directives []Directive
@@ -155,9 +159,26 @@ type positionedItem struct {
 	popmeta   *Popmeta
 }
 
+// PushPopError reports a pushed tag or metadata key left open at the end of
+// a file, or a pop of one that is not pushed.
+type PushPopError struct {
+	Pos     Position
+	Message string
+}
+
+func (e *PushPopError) Error() string {
+	return fmt.Sprintf("%s:%d: %s", e.Pos.Filename, e.Pos.Line, e.Message)
+}
+
+// GetPosition returns the position of the offending push or pop directive.
+func (e *PushPopError) GetPosition() Position { return e.Pos }
+
 // ApplyPushPopDirectives applies pushtag/poptag and pushmeta/popmeta directives
 // to transactions and other directives in file order (before date sorting).
-func ApplyPushPopDirectives(ast *AST) error {
+// Like beancount, pushed tags form a list and pushed metadata a stack per
+// key; it returns an error for each pop of something not pushed and each
+// push still open at the end, which beancount reports per file.
+func ApplyPushPopDirectives(ast *AST) []error {
 	if ast.pushPopApplied {
 		return nil
 	}
@@ -214,47 +235,95 @@ func ApplyPushPopDirectives(ast *AST) error {
 	})
 
 	// Track active state - use slices to preserve order
-	var activeTags []Tag
-	activeMetadata := make(map[string]string)
+	var activeTags []*Pushtag
+	activeMetadata := make(map[string][]*Pushmeta)
+	var metadataKeys []string // push order of keys, for deterministic output
+	var errs []error
 
 	// Process items in file order
 	for _, item := range items {
 		switch {
 		case item.pushtag != nil:
-			activeTags = append(activeTags, item.pushtag.Tag)
+			activeTags = append(activeTags, item.pushtag)
 
 		case item.poptag != nil:
-			// Remove tag from slice
-			for i, tag := range activeTags {
-				if tag == item.poptag.Tag {
-					activeTags = append(activeTags[:i], activeTags[i+1:]...)
+			popped := false
+			for i, pushed := range activeTags {
+				if pushed.Tag == item.poptag.Tag {
+					activeTags = slices.Delete(activeTags, i, i+1)
+					popped = true
 					break
 				}
 			}
+			if !popped {
+				errs = append(errs, &PushPopError{
+					Pos:     item.poptag.Position(),
+					Message: fmt.Sprintf("Attempting to pop absent tag: '%s'", string(item.poptag.Tag)),
+				})
+			}
 
 		case item.pushmeta != nil:
-			activeMetadata[item.pushmeta.Key] = item.pushmeta.Value
+			key := item.pushmeta.Key
+			if len(activeMetadata[key]) == 0 {
+				metadataKeys = append(metadataKeys, key)
+			}
+			activeMetadata[key] = append(activeMetadata[key], item.pushmeta)
 
 		case item.popmeta != nil:
-			delete(activeMetadata, item.popmeta.Key)
+			key := item.popmeta.Key
+			if stack := activeMetadata[key]; len(stack) > 0 {
+				activeMetadata[key] = stack[:len(stack)-1]
+			} else {
+				errs = append(errs, &PushPopError{
+					Pos:     item.popmeta.Position(),
+					Message: fmt.Sprintf("Attempting to pop absent metadata key: '%s'", key),
+				})
+			}
 
 		case item.directive != nil:
 			// Apply active tags to transactions (preserving order)
 			if txn, ok := item.directive.(*Transaction); ok {
-				txn.Tags = append(txn.Tags, activeTags...)
+				for _, pushed := range activeTags {
+					txn.Tags = append(txn.Tags, pushed.Tag)
+				}
 			}
 
-			// Apply active metadata to all directives with metadata
+			// Apply the innermost pushed value of each active key
 			if withMeta, ok := item.directive.(WithMetadata); ok {
-				for key, value := range activeMetadata {
-					rawStr := NewRawString(value)
+				for _, key := range metadataKeys {
+					stack := activeMetadata[key]
+					if len(stack) == 0 {
+						continue
+					}
+					rawStr := NewRawString(stack[len(stack)-1].Value)
 					withMeta.AddMetadata(&Metadata{Key: key, Value: &MetadataValue{StringValue: &rawStr}})
 				}
 			}
 		}
 	}
 
-	return nil
+	for _, pushed := range activeTags {
+		errs = append(errs, &PushPopError{
+			Pos:     pushed.Position(),
+			Message: fmt.Sprintf("Unbalanced pushed tag: '%s'", string(pushed.Tag)),
+		})
+	}
+	for _, key := range metadataKeys {
+		stack := activeMetadata[key]
+		if len(stack) == 0 {
+			continue
+		}
+		values := make([]string, len(stack))
+		for i, pushed := range stack {
+			values[i] = pushed.Value
+		}
+		errs = append(errs, &PushPopError{
+			Pos:     stack[0].Position(),
+			Message: fmt.Sprintf("Unbalanced metadata key '%s'; leftover metadata '%s'", key, strings.Join(values, ", ")),
+		})
+	}
+
+	return errs
 }
 
 // MarkPushPopDirectivesApplied marks a tree as already containing derived push/pop effects.

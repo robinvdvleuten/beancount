@@ -338,3 +338,35 @@ func TestLinesWithMultipleItems(t *testing.T) {
 		assert.Equal(t, 0, len(multiLines))
 	})
 }
+
+func TestApplyPushPopDirectivesReportsImbalance(t *testing.T) {
+	at := func(line int) Position { return Position{Filename: "f.beancount", Line: line} }
+	pushtag := func(line int, tag Tag) *Pushtag { p := &Pushtag{Tag: tag}; p.SetPosition(at(line)); return p }
+	poptag := func(line int, tag Tag) *Poptag { p := &Poptag{Tag: tag}; p.SetPosition(at(line)); return p }
+	pushmeta := func(line int, key, value string) *Pushmeta {
+		p := &Pushmeta{Key: key, Value: value}
+		p.SetPosition(at(line))
+		return p
+	}
+	popmeta := func(line int, key string) *Popmeta { p := &Popmeta{Key: key}; p.SetPosition(at(line)); return p }
+
+	// Messages follow beancount: a tag pushed twice and popped once stays
+	// open, pops need a matching push, and leftover metadata lists every
+	// value still pushed for its key.
+	tree := &AST{
+		Pushtags:  []*Pushtag{pushtag(1, "trip"), pushtag(2, "trip")},
+		Poptags:   []*Poptag{poptag(3, "trip"), poptag(4, "absent")},
+		Pushmetas: []*Pushmeta{pushmeta(5, "key", "v"), pushmeta(6, "key", "w")},
+		Popmetas:  []*Popmeta{popmeta(7, "missing")},
+	}
+	var got []string
+	for _, err := range ApplyPushPopDirectives(tree) {
+		got = append(got, err.Error())
+	}
+	assert.Equal(t, []string{
+		"f.beancount:4: Attempting to pop absent tag: 'absent'",
+		"f.beancount:7: Attempting to pop absent metadata key: 'missing'",
+		"f.beancount:2: Unbalanced pushed tag: 'trip'",
+		"f.beancount:5: Unbalanced metadata key 'key'; leftover metadata 'v, w'",
+	}, got)
+}

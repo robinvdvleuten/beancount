@@ -1,0 +1,3 @@
+; Popping a metadata key that is not pushed is an error.
+popmeta location:
+2020-01-01 open Assets:Cash
