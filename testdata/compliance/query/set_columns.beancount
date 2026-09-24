@@ -1,0 +1,13 @@
+; Set columns are as wide as their longest element; a cell pads each element
+; to that width and joins them sorted with ", ".
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 * "x" #ab #c ^l1
+  Assets:A 1 USD
+  Assets:B
+2020-01-03 * "y" #zz
+  Assets:A 1 USD
+  Assets:B
+2020-01-04 * "z"
+  Assets:A 1 USD
+  Assets:B

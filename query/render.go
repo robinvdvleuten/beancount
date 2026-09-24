@@ -3,6 +3,7 @@ package query
 import (
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -245,6 +246,8 @@ func newRenderer(t DType, forCSV bool, display *ledger.DisplayContext) columnRen
 		// Object-typed columns are width-padded in text but written raw in
 		// CSV, matching the official renderer.
 		return &stringRenderer{unpadded: forCSV}
+	case TSet:
+		return &setRenderer{}
 	case TDate:
 		return &dateRenderer{}
 	case TInt:
@@ -295,6 +298,38 @@ func padLeft(s string, width int) string {
 		return s
 	}
 	return strings.Repeat(" ", width-len(s)) + s
+}
+
+// setRenderer renders sets like bean-query's StringSetRenderer: the column is
+// as wide as its longest element, and a cell pads each element to that width
+// and joins them sorted with ", ", overflowing the column when it holds more
+// than one.
+type setRenderer struct {
+	w int
+}
+
+func (r *setRenderer) prepare(v any) {
+	if set, ok := v.(Set); ok {
+		for elem := range set {
+			r.w = max(r.w, len(elem))
+		}
+	}
+}
+
+func (r *setRenderer) contentWidth() int { return r.w }
+func (r *setRenderer) width() int        { return max(r.w, 1) }
+
+func (r *setRenderer) format(v any) string {
+	set, _ := v.(Set)
+	if len(set) == 0 {
+		return strings.Repeat(" ", r.w)
+	}
+	elems := make([]string, 0, len(set))
+	for elem := range set {
+		elems = append(elems, padRight(elem, r.w))
+	}
+	slices.Sort(elems)
+	return strings.Join(elems, ", ")
 }
 
 // stringRenderer renders strings, sets, and polymorphic values left-aligned.
