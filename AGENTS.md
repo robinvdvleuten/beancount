@@ -278,7 +278,7 @@ Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `p
 | **parser** | Parsing only, returns `*ast.AST`. No type definitions. |
 | **formatter** | Use `runewidth.StringWidth()` for display width. Preserve comments/blanks. |
 | **ledger** | `decimal.Decimal` for amounts. Validation errors have `Pos`/`Directive` fields. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `AVERAGE`. |
-| **loader** | Recursive includes with deduplication by absolute path. Non-fatal issues go to `LoadResult.Diagnostics`. |
+| **loader** | Recursive includes with deduplication by absolute path. Include globs follow Python's `glob.glob(recursive=True)`: `**` spans directories, wildcards skip dotfiles, an unmatched glob is an error. Non-fatal issues go to `LoadResult.Diagnostics`. |
 | **config** | Beancount option parsing and typed processing configuration. Unknown option names are rejected (bean-check parity). |
 | **query/bql** | BQL lexer + recursive-descent parser, syntax only (mirrors parser rules: zero-copy tokens, positioned errors, fuzz test). No semantic knowledge. |
 | **query** | Parse → compile → execute → render. Columns/functions/aggregates live in registry maps (`env.go`, `functions.go`, `aggregates.go`), never switch statements. Compiler resolves names and types with bean-query-parity error messages; executor consumes the ledger-processed `*ast.AST` (interpolated amounts) and never mutates it; renderers reproduce official output byte-for-byte. |

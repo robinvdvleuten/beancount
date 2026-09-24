@@ -488,12 +488,77 @@ include "accounts/*.beancount"
 	assert.Equal(t, 1, len(result.AST.Directives))
 	assert.Equal(t, 0, len(result.Includes))
 
-	// An empty-match warning should be reported instead of a hard failure.
+	// Like bean-check, an unmatched glob is a load error that doesn't abort loading.
 	assert.Equal(t, 1, len(result.Diagnostics))
-	assert.Equal(t, diagnostic.SeverityWarning, diagnostic.SeverityOf(result.Diagnostics[0]))
-	var globWarning *EmptyIncludeGlobWarning
-	assert.True(t, errors.As(result.Diagnostics[0], &globWarning))
-	assert.Equal(t, "accounts/*.beancount", globWarning.Include.Filename.Value)
+	assert.Equal(t, diagnostic.SeverityError, diagnostic.SeverityOf(result.Diagnostics[0]))
+	var globErr *IncludeGlobNoMatchError
+	assert.True(t, errors.As(result.Diagnostics[0], &globErr))
+	assert.Equal(t, "accounts/*.beancount", globErr.Include.Filename.Value)
+}
+
+func TestLoadWithIncludeGlobRecursive(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	files := map[string]string{
+		"journal/top.beancount":          "2024-01-01 open Assets:Top USD\n",
+		"journal/2024/mid.beancount":     "2024-01-01 open Assets:Mid USD\n",
+		"journal/2024/01/deep.beancount": "2024-01-01 open Assets:Deep USD\n",
+		"journal/.hidden/skip.beancount": "2024-01-01 open Assets:HiddenDir USD\n",
+		"journal/.skip.beancount":        "2024-01-01 open Assets:HiddenFile USD\n",
+		"journal/2024/01/ignored.txt":    "ignored",
+	}
+	for name, content := range files {
+		path := filepath.Join(tmpDir, name)
+		assert.NoError(t, os.MkdirAll(filepath.Dir(path), 0755))
+		assert.NoError(t, os.WriteFile(path, []byte(content), 0644))
+	}
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`include "journal/**/*.beancount"`+"\n"), 0644))
+
+	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(result.Diagnostics))
+
+	// "**" matches zero or more directories; wildcards skip dotfiles and dot-directories.
+	var got []string
+	for _, path := range result.Includes {
+		rel, err := filepath.Rel(tmpDir, path)
+		assert.NoError(t, err)
+		got = append(got, filepath.ToSlash(rel))
+	}
+	slices.Sort(got)
+	assert.Equal(t, []string{
+		"journal/2024/01/deep.beancount",
+		"journal/2024/mid.beancount",
+		"journal/top.beancount",
+	}, got)
+}
+
+func TestLoadWithIncludeGlobExplicitDotfile(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, ".secret.beancount"), []byte("2024-01-01 open Assets:Hidden USD\n"), 0644))
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`include ".*.beancount"`+"\n"), 0644))
+
+	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Includes))
+}
+
+func TestLoadWithIncludeGlobMetacharsInBaseDir(t *testing.T) {
+	// The including file's directory is a literal path, never part of the pattern.
+	tmpDir := filepath.Join(t.TempDir(), "ledger[2024]")
+	assert.NoError(t, os.MkdirAll(tmpDir, 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "a.beancount"), []byte("2024-01-01 open Assets:A USD\n"), 0644))
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`include "a*.beancount"`+"\n"), 0644))
+
+	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(result.Diagnostics))
+	assert.Equal(t, 1, len(result.Includes))
 }
 
 func TestLoadWithIncludeGlobInvalidPattern(t *testing.T) {
