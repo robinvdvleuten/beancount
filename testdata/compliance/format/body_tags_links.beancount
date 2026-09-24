@@ -1,0 +1,12 @@
+; Indented lines of tags and links before the first posting, mixed with
+; metadata, add to the transaction's tags and links.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Tags in the body" #header
+  #trip
+  ^receipt-42
+  source: "bank"
+  #work #trip
+  Assets:A  1 USD
+  Assets:B

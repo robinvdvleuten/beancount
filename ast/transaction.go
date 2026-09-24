@@ -30,9 +30,46 @@ type Transaction struct {
 
 	Postings  []*Posting
 	BodyItems []TransactionBodyItem
+
+	// BodyTagsLinks are indented lines of tags and links before the first
+	// posting; they belong to the transaction like the header's tags and
+	// links, but keep their own lines for formatting.
+	BodyTagsLinks []*TagsLinks
 }
 
 var _ Directive = &Transaction{}
+
+// TagsLinks is an indented line of tags and links in a transaction body.
+type TagsLinks struct {
+	pos   Position
+	Tags  []Tag
+	Links []Link
+}
+
+func (t *TagsLinks) Position() Position { return t.pos }
+
+// SetPosition sets the position (for use by parser/builders in ast package)
+func (t *TagsLinks) SetPosition(pos Position) { t.pos = pos }
+
+// AllTags returns the transaction's tags: the header's (including pushed
+// ones) followed by those on body lines.
+func (t *Transaction) AllTags() []Tag {
+	tags := t.Tags
+	for _, line := range t.BodyTagsLinks {
+		tags = append(tags[:len(tags):len(tags)], line.Tags...)
+	}
+	return tags
+}
+
+// AllLinks returns the transaction's links: the header's followed by those
+// on body lines.
+func (t *Transaction) AllLinks() []Link {
+	links := t.Links
+	for _, line := range t.BodyTagsLinks {
+		links = append(links[:len(links):len(links)], line.Links...)
+	}
+	return links
+}
 
 func (t *Transaction) Position() Position  { return t.pos }
 func (t *Transaction) Date() *Date         { return t.date }

@@ -101,17 +101,62 @@ func (p *Parser) parseTransactionBody(txn *ast.Transaction) error {
 	return p.parsePostingBlock(txn)
 }
 
+// parseLeadingTransactionMetadata parses the indented metadata lines and
+// tag/link lines before the first posting, in any order.
 func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
-	if !p.startsIndentedMetadataLine() {
-		return nil
+	for {
+		switch {
+		case p.startsIndentedMetadataLine():
+			metadata, err := p.parseMetadataFromLine(txn.Position().Line)
+			if err != nil {
+				return err
+			}
+			txn.Metadata = append(txn.Metadata, metadata...)
+		case p.startsIndentedTagsLinksLine():
+			line, err := p.parseTagsLinksLine()
+			if err != nil {
+				return err
+			}
+			txn.BodyTagsLinks = append(txn.BodyTagsLinks, line)
+		default:
+			return nil
+		}
 	}
+}
 
-	metadata, err := p.parseMetadataFromLine(txn.Position().Line)
-	if err != nil {
-		return err
+func (p *Parser) startsIndentedTagsLinksLine() bool {
+	tok := p.peek()
+	return (tok.Type == TAG || tok.Type == LINK) && tok.Column > 1 && !p.continuesPreviousLine()
+}
+
+// parseTagsLinksLine parses an indented line of tags and links, with an
+// optional trailing comment.
+func (p *Parser) parseTagsLinksLine() (*ast.TagsLinks, error) {
+	first := p.peek()
+	line := &ast.TagsLinks{}
+	line.SetPosition(tokenPosition(first, p.filename))
+	for (p.check(TAG) || p.check(LINK)) && p.peek().Line == first.Line {
+		if p.check(TAG) {
+			tag, err := p.parseTag()
+			if err != nil {
+				return nil, err
+			}
+			line.Tags = append(line.Tags, tag)
+		} else {
+			link, err := p.parseLink()
+			if err != nil {
+				return nil, err
+			}
+			line.Links = append(line.Links, link)
+		}
 	}
-	txn.Metadata = metadata
-	return nil
+	if p.check(COMMENT) && p.continuesPreviousLine() {
+		p.advance()
+	}
+	if next := p.peek(); next.Type != EOF && next.Type != NEWLINE && next.Line == first.Line {
+		return nil, p.errorAtToken(next, "unexpected content after tags and links")
+	}
+	return line, nil
 }
 
 // parsePostingBlock parses all postings and trivia in the transaction's indented body.
@@ -135,6 +180,18 @@ func (p *Parser) parsePostingBlock(txn *ast.Transaction) error {
 		if tok.Type == COMMENT {
 			comment := p.parseComment()
 			txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{Comment: comment})
+			continue
+		}
+
+		if tok.Type == TAG || tok.Type == LINK {
+			if len(txn.Postings) > 0 {
+				return p.errorAtToken(tok, "tags or links not allowed after first posting")
+			}
+			line, err := p.parseTagsLinksLine()
+			if err != nil {
+				return err
+			}
+			txn.BodyTagsLinks = append(txn.BodyTagsLinks, line)
 			continue
 		}
 

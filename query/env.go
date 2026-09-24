@@ -167,16 +167,18 @@ func descriptionValue(txn *ast.Transaction) any {
 }
 
 func tagSet(txn *ast.Transaction) Set {
-	set := make(Set, len(txn.Tags))
-	for _, tag := range txn.Tags {
+	tags := txn.AllTags()
+	set := make(Set, len(tags))
+	for _, tag := range tags {
 		set[string(tag)] = struct{}{}
 	}
 	return set
 }
 
 func linkSet(txn *ast.Transaction) Set {
-	set := make(Set, len(txn.Links))
-	for _, link := range txn.Links {
+	links := txn.AllLinks()
+	set := make(Set, len(links))
+	for _, link := range links {
 		set[string(link)] = struct{}{}
 	}
 	return set

@@ -1,0 +1,8 @@
+; Tags and links are not allowed after the first posting.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Tag after a posting"
+  Assets:A  1 USD
+  #trip
+  Assets:B

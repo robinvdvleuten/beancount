@@ -1179,7 +1179,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 
 	buf.WriteByte('\n')
 
-	f.formatMetadata(t.Metadata, buf)
+	f.formatLeadingTransactionBody(t, buf)
 
 	if len(t.BodyItems) > 0 {
 		for _, item := range t.BodyItems {
@@ -1191,6 +1191,50 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 	for _, posting := range t.Postings {
 		f.formatPosting(posting, buf)
 	}
+}
+
+// formatLeadingTransactionBody writes the metadata and tag/link lines before
+// the first posting in source order. Like bean-format, tag/link lines are
+// kept as written.
+func (f *Formatter) formatLeadingTransactionBody(t *ast.Transaction, buf *strings.Builder) {
+	metadata := t.Metadata
+	for _, line := range t.BodyTagsLinks {
+		split := 0
+		for split < len(metadata) && metadata[split].Position().Line < line.Position().Line {
+			split++
+		}
+		f.formatMetadata(metadata[:split], buf)
+		metadata = metadata[split:]
+		f.formatTagsLinks(line, buf)
+	}
+	f.formatMetadata(metadata, buf)
+}
+
+func (f *Formatter) formatTagsLinks(line *ast.TagsLinks, buf *strings.Builder) {
+	if n := line.Position().Line; n > 0 && !f.linesWithMultipleItems[n] {
+		if original := f.getOriginalLine(n); original != "" {
+			buf.WriteString(original)
+			buf.WriteByte('\n')
+			f.verbatimLines[n] = true
+			return
+		}
+	}
+	buf.WriteString(strings.Repeat(" ", f.Indentation))
+	for i, tag := range line.Tags {
+		if i > 0 {
+			buf.WriteByte(' ')
+		}
+		buf.WriteByte('#')
+		buf.WriteString(string(tag))
+	}
+	for i, link := range line.Links {
+		if i > 0 || len(line.Tags) > 0 {
+			buf.WriteByte(' ')
+		}
+		buf.WriteByte('^')
+		buf.WriteString(string(link))
+	}
+	buf.WriteByte('\n')
 }
 
 func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strings.Builder) {

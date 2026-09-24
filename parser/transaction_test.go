@@ -534,3 +534,25 @@ func TestParseAllTransactionFlags(t *testing.T) {
 		})
 	}
 }
+
+func TestParseBodyTagsLinks(t *testing.T) {
+	source := `2020-01-02 * "x" #header
+  #trip ^receipt
+  source: "bank"
+  #work ; a comment
+  Assets:A  1 USD
+  Assets:B
+`
+	tree, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	txn := tree.Directives[0].(*ast.Transaction)
+	assert.Equal(t, []ast.Tag{"header"}, txn.Tags, "header tags stay on the header")
+	assert.Equal(t, 2, len(txn.BodyTagsLinks))
+	assert.Equal(t, []ast.Tag{"header", "trip", "work"}, txn.AllTags())
+	assert.Equal(t, []ast.Link{"receipt"}, txn.AllLinks())
+	assert.Equal(t, 1, len(txn.Metadata))
+
+	_, err = ParseString(context.Background(), "2020-01-02 * \"x\"\n  Assets:A  1 USD\n  #late\n  Assets:B\n")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "tags or links not allowed after first posting")
+}
