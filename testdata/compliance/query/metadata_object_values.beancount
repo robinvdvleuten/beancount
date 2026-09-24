@@ -1,0 +1,17 @@
+; Metadata values render as Python str() prints them (3.10, 10.50 USD), in
+; a column as wide as its last non-NULL value.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 * "long first"
+  mv: "a much longer value"
+  Assets:A 1 USD
+  Assets:B
+2020-01-03 * "short last"
+  mv: "x"
+  amt: 10.50 USD
+  num: 3.10
+  Assets:A 1 USD
+  Assets:B
+2020-01-04 * "none"
+  Assets:A 1 USD
+  Assets:B

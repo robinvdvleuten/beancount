@@ -15,7 +15,7 @@ import (
 // centered and truncated to the data width, a dashed rule, and per-type
 // value alignment.
 func RenderText(result *Result, w io.Writer) error {
-	renderers := prepareRenderers(result, false)
+	renderers := prepareRenderers(result)
 
 	var b strings.Builder
 	for i, col := range result.Columns {
@@ -60,7 +60,7 @@ func RenderCSV(result *Result, w io.Writer, numberify bool) error {
 	if numberify {
 		result = numberifyResult(result)
 	}
-	renderers := prepareRenderers(result, true)
+	renderers := prepareRenderers(result)
 
 	var b strings.Builder
 	header := make([]string, len(result.Columns))
@@ -100,10 +100,10 @@ func writeCSVRecord(b *strings.Builder, fields []string) {
 	b.WriteString("\r\n")
 }
 
-func prepareRenderers(result *Result, forCSV bool) []columnRenderer {
+func prepareRenderers(result *Result) []columnRenderer {
 	renderers := make([]columnRenderer, len(result.Columns))
 	for i, col := range result.Columns {
-		renderers[i] = newRenderer(col.Type, forCSV, result.Display)
+		renderers[i] = newRenderer(col.Type, result.Display)
 	}
 	for _, row := range result.Rows {
 		for i, value := range row {
@@ -240,12 +240,10 @@ type columnRenderer interface {
 	format(v any) string
 }
 
-func newRenderer(t DType, forCSV bool, display *ledger.DisplayContext) columnRenderer {
+func newRenderer(t DType, display *ledger.DisplayContext) columnRenderer {
 	switch t {
 	case TAny:
-		// Object-typed columns are width-padded in text but written raw in
-		// CSV, matching the official renderer.
-		return &stringRenderer{unpadded: forCSV}
+		return &objectRenderer{}
 	case TSet:
 		return &setRenderer{}
 	case TDate:
@@ -300,6 +298,42 @@ func padLeft(s string, width int) string {
 	return strings.Repeat(" ", width-len(s)) + s
 }
 
+// objectRenderer renders object-typed values (metadata lookups) like
+// bean-query's ObjectRenderer: each value as Python's str() prints it, the
+// column as wide as the last non-NULL value (the official renderer assigns
+// rather than maximizes), and cells unpadded, so csv cells stay raw.
+type objectRenderer struct {
+	w int
+}
+
+func (r *objectRenderer) prepare(v any) {
+	if v != nil {
+		r.w = len(objectString(v))
+	}
+}
+
+func (r *objectRenderer) contentWidth() int { return r.w }
+func (r *objectRenderer) width() int        { return max(r.w, 1) }
+
+func (r *objectRenderer) format(v any) string {
+	if v == nil {
+		return ""
+	}
+	return objectString(v)
+}
+
+// objectString renders a value like Python's str(): numbers keep the digits
+// they were written with (3.10, 10.50 USD).
+func objectString(v any) string {
+	switch val := v.(type) {
+	case decimal.Decimal:
+		return decimalLiteral(val)
+	case *Amount:
+		return decimalLiteral(val.Number) + " " + val.Currency
+	}
+	return valueString(v)
+}
+
 // setRenderer renders sets like bean-query's StringSetRenderer: the column is
 // as wide as its longest element, and a cell pads each element to that width
 // and joins them sorted with ", ", overflowing the column when it holds more
@@ -332,18 +366,14 @@ func (r *setRenderer) format(v any) string {
 	return strings.Join(elems, ", ")
 }
 
-// stringRenderer renders strings, sets, and polymorphic values left-aligned.
+// stringRenderer renders strings left-aligned.
 type stringRenderer struct {
-	w        int
-	unpadded bool
+	w int
 }
 
 func (r *stringRenderer) toString(v any) string {
 	if v == nil {
 		return ""
-	}
-	if set, ok := v.(Set); ok {
-		return strings.Join(set.Sorted(), ",")
 	}
 	return valueString(v)
 }
@@ -358,9 +388,6 @@ func (r *stringRenderer) contentWidth() int { return r.w }
 func (r *stringRenderer) width() int        { return max(r.w, 1) }
 
 func (r *stringRenderer) format(v any) string {
-	if r.unpadded {
-		return r.toString(v)
-	}
 	return padRight(r.toString(v), r.contentWidth())
 }
 
