@@ -99,14 +99,13 @@ func (p *parser) tokenValue(tok Token) string {
 	case STRING:
 		return text[1 : len(text)-1]
 	case INTEGER:
-		if n, err := strconv.ParseInt(text, 10, 64); err == nil {
+		if n, err := strconv.ParseInt(numberText(text), 10, 64); err == nil {
 			return strconv.FormatInt(n, 10)
 		}
 	case DECIMAL:
-		if d, err := decimal.NewFromString(text); err == nil && d.Exponent() < 0 {
-			return d.StringFixed(-d.Exponent())
+		if d, err := decimal.NewFromString(numberText(text)); err == nil {
+			return d.StringFixed(max(-d.Exponent(), 0))
 		}
-		return strings.TrimSuffix(text, ".")
 	}
 	if _, ok := keywords[strings.ToUpper(text)]; ok {
 		return strings.ToUpper(text)
@@ -253,7 +252,7 @@ func (p *parser) parseTarget() (Target, error) {
 		if err != nil {
 			return Target{}, err
 		}
-		target.As = tok.String(p.source)
+		target.As = strings.ToLower(tok.String(p.source))
 	}
 	return target, nil
 }
@@ -507,33 +506,20 @@ func (p *parser) parseAdditive() (Expr, error) {
 }
 
 func (p *parser) parseMultiplicative() (Expr, error) {
-	left, err := p.parseUnary()
+	left, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
 	}
 	for p.cur.Type == ASTERISK || p.cur.Type == SLASH {
 		tok := p.cur
 		p.next()
-		right, err := p.parseUnary()
+		right, err := p.parsePrimary()
 		if err != nil {
 			return nil, err
 		}
 		left = &Binary{position: position{p.pos(tok)}, Op: tok.Type, L: left, R: right}
 	}
 	return left, nil
-}
-
-func (p *parser) parseUnary() (Expr, error) {
-	if p.cur.Type == MINUS || p.cur.Type == PLUS {
-		tok := p.cur
-		p.next()
-		x, err := p.parseUnary()
-		if err != nil {
-			return nil, err
-		}
-		return &Unary{position: position{p.pos(tok)}, Op: tok.Type, X: x}, nil
-	}
-	return p.parsePrimary()
 }
 
 func (p *parser) parsePrimary() (Expr, error) {
@@ -556,7 +542,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 	case INTEGER:
 		p.next()
-		value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
+		value, err := strconv.ParseInt(numberText(tok.String(p.source)), 10, 64)
 		if err != nil {
 			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
 		}
@@ -564,7 +550,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 	case DECIMAL:
 		p.next()
-		value, err := decimal.NewFromString(tok.String(p.source))
+		value, err := decimal.NewFromString(numberText(tok.String(p.source)))
 		if err != nil {
 			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
 		}
@@ -588,7 +574,8 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 	case IDENT:
 		p.next()
-		name := tok.String(p.source)
+		// Identifiers are case-insensitive: bean-query lower-cases them.
+		name := strings.ToLower(tok.String(p.source))
 		if p.cur.Type != LPAREN {
 			return &Ident{position: position{p.pos(tok)}, Name: name}, nil
 		}
@@ -628,10 +615,24 @@ func (p *parser) parseDate() (*ast.Date, error) {
 // OPEN/CLOSE/CLEAR transforms.
 func (p *parser) startsExpr() bool {
 	switch p.cur.Type {
-	case LPAREN, STRING, INTEGER, DECIMAL, DATE, TRUE, FALSE, NULL, IDENT, NOT, MINUS, PLUS:
+	case LPAREN, STRING, INTEGER, DECIMAL, DATE, TRUE, FALSE, NULL, IDENT, NOT:
 		return true
 	}
 	return false
+}
+
+// numberText rewrites a number token into a form strconv and decimal parse,
+// keeping its digits: +2. is 2 and -.5 is -0.5.
+func numberText(text string) string {
+	text = strings.TrimPrefix(text, "+")
+	text = strings.TrimSuffix(text, ".")
+	if rest, ok := strings.CutPrefix(text, "-."); ok {
+		return "-0." + rest
+	}
+	if rest, ok := strings.CutPrefix(text, "."); ok {
+		return "0." + rest
+	}
+	return text
 }
 
 func stripQuotes(s string) string {

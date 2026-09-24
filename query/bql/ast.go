@@ -117,7 +117,8 @@ type Call struct {
 
 func (*Call) expr() {}
 
-// Unary is a unary operation. Op is MINUS, PLUS, or NOT.
+// Unary is a unary operation. Op is NOT: BQL has no unary minus, only
+// signed number literals.
 type Unary struct {
 	position
 	Op TokenType

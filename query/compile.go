@@ -3,6 +3,7 @@ package query
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -426,15 +427,10 @@ func (c *compiler) compileUnary(node *bql.Unary, allowAgg bool) (cexpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	switch node.Op {
-	case bql.NOT:
-		return &cNot{x: x}, nil
-	case bql.MINUS:
-		return &cNeg{x: x}, nil
-	case bql.PLUS:
-		return x, nil
+	if node.Op != bql.NOT {
+		return nil, compileErrorf(node, "unsupported unary operator")
 	}
-	return nil, compileErrorf(node, "unsupported unary operator")
+	return &cNot{x: x}, nil
 }
 
 func (c *compiler) compileBinary(node *bql.Binary, allowAgg bool) (cexpr, error) {
@@ -479,7 +475,7 @@ func deriveName(e bql.Expr) string {
 	case *bql.Str:
 		return "c" + sanitizeName(node.Value)
 	case *bql.Int:
-		return fmt.Sprintf("c%d", node.Value)
+		return "c" + sanitizeName(strconv.FormatInt(node.Value, 10))
 	case *bql.Dec:
 		return "c" + sanitizeName(decimalLiteral(node.Value))
 	case *bql.DateLit:
@@ -494,17 +490,7 @@ func deriveName(e bql.Expr) string {
 	case *bql.Null:
 		return "c" + sanitizeName("None")
 	case *bql.Unary:
-		if node.Op == bql.NOT {
-			return "not_" + deriveName(node.X)
-		}
-		// bean-query lexes a signed number as one constant: -1.5 is c_1_5.
-		switch x := node.X.(type) {
-		case *bql.Int:
-			return "c" + sanitizeName(fmt.Sprintf("-%d", x.Value))
-		case *bql.Dec:
-			return "c" + sanitizeName("-"+decimalLiteral(x.Value))
-		}
-		return "neg_" + deriveName(node.X)
+		return "not_" + deriveName(node.X)
 	case *bql.Binary:
 		return binaryOpNames[node.Op] + "_" + deriveName(node.L) + "_" + deriveName(node.R)
 	}
@@ -611,22 +597,6 @@ type cNot struct {
 
 func (c *cNot) typ() DType        { return TBool }
 func (c *cNot) eval(row *Row) any { return !truthy(c.x.eval(row)) }
-
-type cNeg struct {
-	x cexpr
-}
-
-func (c *cNeg) typ() DType { return c.x.typ() }
-
-func (c *cNeg) eval(row *Row) any {
-	switch v := c.x.eval(row).(type) {
-	case int64:
-		return -v
-	case decimal.Decimal:
-		return v.Neg()
-	}
-	return nil
-}
 
 type cBinary struct {
 	op   bql.TokenType

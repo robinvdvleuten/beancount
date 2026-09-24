@@ -137,13 +137,33 @@ func TestParseLiterals(t *testing.T) {
 	assert.True(t, isNull)
 }
 
-func TestParseUnaryMinus(t *testing.T) {
-	stmt, err := Parse("SELECT -number")
+func TestParseSignedNumbers(t *testing.T) {
+	// Like bean-query's lexer, a sign directly before a number is part of
+	// it, and there is no unary minus.
+	stmt, err := Parse("SELECT -2, +3, -.5, 2., .5, 007")
 	assert.NoError(t, err)
+	targets := stmt.(*Select).Targets
+	assert.Equal(t, int64(-2), targets[0].Expr.(*Int).Value)
+	assert.Equal(t, int64(3), targets[1].Expr.(*Int).Value)
+	assert.Equal(t, "-0.5", targets[2].Expr.(*Dec).Value.String())
+	assert.Equal(t, "2", targets[3].Expr.(*Dec).Value.String())
+	assert.Equal(t, "0.5", targets[4].Expr.(*Dec).Value.String())
+	assert.Equal(t, int64(7), targets[5].Expr.(*Int).Value)
 
-	unary := stmt.(*Select).Targets[0].Expr.(*Unary)
-	assert.Equal(t, MINUS, unary.Op)
-	assert.Equal(t, "number", unary.X.(*Ident).Name)
+	for _, query := range []string{"SELECT -number", "SELECT 1 -2", "SELECT - 1", "SELECT account2"} {
+		_, err := Parse(query)
+		assert.Error(t, err, query)
+	}
+}
+
+func TestParseIdentifiersAreLowerCased(t *testing.T) {
+	stmt, err := Parse("SELECT LENGTH(Account) AS Len")
+	assert.NoError(t, err)
+	target := stmt.(*Select).Targets[0]
+	call := target.Expr.(*Call)
+	assert.Equal(t, "length", call.Func)
+	assert.Equal(t, "account", call.Args[0].(*Ident).Name)
+	assert.Equal(t, "len", target.As)
 }
 
 func TestParseParenthesizedExpression(t *testing.T) {

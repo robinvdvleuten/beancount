@@ -32,10 +32,18 @@ func (l *Lexer) Next() Token {
 	c := l.source[l.pos]
 
 	switch {
-	case isIdentStart(c):
+	case isLetter(c):
 		return l.scanIdent(start, line, col)
 	case isDigit(c):
 		return l.scanNumberOrDate(start, line, col)
+	case l.numberAhead(l.pos):
+		// A leading dot or sign belongs to the number, as in bean-query's
+		// [-+]?[0-9]*\.[0-9]+ and [-+]?[0-9]+ rules: -2 is one token, so
+		// 1 -2 is two numbers, not a subtraction.
+		if c == '-' || c == '+' {
+			l.advance()
+		}
+		return l.scanNumber(start, line, col)
 	case c == '"' || c == '\'':
 		return l.scanString(c, start, line, col)
 	}
@@ -89,8 +97,11 @@ func (l *Lexer) Next() Token {
 	return tok(ILLEGAL)
 }
 
+// scanIdent scans an identifier or keyword. Like bean-query's
+// [a-zA-Z][a-zA-Z_]* rule, identifiers hold no digits: account2 is the
+// identifier account followed by the number 2.
 func (l *Lexer) scanIdent(start, line, col int) Token {
-	for l.pos < len(l.source) && isIdentPart(l.source[l.pos]) {
+	for l.pos < len(l.source) && (isLetter(l.source[l.pos]) || l.source[l.pos] == '_') {
 		l.advance()
 	}
 	text := string(l.source[start:l.pos])
@@ -113,7 +124,12 @@ func (l *Lexer) scanNumberOrDate(start, line, col int) Token {
 		}
 		return Token{Type: DATE, Start: start, End: l.pos, Line: line, Column: col}
 	}
+	return l.scanNumber(start, line, col)
+}
 
+// scanNumber scans the digits of an INTEGER, or a DECIMAL when a dot
+// follows; either side of the dot may be empty (2. and .5).
+func (l *Lexer) scanNumber(start, line, col int) Token {
 	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
 		l.advance()
 	}
@@ -164,12 +180,20 @@ func (l *Lexer) advance() {
 	l.pos++
 }
 
-func isIdentStart(c byte) bool {
-	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c == '_'
+// numberAhead reports whether a number without leading digits starts at
+// pos: an optional sign followed by a digit, or by a dot and a digit.
+func (l *Lexer) numberAhead(pos int) bool {
+	if pos < len(l.source) && (l.source[pos] == '-' || l.source[pos] == '+') {
+		pos++
+	}
+	if pos < len(l.source) && l.source[pos] == '.' {
+		pos++
+	}
+	return pos < len(l.source) && isDigit(l.source[pos])
 }
 
-func isIdentPart(c byte) bool {
-	return isIdentStart(c) || isDigit(c)
+func isLetter(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z'
 }
 
 func isDigit(c byte) bool {
