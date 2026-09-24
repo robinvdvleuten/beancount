@@ -770,6 +770,11 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 // applyTransaction mutates ledger state (inventory updates) and records posting history.
 // Only called after validation passes. Panics on bugs (invariant violations).
 func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta) {
+	// The processed AST carries booked postings, like beancount's booked
+	// entries; the source layout (BodyItems) is left as written.
+	if delta.Postings != nil {
+		txn.Postings = delta.Postings
+	}
 	for posting, amount := range delta.InferredAmounts {
 		posting.Amount = amount
 		posting.Inferred = true

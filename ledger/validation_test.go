@@ -649,6 +649,65 @@ func TestValidateTransaction_Integration(t *testing.T) {
 // TestImplicitPostings tests the implicit posting (amount interpolation) feature.
 // Beancount allows exactly one posting per transaction to have no amount specified.
 // The missing amount is automatically calculated to make the transaction balance to zero.
+func TestImplicitPostingPerCurrency(t *testing.T) {
+	source := `
+2024-01-01 open Assets:Cash
+2024-01-01 open Assets:Euro
+2024-01-01 open Expenses:Travel
+
+2024-01-15 * "Trip"
+  Expenses:Travel  200.00 EUR
+  Expenses:Travel   50.00 USD
+  Assets:Euro     -200.00 EUR
+  Assets:Cash
+
+2024-01-16 * "Fully balanced"
+  Expenses:Travel   10.00 USD
+  Assets:Euro      -10.00 USD
+  Assets:Cash
+
+2024-01-17 * "Split"
+  Expenses:Travel   20.00 EUR
+  Expenses:Travel    5.00 USD
+  Assets:Cash
+`
+	tree, err := parser.ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+
+	var booked []string
+	for _, directive := range tree.Directives {
+		txn, ok := directive.(*ast.Transaction)
+		if !ok {
+			continue
+		}
+		for _, posting := range txn.Postings {
+			booked = append(booked, fmt.Sprintf("%s %s %s", posting.Account, posting.Amount.Value, posting.Amount.Currency))
+		}
+	}
+	// Assets:Cash is booked once per currency with a non-zero residual: USD
+	// only in the trip (EUR nets to zero), not at all when fully balanced,
+	// and in both currencies, first-appearance order, in the split.
+	assert.Equal(t, []string{
+		"Expenses:Travel 200.00 EUR",
+		"Expenses:Travel 50.00 USD",
+		"Assets:Euro -200.00 EUR",
+		"Assets:Cash -50.00 USD",
+		"Expenses:Travel 10.00 USD",
+		"Assets:Euro -10.00 USD",
+		"Expenses:Travel 20.00 EUR",
+		"Expenses:Travel 5.00 USD",
+		"Assets:Cash -20.00 EUR",
+		"Assets:Cash -5.00 USD",
+	}, booked)
+
+	cash, ok := l.GetAccount("Assets:Cash")
+	assert.True(t, ok)
+	assert.Equal(t, "-55", cash.Inventory.Get("USD").String())
+	assert.Equal(t, "-20", cash.Inventory.Get("EUR").String())
+}
+
 func TestImplicitPostings(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-15")
 	checking, _ := ast.NewAccount("Assets:Checking")
@@ -755,17 +814,18 @@ func TestImplicitPostings(t *testing.T) {
 			wantInferred: false,
 		},
 		{
-			name: "error: implicit posting with multiple currencies",
+			name: "implicit posting with multiple currencies",
 			txn: ast.NewTransaction(date, "Multi-currency",
 				ast.WithPostings(
 					ast.NewPosting(checking, ast.WithAmount("-100", "USD")),
 					ast.NewPosting(expenses, ast.WithAmount("60", "EUR")),
-					ast.NewPosting(multiCurr), // Can't infer - which currency?
+					ast.NewPosting(multiCurr), // Booked once per currency; see TestImplicitPostingPerCurrency
 				),
 			),
-			wantErrCount: 1,
-			wantBalanced: false,
-			wantInferred: false,
+			wantErrCount:    0,
+			wantBalanced:    true,
+			wantInferred:    true,
+			wantInferredAmt: "100",
 		},
 		{
 			name: "implicit posting - income transaction",

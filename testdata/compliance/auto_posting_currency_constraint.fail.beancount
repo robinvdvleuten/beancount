@@ -1,0 +1,9 @@
+; Each currency booked for an amount-less posting must be allowed by the
+; account's currency constraint.
+2020-01-01 open Assets:Wallet
+2020-01-01 open Assets:Cash USD
+
+2020-01-02 * "EUR cannot land in a USD-only account"
+  Assets:Wallet  1.00 USD
+  Assets:Wallet  2.00 EUR
+  Assets:Cash

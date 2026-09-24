@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -519,30 +520,29 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		return delta, unbalancedValidation(balance), nil
 	}
 
-	// Infer missing amounts if possible
-	// Beancount allows at most 1 posting without amount per transaction
-	// It's automatically balanced to make the transaction sum to zero
+	// Beancount allows at most one posting without an amount per
+	// transaction. It absorbs the residual of every weight currency, so it
+	// is booked once per currency with a non-zero residual, in the order the
+	// currencies first appear.
 	if len(pc.withoutAmounts) == 1 {
 		posting := pc.withoutAmounts[0]
 
-		if len(balance) == 1 {
-			// Exactly 1 currency - can infer the amount uniquely
-			for currency, residual := range balance {
-				needed := residual.Neg()
-				delta.InferredAmounts[posting] = &ast.Amount{
-					Value:    formatInferredNumber(needed),
-					Currency: currency,
-				}
-				// Update balance to reflect the inferred amount
-				balance[currency] = balance[currency].Add(needed)
-			}
-		} else if len(balance) > 1 {
-			// Multiple currencies - infer posting must balance all of them
-			// Create multi-currency amount (not supported, so fail)
-			// This matches official beancount: "cannot infer multi-currency amount"
-			return delta, unbalancedValidation(balance), nil
+		var amounts []*ast.Amount
+		for _, currency := range residualCurrencies(allWeights, balance) {
+			needed := balance[currency].Neg()
+			amounts = append(amounts, &ast.Amount{
+				Value:    formatInferredNumber(needed),
+				Currency: currency,
+			})
+			balance[currency] = balance[currency].Add(needed)
 		}
-		// else: len(balance) == 0 means already balanced, no inference needed
+
+		if len(amounts) > 0 {
+			delta.InferredAmounts[posting] = amounts[0]
+		}
+		if len(amounts) != 1 {
+			delta.Postings = bookAutoPosting(txn.Postings, posting, amounts)
+		}
 	}
 
 	// Complete a currency-only amount: the missing number is the residual
@@ -1293,6 +1293,60 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 	return ParseAmount(balance.Tolerance)
 }
 
+// residualCurrencies returns the currencies with a non-zero residual, in the
+// order their weights first appear in the transaction (beancount orders its
+// currency groups by first posting), then any others sorted.
+func residualCurrencies(allWeights []weightSet, balance map[string]decimal.Decimal) []string {
+	var currencies []string
+	seen := make(map[string]bool, len(balance))
+	add := func(currency string) {
+		if !seen[currency] && !balance[currency].IsZero() {
+			currencies = append(currencies, currency)
+		}
+		seen[currency] = true
+	}
+	for _, weights := range allWeights {
+		for _, w := range weights {
+			add(w.Currency)
+		}
+	}
+	rest := make([]string, 0, len(balance))
+	for currency := range balance {
+		if !seen[currency] {
+			rest = append(rest, currency)
+		}
+	}
+	slices.Sort(rest)
+	for _, currency := range rest {
+		add(currency)
+	}
+	return currencies
+}
+
+// bookAutoPosting returns the postings with the amount-less posting booked
+// once per amount: the posting itself carries the first (set on apply) and a
+// copy follows it for each other; without amounts it is dropped.
+func bookAutoPosting(postings []*ast.Posting, auto *ast.Posting, amounts []*ast.Amount) []*ast.Posting {
+	booked := make([]*ast.Posting, 0, len(postings)+len(amounts))
+	for _, posting := range postings {
+		if posting != auto {
+			booked = append(booked, posting)
+			continue
+		}
+		if len(amounts) == 0 {
+			continue
+		}
+		booked = append(booked, posting)
+		for _, amount := range amounts[1:] {
+			copied := *auto
+			copied.Amount = amount
+			copied.Inferred = true
+			booked = append(booked, &copied)
+		}
+	}
+	return booked
+}
+
 // reducesInventory reports whether a posting of amount commodity reduces the
 // account's inventory rather than augmenting it (see Inventory.isReducedBy).
 func (v *validator) reducesInventory(accountName ast.Account, commodity string, amount decimal.Decimal) bool {
@@ -1371,7 +1425,7 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 	var errs []error
 
-	for _, posting := range txn.Postings {
+	for _, posting := range delta.postings(txn) {
 		// Skip postings without amounts (should not happen after inference)
 		amountValue := delta.amountFor(posting)
 		if amountValue == nil {
@@ -1431,7 +1485,7 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction, delta *Tr
 
 	var errs []error
 
-	for _, posting := range txn.Postings {
+	for _, posting := range delta.postings(txn) {
 		accountName := string(posting.Account)
 		account, ok := v.accounts[accountName]
 		if !ok {
