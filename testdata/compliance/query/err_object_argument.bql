@@ -1,0 +1,1 @@
+SELECT year(entry_meta('x'))

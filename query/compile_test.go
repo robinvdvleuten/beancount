@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -256,4 +257,37 @@ func TestCompileDistinctAndLimit(t *testing.T) {
 	compiled := mustCompile(t, ctx, "SELECT DISTINCT account LIMIT 5")
 	assert.True(t, compiled.Distinct)
 	assert.Equal(t, int64(5), *compiled.Limit)
+}
+
+func TestCompileFallbackClassErrors(t *testing.T) {
+	// With no matching signature, bean-query instantiates the function's
+	// by-name class, whose constructor names the class and Python types.
+	for query, want := range map[string]string{
+		"SELECT root(account)":            "Invalid number of arguments for Root: found 1 expected 2.",
+		"SELECT sum(number, 1)":           "Invalid number of arguments for Sum: found 2 expected 1.",
+		"SELECT today(1)":                 "Invalid number of arguments for Today: found 1 expected 0.",
+		"SELECT year(account)":            "Invalid type for argument 0 of Year: found <class 'str'> expected <class 'datetime.date'>.",
+		"SELECT year(NULL)":               "Invalid type for argument 0 of Year: found <class 'NoneType'> expected <class 'datetime.date'>.",
+		"SELECT year(entry_meta('x'))":    "Invalid type for argument 0 of Year: found <class 'object'> expected <class 'datetime.date'>.",
+		"SELECT length(number)":           "Invalid type for argument 0 of Length: found <class 'decimal.Decimal'> expected (<class 'list'>, <class 'set'>, <class 'str'>).",
+		"SELECT only('USD', number)":      "Invalid type for argument 1 of OnlyInventory: found <class 'decimal.Decimal'> expected <class 'beancount.core.inventory.Inventory'>.",
+		"SELECT sum(account)":             "Invalid type for argument 0 of Sum: found <class 'str'> expected (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>).",
+		"SELECT units(account)":           "Invalid function 'units(str)' in targets/column context.",
+		"SELECT coalesce(account, NULL)":  "",
+		"SELECT count(entry_meta('x'))":   "",
+		"SELECT str(entry_meta('x'))":     "",
+		"SELECT maxwidth(account, 1 + 1)": "",
+	} {
+		ctx, _ := newTestContext(t)
+		stmt, err := bql.Parse(query)
+		assert.NoError(t, err, query)
+		_, err = Compile(ctx, stmt)
+		if want == "" {
+			assert.NoError(t, err, query)
+			continue
+		}
+		var compileErr *CompileError
+		assert.True(t, errors.As(err, &compileErr), query)
+		assert.Equal(t, want, compileErr.Message, query)
+	}
 }

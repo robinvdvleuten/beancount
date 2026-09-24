@@ -367,46 +367,45 @@ func (c *compiler) compileExpr(e bql.Expr, allowAgg bool) (cexpr, error) {
 
 func (c *compiler) compileCall(node *bql.Call, allowAgg bool) (cexpr, error) {
 	name := strings.ToLower(node.Func)
-
-	if aggregate, ok := aggregates[name]; ok {
-		if !allowAgg {
-			return nil, compileErrorf(node, "Aggregates are disallowed in this context.")
-		}
-		if len(node.Args) != 1 {
-			return nil, compileErrorf(node, "Aggregate function '%s' takes exactly one argument.", name)
-		}
-		arg, err := c.compileExpr(node.Args[0], false)
-		if err != nil {
-			return nil, err
-		}
-		result, ok := aggregate.resultType(arg.typ())
-		if !ok {
-			return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList([]cexpr{arg}), c.env.context)
-		}
-		agg := &cAgg{def: aggregate, arg: arg, result: result, slot: len(c.aggs)}
-		c.aggs = append(c.aggs, agg)
-		return agg, nil
+	aggregate, isAgg := aggregates[name]
+	if isAgg && !allowAgg {
+		return nil, compileErrorf(node, "Aggregates are disallowed in this context.")
 	}
 
-	def := functions[name]
+	// Like bean-query, compile the arguments before resolving the function.
 	args := make([]cexpr, len(node.Args))
 	argTypes := make([]DType, len(node.Args))
 	for i, argNode := range node.Args {
-		arg, err := c.compileExpr(argNode, allowAgg)
+		// Aggregates do not nest.
+		arg, err := c.compileExpr(argNode, allowAgg && !isAgg)
 		if err != nil {
 			return nil, err
 		}
 		args[i] = arg
 		argTypes[i] = arg.typ()
 	}
-	var overload *funcOverload
-	if def != nil {
-		overload = def.matchOverload(argTypes)
+
+	if isAgg && len(args) == 1 {
+		if result, ok := aggregate.resultType(argTypes[0]); ok {
+			agg := &cAgg{def: aggregate, arg: args[0], result: result, slot: len(c.aggs)}
+			c.aggs = append(c.aggs, agg)
+			return agg, nil
+		}
 	}
-	if overload == nil {
-		return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList(args), c.env.context)
+	if def := functions[name]; def != nil && !isAgg {
+		if overload := def.matchOverload(argTypes); overload != nil {
+			return &cCall{overload: overload, args: args}, nil
+		}
 	}
-	return &cCall{overload: overload, args: args}, nil
+
+	// No signature matches: bean-query falls back to the function's
+	// by-name class, whose constructor rejects the arguments.
+	if fallback := fallbackClasses[name]; fallback != nil {
+		if message := fallback.rejection(args); message != "" {
+			return nil, compileErrorf(node, "%s", message)
+		}
+	}
+	return nil, compileErrorf(node, "Invalid function '%s(%s)' in %s.", name, argTypeList(args), c.env.context)
 }
 
 // argTypeList renders compiled arguments' types by their Python names, as
@@ -415,7 +414,7 @@ func argTypeList(args []cexpr) string {
 	names := make([]string, len(args))
 	for i, arg := range args {
 		names[i] = arg.typ().String()
-		if lit, ok := arg.(*cLiteral); ok && lit.v == nil {
+		if isNullLiteral(arg) {
 			names[i] = "NoneType"
 		}
 	}

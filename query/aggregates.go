@@ -47,7 +47,7 @@ var aggregates = map[string]*aggDef{
 			switch arg {
 			case TInt:
 				return TInt, true
-			case TDecimal, TAny:
+			case TDecimal:
 				return TDecimal, true
 			case TAmount, TPosition, TInventory:
 				return TInventory, true
