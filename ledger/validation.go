@@ -427,7 +427,14 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			amount, aerr := ParseAmount(posting.Amount)
 			if aerr == nil && v.reducesInventory(posting.Account, posting.Amount.Currency, amount) {
 				reducingEmptyCosts[posting] = true
-				if lots, ok := v.bookedReductions(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
+				lots, ok, berr := v.bookedReductions(posting.Account, posting.Cost, posting.Amount.Currency, amount)
+				if berr != nil {
+					// Beancount stops at the booking error; the posting's
+					// weight is unknown, so the balance is not checked.
+					errs = append(errs, newBookingError(txn, posting.Account, berr))
+					continue
+				}
+				if ok {
 					var booked weightSet
 					for _, lot := range lots {
 						booked = append(booked, weight{
@@ -1727,40 +1734,50 @@ func (v *validator) reducesInventory(accountName ast.Account, commodity string, 
 // The second return value reports whether the posting's cost is considered
 // resolved. It is false only when the cost must instead be inferred from the
 // transaction residual (NONE booking, or booked lots without a cost basis).
-// Booking failures (ambiguous matches, insufficient lots) return true with no
-// lots: they are reported separately by validateInventoryOperations, and
-// the posting must not additionally participate in cost inference.
-func (v *validator) bookedReductions(accountName ast.Account, cost *ast.Cost, commodity string, amount decimal.Decimal) ([]lotReduction, bool) {
+// A booking failure (ambiguous match, not enough lots) is returned as the
+// error; the caller reports it instead of checking the balance, as beancount
+// stops at booking errors.
+func (v *validator) bookedReductions(accountName ast.Account, cost *ast.Cost, commodity string, amount decimal.Decimal) ([]lotReduction, bool, error) {
 	account, ok := v.accounts[string(accountName)]
 	if !ok {
-		return nil, true // Unopened account; reported by validateAccountsOpen
+		return nil, true, nil // Unopened account; reported by validateAccountsOpen
 	}
 
 	bookingMethod := defaultBookingMethod(account.BookingMethod)
 	if bookingMethod == BookingNONE {
-		return nil, false
+		return nil, false, nil
 	}
 
 	spec, err := ParseLotSpec(cost)
 	if err != nil {
-		return nil, true // Invalid cost spec; reported by validateCosts
+		return nil, true, nil // Invalid cost spec; reported by validateCosts
 	}
 
 	plan, err := account.Inventory.planBooking(commodity, amount, spec, bookingMethod, nil)
 	if err != nil {
-		return nil, true // Booking error; reported by validateInventoryOperations
+		return nil, true, err
 	}
 	if plan == nil || len(plan.reductions) == 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	for _, reduction := range plan.reductions {
 		if spec := reduction.lot.Spec; spec == nil || spec.Cost == nil {
-			return nil, false // Lot held without cost basis; infer from residual
+			return nil, false, nil // Lot held without cost basis; infer from residual
 		}
 	}
 
-	return plan.reductions, true
+	return plan.reductions, true, nil
+}
+
+// newBookingError classifies a failed booking: an ambiguous match, or
+// inventory that cannot cover the reduction.
+func newBookingError(txn *ast.Transaction, account ast.Account, err error) error {
+	var ambiguousErr *ambiguousBookingMatchError
+	if errors.As(err, &ambiguousErr) {
+		return NewAmbiguousBookingError(txn, account, ambiguousErr)
+	}
+	return NewInsufficientInventoryError(txn, account, err)
 }
 
 // validateInventoryOperations validates that inventory operations (lot reductions) are possible.
@@ -1819,12 +1836,7 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 			// Check if booking is possible (read-only)
 			if err := account.Inventory.CanBook(currency, amount, lotSpec, bookingMethod); err != nil {
-				var ambiguousErr *ambiguousBookingMatchError
-				if errors.As(err, &ambiguousErr) {
-					errs = append(errs, NewAmbiguousBookingError(txn, posting.Account, ambiguousErr))
-					continue
-				}
-				errs = append(errs, NewInsufficientInventoryError(txn, posting.Account, err))
+				errs = append(errs, newBookingError(txn, posting.Account, err))
 			}
 		}
 	}

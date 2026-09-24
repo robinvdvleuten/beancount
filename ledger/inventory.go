@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -59,6 +60,28 @@ func (e *ambiguousBookingMatchError) Error() string {
 		e.spec.String(),
 		strings.Join(matchStrings, ", "),
 	)
+}
+
+// errNotEnoughLots marks a reduction larger than the lots it can book
+// against; planBooking reports it as a notEnoughLotsError.
+var errNotEnoughLots = errors.New("not enough lots")
+
+// notEnoughLotsError reports a reduction larger than the lots it can book
+// against, in beancount's words.
+type notEnoughLotsError struct {
+	commodity string
+	amount    decimal.Decimal
+	spec      *lotSpec
+	lots      []*lot
+}
+
+func (e *notEnoughLotsError) Error() string {
+	lots := make([]string, len(e.lots))
+	for i, lot := range e.lots {
+		lots[i] = lot.String()
+	}
+	return fmt.Sprintf("not enough lots to reduce \"%s %s %s\": %s",
+		e.amount.String(), e.commodity, e.spec.String(), strings.Join(lots, ", "))
 }
 
 type BookingMethod string
@@ -297,6 +320,9 @@ func (inv *Inventory) planBooking(
 	}
 
 	plan, err := planReduction(commodity, lots, amount.Abs(), spec, bookingMethod)
+	if errors.Is(err, errNotEnoughLots) {
+		return nil, &notEnoughLotsError{commodity: commodity, amount: amount, spec: spec, lots: lots}
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -362,8 +388,8 @@ func planStrictReduction(
 	if len(matches) == 1 {
 		lot := matches[0]
 		if lot.Amount.Abs().LessThan(amount) {
-			return nil, fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
-				spec.String(), lot.Amount.Abs().String(), amount.String())
+			return nil, fmt.Errorf("%w: insufficient amount in lot %s: have %s, need %s",
+				errNotEnoughLots, spec.String(), lot.Amount.Abs().String(), amount.String())
 		}
 		return &reductionPlan{
 			commodity:  commodity,
@@ -377,8 +403,8 @@ func planStrictReduction(
 	}
 
 	if total.LessThan(amount) {
-		return nil, fmt.Errorf("insufficient total amount for %s: have %s, need %s",
-			commodity, total.String(), amount.String())
+		return nil, fmt.Errorf("%w: insufficient total amount for %s: have %s, need %s",
+			errNotEnoughLots, commodity, total.String(), amount.String())
 	}
 
 	if total.Equal(amount) {
@@ -457,8 +483,8 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 	}
 
 	if !remaining.IsZero() {
-		return nil, fmt.Errorf("insufficient amount for %s: need %s across %d lots",
-			commodity, amount.String(), len(sortedLots))
+		return nil, fmt.Errorf("%w: insufficient amount for %s: need %s across %d lots",
+			errNotEnoughLots, commodity, amount.String(), len(sortedLots))
 	}
 
 	return &reductionPlan{
@@ -505,8 +531,8 @@ func planMergeReduction(
 		return nil, fmt.Errorf("no units available for %s", commodity)
 	}
 	if totalUnits.LessThan(amount) {
-		return nil, fmt.Errorf("insufficient total amount for %s: have %s, need %s",
-			commodity, totalUnits.String(), amount.String())
+		return nil, fmt.Errorf("%w: insufficient total amount for %s: have %s, need %s",
+			errNotEnoughLots, commodity, totalUnits.String(), amount.String())
 	}
 
 	plan := &reductionPlan{

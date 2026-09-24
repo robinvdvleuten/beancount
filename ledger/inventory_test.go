@@ -68,7 +68,7 @@ func TestCanBook(t *testing.T) {
 			spec:          &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"},
 			bookingMethod: "",
 			wantErr:       true,
-			errContains:   "insufficient amount in lot",
+			errContains:   "not enough lots to reduce",
 		},
 		{
 			name: "reducing with no spec - simple add",
@@ -130,7 +130,7 @@ func TestCanBook(t *testing.T) {
 			},
 			bookingMethod: "",
 			wantErr:       true,
-			errContains:   "insufficient amount",
+			errContains:   "not enough lots to reduce",
 		},
 		{
 			name: "reducing with specific lot spec - lot not found",
@@ -179,7 +179,7 @@ func TestCanBook(t *testing.T) {
 			spec:          &lotSpec{Merge: true},
 			bookingMethod: "",
 			wantErr:       true,
-			errContains:   "insufficient total amount",
+			errContains:   "not enough lots to reduce",
 		},
 	}
 
@@ -389,7 +389,7 @@ func TestCanReduceSpecificLot(t *testing.T) {
 				CostCurrency: "USD",
 			},
 			wantErr:     true,
-			errContains: "insufficient amount",
+			errContains: "not enough lots: insufficient amount",
 		},
 		{
 			name: "lot not found - error",
@@ -659,7 +659,7 @@ func TestCanReduceWithBooking(t *testing.T) {
 			amount:        d("100"),
 			bookingMethod: "FIFO",
 			wantErr:       true,
-			errContains:   "insufficient amount",
+			errContains:   "not enough lots: insufficient amount",
 		},
 		{
 			name: "insufficient total across multiple lots LIFO",
@@ -673,7 +673,7 @@ func TestCanReduceWithBooking(t *testing.T) {
 			amount:        d("100"),
 			bookingMethod: "LIFO",
 			wantErr:       true,
-			errContains:   "insufficient amount",
+			errContains:   "not enough lots: insufficient amount",
 		},
 		{
 			name: "empty lots array FIFO",

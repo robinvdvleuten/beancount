@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -2451,4 +2452,28 @@ func TestCostTolerances(t *testing.T) {
 	_, ok := got["CHF"]
 	assert.False(t, ok, "whole-number units add nothing")
 	assert.Equal(t, "0.5", got["JPY"].String(), "a cost without numbers adds the cap")
+}
+
+func TestOverReductionReportsNotEnoughLots(t *testing.T) {
+	// Selling more than the lots hold is a booking error, reported alone:
+	// the posting's weight is unknown, so the balance is not checked.
+	for _, spec := range []string{"{}", "{10 USD}"} {
+		source := "2020-01-01 open Assets:Stock \"FIFO\"\n2020-01-01 open Assets:Cash\n" +
+			"2020-01-02 * \"buy\"\n  Assets:Stock  1 HOOL {10 USD}\n  Assets:Cash  -10 USD\n" +
+			"2020-01-04 * \"sell\"\n  Assets:Stock  -2 HOOL " + spec + "\n  Assets:Cash  20 USD\n"
+		tree, err := parser.ParseString(context.Background(), source)
+		assert.NoError(t, err)
+		l := New()
+		err = l.Process(context.Background(), tree)
+
+		var validationErrors *ValidationErrors
+		assert.True(t, errors.As(err, &validationErrors), spec)
+		assert.Equal(t, 1, len(validationErrors.Errors), spec)
+		var insufficient *InsufficientInventoryError
+		assert.True(t, errors.As(validationErrors.Errors[0], &insufficient), spec)
+		assert.Contains(t, insufficient.Error(), `not enough lots to reduce "-2 HOOL`, spec)
+
+		stock, _ := l.GetAccount("Assets:Stock")
+		assert.Equal(t, "1", stock.Inventory.Get("HOOL").String(), "the failed sale changes nothing")
+	}
 }
