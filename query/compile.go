@@ -38,8 +38,8 @@ type cexpr interface {
 	eval(row *Row) any
 }
 
-// Compiled is a fully resolved SELECT ready for execution. GroupBy, OrderBy,
-// and PivotBy reference targets by index; hidden targets were appended
+// Compiled is a fully resolved SELECT ready for execution. GroupBy and
+// OrderBy reference targets by index; hidden targets were appended
 // during resolution and are not rendered.
 type Compiled struct {
 	Targets   []CompiledTarget
@@ -48,7 +48,6 @@ type Compiled struct {
 	GroupBy   []int
 	OrderBy   []int
 	OrderDesc bool
-	PivotBy   []int
 	Limit     *int64
 	Distinct  bool
 	HasAgg    bool
@@ -178,9 +177,6 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 	if err := c.resolveOrderBy(sel, compiled); err != nil {
 		return nil, err
 	}
-	if err := c.resolvePivotBy(sel, compiled); err != nil {
-		return nil, err
-	}
 
 	compiled.HasAgg = false
 	for _, target := range compiled.Targets {
@@ -194,6 +190,10 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 
 	if err := checkGroupCoverage(sel, compiled); err != nil {
 		return nil, err
+	}
+	// bean-query parses PIVOT BY but rejects it as its last check.
+	if len(sel.PivotBy) > 0 {
+		return nil, compileErrorf(sel.PivotBy[0], "The PIVOT BY clause is not supported yet.")
 	}
 	return compiled, nil
 }
@@ -276,17 +276,6 @@ func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *Compiled) error {
 			return err
 		}
 		compiled.OrderBy = append(compiled.OrderBy, idx)
-	}
-	return nil
-}
-
-func (c *compiler) resolvePivotBy(sel *bql.Select, compiled *Compiled) error {
-	for _, item := range sel.PivotBy {
-		idx, err := c.resolveTargetRef(item, compiled, "PIVOT-BY")
-		if err != nil {
-			return err
-		}
-		compiled.PivotBy = append(compiled.PivotBy, idx)
 	}
 	return nil
 }

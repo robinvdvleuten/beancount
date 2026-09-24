@@ -218,11 +218,17 @@ func (p *parser) parseSelect() (*Select, error) {
 		if _, err := p.expect(BY, "PIVOT BY"); err != nil {
 			return nil, err
 		}
-		exprs, err := p.parseExprList()
-		if err != nil {
-			return nil, err
+		// Like bean-query's grammar, PIVOT BY lists column names only.
+		for {
+			tok, err := p.expect(IDENT, "PIVOT BY")
+			if err != nil {
+				return nil, err
+			}
+			sel.PivotBy = append(sel.PivotBy, &Ident{position: position{p.pos(tok)}, Name: strings.ToLower(tok.String(p.source))})
+			if !p.accept(COMMA) {
+				break
+			}
 		}
-		sel.PivotBy = exprs
 	}
 
 	if p.cur.Type == LIMIT {

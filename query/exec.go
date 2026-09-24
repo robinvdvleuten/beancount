@@ -2,7 +2,6 @@ package query
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 
@@ -33,12 +32,6 @@ type ResultColumn struct {
 func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compiled) (*Result, error) {
 	timer := telemetry.FromContext(ctx).Start("query.execute")
 	defer timer.End()
-
-	if len(compiled.PivotBy) > 0 {
-		// Official bean-query 2.x parses but rejects PIVOT BY; match its
-		// error message exactly, punctuation included.
-		return nil, errors.New("The PIVOT BY clause is not supported yet.") //nolint:staticcheck // official message parity
-	}
 
 	rows, err := generateRows(ctx, qctx, tree, compiled)
 	if err != nil {

@@ -1,0 +1,1 @@
+SELECT account PIVOT BY foo(1)

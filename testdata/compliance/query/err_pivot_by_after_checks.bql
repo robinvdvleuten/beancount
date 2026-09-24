@@ -1,0 +1,1 @@
+SELECT account, sum(number) PIVOT BY bogus

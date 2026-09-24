@@ -43,8 +43,10 @@ type Select struct {
 	// OrderDesc applies to the whole ORDER BY list; the official grammar
 	// accepts a single trailing ASC or DESC, not one per term.
 	OrderDesc bool
-	PivotBy   []Expr
-	Limit     *int64
+	// PivotBy holds column names; bean-query parses the clause but rejects
+	// it as not supported.
+	PivotBy []*Ident
+	Limit   *int64
 }
 
 func (*Select) stmt() {}
