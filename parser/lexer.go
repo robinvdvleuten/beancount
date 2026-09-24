@@ -187,10 +187,11 @@ func (l *Lexer) scanNextToken() Token {
 		}
 
 		ch := l.source[l.pos]
-		if l.column == 1 && l.shouldSkipNonDirectiveLine() {
-			l.skipPhysicalLine()
-			lineHasContent = false
-			continue
+		// Org-mode and other non-directive lines are ignored by the grammar
+		// like comments, but must survive formatting, so they become COMMENT
+		// tokens and end any directive body just like a column-1 comment.
+		if l.column == 1 && l.isNonDirectiveLine() {
+			return l.scanComment()
 		}
 
 		if ch == ' ' || ch == '\t' {
@@ -614,14 +615,12 @@ func (l *Lexer) keywordType(word []byte) TokenType {
 	return IDENT
 }
 
-// scanComment scans a comment line (;...) and returns a COMMENT token
+// scanComment scans the rest of a comment line (;... or a non-directive
+// line) and returns a COMMENT token
 func (l *Lexer) scanComment() Token {
 	start := l.pos
 	startLine := l.line
 	startCol := l.column
-
-	// Advance past the semicolon
-	l.advance()
 
 	// Scan to end of line
 	for l.pos < len(l.source) && l.lineBreakLenAt(l.pos) == 0 {
@@ -760,7 +759,7 @@ func isValidCurrencyLiteral(value []byte) bool {
 	return true
 }
 
-func (l *Lexer) shouldSkipNonDirectiveLine() bool {
+func (l *Lexer) isNonDirectiveLine() bool {
 	remaining := l.source[l.pos:]
 	if len(remaining) == 0 {
 		return false
@@ -778,13 +777,4 @@ func (l *Lexer) shouldSkipNonDirectiveLine() bool {
 		return len(remaining) > 1 && (remaining[1] == ' ' || remaining[1] == '\t')
 	}
 	return false
-}
-
-func (l *Lexer) skipPhysicalLine() {
-	for l.pos < len(l.source) && l.lineBreakLenAt(l.pos) == 0 {
-		l.advance()
-	}
-	if l.lineBreakLenAt(l.pos) > 0 {
-		l.consumeLineBreak()
-	}
 }
