@@ -35,7 +35,8 @@ indent). The content is equivalent beancount text that round-trips through
   (text and csv, including numberify, shortcut statements, FROM
   summarization, and error output). Notable pinned quirks we reproduce:
   data-width columns with truncated centered headers, padded CSV cells
-  with Python QUOTE_MINIMAL and CRLF, per-currency decimal precision,
+  with Python QUOTE_MINIMAL and CRLF, display-context precision (each
+  currency's most common precision in the source, numbers cut to it),
   constant names sanitized by collapsing invalid runs ('USD' → `c_`),
   implicit GROUP BY, a single trailing ORDER BY direction, `ERROR:` lines
   on stdout with exit status 0, and `The PIVOT BY clause is not supported

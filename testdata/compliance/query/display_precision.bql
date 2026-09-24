@@ -1,0 +1,1 @@
+SELECT date, account, number, position, weight WHERE account = 'Assets:A'

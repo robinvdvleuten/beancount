@@ -1,0 +1,11 @@
+; Cost numbers align like units, cost currencies are padded, and lot labels
+; are not shown.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock  2 HOOL {10.00 USD, "first"}
+  Assets:Stock  1 AAPL {150.5 USD}
+  Assets:Stock  3 LONGCUR {7 EURO}
+  Assets:Cash   5 USD
+  Assets:Cash

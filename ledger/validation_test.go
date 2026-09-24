@@ -688,17 +688,18 @@ func TestImplicitPostingPerCurrency(t *testing.T) {
 	}
 	// Assets:Cash is booked once per currency with a non-zero residual: USD
 	// only in the trip (EUR nets to zero), not at all when fully balanced,
-	// and in both currencies, first-appearance order, in the split.
+	// and in both currencies in the split. Booked postings are grouped by
+	// currency, like beancount's booking.
 	assert.Equal(t, []string{
 		"Expenses:Travel 200.00 EUR",
-		"Expenses:Travel 50.00 USD",
 		"Assets:Euro -200.00 EUR",
+		"Expenses:Travel 50.00 USD",
 		"Assets:Cash -50.00 USD",
 		"Expenses:Travel 10.00 USD",
 		"Assets:Euro -10.00 USD",
 		"Expenses:Travel 20.00 EUR",
-		"Expenses:Travel 5.00 USD",
 		"Assets:Cash -20.00 EUR",
+		"Expenses:Travel 5.00 USD",
 		"Assets:Cash -5.00 USD",
 	}, booked)
 

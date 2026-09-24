@@ -1,0 +1,21 @@
+; Numbers render at the ledger's most common precision per currency (its
+; display context), not at the widest precision in the column: most USD
+; amounts here are whole, so 2500.00 renders as 2500 and 1.5 is cut to 1.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Salary"
+  Assets:A  2500.00 USD
+  Assets:B
+
+2020-01-03 * "Whole"
+  Assets:A  7 USD
+  Assets:B
+
+2020-01-04 * "Whole"
+  Assets:A  3 USD
+  Assets:B
+
+2020-01-05 * "Half"
+  Assets:A  1.5 USD
+  Assets:B

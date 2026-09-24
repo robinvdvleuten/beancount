@@ -30,3 +30,29 @@ jobs:
           cache-dependency-path: assets/package-lock.json
       - run: npm ci --prefix assets
       - run: npm run --prefix assets lint
+
+  lint-commit:
+    runs-on: ubuntu-latest
+    env:
+      VALE_VERSION: 3.22.0
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install Vale
+        run: |
+          curl -fsSL "https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz" | tar -xz -C "$RUNNER_TEMP" vale
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - run: vale sync
+      - if: github.event_name == 'push'
+        run: git log -1 --format=%B | vale --path=COMMIT_EDITMSG
+      - if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          status=0
+          for c in $(git rev-list --no-merges "$BASE..$HEAD"); do
+            git log -1 --format=%B "$c" | vale --path=COMMIT_EDITMSG || status=1
+          done
+          exit $status

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
 
@@ -113,7 +114,7 @@ func columnAllNull(result *Result, col int) bool {
 func prepareRenderers(result *Result, forCSV bool) []columnRenderer {
 	renderers := make([]columnRenderer, len(result.Columns))
 	for i, col := range result.Columns {
-		renderers[i] = newRenderer(col.Type, forCSV)
+		renderers[i] = newRenderer(col.Type, forCSV, result.Display)
 	}
 	for _, row := range result.Rows {
 		for i, value := range row {
@@ -125,7 +126,8 @@ func prepareRenderers(result *Result, forCSV bool) []columnRenderer {
 
 // numberifyResult splits amount, position, and inventory columns into one
 // decimal column per currency, named "column (CUR)", with currencies in
-// order of first appearance.
+// order of first appearance. Numbers are rounded to their currency's display
+// precision, like bean-query's numberify.
 func numberifyResult(result *Result) *Result {
 	type split struct {
 		column     int
@@ -173,6 +175,9 @@ func numberifyResult(result *Result) *Result {
 			if s, ok := splits[i]; ok {
 				for currency, offset := range s.index {
 					if number, ok := currencyNumber(value, currency); ok {
+						if result.Display != nil {
+							number = result.Display.Quantize(number, currency)
+						}
 						values[mapping[i]+offset] = number
 					}
 				}
@@ -183,26 +188,7 @@ func numberifyResult(result *Result) *Result {
 		rows[r] = values
 	}
 
-	// Quantize each currency column to its maximum scale so 1000 and 4.50
-	// render as 1000.00 and 4.50, matching the official per-currency
-	// precision.
-	for _, s := range splits {
-		for _, offset := range s.index {
-			col := mapping[s.column] + offset
-			var scale int32
-			for _, row := range rows {
-				if number, ok := row[col].(decimal.Decimal); ok {
-					scale = max(scale, -number.Exponent())
-				}
-			}
-			for _, row := range rows {
-				if number, ok := row[col].(decimal.Decimal); ok {
-					row[col] = number.Round(scale)
-				}
-			}
-		}
-	}
-	return &Result{Columns: columns, Rows: rows}
+	return &Result{Columns: columns, Rows: rows, Display: result.Display}
 }
 
 // valueCurrencies lists the currencies present in an amount-bearing value.
@@ -262,7 +248,7 @@ type columnRenderer interface {
 	format(v any) string
 }
 
-func newRenderer(t DType, forCSV bool) columnRenderer {
+func newRenderer(t DType, forCSV bool, display *ledger.DisplayContext) columnRenderer {
 	switch t {
 	case TAny:
 		// Object-typed columns are width-padded in text but written raw in
@@ -275,11 +261,14 @@ func newRenderer(t DType, forCSV bool) columnRenderer {
 	case TBool:
 		return &boolRenderer{}
 	case TDecimal:
-		return &decimalRenderer{}
+		return &decimalRenderer{numbers: newNumberField(display)}
 	case TAmount:
-		return &amountRenderer{numbers: newNumberField()}
+		return &amountRenderer{amounts: amountField{numbers: newNumberField(display)}}
 	case TPosition, TInventory:
-		return &positionRenderer{numbers: newNumberField()}
+		return &positionRenderer{
+			units: amountField{numbers: newNumberField(display)},
+			costs: amountField{numbers: newNumberField(display)},
+		}
 	default:
 		return &stringRenderer{}
 	}
@@ -421,11 +410,28 @@ func (r *boolRenderer) format(v any) string {
 	return "FALSE"
 }
 
-// decimalRenderer aligns numbers at the decimal point, preserving each
-// value's own digits (space-padded, not zero-padded).
+// decimalRenderer renders a plain decimal column. Its numbers have no
+// currency, so they are laid out at their own precision.
 type decimalRenderer struct {
-	integral integralWidth
-	fracW    int
+	numbers *numberField
+}
+
+func (r *decimalRenderer) prepare(v any) {
+	if d, ok := v.(decimal.Decimal); ok {
+		r.numbers.observe(d, "")
+	}
+}
+
+func (r *decimalRenderer) width() int {
+	return max(r.numbers.width(), 1)
+}
+
+func (r *decimalRenderer) format(v any) string {
+	d, ok := v.(decimal.Decimal)
+	if !ok {
+		return strings.Repeat(" ", r.width())
+	}
+	return padRight(r.numbers.format(d), r.width())
 }
 
 func decimalParts(d decimal.Decimal) (string, string) {
@@ -437,131 +443,129 @@ func decimalParts(d decimal.Decimal) (string, string) {
 	return s, ""
 }
 
-func (r *decimalRenderer) prepare(v any) {
-	d, ok := v.(decimal.Decimal)
-	if !ok {
-		return
-	}
-	intPart, fracPart := decimalParts(d)
-	r.integral.observe(intPart)
-	r.fracW = max(r.fracW, len(fracPart))
-}
-
-func (r *decimalRenderer) width() int {
-	w := r.integral.width()
-	if r.fracW > 0 {
-		w += 1 + r.fracW
-	}
-	return max(w, 1)
-}
-
-func (r *decimalRenderer) format(v any) string {
-	d, ok := v.(decimal.Decimal)
-	if !ok {
-		return strings.Repeat(" ", r.width())
-	}
-	intPart, fracPart := decimalParts(d)
-	s := padLeft(intPart, r.integral.width())
-	if r.fracW > 0 {
-		if fracPart != "" {
-			s += "." + fracPart
-		}
-		s = padRight(s, r.width())
-	}
-	return s
-}
-
-// numberField aligns amount numbers at the decimal point with per-currency
-// precision: each currency's numbers are quantized to the maximum scale seen
-// for that currency, and the fraction field is space-padded to the widest
-// currency's scale.
+// numberField lays out a column of numbers like bean-query's
+// DecimalRenderer. Each number is quantized to its currency's display
+// precision only to size the field: a sign column when any value is
+// negative, the most integer digits, and the widest per-currency most common
+// count of fractional digits. Numbers then print as written, aligned at the
+// decimal point and cut to the field width, so 2500.00 in a column of whole
+// numbers renders as 2500.
 type numberField struct {
+	display  *ledger.DisplayContext
 	integral integralWidth
-	fracW    int // widest fraction incl. the dot
-	currFrac map[string]int
+	digits   map[string]map[int32]int // currency -> fractional digits -> count
+	fracW    int                      // widest fraction incl. the dot
+	finished bool
 }
 
-func newNumberField() *numberField {
-	return &numberField{currFrac: make(map[string]int)}
+func newNumberField(display *ledger.DisplayContext) *numberField {
+	return &numberField{display: display, digits: make(map[string]map[int32]int)}
 }
 
+// observe records a number of the given currency ("" for plain decimals).
 func (f *numberField) observe(number decimal.Decimal, currency string) {
-	scale := int(max(-number.Exponent(), 0))
-	f.currFrac[currency] = max(f.currFrac[currency], scale)
+	if f.display != nil {
+		number = f.display.Quantize(number, currency)
+	}
 	intPart, _ := decimalParts(number)
 	f.integral.observe(intPart)
+
+	counts, ok := f.digits[currency]
+	if !ok {
+		counts = make(map[int32]int)
+		f.digits[currency] = counts
+	}
+	counts[max(-number.Exponent(), 0)]++
 }
 
-// finish computes the fraction field width after all values are observed.
-func (f *numberField) finish() {
-	for _, scale := range f.currFrac {
-		if scale > 0 {
-			f.fracW = max(f.fracW, 1+scale)
+func (f *numberField) width() int {
+	if !f.finished {
+		for _, counts := range f.digits {
+			if digits := int(mostCommonDigits(counts)); digits > 0 {
+				f.fracW = max(f.fracW, 1+digits)
+			}
+		}
+		f.finished = true
+	}
+	return f.integral.width() + f.fracW
+}
+
+func (f *numberField) format(number decimal.Decimal) string {
+	intPart, fracPart := decimalParts(number)
+	s := padLeft(intPart, f.integral.width())
+	if fracPart != "" {
+		s += "." + fracPart
+	}
+	return padRight(truncate(s, f.width()), f.width())
+}
+
+// mostCommonDigits returns the most frequent fractional digit count,
+// preferring more digits on a tie, like beancount's Distribution.mode.
+func mostCommonDigits(counts map[int32]int) int32 {
+	var digits int32
+	best := 0
+	for d, count := range counts {
+		if count > best || (count == best && d > digits) {
+			digits, best = d, count
 		}
 	}
+	return digits
 }
 
-func (f *numberField) width() int { return f.integral.width() + f.fracW }
-
-func (f *numberField) format(number decimal.Decimal, currency string) string {
-	scale := f.currFrac[currency]
-	s := number.StringFixed(int32(scale))
-	var intPart, fracPart string
-	if idx := strings.IndexByte(s, '.'); idx >= 0 {
-		intPart, fracPart = s[:idx], s[idx+1:]
-	} else {
-		intPart = s
-	}
-	out := padLeft(intPart, f.integral.width())
-	if fracPart != "" {
-		out += "." + fracPart
-	}
-	return padRight(out, f.width())
+// amountField renders "number CURRENCY" with the numbers aligned and the
+// currencies padded, like bean-query's AmountRenderer.
+type amountField struct {
+	numbers *numberField
+	curW    int
 }
 
-// amountRenderer renders "number CURRENCY" with the number field aligned.
+func (a *amountField) observe(number decimal.Decimal, currency string) {
+	a.numbers.observe(number, currency)
+	a.curW = max(a.curW, len(currency))
+}
+
+// width is 0 when no amount was observed.
+func (a *amountField) width() int {
+	if a.curW == 0 {
+		return 0
+	}
+	return a.numbers.width() + 1 + a.curW
+}
+
+func (a *amountField) format(number decimal.Decimal, currency string) string {
+	return a.numbers.format(number) + " " + padRight(currency, a.curW)
+}
+
+// amountRenderer renders amount columns.
 type amountRenderer struct {
-	numbers  *numberField
-	curW     int
-	prepared bool
+	amounts amountField
 }
 
 func (r *amountRenderer) prepare(v any) {
 	if a, ok := v.(*Amount); ok && a != nil {
-		r.numbers.observe(a.Number, a.Currency)
-		r.curW = max(r.curW, len(a.Currency))
+		r.amounts.observe(a.Number, a.Currency)
 	}
 }
 
 func (r *amountRenderer) width() int {
-	if !r.prepared {
-		r.numbers.finish()
-		r.prepared = true
-	}
-	if r.curW == 0 {
-		return 1
-	}
-	return r.numbers.width() + 1 + r.curW
+	return max(r.amounts.width(), 1)
 }
 
 func (r *amountRenderer) format(v any) string {
-	width := r.width()
 	a, ok := v.(*Amount)
 	if !ok || a == nil {
-		return strings.Repeat(" ", width)
+		return strings.Repeat(" ", r.width())
 	}
-	return padRight(r.numbers.format(a.Number, a.Currency)+" "+a.Currency, width)
+	return padRight(r.amounts.format(a.Number, a.Currency), r.width())
 }
 
-// positionRenderer renders positions and inventories: each position is a
-// fixed-width sub-cell (aligned number, padded currency, optional cost) and
-// inventories join their positions with ", ".
+// positionRenderer renders positions and inventories like bean-query's
+// PositionRenderer: aligned units, then the cost as a second aligned amount
+// in braces (its date and label are not shown). Inventories join their
+// positions with ", ".
 type positionRenderer struct {
-	numbers  *numberField
-	curW     int
-	costW    int
-	cellW    int
-	prepared bool
+	units amountField
+	costs amountField
 }
 
 func (r *positionRenderer) positions(v any) []*Position {
@@ -578,54 +582,32 @@ func (r *positionRenderer) positions(v any) []*Position {
 	return nil
 }
 
-// costString renders a cost basis for position cells. The official renderer
-// omits the booking-stamped cost date, showing only number, currency, and
-// label.
-func costString(c *Cost) string {
-	var b strings.Builder
-	b.WriteByte('{')
-	b.WriteString(c.Number.StringFixed(max(-c.Number.Exponent(), 0)))
-	b.WriteByte(' ')
-	b.WriteString(c.Currency)
-	if c.Label != "" {
-		fmt.Fprintf(&b, ", %q", c.Label)
-	}
-	b.WriteByte('}')
-	return b.String()
-}
-
 func (r *positionRenderer) prepare(v any) {
 	for _, p := range r.positions(v) {
-		r.numbers.observe(p.Units.Number, p.Units.Currency)
-		r.curW = max(r.curW, len(p.Units.Currency))
+		r.units.observe(p.Units.Number, p.Units.Currency)
 		if p.Cost != nil {
-			r.costW = max(r.costW, len(costString(p.Cost)))
+			r.costs.observe(p.Cost.Number, p.Cost.Currency)
 		}
 	}
 }
 
 // subWidth is the fixed width of one rendered position.
 func (r *positionRenderer) subWidth() int {
-	w := r.numbers.width() + 1 + r.curW
-	if r.costW > 0 {
-		w += 1 + r.costW
+	w := r.units.width()
+	if costW := r.costs.width(); costW > 0 {
+		w += 1 + costW + 2
 	}
 	return w
 }
 
 func (r *positionRenderer) width() int {
-	if !r.prepared {
-		r.numbers.finish()
-		r.prepared = true
-		r.cellW = max(r.subWidth(), 1)
-	}
-	return r.cellW
+	return max(r.subWidth(), 1)
 }
 
 func (r *positionRenderer) formatPosition(p *Position) string {
-	s := r.numbers.format(p.Units.Number, p.Units.Currency) + " " + padRight(p.Units.Currency, r.curW)
+	s := r.units.format(p.Units.Number, p.Units.Currency)
 	if p.Cost != nil {
-		s += " " + costString(p.Cost)
+		s += " {" + r.costs.format(p.Cost.Number, p.Cost.Currency) + "}"
 	}
 	return padRight(s, r.subWidth())
 }
