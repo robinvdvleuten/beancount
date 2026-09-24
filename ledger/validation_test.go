@@ -1208,154 +1208,154 @@ func TestEmptyCostBehavior(t *testing.T) {
 		{
 			name: "positive amount with {} infers cost from residual",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy stock with empty cost"
-				  Assets:Brokerage    10 STOCK {}
-				  Assets:Cash        -1000 USD
-			`,
+2020-01-02 * "Buy stock with empty cost"
+  Assets:Brokerage    10 STOCK {}
+  Assets:Cash        -1000 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "negative amount with {} uses FIFO booking",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Sell stock with empty cost (FIFO)"
-				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         600 USD
-				  Income:CapitalGains    -100 USD
-			`,
+2020-01-03 * "Sell stock with empty cost (FIFO)"
+  Assets:Brokerage    -5 STOCK {}
+  Assets:Cash         600 USD
+  Income:CapitalGains    -100 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "negative amount with {} on LIFO account",
 			input: `
-				2020-01-01 open Assets:Brokerage "LIFO"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage "LIFO"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy first lot"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy first lot"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Buy second lot"
-				  Assets:Brokerage    10 STOCK {110 USD}
-				  Assets:Cash        -1100 USD
+2020-01-03 * "Buy second lot"
+  Assets:Brokerage    10 STOCK {110 USD}
+  Assets:Cash        -1100 USD
 
-				2020-01-04 * "Sell stock with empty cost (LIFO - newest first)"
-				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         560 USD
-				  Income:CapitalGains    -10 USD
-			`,
+2020-01-04 * "Sell stock with empty cost (LIFO - newest first)"
+  Assets:Brokerage    -5 STOCK {}
+  Assets:Cash         560 USD
+  Income:CapitalGains    -10 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "zero amount with {} does not panic on cost inference",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Zero amount with empty cost"
-				  Assets:Brokerage    0 STOCK {}
-				  Assets:Cash        0 USD
-			`,
+2020-01-02 * "Zero amount with empty cost"
+  Assets:Brokerage    0 STOCK {}
+  Assets:Cash        0 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "multiple empty costs - cannot infer costs unambiguously",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Multiple empty costs for different commodities"
-				  Assets:Brokerage    10 STOCK {}
-				  Assets:Brokerage    5 AAPL {}
-				  Assets:Cash        -2000 USD
-			`,
+2020-01-02 * "Multiple empty costs for different commodities"
+  Assets:Brokerage    10 STOCK {}
+  Assets:Brokerage    5 AAPL {}
+  Assets:Cash        -2000 USD
+`,
 			wantErr: true, // Beancount cannot infer costs when multiple postings have empty cost specs
 		},
 		{
 			name: "FIFO insufficient inventory - cannot reduce more than available",
 			input: `
-				2020-01-01 open Assets:Brokerage "FIFO"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage "FIFO"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Try to sell more than available"
-				  Assets:Brokerage    -20 STOCK {}
-				  Assets:Cash         2000 USD
-				  Income:CapitalGains    -2000 USD
-			`,
+2020-01-03 * "Try to sell more than available"
+  Assets:Brokerage    -20 STOCK {}
+  Assets:Cash         2000 USD
+  Income:CapitalGains    -2000 USD
+`,
 			wantErr: true, // Beancount error: trying to reduce 20 shares when only 10 available
 		},
 		{
 			name: "{} reduction resolves weight from booked lot for interpolation",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Sell with auto gains posting"
-				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         600 USD
-				  Income:CapitalGains
+2020-01-03 * "Sell with auto gains posting"
+  Assets:Brokerage    -5 STOCK {}
+  Assets:Cash         600 USD
+  Income:CapitalGains
 
-				2020-01-04 balance Income:CapitalGains -100 USD
-			`,
+2020-01-04 balance Income:CapitalGains -100 USD
+`,
 			wantErr: false, // gains inferred from lot cost basis, not the full proceeds
 		},
 		{
 			name: "NONE booking interpolates {} cost from residual",
 			input: `
-				option "booking_method" "NONE"
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+option "booking_method" "NONE"
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Sell, cost interpolated as 100"
-				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         600 USD
-				  Income:CapitalGains    -100 USD
-			`,
+2020-01-03 * "Sell, cost interpolated as 100"
+  Assets:Brokerage    -5 STOCK {}
+  Assets:Cash         600 USD
+  Income:CapitalGains    -100 USD
+`,
 			wantErr: false, // verified against bean-check 2.3.6
 		},
 		{
 			name: "NONE booking with {} and auto posting has too many unknowns",
 			input: `
-				option "booking_method" "NONE"
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+option "booking_method" "NONE"
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Sell with two unknowns"
-				  Assets:Brokerage    -5 STOCK {}
-				  Assets:Cash         600 USD
-				  Income:CapitalGains
-			`,
+2020-01-03 * "Sell with two unknowns"
+  Assets:Brokerage    -5 STOCK {}
+  Assets:Cash         600 USD
+  Income:CapitalGains
+`,
 			wantErr: true, // beancount: "Too many missing numbers for currency group"
 		},
 	}
@@ -1389,75 +1389,75 @@ func TestPadTiming(t *testing.T) {
 		{
 			name: "pad before balance - valid",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 pad Assets:Checking Equity:Opening
-				2020-01-05 balance Assets:Checking 100 USD
-			`,
+2020-01-02 pad Assets:Checking Equity:Opening
+2020-01-05 balance Assets:Checking 100 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "pad on same date as balance - balance runs before pad",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-05 pad Assets:Checking Equity:Opening
-				2020-01-05 balance Assets:Checking 100 USD
-			`,
+2020-01-05 pad Assets:Checking Equity:Opening
+2020-01-05 balance Assets:Checking 100 USD
+`,
 			wantErr: true,
 			errMsg:  "Balance mismatch",
 		},
 		{
 			name: "pad after balance - balance fails without pad",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-05 balance Assets:Checking 100 USD
-				2020-01-06 pad Assets:Checking Equity:Opening
-			`,
+2020-01-05 balance Assets:Checking 100 USD
+2020-01-06 pad Assets:Checking Equity:Opening
+`,
 			wantErr: true,
 			errMsg:  "Balance mismatch",
 		},
 		{
 			name: "multiple pads for same account - superseded pads are unused errors",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 pad Assets:Checking Equity:Opening
-				2020-01-03 pad Assets:Checking Equity:Opening
-				2020-01-04 pad Assets:Checking Equity:Opening
-				2020-01-05 balance Assets:Checking 100 USD
-			`,
+2020-01-02 pad Assets:Checking Equity:Opening
+2020-01-03 pad Assets:Checking Equity:Opening
+2020-01-04 pad Assets:Checking Equity:Opening
+2020-01-05 balance Assets:Checking 100 USD
+`,
 			wantErr: true, // bean-check: "Unused Pad entry" for each superseded pad
 		},
 		{
 			name: "pad without subsequent balance - generates warning",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 pad Assets:Checking Equity:Opening
-			`,
+2020-01-02 pad Assets:Checking Equity:Opening
+`,
 			wantErr: true,
 			errMsg:  "Unused Pad entry",
 		},
 		{
 			name: "pad then transaction then balance",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
-				2020-01-01 open Expenses:Groceries USD
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
+2020-01-01 open Expenses:Groceries USD
 
-				2020-01-02 pad Assets:Checking Equity:Opening
-				2020-01-03 * "Spend some money"
-				  Assets:Checking    -50 USD
-				  Expenses:Groceries  50 USD
-				2020-01-05 balance Assets:Checking 50 USD
-			`,
+2020-01-02 pad Assets:Checking Equity:Opening
+2020-01-03 * "Spend some money"
+  Assets:Checking    -50 USD
+  Expenses:Groceries  50 USD
+2020-01-05 balance Assets:Checking 50 USD
+`,
 			wantErr: false,
 		},
 	}
@@ -1492,132 +1492,132 @@ func TestBalanceTolerance(t *testing.T) {
 		{
 			name: "balance matches exactly",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100.00 USD
-				  Equity:Opening    -100.00 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100.00 USD
+  Equity:Opening    -100.00 USD
 
-				2020-01-03 balance Assets:Checking 100.00 USD
-			`,
+2020-01-03 balance Assets:Checking 100.00 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "balance within inferred tolerance (0.005)",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100.004 USD
-				  Equity:Opening    -100.004 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100.004 USD
+  Equity:Opening    -100.004 USD
 
-				2020-01-03 balance Assets:Checking 100.00 USD
-			`,
+2020-01-03 balance Assets:Checking 100.00 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "integer precision balance is exact",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100.4 USD
-				  Equity:Opening    -100.4 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100.4 USD
+  Equity:Opening    -100.4 USD
 
-				2020-01-03 balance Assets:Checking 100 USD
-			`,
+2020-01-03 balance Assets:Checking 100 USD
+`,
 			wantErr: true,
 		},
 		{
 			name: "balance within doubled inferred tolerance - passes",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100.01 USD
-				  Equity:Opening    -100.01 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100.01 USD
+  Equity:Opening    -100.01 USD
 
-				2020-01-03 balance Assets:Checking 100.00 USD
-			`,
+2020-01-03 balance Assets:Checking 100.00 USD
+`,
 			wantErr: false, // tolerance = 0.01 * 0.5 * 2 = 0.01; diff of 0.01 is not greater
 		},
 		{
 			name: "balance exceeds tolerance - should error",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100.02 USD
-				  Equity:Opening    -100.02 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100.02 USD
+  Equity:Opening    -100.02 USD
 
-				2020-01-03 balance Assets:Checking 100.00 USD
-			`,
+2020-01-03 balance Assets:Checking 100.00 USD
+`,
 			wantErr: true, // diff of 0.02 exceeds the 0.01 tolerance
 		},
 		{
 			name: "balance uses local tolerance override",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100.01 USD
-				  Equity:Opening    -100.01 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100.01 USD
+  Equity:Opening    -100.01 USD
 
-				2020-01-03 balance Assets:Checking 100.00 ~ 0.02 USD
-			`,
+2020-01-03 balance Assets:Checking 100.00 ~ 0.02 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "tolerance applied after padding",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    50.004 USD
-				  Equity:Opening    -50.004 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    50.004 USD
+  Equity:Opening    -50.004 USD
 
-				2020-01-03 pad Assets:Checking Equity:Opening
-				2020-01-04 balance Assets:Checking 100.00 USD
-			`,
+2020-01-03 pad Assets:Checking Equity:Opening
+2020-01-04 balance Assets:Checking 100.00 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "balance assertion of exactly 0 (empty account)",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit and withdraw"
-				  Assets:Checking    100 USD
-				  Equity:Opening    -100 USD
+2020-01-02 * "Deposit and withdraw"
+  Assets:Checking    100 USD
+  Equity:Opening    -100 USD
 
-				2020-01-03 * "Withdraw all"
-				  Assets:Checking   -100 USD
-				  Equity:Opening     100 USD
+2020-01-03 * "Withdraw all"
+  Assets:Checking   -100 USD
+  Equity:Opening     100 USD
 
-				2020-01-04 balance Assets:Checking 0 USD
-			`,
+2020-01-04 balance Assets:Checking 0 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "negative balance within tolerance",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Overdraft"
-				  Assets:Checking    -50.003 USD
-				  Equity:Opening      50.003 USD
+2020-01-02 * "Overdraft"
+  Assets:Checking    -50.003 USD
+  Equity:Opening      50.003 USD
 
-				2020-01-03 balance Assets:Checking -50.00 USD
-			`,
+2020-01-03 balance Assets:Checking -50.00 USD
+`,
 			wantErr: false,
 		},
 	}
@@ -1649,51 +1649,51 @@ func TestConstraintCurrencyEnforcement(t *testing.T) {
 		{
 			name: "explicit amount violates constraint - should error",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Invalid currency"
-				  Assets:Checking    100 EUR
-				  Equity:Opening    -100 EUR
-			`,
+2020-01-02 * "Invalid currency"
+  Assets:Checking    100 EUR
+  Equity:Opening    -100 EUR
+`,
 			wantErr: true,
 		},
 		{
 			name: "inferred amount violates constraint - should error",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Inferred EUR violates USD constraint"
-				  Assets:Checking
-				  Equity:Opening    -100 EUR
-			`,
+2020-01-02 * "Inferred EUR violates USD constraint"
+  Assets:Checking
+  Equity:Opening    -100 EUR
+`,
 			wantErr: true,
 		},
 		{
 			name: "explicit and inferred amounts both validated",
 			input: `
-				2020-01-01 open Assets:Checking USD, EUR
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD, EUR
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Multiple currencies OK"
-				  Assets:Checking    100 USD
-				  Assets:Checking    50 EUR
-				  Equity:Opening    -100 USD
-				  Equity:Opening    -50 EUR
-			`,
+2020-01-02 * "Multiple currencies OK"
+  Assets:Checking    100 USD
+  Assets:Checking    50 EUR
+  Equity:Opening    -100 USD
+  Equity:Opening    -50 EUR
+`,
 			wantErr: false,
 		},
 		{
 			name: "no constraint allows any currency",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Any currency OK"
-				  Assets:Checking    100 XYZ
-				  Equity:Opening    -100 XYZ
-			`,
+2020-01-02 * "Any currency OK"
+  Assets:Checking    100 XYZ
+  Equity:Opening    -100 XYZ
+`,
 			wantErr: false,
 		},
 	}
@@ -2200,70 +2200,70 @@ func TestBookingMethodSemantics(t *testing.T) {
 		{
 			name: "STRICT ambiguous reduction errors",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy lot 1"
-				  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
-				  Assets:Cash         -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
+  Assets:Cash         -1000 USD
 
-				2020-01-03 * "Buy lot 2"
-				  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
-				  Assets:Cash         -1100 USD
+2020-01-03 * "Buy lot 2"
+  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
+  Assets:Cash         -1100 USD
 
-				2020-01-04 * "Sell"
-				  Assets:Brokerage       -5 HOOL {}
-				  Assets:Cash           500 USD
-				  Income:CapitalGains  -500 USD
-			`,
+2020-01-04 * "Sell"
+  Assets:Brokerage       -5 HOOL {}
+  Assets:Cash           500 USD
+  Income:CapitalGains  -500 USD
+`,
 			wantErr:                 true,
 			wantAmbiguousBookingErr: true,
 		},
 		{
 			name: "global NONE allows mixed-sign inventory",
 			input: `
-				option "booking_method" "NONE"
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+option "booking_method" "NONE"
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy lot 1"
-				  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
-				  Assets:Cash         -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
+  Assets:Cash         -1000 USD
 
-				2020-01-03 * "Buy lot 2"
-				  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
-				  Assets:Cash         -1100 USD
+2020-01-03 * "Buy lot 2"
+  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
+  Assets:Cash         -1100 USD
 
-				2020-01-04 * "Sell"
-				  Assets:Brokerage       -5 HOOL {}
-				  Assets:Cash           500 USD
-				  Income:CapitalGains  -500 USD
-			`,
+2020-01-04 * "Sell"
+  Assets:Brokerage       -5 HOOL {}
+  Assets:Cash           500 USD
+  Income:CapitalGains  -500 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "per-account NONE overrides global STRICT",
 			input: `
-				option "booking_method" "STRICT"
-				2020-01-01 open Assets:Brokerage "NONE"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+option "booking_method" "STRICT"
+2020-01-01 open Assets:Brokerage "NONE"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy lot 1"
-				  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
-				  Assets:Cash         -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage       10 HOOL {100 USD, 2020-01-02}
+  Assets:Cash         -1000 USD
 
-				2020-01-03 * "Buy lot 2"
-				  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
-				  Assets:Cash         -1100 USD
+2020-01-03 * "Buy lot 2"
+  Assets:Brokerage       10 HOOL {110 USD, 2020-01-03}
+  Assets:Cash         -1100 USD
 
-				2020-01-04 * "Sell"
-				  Assets:Brokerage       -5 HOOL {}
-				  Assets:Cash           500 USD
-				  Income:CapitalGains  -500 USD
-			`,
+2020-01-04 * "Sell"
+  Assets:Brokerage       -5 HOOL {}
+  Assets:Cash           500 USD
+  Income:CapitalGains  -500 USD
+`,
 			wantErr: false,
 		},
 	}

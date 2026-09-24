@@ -13,12 +13,12 @@ import (
 
 func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Equity:Opening-Balances
-		
-		2020-01-01 pad Assets:Checking Equity:Opening-Balances
-		2020-01-15 balance Assets:Checking 1000.00 USD
-	`
+2020-01-01 open Assets:Checking
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-01 pad Assets:Checking Equity:Opening-Balances
+2020-01-15 balance Assets:Checking 1000.00 USD
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
@@ -55,13 +55,13 @@ func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 
 func TestPadWithMultipleCurrencies(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Investment
-		2020-01-01 open Equity:Opening-Balances
-		
-		2020-01-01 pad Assets:Investment Equity:Opening-Balances
-		2020-02-01 balance Assets:Investment 500.00 EUR
-		2020-02-01 balance Assets:Investment 750.00 GBP
-	`
+2020-01-01 open Assets:Investment
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-01 pad Assets:Investment Equity:Opening-Balances
+2020-02-01 balance Assets:Investment 500.00 EUR
+2020-02-01 balance Assets:Investment 750.00 GBP
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
@@ -95,16 +95,16 @@ func TestPadWithMultipleCurrencies(t *testing.T) {
 
 func TestPadWithExistingBalance(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Savings
-		2020-01-01 open Equity:Opening-Balances
-		
-		2020-01-05 * "Initial deposit"
-		  Assets:Savings  100.00 USD
-		  Equity:Opening-Balances
-		
-		2020-01-10 pad Assets:Savings Equity:Opening-Balances
-		2020-01-20 balance Assets:Savings 550.00 USD
-	`
+2020-01-01 open Assets:Savings
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-05 * "Initial deposit"
+  Assets:Savings  100.00 USD
+  Equity:Opening-Balances
+
+2020-01-10 pad Assets:Savings Equity:Opening-Balances
+2020-01-20 balance Assets:Savings 550.00 USD
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
@@ -127,16 +127,16 @@ func TestPadWithExistingBalance(t *testing.T) {
 
 func TestPadWithinTolerance(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Cash
-		2020-01-01 open Equity:Opening-Balances
-		
-		2020-01-05 * "Cash on hand"
-		  Assets:Cash  200.00 USD
-		  Equity:Opening-Balances
-		
-		2020-01-10 pad Assets:Cash Equity:Opening-Balances
-		2020-01-15 balance Assets:Cash 200.00 USD
-	`
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-05 * "Cash on hand"
+  Assets:Cash  200.00 USD
+  Equity:Opening-Balances
+
+2020-01-10 pad Assets:Cash Equity:Opening-Balances
+2020-01-15 balance Assets:Cash 200.00 USD
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
@@ -156,11 +156,11 @@ func TestPadWithinTolerance(t *testing.T) {
 
 func TestUnusedPadWarning(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Cash
-		2020-01-01 open Equity:Opening-Balances
-		
-		2020-01-10 pad Assets:Cash Equity:Opening-Balances
-	`
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-10 pad Assets:Cash Equity:Opening-Balances
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
@@ -180,12 +180,12 @@ func TestUnusedPadWarning(t *testing.T) {
 
 func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Equity:Opening-Balances
-		
-		2020-01-05 pad Assets:Checking Equity:Opening-Balances
-		2020-02-15 balance Assets:Checking 1000.00 USD
-	`
+2020-01-01 open Assets:Checking
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-05 pad Assets:Checking Equity:Opening-Balances
+2020-02-15 balance Assets:Checking 1000.00 USD
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
@@ -203,12 +203,12 @@ func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
 
 func TestPadSyntheticTransactionValidationErrorDoesNotPanic(t *testing.T) {
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Equity:Opening-Balances EUR
+2020-01-01 open Assets:Checking
+2020-01-01 open Equity:Opening-Balances EUR
 
-		2020-01-05 pad Assets:Checking Equity:Opening-Balances
-		2020-01-15 balance Assets:Checking 1000.00 USD
-	`
+2020-01-05 pad Assets:Checking Equity:Opening-Balances
+2020-01-15 balance Assets:Checking 1000.00 USD
+`
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 	ledger := New()
@@ -251,10 +251,10 @@ func TestPadFromItselfDoesNotSatisfyBalance(t *testing.T) {
 	// Both legs of the padding post to the same account, so the balance
 	// assertion fails, as in beancount.
 	source := `
-		2020-01-01 open Assets:Cash
-		2020-01-02 pad Assets:Cash Assets:Cash
-		2020-01-03 balance Assets:Cash 5 USD
-	`
+2020-01-01 open Assets:Cash
+2020-01-02 pad Assets:Cash Assets:Cash
+2020-01-03 balance Assets:Cash 5 USD
+`
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	err := New().Process(context.Background(), tree)

@@ -13,10 +13,10 @@ import (
 func TestCalculateWeights_SimpleCost(t *testing.T) {
 	// Parse a transaction with cost
 	input := `
-		2021-01-01 * "Buy stock"
-		  Assets:Cash       -500.00 USD
-		  Assets:Stock         5 AAPL {100.00 USD}
-	`
+2021-01-01 * "Buy stock"
+  Assets:Cash       -500.00 USD
+  Assets:Stock         5 AAPL {100.00 USD}
+`
 
 	tree := parser.MustParseString(context.Background(), input)
 	assert.Equal(t, 1, len(tree.Directives))
@@ -89,13 +89,13 @@ func mustDecimal(s string) decimal.Decimal {
 func TestFullTransactionWithCost(t *testing.T) {
 	// Integration test: full transaction processing with cost
 	input := `
-		2021-01-01 open Assets:Cash
-		2021-01-01 open Assets:Stock
+2021-01-01 open Assets:Cash
+2021-01-01 open Assets:Stock
 
-		2021-01-02 * "Buy stock"
-		  Assets:Cash   -500.00 USD
-		  Assets:Stock     5 AAPL {100.00 USD}
-	`
+2021-01-02 * "Buy stock"
+  Assets:Cash   -500.00 USD
+  Assets:Stock     5 AAPL {100.00 USD}
+`
 
 	ast := parser.MustParseString(context.Background(), input)
 
@@ -117,10 +117,10 @@ func TestFullTransactionWithCost(t *testing.T) {
 func TestCalculateWeights_Price(t *testing.T) {
 	// Parse a transaction with price
 	input := `
-		2021-01-01 * "Sell stock"
-		  Assets:Stock     -10 AAPL {150.00 USD} @ 160.00 USD
-		  Assets:Cash     1600.00 USD
-	`
+2021-01-01 * "Sell stock"
+  Assets:Stock     -10 AAPL {150.00 USD} @ 160.00 USD
+  Assets:Cash     1600.00 USD
+`
 
 	tree := parser.MustParseString(context.Background(), input)
 

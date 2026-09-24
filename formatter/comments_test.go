@@ -238,9 +238,11 @@ func TestFormatPreservesOneLegTransaction(t *testing.T) {
 }
 
 func TestFormatLeadingBlankTriviaAfterTransactionIsIdempotent(t *testing.T) {
+	// An indented comment after a blank line is a syntax error (as in
+	// beancount), so the trailing comments here start at column 1.
 	for _, source := range []string{
-		"0001-01-01 !\n\n \n ;",
-		"0001-01-01 !\n ;\n\n \n ;",
+		"0001-01-01 !\n\n \n;",
+		"0001-01-01 !\n ;\n\n \n;",
 	} {
 		tree1 := parser.MustParseBytes(context.Background(), []byte(source))
 		f := New()

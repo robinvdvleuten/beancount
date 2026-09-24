@@ -883,23 +883,23 @@ func TestFIFOLIFOBooking(t *testing.T) {
 		{
 			name: "FIFO reduces oldest lots first",
 			input: `
-				2020-01-01 open Assets:Brokerage "FIFO"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage "FIFO"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy lot 1"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Buy lot 2"
-				  Assets:Brokerage    10 STOCK {110 USD}
-				  Assets:Cash        -1100 USD
+2020-01-03 * "Buy lot 2"
+  Assets:Brokerage    10 STOCK {110 USD}
+  Assets:Cash        -1100 USD
 
-				2020-01-04 * "Sell - should reduce lot 1 first"
-				  Assets:Brokerage    -15 STOCK {}
-				  Assets:Cash         1650 USD
-				  Income:CapitalGains    -100 USD
-			`,
+2020-01-04 * "Sell - should reduce lot 1 first"
+  Assets:Brokerage    -15 STOCK {}
+  Assets:Cash         1650 USD
+  Income:CapitalGains    -100 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -914,23 +914,23 @@ func TestFIFOLIFOBooking(t *testing.T) {
 		{
 			name: "LIFO reduces newest lots first",
 			input: `
-				2020-01-01 open Assets:Brokerage "LIFO"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage "LIFO"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy lot 1"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Buy lot 2"
-				  Assets:Brokerage    10 STOCK {110 USD}
-				  Assets:Cash        -1100 USD
+2020-01-03 * "Buy lot 2"
+  Assets:Brokerage    10 STOCK {110 USD}
+  Assets:Cash        -1100 USD
 
-				2020-01-04 * "Sell - should reduce lot 2 first"
-				  Assets:Brokerage    -15 STOCK {}
-				  Assets:Cash         1650 USD
-				  Income:CapitalGains    -50 USD
-			`,
+2020-01-04 * "Sell - should reduce lot 2 first"
+  Assets:Brokerage    -15 STOCK {}
+  Assets:Cash         1650 USD
+  Income:CapitalGains    -50 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -945,21 +945,21 @@ func TestFIFOLIFOBooking(t *testing.T) {
 		{
 			name: "stable sort for same-date lots",
 			input: `
-				2020-01-01 open Assets:Brokerage "FIFO"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage "FIFO"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy multiple lots same day"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Brokerage    10 STOCK {105 USD}
-				  Assets:Brokerage    10 STOCK {110 USD}
-				  Assets:Cash        -3150 USD
+2020-01-02 * "Buy multiple lots same day"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Brokerage    10 STOCK {105 USD}
+  Assets:Brokerage    10 STOCK {110 USD}
+  Assets:Cash        -3150 USD
 
-				2020-01-03 * "Sell - should use insertion order"
-				  Assets:Brokerage    -25 STOCK {}
-				  Assets:Cash         2625 USD
-				  Income:CapitalGains    -25 USD
-			`,
+2020-01-03 * "Sell - should use insertion order"
+  Assets:Brokerage    -25 STOCK {}
+  Assets:Cash         2625 USD
+  Income:CapitalGains    -25 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -973,19 +973,19 @@ func TestFIFOLIFOBooking(t *testing.T) {
 		{
 			name: "insufficient inventory across multiple lots",
 			input: `
-				2020-01-01 open Assets:Brokerage "FIFO"
-				2020-01-01 open Assets:Cash USD
-				2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage "FIFO"
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Try to sell more than available"
-				  Assets:Brokerage    -20 STOCK {}
-				  Assets:Cash         2000 USD
-				  Income:CapitalGains    -2000 USD
-			`,
+2020-01-03 * "Try to sell more than available"
+  Assets:Brokerage    -20 STOCK {}
+  Assets:Cash         2000 USD
+  Income:CapitalGains    -2000 USD
+`,
 			wantErr: true,
 		},
 	}
@@ -1026,17 +1026,17 @@ func TestLotMatching(t *testing.T) {
 		{
 			name: "match by cost only: {100 USD}",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Sell specific lot by cost"
-				  Assets:Brokerage    -5 STOCK {100 USD}
-				  Assets:Cash         500 USD
-			`,
+2020-01-03 * "Sell specific lot by cost"
+  Assets:Brokerage    -5 STOCK {100 USD}
+  Assets:Cash         500 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -1049,21 +1049,21 @@ func TestLotMatching(t *testing.T) {
 		{
 			name: "match by cost + date: {100 USD, 2020-01-02}",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy lot 1"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Buy lot 2 at same price but different date"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-03}
-				  Assets:Cash        -1000 USD
+2020-01-03 * "Buy lot 2 at same price but different date"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-03}
+  Assets:Cash        -1000 USD
 
-				2020-01-04 * "Sell from specific dated lot"
-				  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02}
-				  Assets:Cash         500 USD
-			`,
+2020-01-04 * "Sell from specific dated lot"
+  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02}
+  Assets:Cash         500 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -1075,21 +1075,21 @@ func TestLotMatching(t *testing.T) {
 		{
 			name: "match by cost + label: {100 USD, 2020-01-02, \"batch-1\"}",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy batch 1"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-1"}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy batch 1"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-1"}
+  Assets:Cash        -1000 USD
 
-				2020-01-02 * "Buy batch 2"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-2"}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy batch 2"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-2"}
+  Assets:Cash        -1000 USD
 
-				2020-01-04 * "Sell from batch 1"
-				  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02, "batch-1"}
-				  Assets:Cash         500 USD
-			`,
+2020-01-04 * "Sell from batch 1"
+  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02, "batch-1"}
+  Assets:Cash         500 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -1101,21 +1101,21 @@ func TestLotMatching(t *testing.T) {
 		{
 			name: "match by all three: {100 USD, 2020-01-02, \"batch-1\"}",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy specific lot"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-1"}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy specific lot"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-1"}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Buy different lot same price"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-03, "batch-2"}
-				  Assets:Cash        -1000 USD
+2020-01-03 * "Buy different lot same price"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-03, "batch-2"}
+  Assets:Cash        -1000 USD
 
-				2020-01-04 * "Sell exact lot match"
-				  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02, "batch-1"}
-				  Assets:Cash         500 USD
-			`,
+2020-01-04 * "Sell exact lot match"
+  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02, "batch-1"}
+  Assets:Cash         500 USD
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -1127,49 +1127,49 @@ func TestLotMatching(t *testing.T) {
 		{
 			name: "lot not found - wrong cost",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Try to sell at wrong cost"
-				  Assets:Brokerage    -5 STOCK {110 USD}
-				  Assets:Cash         550 USD
-			`,
+2020-01-03 * "Try to sell at wrong cost"
+  Assets:Brokerage    -5 STOCK {110 USD}
+  Assets:Cash         550 USD
+`,
 			wantErr: true,
 		},
 		{
 			name: "lot not found - wrong date",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Try to sell with wrong date"
-				  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-03}
-				  Assets:Cash         500 USD
-			`,
+2020-01-03 * "Try to sell with wrong date"
+  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-03}
+  Assets:Cash         500 USD
+`,
 			wantErr: true,
 		},
 		{
 			name: "lot not found - wrong label",
 			input: `
-				2020-01-01 open Assets:Brokerage
-				2020-01-01 open Assets:Cash USD
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
 
-				2020-01-02 * "Buy stock"
-				  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-1"}
-				  Assets:Cash        -1000 USD
+2020-01-02 * "Buy stock"
+  Assets:Brokerage    10 STOCK {100 USD, 2020-01-02, "batch-1"}
+  Assets:Cash        -1000 USD
 
-				2020-01-03 * "Try to sell with wrong label"
-				  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02, "batch-2"}
-				  Assets:Cash         500 USD
-			`,
+2020-01-03 * "Try to sell with wrong label"
+  Assets:Brokerage    -5 STOCK {100 USD, 2020-01-02, "batch-2"}
+  Assets:Cash         500 USD
+`,
 			wantErr: true,
 		},
 	}

@@ -19,8 +19,8 @@ func TestLedger_ProcessOpen(t *testing.T) {
 		{
 			name: "open account successfully",
 			input: `
-				2020-01-01 open Assets:Checking
-			`,
+2020-01-01 open Assets:Checking
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
@@ -34,9 +34,9 @@ func TestLedger_ProcessOpen(t *testing.T) {
 		{
 			name: "open account inherits configured booking method",
 			input: `
-				option "booking_method" "LIFO"
-				2020-01-01 open Assets:Brokerage USD
-			`,
+option "booking_method" "LIFO"
+2020-01-01 open Assets:Brokerage USD
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -47,8 +47,8 @@ func TestLedger_ProcessOpen(t *testing.T) {
 		{
 			name: "open account with currencies",
 			input: `
-				2020-01-01 open Assets:Checking USD, EUR
-			`,
+2020-01-01 open Assets:Checking USD, EUR
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
@@ -59,8 +59,8 @@ func TestLedger_ProcessOpen(t *testing.T) {
 		{
 			name: "open account with booking method",
 			input: `
-				2020-01-01 open Assets:Brokerage USD "STRICT"
-			`,
+2020-01-01 open Assets:Brokerage USD "STRICT"
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
@@ -71,9 +71,9 @@ func TestLedger_ProcessOpen(t *testing.T) {
 		{
 			name: "error: open same account twice",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-06-01 open Assets:Checking
-			`,
+2020-01-01 open Assets:Checking
+2020-06-01 open Assets:Checking
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -137,9 +137,9 @@ func TestLedger_ProcessClose(t *testing.T) {
 		{
 			name: "close account successfully",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-12-31 close Assets:Checking
-			`,
+2020-01-01 open Assets:Checking
+2020-12-31 close Assets:Checking
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
@@ -151,8 +151,8 @@ func TestLedger_ProcessClose(t *testing.T) {
 		{
 			name: "error: close account that was never opened",
 			input: `
-				2020-12-31 close Assets:Checking
-			`,
+2020-12-31 close Assets:Checking
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -164,10 +164,10 @@ func TestLedger_ProcessClose(t *testing.T) {
 		{
 			name: "error: close account twice",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-06-01 close Assets:Checking
-				2020-12-31 close Assets:Checking
-			`,
+2020-01-01 open Assets:Checking
+2020-06-01 close Assets:Checking
+2020-12-31 close Assets:Checking
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -208,13 +208,13 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 		{
 			name: "transaction with opened accounts",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary   -1000.00 USD
-			`,
+2020-01-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				// Check inventory updated
@@ -228,15 +228,15 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 		{
 			name: "multi-posting transaction",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Expenses:Rent
-				2020-01-01 open Expenses:Food
+2020-01-01 open Assets:Checking
+2020-01-01 open Expenses:Rent
+2020-01-01 open Expenses:Food
 
-				2020-02-01 * "Monthly expenses"
-				  Assets:Checking  -2000.00 USD
-				  Expenses:Rent     1500.00 USD
-				  Expenses:Food      500.00 USD
-			`,
+2020-02-01 * "Monthly expenses"
+  Assets:Checking  -2000.00 USD
+  Expenses:Rent     1500.00 USD
+  Expenses:Food      500.00 USD
+`,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				checking, _ := l.GetAccount("Assets:Checking")
@@ -252,27 +252,27 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 		{
 			name: "multi-currency transaction",
 			input: `
-				2020-01-01 open Assets:USD
-				2020-01-01 open Assets:EUR
-				2020-01-01 open Expenses:Travel
+2020-01-01 open Assets:USD
+2020-01-01 open Assets:EUR
+2020-01-01 open Expenses:Travel
 
-				2020-03-01 * "European trip"
-				  Assets:USD         -500.00 USD
-				  Assets:EUR         -200.00 EUR
-				  Expenses:Travel     500.00 USD
-				  Expenses:Travel     200.00 EUR
-			`,
+2020-03-01 * "European trip"
+  Assets:USD         -500.00 USD
+  Assets:EUR         -200.00 EUR
+  Expenses:Travel     500.00 USD
+  Expenses:Travel     200.00 EUR
+`,
 			wantErr: false,
 		},
 		{
 			name: "error: transaction with unopened account",
 			input: `
-				2020-01-01 open Assets:Checking
+2020-01-01 open Assets:Checking
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary   -1000.00 USD
-			`,
+2020-01-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -284,14 +284,14 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 		{
 			name: "error: transaction with closed account",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
-				2020-06-01 close Assets:Checking
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
+2020-06-01 close Assets:Checking
 
-				2020-07-15 * "Salary"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary   -1000.00 USD
-			`,
+2020-07-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -303,13 +303,13 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 		{
 			name: "error: transaction doesn't balance",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-				2020-01-15 * "Oops"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary    -500.00 USD
-			`,
+2020-01-15 * "Oops"
+  Assets:Checking  1000.00 USD
+  Income:Salary    -500.00 USD
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -321,13 +321,13 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 		{
 			name: "error: multi-currency doesn't balance",
 			input: `
-				2020-01-01 open Assets:USD
-				2020-01-01 open Assets:EUR
+2020-01-01 open Assets:USD
+2020-01-01 open Assets:EUR
 
-				2020-01-15 * "Broken exchange"
-				  Assets:USD  -100.00 USD
-				  Assets:EUR    50.00 EUR
-			`,
+2020-01-15 * "Broken exchange"
+  Assets:USD  -100.00 USD
+  Assets:EUR    50.00 EUR
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -370,62 +370,62 @@ func TestLedger_ProcessBalance(t *testing.T) {
 		{
 			name: "balance assertion passes",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary   -1000.00 USD
+2020-01-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
 
-				2020-01-16 balance Assets:Checking  1000.00 USD
-			`,
+2020-01-16 balance Assets:Checking  1000.00 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "balance assertion with tolerance passes",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  1000.004 USD
-				  Income:Salary   -1000.004 USD
+2020-01-15 * "Salary"
+  Assets:Checking  1000.004 USD
+  Income:Salary   -1000.004 USD
 
-				2020-01-16 balance Assets:Checking  1000.00 USD
-			`,
+2020-01-16 balance Assets:Checking  1000.00 USD
+`,
 			wantErr: false, // Within inferred 0.005 tolerance
 		},
 		{
 			name: "balance after multiple transactions",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
-				2020-01-01 open Expenses:Rent
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
+2020-01-01 open Expenses:Rent
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  3000.00 USD
-				  Income:Salary   -3000.00 USD
+2020-01-15 * "Salary"
+  Assets:Checking  3000.00 USD
+  Income:Salary   -3000.00 USD
 
-				2020-02-01 * "Rent"
-				  Assets:Checking  -1500.00 USD
-				  Expenses:Rent     1500.00 USD
+2020-02-01 * "Rent"
+  Assets:Checking  -1500.00 USD
+  Expenses:Rent     1500.00 USD
 
-				2020-02-02 balance Assets:Checking  1500.00 USD
-			`,
+2020-02-02 balance Assets:Checking  1500.00 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "error: balance mismatch",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary   -1000.00 USD
+2020-01-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
 
-				2020-01-16 balance Assets:Checking  500.00 USD
-			`,
+2020-01-16 balance Assets:Checking  500.00 USD
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -440,15 +440,15 @@ func TestLedger_ProcessBalance(t *testing.T) {
 		{
 			name: "error: balance exceeds tolerance",
 			input: `
-				2020-01-01 open Assets:Checking
-				2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-				2020-01-15 * "Salary"
-				  Assets:Checking  1000.00 USD
-				  Income:Salary   -1000.00 USD
+2020-01-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
 
-				2020-01-16 balance Assets:Checking  1000.10 USD
-			`,
+2020-01-16 balance Assets:Checking  1000.10 USD
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -460,8 +460,8 @@ func TestLedger_ProcessBalance(t *testing.T) {
 		{
 			name: "error: balance on unopened account",
 			input: `
-				2020-01-16 balance Assets:Checking  1000.00 USD
-			`,
+2020-01-16 balance Assets:Checking  1000.00 USD
+`,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
@@ -473,27 +473,27 @@ func TestLedger_ProcessBalance(t *testing.T) {
 		{
 			name: "balance zero when no transactions",
 			input: `
-				2020-01-01 open Assets:Checking
+2020-01-01 open Assets:Checking
 
-				2020-01-16 balance Assets:Checking  0.00 USD
-			`,
+2020-01-16 balance Assets:Checking  0.00 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "multi-currency balance checking",
 			input: `
-				2020-01-01 open Assets:Account
-				2020-01-01 open Income:Source
+2020-01-01 open Assets:Account
+2020-01-01 open Income:Source
 
-				2020-01-15 * "Income"
-				  Assets:Account  1000.00 USD
-				  Assets:Account   500.00 EUR
-				  Income:Source  -1000.00 USD
-				  Income:Source   -500.00 EUR
+2020-01-15 * "Income"
+  Assets:Account  1000.00 USD
+  Assets:Account   500.00 EUR
+  Income:Source  -1000.00 USD
+  Income:Source   -500.00 EUR
 
-				2020-01-16 balance Assets:Account  1000.00 USD
-				2020-01-16 balance Assets:Account   500.00 EUR
-			`,
+2020-01-16 balance Assets:Account  1000.00 USD
+2020-01-16 balance Assets:Account   500.00 EUR
+`,
 			wantErr: false,
 		},
 	}
@@ -611,15 +611,15 @@ func TestAccountLifecycleEdgeCases(t *testing.T) {
 		{
 			name: "close account with non-zero inventory - should succeed",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
 
-				2020-01-02 * "Deposit"
-				  Assets:Checking    100 USD
-				  Equity:Opening    -100 USD
+2020-01-02 * "Deposit"
+  Assets:Checking    100 USD
+  Equity:Opening    -100 USD
 
-				2020-01-03 close Assets:Checking
-			`,
+2020-01-03 close Assets:Checking
+`,
 			wantErr: false,
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
@@ -632,45 +632,45 @@ func TestAccountLifecycleEdgeCases(t *testing.T) {
 		{
 			name: "balance assertion on account open date - valid",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 balance Assets:Checking 0 USD
-			`,
+2020-01-01 open Assets:Checking USD
+2020-01-01 balance Assets:Checking 0 USD
+`,
 			wantErr: false,
 		},
 		{
 			name: "reopen closed account - invalid (duplicate open)",
 			input: `
-				2020-01-01 open Assets:OldAccount
-				2020-01-02 close Assets:OldAccount
-				2020-01-03 open Assets:OldAccount
-			`,
+2020-01-01 open Assets:OldAccount
+2020-01-02 close Assets:OldAccount
+2020-01-03 open Assets:OldAccount
+`,
 			wantErr: true, // Beancount does NOT allow reopening accounts - duplicate open directives are errors
 		},
 		{
 			name: "use account after close - should error",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
-				2020-01-02 close Assets:Checking
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
+2020-01-02 close Assets:Checking
 
-				2020-01-03 * "Try to use closed account"
-				  Assets:Checking    100 USD
-				  Equity:Opening    -100 USD
-			`,
+2020-01-03 * "Try to use closed account"
+  Assets:Checking    100 USD
+  Equity:Opening    -100 USD
+`,
 			wantErr: true,
 		},
 		{
 			name: "close then reopen then use - invalid (cannot reopen)",
 			input: `
-				2020-01-01 open Assets:Checking USD
-				2020-01-01 open Equity:Opening
-				2020-01-02 close Assets:Checking
-				2020-01-03 open Assets:Checking USD
+2020-01-01 open Assets:Checking USD
+2020-01-01 open Equity:Opening
+2020-01-02 close Assets:Checking
+2020-01-03 open Assets:Checking USD
 
-				2020-01-04 * "Use reopened account"
-				  Assets:Checking    100 USD
-				  Equity:Opening    -100 USD
-			`,
+2020-01-04 * "Use reopened account"
+  Assets:Checking    100 USD
+  Equity:Opening    -100 USD
+`,
 			wantErr: true, // Beancount does NOT allow reopening accounts - duplicate open at line 4 is an error
 		},
 	}
@@ -703,11 +703,11 @@ func TestLedger_MultipleOptions(t *testing.T) {
 		{
 			name: "multiple values for same option key",
 			input: `
-				option "inferred_tolerance_default" "USD:0.01"
-				option "inferred_tolerance_default" "EUR:0.01"
-				option "inferred_tolerance_default" "BTC:0.0001"
-				option "title" "My Ledger"
-			`,
+option "inferred_tolerance_default" "USD:0.01"
+option "inferred_tolerance_default" "EUR:0.01"
+option "inferred_tolerance_default" "BTC:0.0001"
+option "title" "My Ledger"
+`,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				// Options are parsed into Config during Process()
 				// Just verify no errors occurred
@@ -717,8 +717,8 @@ func TestLedger_MultipleOptions(t *testing.T) {
 		{
 			name: "single value option",
 			input: `
-				option "title" "Test Ledger"
-			`,
+option "title" "Test Ledger"
+`,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				// Options are now parsed into Config and stored in context
 				// Just verify processing succeeds without errors
@@ -728,8 +728,8 @@ func TestLedger_MultipleOptions(t *testing.T) {
 		{
 			name: "non-existent option",
 			input: `
-				option "title" "Test"
-			`,
+option "title" "Test"
+`,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				// Options are now parsed into Config and stored in context
 				// Just verify processing succeeds without errors
@@ -756,23 +756,23 @@ func TestLedger_MultipleOptions(t *testing.T) {
 // TestMergeCostBooking tests merge cost {*} functionality end-to-end
 func TestMergeCostBooking(t *testing.T) {
 	input := `
-                2020-01-01 open Assets:Brokerage
-                2020-01-01 open Assets:Cash USD
-                2020-01-01 open Income:CapitalGains
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash USD
+2020-01-01 open Income:CapitalGains
 
-                2020-01-02 * "Buy lot 1"
-                Assets:Brokerage    10 STOCK {100 USD}
-                Assets:Cash        -1000 USD
+2020-01-02 * "Buy lot 1"
+  Assets:Brokerage    10 STOCK {100 USD}
+  Assets:Cash        -1000 USD
 
-                2020-01-03 * "Buy lot 2"
-                Assets:Brokerage    10 STOCK {200 USD}
-                Assets:Cash        -2000 USD
+2020-01-03 * "Buy lot 2"
+  Assets:Brokerage    10 STOCK {200 USD}
+  Assets:Cash        -2000 USD
 
-                2020-01-04 * "Sell using merge cost - reduces at average cost 150 USD"
-                Assets:Brokerage    -15 STOCK {*}
-                Assets:Cash         2250 USD
-                Income:CapitalGains
-        `
+2020-01-04 * "Sell using merge cost - reduces at average cost 150 USD"
+  Assets:Brokerage    -15 STOCK {*}
+  Assets:Cash         2250 USD
+  Income:CapitalGains
+`
 
 	ast := parser.MustParseString(context.Background(), input)
 
@@ -797,18 +797,18 @@ func TestDatedAndLabeledLotReduction(t *testing.T) {
 	// that specifies only a date or only a label must select the matching lot,
 	// mirroring official beancount behavior (bean-check 2.3.6).
 	prefix := `
-                2020-01-01 open Assets:Brokerage
-                2020-01-01 open Assets:Cash
-                2020-01-01 open Income:Gains
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Gains
 
-                2020-02-01 * "Buy lot a"
-                Assets:Brokerage    5 HOOL {100.00 USD, "lot-a"}
-                Assets:Cash        -500.00 USD
+2020-02-01 * "Buy lot a"
+  Assets:Brokerage    5 HOOL {100.00 USD, "lot-a"}
+  Assets:Cash        -500.00 USD
 
-                2020-03-01 * "Buy lot b"
-                Assets:Brokerage    5 HOOL {110.00 USD, "lot-b"}
-                Assets:Cash        -550.00 USD
-        `
+2020-03-01 * "Buy lot b"
+  Assets:Brokerage    5 HOOL {110.00 USD, "lot-b"}
+  Assets:Cash        -550.00 USD
+`
 
 	tests := []struct {
 		name          string
@@ -823,8 +823,8 @@ func TestDatedAndLabeledLotReduction(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			input := prefix + `
-                2020-04-01 * "Sell"
-                Assets:Brokerage    -5 HOOL ` + test.spec + `
+2020-04-01 * "Sell"
+  Assets:Brokerage    -5 HOOL ` + test.spec + `
                 Assets:Cash         550.00 USD
                 Income:Gains
         `

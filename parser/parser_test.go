@@ -127,3 +127,23 @@ popmeta location:
 	assert.Equal(t, 0, len(txn.Metadata))
 	assert.Equal(t, 0, len(txn.Tags))
 }
+
+func TestParseRejectsTopLevelIndentation(t *testing.T) {
+	// Like beancount, an indented line may only continue the dated
+	// directive above it; indented comments may chain there.
+	valid := "2020-01-01 open Assets:Cash\n  ; first\n  ; second\n   \n2020-01-02 open Assets:Bank\n"
+	_, err := ParseString(context.Background(), valid)
+	assert.NoError(t, err)
+
+	for _, source := range []string{
+		" 2020-01-01 open Assets:Cash\n",
+		"\toption \"title\" \"x\"\n",
+		"option \"title\" \"x\"\n  ; after an option\n",
+		"2020-01-01 open Assets:Cash\n\n  ; after a blank line\n",
+		"2020-01-01 open Assets:Cash\n; top\n  ; after a column-1 comment\n",
+	} {
+		_, err := ParseString(context.Background(), source)
+		assert.Error(t, err, source)
+		assert.Contains(t, err.Error(), "unexpected indentation", source)
+	}
+}

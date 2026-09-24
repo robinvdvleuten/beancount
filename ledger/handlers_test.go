@@ -48,8 +48,8 @@ func TestHandlerRegistry_GetHandler(t *testing.T) {
 func TestOpenHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-	`
+2020-01-01 open Assets:Checking
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -73,9 +73,9 @@ func TestOpenHandler(t *testing.T) {
 func TestCloseHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-12-31 close Assets:Checking
-	`
+2020-01-01 open Assets:Checking
+2020-12-31 close Assets:Checking
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -102,13 +102,13 @@ func TestCloseHandler(t *testing.T) {
 func TestTransactionHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Income:Salary
+2020-01-01 open Assets:Checking
+2020-01-01 open Income:Salary
 
-		2020-01-15 * "Salary"
-		  Assets:Checking  1000.00 USD
-		  Income:Salary   -1000.00 USD
-	`
+2020-01-15 * "Salary"
+  Assets:Checking  1000.00 USD
+  Income:Salary   -1000.00 USD
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -136,10 +136,10 @@ func TestTransactionHandler(t *testing.T) {
 func TestBalanceHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 pad Assets:Checking Equity:Opening-Balances
-		2020-01-15 balance Assets:Checking 1000.00 USD
-	`
+2020-01-01 open Assets:Checking
+2020-01-01 pad Assets:Checking Equity:Opening-Balances
+2020-01-15 balance Assets:Checking 1000.00 USD
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -205,10 +205,10 @@ func TestBalanceHandler_PadNotMarkedUsedOnFailure(t *testing.T) {
 func TestPadHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-01-01 open Equity:Opening-Balances
-		2020-01-01 pad Assets:Checking Equity:Opening-Balances
-	`
+2020-01-01 open Assets:Checking
+2020-01-01 open Equity:Opening-Balances
+2020-01-01 pad Assets:Checking Equity:Opening-Balances
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -236,9 +236,9 @@ func TestPadHandler(t *testing.T) {
 func TestNoteHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-07-09 note Assets:Checking "Called bank about pending deposit"
-	`
+2020-01-01 open Assets:Checking
+2020-07-09 note Assets:Checking "Called bank about pending deposit"
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -265,9 +265,9 @@ func TestDocumentHandler(t *testing.T) {
 	assert.NoError(t, os.WriteFile(docFile, nil, 0o644))
 
 	source := fmt.Sprintf(`
-		2020-01-01 open Assets:Checking
-		2020-07-09 document Assets:Checking %q
-	`, docFile)
+2020-01-01 open Assets:Checking
+2020-07-09 document Assets:Checking %q
+`, docFile)
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -289,9 +289,9 @@ func TestDocumentHandler(t *testing.T) {
 func TestDocumentHandlerMissingFile(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2020-01-01 open Assets:Checking
-		2020-07-09 document Assets:Checking "/documents/does-not-exist.pdf"
-	`
+2020-01-01 open Assets:Checking
+2020-07-09 document Assets:Checking "/documents/does-not-exist.pdf"
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -309,8 +309,8 @@ func TestDocumentHandlerMissingFile(t *testing.T) {
 func TestPriceHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-15 price USD 1.08 CAD
-	`
+2024-01-15 price USD 1.08 CAD
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -333,9 +333,9 @@ func TestPriceHandler(t *testing.T) {
 func TestCommodityHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-01 commodity USD
-		  name: "US Dollar"
-	`
+2024-01-01 commodity USD
+  name: "US Dollar"
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -363,8 +363,8 @@ func TestCommodityHandler(t *testing.T) {
 func TestEventHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-01 event "location" "New York, USA"
-	`
+2024-01-01 event "location" "New York, USA"
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -398,8 +398,8 @@ func TestCustomHandler(t *testing.T) {
 func TestQueryHandler(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-01 query "cash" "SELECT * FROM accounts"
-	`
+2024-01-01 query "cash" "SELECT * FROM accounts"
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -417,13 +417,13 @@ func TestCommodityValidation_ValidCodes(t *testing.T) {
 	ctx := context.Background()
 	// Use commodity codes that the parser recognizes
 	source := `
-		2024-01-01 commodity USD
-		2024-01-01 commodity EUR
-		2024-01-01 commodity BTC
-		2024-01-01 commodity HOOL
-		2024-01-01 commodity VTSAX
-		2024-01-01 commodity VACHR
-	`
+2024-01-01 commodity USD
+2024-01-01 commodity EUR
+2024-01-01 commodity BTC
+2024-01-01 commodity HOOL
+2024-01-01 commodity VTSAX
+2024-01-01 commodity VACHR
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -449,10 +449,10 @@ func TestCommodityValidation_ValidCodes(t *testing.T) {
 func TestCommodityWithMetadata(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-01 commodity USD
-		  name: "US Dollar"
-		  asset-class: "cash"
-	`
+2024-01-01 commodity USD
+  name: "US Dollar"
+  asset-class: "cash"
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -478,9 +478,9 @@ func TestCommodityWithMetadata(t *testing.T) {
 func TestCommodityNodeKind(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-01 commodity BTC
-		  precision: 8
-	`
+2024-01-01 commodity BTC
+  precision: 8
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
@@ -498,16 +498,16 @@ func TestCommodityNodeKind(t *testing.T) {
 func TestCommodityIntegrationWithOtherDirectives(t *testing.T) {
 	ctx := context.Background()
 	source := `
-		2024-01-01 commodity USD
-		  name: "US Dollar"
-		
-		2024-01-01 open Assets:Checking USD
-		2024-01-01 open Equity:Opening USD
-		
-		2024-01-02 * "Initial deposit"
-		  Assets:Checking  100 USD
-		  Equity:Opening  -100 USD
-	`
+2024-01-01 commodity USD
+  name: "US Dollar"
+
+2024-01-01 open Assets:Checking USD
+2024-01-01 open Equity:Opening USD
+
+2024-01-02 * "Initial deposit"
+  Assets:Checking  100 USD
+  Equity:Opening  -100 USD
+`
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 

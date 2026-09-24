@@ -1,0 +1,7 @@
+; Indented comments may follow a dated directive directly, one after
+; another; whitespace-only lines are allowed anywhere.
+2020-01-01 open Assets:Cash
+  ; first
+  ; second
+   
+2020-01-02 open Assets:Bank

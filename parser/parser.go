@@ -39,14 +39,31 @@ func NewParser(source []byte, tokens []Token, filename string, interner *Interne
 func (p *Parser) Parse() (*ast.AST, error) {
 	tree := &ast.AST{}
 
+	// Like beancount's grammar, an indented line may only continue the dated
+	// directive right above it (as indented comments do); anywhere else at
+	// top level it is a syntax error. continuationLine is the line such a
+	// comment would have to be on, or 0 when none may follow.
+	continuationLine := 0
+
 	for !p.isAtEnd() {
-		tokType := p.peek().Type
+		tok := p.peek()
+		tokType := tok.Type
+		continuesDirective := tokType == COMMENT && tok.Column > 1 && tok.Line == continuationLine
+		if tok.Column > 1 && tokType != NEWLINE && tokType != EOF && !continuesDirective {
+			return nil, p.errorAtToken(tok, "unexpected indentation")
+		}
+		if tokType != DATE && !continuesDirective {
+			continuationLine = 0
+		}
 
 		// Dispatch by token type
 		switch tokType {
 		case COMMENT:
 			comment := p.parseComment()
 			tree.Comments = append(tree.Comments, comment)
+			if continuationLine != 0 {
+				continuationLine = tok.Line + 1
+			}
 
 		case NEWLINE:
 			blankLine := p.parseBlankLine()
@@ -116,6 +133,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				return nil, err
 			}
 			tree.Directives = append(tree.Directives, directive)
+			continuationLine = p.lineAfterPrevious()
 
 		case EOF:
 			// Done - loop will exit via !p.isAtEnd()

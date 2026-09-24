@@ -666,6 +666,15 @@ func (p *Parser) previous() Token {
 	return p.tokens[p.pos-1]
 }
 
+// lineAfterPrevious returns the line following the last consumed token,
+// accounting for line breaks inside it (multi-line strings) and not
+// counting the trailing line break content tokens own.
+func (p *Parser) lineAfterPrevious() int {
+	tok := p.previous()
+	text := strings.TrimRight(tok.String(p.source), "\r\n")
+	return tok.Line + strings.Count(text, "\n") + 1
+}
+
 func (p *Parser) isAtEnd() bool {
 	return p.peek().Type == EOF
 }

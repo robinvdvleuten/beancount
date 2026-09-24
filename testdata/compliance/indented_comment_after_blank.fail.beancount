@@ -1,0 +1,6 @@
+; An indented comment continues the directive right above it; after a
+; blank line it is a syntax error.
+2020-01-01 open Assets:Cash
+  ; continues the open directive
+
+  ; indented after a blank line
