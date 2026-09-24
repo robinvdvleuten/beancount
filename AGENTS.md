@@ -1,304 +1,103 @@
 # AGENTS.md
 
-Project-specific conventions for the beancount Go implementation.
+Conventions for the Go implementation of Beancount. The yardstick is parity with the official Beancount v2 tools.
 
-**Keep this file current**: when a change alters the architecture — a new package, a changed phase pipeline, a new pattern or convention, a new compliance suite — update AGENTS.md in the same change. Stale conventions are worse than missing ones.
+Update this file in the same change whenever you add a package, change the phase pipeline, introduce a convention, or add a compliance suite. A stale convention misleads more than a missing one.
 
-## Feature Evaluation: Question First, Plan Second
+## YAGNI: question first, plan second
 
-**CRITICAL**: Before diving into implementation planning, critically evaluate whether a feature is actually needed for this project's use case.
+Before exploring or planning a feature, establish its value in this project's context (a local dev tool, not a production service): what problem it solves, its measurable impact, and whether that justifies the complexity. When the value is unclear, ask the user; when it is low, say so and propose an alternative or drop it. "Might be useful later" is no justification.
 
-**Ask these questions FIRST**:
-1. **What problem does this solve?** Be specific about the actual benefit.
-2. **What is the context?** (e.g., localhost-only, production, development tool)
-3. **What is the measurable impact?** Quantify the benefit (time saved, bytes reduced, errors prevented).
-4. **Is the complexity justified?** Compare implementation cost vs. actual value delivered.
+- Compression for the localhost server saves ~3ms per page load: not worth it.
+- Line/column positions in parser errors save hours of debugging: worth it.
 
-**Examples**:
-- **Compression for localhost server**: Saves ~3ms per page load. Not worth the complexity.
-- **Position tracking in parser errors**: Shows exact line/column for syntax errors. Worth the complexity—saves hours of debugging.
-- **Syntax validation in parser**: Reports malformed input at the exact source position. Worth the complexity for better error messages.
-- **Premature optimization**: "Might be useful later" is not justification. YAGNI applies.
+## Done when
 
-**Process**:
-1. User requests feature
-2. **Before exploring or planning**, ask: "Is this actually valuable for [specific context]?"
-3. If unclear, ask the user about their use case and constraints
-4. If not valuable, explain why and suggest alternatives (or skip it entirely)
-5. Only proceed with planning if the value is clear and justified
+- `gofmt -l .` prints nothing (fix with `gofmt -w <changed-files>`)
+- `golangci-lint run` passes
+- `go test ./...` passes
+- A Beancount semantics or query change carries a compliance fixture (see [Beancount compliance](#beancount-compliance))
+- A frontend change passes `npm run --prefix assets lint` and `npm run --prefix assets test`
 
-Don't waste time planning solutions to non-problems.
+Fuzz with `go test -fuzz=FuzzName -fuzztime=30s ./package`; `make fuzz-promote` copies the `FuzzParser` corpus into `parser/testdata`. Assertions use `github.com/alecthomas/assert/v2`; fuzz targets `defer recover()`.
 
-## Essential Commands
+Library docs: Context7 for third-party dependencies (shopspring/decimal, alecthomas/kong, mattn/go-runewidth); read the source for stdlib and project code.
 
-**Go**:
-```bash
-gofmt -w <changed-files> # Format changed Go files (required)
-gofmt -l .           # Verify repository formatting (must print nothing)
-golangci-lint run    # Lint (must pass)
-go test ./...        # Test all (must pass)
-go test -run TestName ./package  # Run single test
-go test -fuzz=FuzzName -fuzztime=30s ./package  # Run fuzz test
-make fuzz-promote    # Promote fuzz corpus to testdata
-```
+## Parse → Validate → Apply
 
-**Frontend**:
-```bash
-npm run --prefix assets dev   # Dev server with hot reload (proxies /api to :8080)
-npm run --prefix assets build # Build to web/dist
-npm run --prefix assets lint  # oxlint
-npm run --prefix assets test  # Playwright
-```
+Each phase owns one job and trusts the one before it.
 
-## Validation Logic Separation
-
-**CRITICAL**: Parse → Validate → Apply. No semantic validation in parsing or mutation phases.
-
-| Phase | Does | Does NOT |
-|-------|------|----------|
+| Phase | Does | Leaves to another phase |
+|-------|------|-------------------------|
 | **Parser** | Parse tokens into AST, report syntax errors | Semantic validation, cross-directive checks, business logic |
-| **Validation** | Perform all semantic checks and compute mutation deltas | Mutate ledger state |
-| **Apply** | Apply validated deltas, compute derived state, build ledger state | Validate correctness, check errors |
+| **Validation** | All semantic checks; compute mutation deltas | Mutating ledger state |
+| **Apply** | Apply validated deltas, compute derived state | Checking correctness |
 
-```go
-// Parser: syntax only
-func (p *Parser) parseTransaction() (*Transaction, error) {
-    return &Transaction{Date: p.parseDate(), Flag: p.parseFlag()}, nil
-}
+## Beancount compliance
 
-// Validator: all checks
-func (v *Validator) validateTransaction(txn *Transaction) []error {
-    var errs []error
-    if !v.isAccountOpen(txn.Account) {
-        errs = append(errs, NewError("account not open", txn))
-    }
-    return errs
-}
+Validate every change to semantics, parsing, lexing, formatting, or queries against the matching official tool: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Internal refactors and infrastructure changes skip this.
 
-// Apply: mutate state only after validation succeeds
-func (l *Ledger) applyTransaction(txn *Transaction, delta *TransactionDelta) {
-    // Mutate account inventories from the validated postings.
-}
-```
+**Ledger semantics**: `cli/compliance_test.go` runs every `testdata/compliance/<name>.pass.beancount` / `.fail.beancount` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`). Record known divergences in `testdata/compliance/KNOWN_GAPS.md`.
 
-## Context7 for Library Docs
+**Queries**: `cli/query_compliance_test.go` runs every `testdata/compliance/query/*.bql` through both implementations and compares stdout **byte-for-byte** in text and csv (`go test ./cli -run 'QueryFixtures|OfficialQueryParity'`). Name prefixes: `err_` expects an `ERROR:` line, `numberify_` adds `-m`, `gap_` skips the parity leg (record it in KNOWN_GAPS.md).
 
-Use Context7 MCP for **third-party libraries** (shopspring/decimal, alecthomas/kong, mattn/go-runewidth, olivere/vite). Do NOT use for Go stdlib or project code.
-
-```
-context7_resolve_library_id(libraryName: "shopspring/decimal")
-context7_get_library_docs(context7CompatibleLibraryID: "/shopspring/decimal", topic: "rounding")
-```
-
-## Beancount Compliance
-
-When changing Beancount semantics, parsing, lexing, formatting, or query behavior, validate against the relevant official tools: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Purely internal refactors and unrelated infrastructure changes do not require an official-tool comparison.
-
-The differential suite in `cli/compliance_test.go` runs every fixture in `testdata/compliance/` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`). Add a fixture (`<name>.pass.beancount` / `<name>.fail.beancount`) for any semantics change; known divergences are documented in `testdata/compliance/KNOWN_GAPS.md`.
-
-**BQL / bean-query**: `cli/query_compliance_test.go` runs every `testdata/compliance/query/*.bql` fixture through both implementations (`go test ./cli -run 'QueryFixtures|OfficialQueryParity'`), comparing stdout **byte-for-byte** in text and csv. Fixture name prefixes: `err_` expects an `ERROR:` line, `numberify_` adds `-m`, `gap_` skips the parity leg (document in KNOWN_GAPS.md). Any query semantics change needs a fixture.
-
-**Pin first, implement second**: bean-query has many undocumented quirks (column naming like `sum_position`/`c42`, header truncation, padded CSV cells, implicit GROUP BY, per-currency precision). Never guess—probe the official tool with a small ledger and match the observed bytes:
+**Pin first, implement second**: bean-query is full of undocumented quirks (column names like `sum_position`/`c42`, header truncation, padded CSV cells, implicit GROUP BY, per-currency precision). Probe the official tool with a small ledger and match the observed bytes:
 
 ```bash
-# Pin behavior empirically before writing code
 bean-query testdata/compliance/query/ledger.beancount "select account, sum(position) group by account"
 bean-query -f csv ledger.beancount "select 1 + 2"   # csv shows untruncated headers
 bean-query ledger.beancount "help targets"           # official column/function reference
-
-# Diff an end-to-end query against the official tool
 diff <(go run ./cmd/beancount query f.beancount "$Q") <(bean-query f.beancount "$Q")
+
+bean-doctor lex f.beancount; beancount doctor lex f.beancount  # token models differ; compare by eye
+diff <(bean-format f.beancount) <(beancount format f.beancount)
+beancount format f.beancount | bean-check /dev/stdin  # round-trip
 ```
 
-```bash
-# Debug parser / lexer issues or inconsistencies
-bean-doctor lex input.beancount
-beancount doctor lex input.beancount
-echo '0001-01-01 open Assets:Test' | bean-doctor lex /dev/stdin
+## Key patterns
 
-# Compare formatter output
-bean-format input.beancount > /tmp/official.beancount
-beancount format input.beancount > /tmp/our.beancount
-diff /tmp/official.beancount /tmp/our.beancount
+**Registry dispatch**: dispatch by kind through registry maps, never switch statements. Ledger directives go through `handlerRegistry` in `ledger/handlers.go` (`DirectiveKind` → `Handler` with `Validate`/`Apply`); handlers call the functions in `validation.go` directly, so there is exactly one registry. Build validators with `newValidator(l.accounts, l.config)`, the stable read-only map, rather than a copy from `Accounts()`. Query columns, functions and aggregates follow the same rule (`query/env.go`, `functions.go`, `aggregates.go`).
 
-# Validate round-trip
-beancount format input.beancount | bean-check /dev/stdin
-```
+**Owner computes**: the type that owns the data computes on it; coordinators call owner methods and aggregate. `Ledger.GetBalanceTree` calls `Account.GetBalanceInPeriod` instead of walking postings itself.
 
-## Error Handling
+**Lexer newline ownership**: every content-bearing token (including COMMENT) consumes its trailing newline; NEWLINE tokens stand only for blank lines, emitted solely by `scanNextToken()`. `parseComment` strips the newline from the comment's content. Consistent ownership keeps the formatter idempotent around consecutive blank lines and comments.
 
-**I/O errors**: Wrap with context (`fmt.Errorf("failed to read %s: %w", filename, err)`)
+**State as receiver**: validators and processors keep config and lookups on the struct and read them through the receiver.
 
-**Validation errors**: Structured types with `Pos` and `Directive` fields, collected into slices
+**Constructors take the directive**: `NewAccountNotClosedError(close *ast.Close)` extracts date, account and position itself.
 
-**Parser errors**: Return directly (already have position info)
+**Context and telemetry**: public functions doing I/O or processing take `context.Context` first, check `ctx.Done()` in long loops, and time work with `telemetry.FromContext(ctx).Start("package.operation <context>")` (e.g. `parser.lexing`, `loader.parse main.beancount`).
 
-## Key Patterns
+**Errors**: wrap I/O errors with context (`fmt.Errorf("failed to read %s: %w", filename, err)`); return parser errors as-is (they carry positions); collect validation errors into slices as structured types with `Pos` and `Directive`. Formatting for CLI text and API JSON lives in `cli/errors.go`.
 
-### Separation of Concerns: Single Responsibility
+**Performance**: `strings.Builder` for concatenation, `sync.Pool` for frequently allocated maps, capacity hints when the size is known.
 
-**Rule**: Data owner computes on its own data. Coordinator calls owner methods, then aggregates/filters. Never duplicate computation logic across boundaries.
+## Package conventions
 
-```go
-// ✓ CORRECT: Owner computes, coordinator delegates
-func (a *Account) GetBalanceInPeriod(start, end ast.Date) *Balance {
-    balance := NewBalance()
-    for _, posting := range a.GetPostingsInPeriod(start, end) {
-        // Account computes on its data
-    }
-    return balance
-}
-
-func (l *Ledger) GetBalanceTree(types []ast.AccountType, start, end *ast.Date) *BalanceTree {
-    // Ledger coordinates: iterates accounts, calls Account methods, aggregates results
-    for _, account := range l.Accounts() {
-        balance := account.GetBalanceInPeriod(*start, *end)  // Delegate, don't recompute
-        // ... build tree structure ...
-    }
-    return tree
-}
-
-// ✗ WRONG: Coordinator reimplements owner's logic
-func (l *Ledger) GetBalanceTree(types []ast.AccountType, start, end *ast.Date) *BalanceTree {
-    for _, account := range l.Accounts() {
-        postings := account.GetPostingsInPeriod(*start, *end)  // Coordinator now owns posting logic
-        balance := NewBalance()
-        for _, posting := range postings {
-            // ... duplicates Account's computation ...
-        }
-    }
-    return tree
-}
-```
-
-### Handler Registry Pattern (No Switch Statements)
-
-Directives dispatch via `handlerRegistry` map (DirectiveKind → Handler), not switch statements. Handlers call validation functions directly from `validation.go`:
-
-```go
-var handlerRegistry = map[ast.DirectiveKind]Handler{
-    ast.KindTransaction: &TransactionHandler{}, // ... 12 total
-}
-
-type TransactionHandler struct{}
-func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
-    v := newValidator(l.accounts, l.config) // Stable read-only lookup; do not copy via Accounts().
-    return v.validateTransaction(ctx, d.(*ast.Transaction))
-}
-func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-    l.applyTransaction(d.(*ast.Transaction), delta.(*TransactionDelta))
-}
-```
-
-**Key principle**: One registry (handlers), validation functions called directly. Don't create parallel validator registries—it's just indirection without benefit.
-
-### Lexer Token Consumption
-
-All content-bearing tokens (everything except NEWLINE which represents blank lines) consume their trailing newline if present. This ensures clear semantics:
-
-- **COMMENT tokens** include their trailing newline in token bounds (and are stripped in parseComment)
-- **Content tokens** (DATE, ACCOUNT, NUMBER, IDENT, etc.) consume their trailing newline  
-- **NEWLINE tokens** represent only actual blank lines, never content
-
-This prevents ambiguity: after scanToken() returns, the position is past the newline, and only scanNextToken() can emit NEWLINE tokens for blank lines.
-
-```go
-// Lexer: all content tokens consume trailing newline
-func (l *Lexer) scanToken() Token {
-    tok := l.scanSomeToken()
-    // Consume trailing newline - content tokens own their line
-    if l.pos < len(l.source) && l.source[l.pos] == '\n' {
-        l.advance()
-    }
-    return tok
-}
-
-// Lexer: comments also consume their newline
-func (l *Lexer) scanComment() Token {
-    // ... scan to end of line ...
-    if l.pos < len(l.source) && l.source[l.pos] == '\n' {
-        l.advance()
-    }
-    return Token{COMMENT, start, l.pos, ...}
-}
-
-// Parser: strip newline from comment token to keep Content semantic
-func (p *Parser) parseComment() *ast.Comment {
-    content := tok.String(p.source)
-    content = strings.TrimSuffix(content, "\n")  // Lexer includes it, we don't store it
-    return &ast.Comment{Content: content, ...}
-}
-```
-
-**Why this matters**: Without consistent ownership, NEWLINE tokens become ambiguous (blank line or line terminator?), causing idempotency issues in formatters when handling consecutive blank lines and comments.
-
-### State as Receiver
-
-For validators/processors, store state on struct and use methods instead of passing state through parameters:
-
-```go
-type processor struct {
-    config   *Config
-    accounts map[string]*Account
-}
-
-func (p *processor) processTransaction(ctx context.Context, txn *Transaction) error {
-    return p.validateAndApply(ctx, txn)  // Access p.config, p.accounts via receiver
-}
-```
-
-### Constructor Pattern
-
-Let constructors extract fields from passed structs:
-
-```go
-// Prefer: func NewErrorFromBalance(b *parser.Balance) *Error
-// Avoid:  func NewError(d Directive, account Account, date *Date, pos Position) *Error
-```
-
-### Context and Telemetry
-
-Public functions doing I/O or processing take `context.Context` first. Use telemetry package for timing:
-
-```go
-func Load(ctx context.Context, filename string) (*AST, error) {
-    timer := telemetry.FromContext(ctx).Start("loader.load " + filename)
-    defer timer.End()
-    // Check ctx.Done() in long loops
-}
-```
-
-Telemetry naming: `package.operation` or `package.operation <context>` (e.g., `parser.lexing`, `loader.parse main.beancount`)
-
-## Package Conventions
-
-| Package | Key Rules |
+| Package | Key rules |
 |---------|-----------|
-| **ast** | All AST node types, `Directive` interface. Use functional options for builders. |
-| **parser** | Parsing only, returns `*ast.AST`. No type definitions. |
-| **formatter** | Use `runewidth.StringWidth()` for display width. Preserve comments/blanks. |
-| **ledger** | `decimal.Decimal` for amounts. Validation errors have `Pos`/`Directive` fields. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `AVERAGE`. |
-| **loader** | Recursive includes with deduplication by absolute path. Include globs follow Python's `glob.glob(recursive=True)`: `**` spans directories, wildcards skip dotfiles, an unmatched glob is an error. Non-fatal issues go to `LoadResult.Diagnostics`. |
-| **config** | Beancount option parsing and typed processing configuration. Unknown option names are rejected (bean-check parity). |
-| **query/bql** | BQL lexer + recursive-descent parser, syntax only (mirrors parser rules: zero-copy tokens, positioned errors, fuzz test). No semantic knowledge. |
-| **query** | Parse → compile → execute → render. Columns/functions/aggregates live in registry maps (`env.go`, `functions.go`, `aggregates.go`), never switch statements. Compiler resolves names and types with bean-query-parity error messages; executor consumes the ledger-processed `*ast.AST` (interpolated amounts) and never mutates it; renderers reproduce official output byte-for-byte. |
-| **diagnostic** | Severity classification (`SeverityError`/`SeverityWarning`) for errors from loading and validation. Warnings never affect exit codes. |
-| **web** | **Local dev only**. Bind to localhost. No auth. Path traversal protection. |
-
-Error *formatting* (text for CLI, JSON for APIs) lives in `cli/errors.go`.
+| **ast** | All AST node types, `Directive` interface. Builders use functional options. |
+| **parser** | Parsing only, returns `*ast.AST`. Types live in `ast`. |
+| **formatter** | `runewidth.StringWidth()` for display width. Preserves comments and blank lines. |
+| **ledger** | `decimal.Decimal` for amounts. Booking methods: `STRICT` (default), `NONE`, `FIFO`, `LIFO`, `AVERAGE`. |
+| **loader** | Recursive includes, deduplicated by absolute path. Include globs follow Python's `glob.glob(recursive=True)`: `**` spans directories, wildcards skip dotfiles, an unmatched glob is an error. Non-fatal issues go to `LoadResult.Diagnostics`. |
+| **config** | Beancount option parsing into typed configuration. Rejects unknown option names (bean-check parity). |
+| **query/bql** | BQL lexer + recursive-descent parser, syntax only, held to the parser's rules: zero-copy tokens, positioned errors, fuzz test. |
+| **query** | Parse → compile → execute → render. Compiler resolves names and types with bean-query-parity error messages; executor reads the ledger-processed `*ast.AST` (interpolated amounts) read-only; renderers reproduce official output byte-for-byte. |
+| **diagnostic** | `SeverityError`/`SeverityWarning` for load and validation errors. Only errors affect exit codes. |
+| **web** | Local dev tool: binds to localhost, no auth, guards against path traversal. |
 
 ## Frontend (assets/)
 
-**Structure**: Vite + Solidjs + TypeScript. Built into `web/dist/`, embedded in Go binary.
+Vite + Solid + TypeScript, styled with Tailwind CSS 4 + DaisyUI, built into `web/dist/` and embedded in the Go binary. `web.go` injects metadata (version, commitSHA, readOnly) into `index.html`; the dev server injects dummy values via a Vite plugin. `npm run --prefix assets dev` proxies `/api` to `:8080`.
 
-**Dependency Management**: Use `npm install --prefix assets <package>` and `npm uninstall --prefix assets <package>`. NEVER manually edit `package.json`.
+**Dependencies**: change them only through `npm install --prefix assets <pkg>` / `npm uninstall --prefix assets <pkg>`, so `package.json` and the lockfile stay in sync.
 
-**CodeMirror**: Minimal setup only. Import only what you use: `@codemirror/{state,view,commands,language,lint,autocomplete}`. Drop `@uiw/react-codemirror`, `@uiw/codemirror-themes`—use `EditorView.theme()` directly. Only `indentWithTab` for keybindings. Result: ~75KB gzipped (vs 400KB+ with basicSetup). Wrappers defeat tree-shaking.
+**CodeMirror**: import individual `@codemirror/{state,view,commands,language,lint,autocomplete}` packages, theme with `EditorView.theme()` and `--color-` CSS variables, and bind only `indentWithTab`. This keeps the editor ~75KB gzipped, against 400KB+ for `basicSetup` or wrapper packages that defeat tree-shaking.
 
-**Composable Components**: Prefer Radix-style composition for reusable UI primitives instead of abstracting whole feature trees behind one large component. Routes should own data fetching, state branching, and page-specific layout decisions; shared components should expose small primitives that compose clearly.
+**Composition**: build shared UI as small Radix-style primitives. Routes own data fetching, state branching, and page layout, and compose the primitives so intent stays visible:
 
 ```tsx
-// Prefer: route composes primitives and keeps intent visible
 <FinancialReport.Root>
   <FinancialReport.Grid>
     <FinancialReport.Column>
@@ -308,42 +107,20 @@ Error *formatting* (text for CLI, JSON for APIs) lives in `cli/errors.go`.
 </FinancialReport.Root>
 
 const sections = () => FinancialReport.getSections(data()?.roots, ["Assets"])
-
-// Avoid: one component hides routing-specific structure and policy
-<FinancialReportPage data={data} primarySections={["Assets"]} secondarySections={["Equity"]} />
 ```
 
-| Directory | Purpose |
-|-----------|---------|
-| `src/codemirror/` | CodeMirror setup (language, theme, linting, autocomplete) |
-| `src/components/` | Solidjs components (editor, application) |
-| `index.html` | Entry point with metadata template (replaced by Go at runtime) |
+Playwright e2e tests live in `assets/tests/`.
 
-**Styling**: Tailwind CSS 4 + DaisyUI for component presets. CSS variables for (CodeMirror) theming (prefixed `--color-`).
+## Agent skills
 
-**Metadata**: Injected at build time by `web.go` (version, commitSHA, readOnly). Dev server injects dummy values via Vite plugin.
+### Issue tracker
 
-## Testing
+GitHub Issues on `robinvdvleuten/beancount`, via the `gh` CLI. See `docs/agents/issue-tracker.md`.
 
-**Go**: Use `github.com/alecthomas/assert/v2` for all assertions. Fuzz tests must `defer recover()`.
+### Triage labels
 
-```bash
-go test ./...                                   # Test all (must pass)
-go test -run TestName ./package                 # Run single test
-go test -fuzz=FuzzName -fuzztime=30s ./package  # Run fuzz test
-```
+Default vocabulary. See `docs/agents/triage-labels.md`.
 
-**Frontend**: Playwright for e2e tests (from `assets/`).
+### Domain docs
 
-```bash
-npm run test                  # Run all tests
-npx playwright show-report    # View last test report
-```
-
-Tests in `assets/tests/`. Config in `playwright.config.ts`.
-
-## Performance
-
-- Use `strings.Builder` (not `+=` concatenation)
-- Use `sync.Pool` for frequently allocated maps
-- Pre-allocate with capacity hints when size is known
+Single-context: root `CONTEXT.md` plus `docs/adr/`, created when first needed. See `docs/agents/domain.md`.
