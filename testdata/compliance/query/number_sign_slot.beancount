@@ -1,0 +1,22 @@
+; Number columns reserve a sign column whenever any value is negative, even
+; when the widest value is positive: 2500.00 next to -4.50 renders " 2500.00".
+option "operating_currency" "USD"
+
+2020-01-01 open Assets:Bank
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Wallet
+2020-01-01 open Expenses:Coffee
+2020-01-01 open Income:Salary
+
+2020-01-15 * "Salary"
+  Assets:Bank      2500.00 USD
+  Income:Salary
+
+2020-01-16 * "Coffee"
+  Expenses:Coffee     4.50 USD
+  Assets:Cash        -4.50 USD
+
+2020-01-17 * "Pocket money"
+  Assets:Wallet     10.00 EUR
+  Assets:Cash       -1.00 EUR
+  Assets:Cash       -9.00 EUR

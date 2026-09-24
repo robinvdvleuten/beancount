@@ -94,6 +94,19 @@ func TestRenderTextScalarTypes(t *testing.T) {
 	assert.Equal(t, expected, renderText(t, "select 2 = 2, 3.5, 42 limit 1"))
 }
 
+func TestRenderTextSignColumn(t *testing.T) {
+	// A negative value reserves a sign column even when a positive value is
+	// widest, so positives render with a leading space.
+	expected := "" +
+		"sub  number    position  \n" +
+		"--- -------- ------------\n" +
+		" -1  1000.00  1000.00 USD\n" +
+		" 11  2500.00  2500.00 USD\n" +
+		" 23    -4.50    -4.50 USD\n"
+	assert.Equal(t, expected, renderText(t,
+		"select lineno * 3 - 31, number, position where account = 'Assets:Checking' and number > -10"))
+}
+
 func TestRenderTextEmpty(t *testing.T) {
 	assert.Equal(t, "(empty)\n", renderText(t, "select account where account = 'NOPE'"))
 }
