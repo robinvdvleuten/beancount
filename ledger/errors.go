@@ -8,6 +8,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
+	"github.com/shopspring/decimal"
 )
 
 // directiveError embeds common fields from directives, providing a consistent
@@ -217,6 +218,45 @@ func NewDuplicateCommodityError(commodity *ast.Commodity) *DuplicateCommodityErr
 	return &DuplicateCommodityError{
 		directiveError: newDirectiveError(commodity),
 		Currency:       commodity.Currency,
+	}
+}
+
+// NegativeCostError is returned for a posting whose per-unit cost, once
+// booked, is negative.
+type NegativeCostError struct {
+	directiveError
+	Account  ast.Account
+	Cost     decimal.Decimal
+	Currency string
+}
+
+func (e *NegativeCostError) Error() string {
+	return fmt.Sprintf("%s: Cost is negative: %s %s (account %s)",
+		e.formatLocation(), e.Cost.String(), e.Currency, e.Account)
+}
+
+func (e *NegativeCostError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *NegativeCostError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "NegativeCostError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"cost":     e.Cost.String() + " " + e.Currency,
+		"date":     e.Date().String(),
+	})
+}
+
+// NewNegativeCostError creates an error for a posting booked at a negative cost.
+func NewNegativeCostError(txn *ast.Transaction, account ast.Account, cost decimal.Decimal, currency string) *NegativeCostError {
+	return &NegativeCostError{
+		directiveError: newDirectiveError(txn),
+		Account:        account,
+		Cost:           cost,
+		Currency:       currency,
 	}
 }
 

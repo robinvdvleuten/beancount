@@ -1,0 +1,12 @@
+; A zero cost is allowed, and a compound cost only has to be non-negative
+; per unit once its total is spread over the units.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Free shares"
+  Assets:Stock  1 HOOL {0 USD}
+  Assets:Cash
+
+2020-01-03 * "Negative per-unit part, positive total"
+  Assets:Stock  1 HOOL {-1 # 5 USD}
+  Assets:Cash

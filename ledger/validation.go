@@ -1758,6 +1758,18 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 				continue
 			}
 
+			// Like beancount, a booked cost may be zero but never negative;
+			// the check applies per unit, after a total or compound cost is
+			// spread over the units.
+			if lotSpec != nil && lotSpec.Cost != nil {
+				perUnit := *lotSpec
+				booked := &ast.Posting{Amount: amountValue, Cost: costValue}
+				if normalizeLotSpecForPosting(&perUnit, booked) == nil && perUnit.Cost.IsNegative() {
+					errs = append(errs, NewNegativeCostError(txn, posting.Account, *perUnit.Cost, perUnit.CostCurrency))
+					continue
+				}
+			}
+
 			bookingMethod := defaultBookingMethod(account.BookingMethod)
 
 			// Check if booking is possible (read-only)
