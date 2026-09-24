@@ -10,7 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestCanReduceLot(t *testing.T) {
+func TestCanBook(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-15")
 	date2, _ := ast.NewDate("2024-02-15")
 
@@ -44,18 +44,31 @@ func TestCanReduceLot(t *testing.T) {
 			wantErr:       false,
 		},
 		{
-			name: "reducing with positive amount - error",
+			name: "same-signed amount augments",
 			setup: func() *Inventory {
 				inv := NewInventory()
-				inv.Add("USD", d("100"))
+				inv.AddLot("HOOL", d("10"), &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"})
 				return inv
 			},
-			commodity:     "USD",
-			amount:        d("50"),
-			spec:          nil,
+			commodity:     "HOOL",
+			amount:        d("5"),
+			spec:          &lotSpec{Cost: ptrDecimal(d("7")), CostCurrency: "USD"},
+			bookingMethod: "",
+			wantErr:       false,
+		},
+		{
+			name: "positive amount reduces short lot beyond its size - error",
+			setup: func() *Inventory {
+				inv := NewInventory()
+				inv.AddLot("HOOL", d("-10"), &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"})
+				return inv
+			},
+			commodity:     "HOOL",
+			amount:        d("15"),
+			spec:          &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"},
 			bookingMethod: "",
 			wantErr:       true,
-			errContains:   "reduce amount must be negative",
+			errContains:   "insufficient amount in lot",
 		},
 		{
 			name: "reducing with no spec - simple add",
@@ -173,7 +186,7 @@ func TestCanReduceLot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inv := tt.setup()
-			err := inv.CanReduceLot(tt.commodity, tt.amount, tt.spec, tt.bookingMethod)
+			err := inv.CanBook(tt.commodity, tt.amount, tt.spec, tt.bookingMethod)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -207,7 +220,7 @@ func TestReduceLotLIFO(t *testing.T) {
 		Date:         date2,
 	})
 
-	err = inv.ReduceLot("STOCK", decimal.NewFromInt(-5), &lotSpec{}, "LIFO")
+	_, err = inv.Book("STOCK", decimal.NewFromInt(-5), &lotSpec{}, "LIFO", nil)
 	assert.NoError(t, err)
 
 	lots := inv.GetLots("STOCK")
@@ -226,13 +239,69 @@ func TestReduceLotDoesNotMutateOnFailure(t *testing.T) {
 	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{Date: date1})
 	inv.AddLot("STOCK", decimal.NewFromInt(20), &lotSpec{Date: date2})
 
-	err = inv.ReduceLot("STOCK", decimal.NewFromInt(-40), &lotSpec{}, "FIFO")
+	_, err = inv.Book("STOCK", decimal.NewFromInt(-40), &lotSpec{}, "FIFO", nil)
 	assert.Error(t, err)
 
 	lots := inv.GetLots("STOCK")
 	assert.Equal(t, 2, len(lots))
 	assert.True(t, lots[0].Amount.Equal(decimal.NewFromInt(10)))
 	assert.True(t, lots[1].Amount.Equal(decimal.NewFromInt(20)))
+}
+
+func TestBookShortPositionAtCost(t *testing.T) {
+	shortDate, err := ast.NewDate("2024-01-15")
+	assert.NoError(t, err)
+	coverDate, err := ast.NewDate("2024-02-15")
+	assert.NoError(t, err)
+	cost := decimal.NewFromInt(10)
+
+	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
+		t.Run(string(method), func(t *testing.T) {
+			inv := NewInventory()
+
+			// Selling without holdings opens a short lot dated like an acquisition.
+			_, err := inv.Book("HOOL", decimal.NewFromInt(-3), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, shortDate)
+			assert.NoError(t, err)
+			lots := inv.GetLots("HOOL")
+			assert.Equal(t, 1, len(lots))
+			assert.Equal(t, "-3", lots[0].Amount.String())
+			assert.True(t, lots[0].Spec.Date.Equal(shortDate.Time))
+
+			// A positive posting now reduces the short lot instead of adding a lot.
+			_, err = inv.Book("HOOL", decimal.NewFromInt(2), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, coverDate)
+			assert.NoError(t, err)
+			lots = inv.GetLots("HOOL")
+			assert.Equal(t, 1, len(lots))
+			assert.Equal(t, "-1", lots[0].Amount.String())
+
+			_, err = inv.Book("HOOL", decimal.NewFromInt(1), &lotSpec{}, method, coverDate)
+			assert.NoError(t, err)
+			assert.True(t, inv.IsEmpty())
+		})
+	}
+}
+
+func TestBookReturnsBookedLots(t *testing.T) {
+	date1, err := ast.NewDate("2024-01-15")
+	assert.NoError(t, err)
+	date2, err := ast.NewDate("2024-02-15")
+	assert.NoError(t, err)
+	cost100 := decimal.NewFromInt(100)
+	cost120 := decimal.NewFromInt(120)
+
+	inv := NewInventory()
+	booked, err := inv.Book("HOOL", decimal.NewFromInt(10), &lotSpec{Cost: &cost100, CostCurrency: "USD"}, BookingFIFO, date1)
+	assert.NoError(t, err)
+	assert.Zero(t, booked, "augmentations book no existing lots")
+	_, err = inv.Book("HOOL", decimal.NewFromInt(10), &lotSpec{Cost: &cost120, CostCurrency: "USD", Label: "b"}, BookingFIFO, date2)
+	assert.NoError(t, err)
+
+	booked, err = inv.Book("HOOL", decimal.NewFromInt(-15), &lotSpec{}, BookingFIFO, date2)
+	assert.NoError(t, err)
+	assert.Equal(t, []BookedLot{
+		{Units: decimal.NewFromInt(-10), Cost: &cost100, CostCurrency: "USD", Date: date1},
+		{Units: decimal.NewFromInt(-5), Cost: &cost120, CostCurrency: "USD", Date: date2, Label: "b"},
+	}, booked)
 }
 
 func TestInventoryStringSortsCommodities(t *testing.T) {
@@ -737,7 +806,7 @@ func TestStrictBookingReduction(t *testing.T) {
 		inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
 		inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
 
-		err := inv.CanReduceLot("STOCK", d("-40"), &lotSpec{}, BookingSTRICT)
+		err := inv.CanBook("STOCK", d("-40"), &lotSpec{}, BookingSTRICT)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "ambiguous matches")
 	})
@@ -747,7 +816,7 @@ func TestStrictBookingReduction(t *testing.T) {
 		inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
 		inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
 
-		err := inv.CanReduceLot("STOCK", d("-110"), &lotSpec{}, BookingSTRICT)
+		err := inv.CanBook("STOCK", d("-110"), &lotSpec{}, BookingSTRICT)
 		assert.NoError(t, err)
 	})
 }
@@ -763,7 +832,7 @@ func TestNoneBookingReduction(t *testing.T) {
 	inv := NewInventory()
 	inv.AddLot("STOCK", d("10"), &lotSpec{Date: date1})
 
-	err := inv.ReduceLot("STOCK", d("-5"), &lotSpec{}, BookingNONE)
+	_, err := inv.Book("STOCK", d("-5"), &lotSpec{}, BookingNONE, nil)
 	assert.NoError(t, err)
 	assert.Equal(t, "5", inv.Get("STOCK").String())
 }

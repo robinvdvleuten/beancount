@@ -1,0 +1,1 @@
+SELECT day(date) * 12 - 181 AS offset, account, number, position, weight WHERE account ~ '^Assets'

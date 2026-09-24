@@ -1,0 +1,12 @@
+; Buying more than the short position is a reduction of the short lot that
+; exceeds it, not an augmentation.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Open short"
+  Assets:Stock  -1 HOOL {10 USD}
+  Assets:Cash   10 USD
+
+2020-01-03 * "Buy more than the short"
+  Assets:Stock   2 HOOL {10 USD}
+  Assets:Cash  -20 USD

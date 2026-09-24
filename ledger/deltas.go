@@ -43,6 +43,11 @@ type TransactionDelta struct {
 	InferredAmounts map[*ast.Posting]*ast.Amount
 	InferredCosts   map[*ast.Posting]*ast.Amount
 	InferredPrices  map[*ast.Posting]*ast.Amount
+	// Postings, when set, replaces the transaction's postings with the booked
+	// ones. Beancount books an amount-less posting once per currency with a
+	// non-zero residual, as a copy of the posting per extra currency, and
+	// drops it when every residual is zero.
+	Postings []*ast.Posting
 	// NOTE: LotOps is reserved for future enhancement - not populated in this implementation
 	// LotOps []LotOperation  // Pre-calculated, validated inventory operations
 }
@@ -57,6 +62,14 @@ type balanceValidation struct {
 // HasMutations returns true if delta requires state changes.
 func (d *TransactionDelta) HasMutations() bool {
 	return d != nil && (len(d.InferredAmounts) > 0 || len(d.InferredCosts) > 0 || len(d.InferredPrices) > 0)
+}
+
+// postings returns the transaction's booked postings.
+func (d *TransactionDelta) postings(txn *ast.Transaction) []*ast.Posting {
+	if d.Postings != nil {
+		return d.Postings
+	}
+	return txn.Postings
 }
 
 func (d *TransactionDelta) amountFor(posting *ast.Posting) *ast.Amount {

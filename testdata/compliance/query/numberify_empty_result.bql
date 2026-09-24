@@ -1,0 +1,1 @@
+SELECT account, sum(position) WHERE account = 'Assets:Nowhere' GROUP BY account

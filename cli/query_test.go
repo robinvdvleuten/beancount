@@ -39,6 +39,28 @@ func TestQueryShell(t *testing.T) {
 	assert.NotContains(t, output, "bogus\n") // and does not echo the input
 }
 
+func TestQueryEmptyResult(t *testing.T) {
+	ctx := context.Background()
+	ldr := loader.New(loader.WithFollowIncludes())
+	result, err := ldr.Load(ctx, "../testdata/compliance/query/ledger.beancount")
+	assert.NoError(t, err)
+
+	l := ledger.New()
+	assert.NoError(t, l.Process(ctx, result.AST))
+	cfg, err := config.FromAST(result.AST)
+	assert.NoError(t, err)
+	qctx := &query.Context{Ledger: l, Config: cfg}
+
+	for _, tt := range []struct {
+		format    string
+		numberify bool
+	}{{"text", false}, {"csv", false}, {"csv", true}} {
+		var out strings.Builder
+		assert.NoError(t, runQuery(ctx, qctx, result.AST, "select account where account = 'NOPE'", tt.format, tt.numberify, &out))
+		assert.Equal(t, "(empty)\n", out.String(), "format %s, numberify %v", tt.format, tt.numberify)
+	}
+}
+
 func TestQueryShellEOF(t *testing.T) {
 	ctx := context.Background()
 	ldr := loader.New(loader.WithFollowIncludes())

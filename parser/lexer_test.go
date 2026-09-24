@@ -765,10 +765,12 @@ func TestTransactionFlagTokens(t *testing.T) {
 	assert.Equal(t, []TokenType{FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, EOF}, tokenTypes(tokens))
 }
 
-func TestIgnoredNonDirectiveLineStarts(t *testing.T) {
+func TestNonDirectiveLinesAreComments(t *testing.T) {
 	source := []byte(":PROPERTIES:\n#+options: toc:nil\n! note\nS generated heading\n2000-01-01 open Assets:Cash USD\n")
 	lexer := NewLexer(source, "test.beancount")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
-	assert.Equal(t, []TokenType{DATE, OPEN, ACCOUNT, IDENT, EOF}, tokenTypes(tokens))
+	assert.Equal(t, []TokenType{COMMENT, COMMENT, COMMENT, COMMENT, DATE, OPEN, ACCOUNT, IDENT, EOF}, tokenTypes(tokens))
+	assert.Equal(t, ":PROPERTIES:\n", tokens[0].String(source))
+	assert.Equal(t, "S generated heading\n", tokens[3].String(source))
 }

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -394,8 +395,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 	// Calculate weights for postings with amounts
 	var allWeights []weightSet
-	// Negative empty-cost postings whose lot cost could not be resolved via
-	// booking (e.g. NONE booking); their cost must be inferred from the residual.
+	// Empty-cost postings that reduce their account's inventory, and the
+	// subset whose lot cost could not be resolved via booking (e.g. NONE
+	// booking); the latter's cost must be inferred from the residual.
+	reducingEmptyCosts := make(map[*ast.Posting]bool)
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
@@ -417,7 +420,8 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 			// spec's date/label (if any) narrows which lots are booked.
 			// Augmentations are handled in cost inference below.
 			amount, aerr := ParseAmount(posting.Amount)
-			if aerr == nil && amount.IsNegative() {
+			if aerr == nil && v.reducesInventory(posting.Account, posting.Amount.Currency, amount) {
+				reducingEmptyCosts[posting] = true
 				if booked, ok := v.bookedReductionWeights(posting.Account, posting.Cost, posting.Amount.Currency, amount); ok {
 					allWeights = append(allWeights, booked)
 				} else {
@@ -516,30 +520,29 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		return delta, unbalancedValidation(balance), nil
 	}
 
-	// Infer missing amounts if possible
-	// Beancount allows at most 1 posting without amount per transaction
-	// It's automatically balanced to make the transaction sum to zero
+	// Beancount allows at most one posting without an amount per
+	// transaction. It absorbs the residual of every weight currency, so it
+	// is booked once per currency with a non-zero residual, in the order the
+	// currencies first appear.
 	if len(pc.withoutAmounts) == 1 {
 		posting := pc.withoutAmounts[0]
 
-		if len(balance) == 1 {
-			// Exactly 1 currency - can infer the amount uniquely
-			for currency, residual := range balance {
-				needed := residual.Neg()
-				delta.InferredAmounts[posting] = &ast.Amount{
-					Value:    formatInferredNumber(needed),
-					Currency: currency,
-				}
-				// Update balance to reflect the inferred amount
-				balance[currency] = balance[currency].Add(needed)
-			}
-		} else if len(balance) > 1 {
-			// Multiple currencies - infer posting must balance all of them
-			// Create multi-currency amount (not supported, so fail)
-			// This matches official beancount: "cannot infer multi-currency amount"
-			return delta, unbalancedValidation(balance), nil
+		var amounts []*ast.Amount
+		for _, currency := range residualCurrencies(allWeights, balance) {
+			needed := balance[currency].Neg()
+			amounts = append(amounts, &ast.Amount{
+				Value:    formatInferredNumber(needed),
+				Currency: currency,
+			})
+			balance[currency] = balance[currency].Add(needed)
 		}
-		// else: len(balance) == 0 means already balanced, no inference needed
+
+		if len(amounts) > 0 {
+			delta.InferredAmounts[posting] = amounts[0]
+		}
+		if len(amounts) != 1 {
+			delta.Postings = bookAutoPosting(txn.Postings, posting, amounts)
+		}
 	}
 
 	// Complete a currency-only amount: the missing number is the residual
@@ -591,11 +594,10 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		// plus reductions whose lot cost could not be resolved via booking.
 		inferableEmptyCosts := 0
 		for _, posting := range pc.withEmptyCosts {
-			amount, err := ParseAmount(posting.Amount)
-			if err != nil {
+			if _, err := ParseAmount(posting.Amount); err != nil {
 				continue
 			}
-			if !amount.IsNegative() || unresolvedEmptyCosts[posting] {
+			if !reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting] {
 				inferableEmptyCosts++
 			}
 		}
@@ -614,7 +616,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 			// Infer cost for augmentations, and for reductions whose cost was
 			// not resolved from booked lots (e.g. NONE booking)
-			if amount.IsZero() || (amount.IsNegative() && !unresolvedEmptyCosts[posting]) {
+			if amount.IsZero() || (reducingEmptyCosts[posting] && !unresolvedEmptyCosts[posting]) {
 				continue
 			}
 
@@ -1291,6 +1293,67 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 	return ParseAmount(balance.Tolerance)
 }
 
+// residualCurrencies returns the currencies with a non-zero residual, in the
+// order their weights first appear in the transaction (beancount orders its
+// currency groups by first posting), then any others sorted.
+func residualCurrencies(allWeights []weightSet, balance map[string]decimal.Decimal) []string {
+	var currencies []string
+	seen := make(map[string]bool, len(balance))
+	add := func(currency string) {
+		if !seen[currency] && !balance[currency].IsZero() {
+			currencies = append(currencies, currency)
+		}
+		seen[currency] = true
+	}
+	for _, weights := range allWeights {
+		for _, w := range weights {
+			add(w.Currency)
+		}
+	}
+	rest := make([]string, 0, len(balance))
+	for currency := range balance {
+		if !seen[currency] {
+			rest = append(rest, currency)
+		}
+	}
+	slices.Sort(rest)
+	for _, currency := range rest {
+		add(currency)
+	}
+	return currencies
+}
+
+// bookAutoPosting returns the postings with the amount-less posting booked
+// once per amount: the posting itself carries the first (set on apply) and a
+// copy follows it for each other; without amounts it is dropped.
+func bookAutoPosting(postings []*ast.Posting, auto *ast.Posting, amounts []*ast.Amount) []*ast.Posting {
+	booked := make([]*ast.Posting, 0, len(postings)+len(amounts))
+	for _, posting := range postings {
+		if posting != auto {
+			booked = append(booked, posting)
+			continue
+		}
+		if len(amounts) == 0 {
+			continue
+		}
+		booked = append(booked, posting)
+		for _, amount := range amounts[1:] {
+			copied := *auto
+			copied.Amount = amount
+			copied.Inferred = true
+			booked = append(booked, &copied)
+		}
+	}
+	return booked
+}
+
+// reducesInventory reports whether a posting of amount commodity reduces the
+// account's inventory rather than augmenting it (see Inventory.isReducedBy).
+func (v *validator) reducesInventory(accountName ast.Account, commodity string, amount decimal.Decimal) bool {
+	account, ok := v.accounts[string(accountName)]
+	return ok && account.Inventory.isReducedBy(commodity, amount)
+}
+
 // bookedReductionWeights resolves the balancing weights of an amount-less
 // cost spec reduction (empty {} or date/label-only) from the lots selected by
 // the account's booking method, matching beancount, which books lots before
@@ -1318,7 +1381,7 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 		return nil, true // Invalid cost spec; reported by validateCosts
 	}
 
-	plan, err := account.Inventory.planReduction(commodity, amount, spec, bookingMethod)
+	plan, err := account.Inventory.planBooking(commodity, amount, spec, bookingMethod, nil)
 	if err != nil {
 		return nil, true // Booking error; reported by validateInventoryOperations
 	}
@@ -1333,7 +1396,7 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 			return nil, false // Lot held without cost basis; infer from residual
 		}
 		weights = append(weights, weight{
-			Amount:   reduction.amount.Mul(*spec.Cost).Neg(),
+			Amount:   reduction.amount.Mul(*spec.Cost),
 			Currency: spec.CostCurrency,
 		})
 	}
@@ -1344,7 +1407,7 @@ func (v *validator) bookedReductionWeights(accountName ast.Account, cost *ast.Co
 // validateInventoryOperations validates that inventory operations (lot reductions) are possible.
 //
 // It validates that:
-//   - For lot reductions (negative amounts with cost specs), sufficient inventory exists
+//   - For lot reductions (cost-spec postings opposing the held position), sufficient inventory exists
 //   - Booking method constraints are satisfied
 //   - Both explicit and inferred amounts are checked
 //
@@ -1362,7 +1425,7 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 	var errs []error
 
-	for _, posting := range txn.Postings {
+	for _, posting := range delta.postings(txn) {
 		// Skip postings without amounts (should not happen after inference)
 		amountValue := delta.amountFor(posting)
 		if amountValue == nil {
@@ -1372,9 +1435,9 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 		amount, _ := ParseAmount(amountValue)
 		currency := amountValue.Currency
 
-		// Check if this is a lot reduction
+		// Check if this is a lot booking
 		costValue := delta.costFor(posting)
-		if costValue != nil && amount.IsNegative() {
+		if costValue != nil {
 			accountName := string(posting.Account)
 			account := v.accounts[accountName]
 
@@ -1386,8 +1449,8 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 
 			bookingMethod := defaultBookingMethod(account.BookingMethod)
 
-			// Check if reduction is possible (read-only)
-			if err := account.Inventory.CanReduceLot(currency, amount, lotSpec, bookingMethod); err != nil {
+			// Check if booking is possible (read-only)
+			if err := account.Inventory.CanBook(currency, amount, lotSpec, bookingMethod); err != nil {
 				var ambiguousErr *ambiguousBookingMatchError
 				if errors.As(err, &ambiguousErr) {
 					errs = append(errs, NewAmbiguousBookingError(txn, posting.Account, ambiguousErr))
@@ -1422,7 +1485,7 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction, delta *Tr
 
 	var errs []error
 
-	for _, posting := range txn.Postings {
+	for _, posting := range delta.postings(txn) {
 		accountName := string(posting.Account)
 		account, ok := v.accounts[accountName]
 		if !ok {

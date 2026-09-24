@@ -1,0 +1,1 @@
+SELECT date, narration, position, cost_date, weight, balance WHERE account = 'Assets:Stock'

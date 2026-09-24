@@ -1,0 +1,16 @@
+; Under NONE booking every posting opens its own lot dated by its
+; transaction, so a later sale does not cancel the earlier purchase.
+2020-01-01 open Assets:Stock "NONE"
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock    5 HOOL {100.00 USD}
+  Assets:Cash
+
+2020-01-03 * "Sell"
+  Assets:Stock  -12 HOOL {100.00 USD}
+  Assets:Cash
+
+2020-01-03 * "Buy again the same day"
+  Assets:Stock    1 HOOL {100.00 USD}
+  Assets:Cash

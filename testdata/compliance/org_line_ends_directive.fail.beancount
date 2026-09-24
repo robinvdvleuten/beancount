@@ -1,0 +1,8 @@
+; An org-mode line at column 1 ends the transaction like a comment does, so
+; the following indented posting is a syntax error.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 * "split by an org drawer"
+  Assets:A  1 USD
+:PROPERTIES:
+  Assets:B  -1 USD

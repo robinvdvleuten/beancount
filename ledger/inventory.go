@@ -5,6 +5,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
 
@@ -15,8 +16,19 @@ type Inventory struct {
 }
 
 type lotReduction struct {
-	lot    *lot
+	lot *lot
+	// amount is the signed change applied to the lot: negative when a long
+	// lot is sold, positive when a short lot is covered.
 	amount decimal.Decimal
+}
+
+// BookedLot is the share of a reducing posting booked against one lot.
+type BookedLot struct {
+	Units        decimal.Decimal  // Signed change applied to the lot
+	Cost         *decimal.Decimal // Per-unit cost; nil for a lot held without cost
+	CostCurrency string
+	Date         *ast.Date
+	Label        string
 }
 
 type reductionPlan struct {
@@ -88,6 +100,9 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 		if lotSpecsMatch(lot.Spec, spec) {
 			// Add to existing lot
 			lot.Amount = lot.Amount.Add(amount)
+			if lot.Amount.IsZero() {
+				inv.removeLot(commodity, lot)
+			}
 			return
 		}
 	}
@@ -111,14 +126,53 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 	return inv.lots[commodity]
 }
 
-// ReduceLot reduces from a specific lot or uses booking method
-func (inv *Inventory) ReduceLot(commodity string, amount decimal.Decimal, spec *lotSpec, bookingMethod BookingMethod) error {
-	plan, err := inv.planReduction(commodity, amount, spec, bookingMethod)
+// Book books a posting of amount units held at spec into the inventory.
+//
+// Like beancount, the posting reduces existing lots only when the inventory
+// holds an opposite-signed position in the commodity (see isReducedBy);
+// otherwise it augments, which is how short positions at cost are opened.
+// An augmenting lot without an explicit date is acquired on acquisitionDate.
+//
+// For a reduction, Book returns the lots it was booked against in booking
+// order; an augmentation returns none.
+func (inv *Inventory) Book(
+	commodity string,
+	amount decimal.Decimal,
+	spec *lotSpec,
+	bookingMethod BookingMethod,
+	acquisitionDate *ast.Date,
+) ([]BookedLot, error) {
+	plan, err := inv.planBooking(commodity, amount, spec, bookingMethod, acquisitionDate)
 	if err != nil {
-		return err
+		return nil, err
 	}
+
+	var booked []BookedLot
+	for _, reduction := range plan.reductions {
+		lot := BookedLot{Units: reduction.amount}
+		if s := reduction.lot.Spec; s != nil {
+			lot.Cost, lot.CostCurrency, lot.Date, lot.Label = s.Cost, s.CostCurrency, s.Date, s.Label
+		}
+		booked = append(booked, lot)
+	}
+
 	inv.applyReduction(plan)
-	return nil
+	return booked, nil
+}
+
+// isReducedBy reports whether adding amount of commodity would reduce the
+// inventory: some position in the commodity has the opposite sign. This is
+// beancount's Inventory.is_reduced_by.
+func (inv *Inventory) isReducedBy(commodity string, amount decimal.Decimal) bool {
+	if amount.IsZero() {
+		return false
+	}
+	for _, lot := range inv.lots[commodity] {
+		if lot.Amount.Sign() != amount.Sign() {
+			return true
+		}
+	}
+	return false
 }
 
 // removeLot removes a lot from the inventory
@@ -187,33 +241,38 @@ func (inv *Inventory) String() string {
 	return buf.String()
 }
 
-// CanReduceLot checks if a reduction is possible without mutating state.
-// This is a read-only version of ReduceLot used for validation.
-func (inv *Inventory) CanReduceLot(
+// CanBook checks if a booking is possible without mutating state.
+// This is a read-only version of Book used for validation.
+func (inv *Inventory) CanBook(
 	commodity string,
 	amount decimal.Decimal,
 	spec *lotSpec,
 	bookingMethod BookingMethod,
 ) error {
-	_, err := inv.planReduction(commodity, amount, spec, bookingMethod)
+	_, err := inv.planBooking(commodity, amount, spec, bookingMethod, nil)
 	return err
 }
 
-func (inv *Inventory) planReduction(
+// planBooking decides whether the posting augments or reduces the inventory
+// and plans the change. A zero amount plans nothing.
+func (inv *Inventory) planBooking(
 	commodity string,
 	amount decimal.Decimal,
 	spec *lotSpec,
 	bookingMethod BookingMethod,
+	acquisitionDate *ast.Date,
 ) (*reductionPlan, error) {
-	// Reducing means amount should be negative
-	if amount.GreaterThanOrEqual(decimal.Zero) {
-		return nil, fmt.Errorf("reduce amount must be negative, got %s", amount.String())
+	if amount.IsZero() {
+		return &reductionPlan{commodity: commodity}, nil
 	}
 
-	reduceAmount := amount.Abs()
 	bookingMethod = defaultBookingMethod(bookingMethod)
-
-	if bookingMethod == BookingNONE {
+	if bookingMethod == BookingNONE || spec == nil || !inv.isReducedBy(commodity, amount) {
+		if spec != nil && spec.Date == nil && acquisitionDate != nil {
+			dated := *spec
+			dated.Date = acquisitionDate
+			spec = &dated
+		}
 		return &reductionPlan{
 			commodity: commodity,
 			addAmount: &amount,
@@ -221,36 +280,63 @@ func (inv *Inventory) planReduction(
 		}, nil
 	}
 
-	if spec == nil {
-		return &reductionPlan{
-			commodity: commodity,
-			addAmount: &amount,
-		}, nil
+	// A reduction consumes only lots of the opposite sign. The strategies
+	// work on magnitudes; the resulting deltas take the posting's sign.
+	lots := make([]*lot, 0, len(inv.lots[commodity]))
+	for _, lot := range inv.lots[commodity] {
+		if lot.Amount.Sign() != amount.Sign() {
+			lots = append(lots, lot)
+		}
 	}
 
+	plan, err := planReduction(commodity, lots, amount.Abs(), spec, bookingMethod)
+	if err != nil {
+		return nil, err
+	}
+	if amount.IsNegative() {
+		for i := range plan.reductions {
+			plan.reductions[i].amount = plan.reductions[i].amount.Neg()
+		}
+	} else {
+		// Merged lots left over from covering a short stay short.
+		for _, lot := range plan.replacementLots {
+			lot.Amount = lot.Amount.Neg()
+		}
+	}
+	return plan, nil
+}
+
+// planReduction plans reducing amount (a magnitude) from the given lots.
+func planReduction(
+	commodity string,
+	lots []*lot,
+	amount decimal.Decimal,
+	spec *lotSpec,
+	bookingMethod BookingMethod,
+) (*reductionPlan, error) {
 	if spec.Merge {
-		return inv.planMergeReduction(commodity, reduceAmount)
+		return planMergeReduction(commodity, lots, amount)
 	}
 
 	if bookingMethod == BookingSTRICT {
-		return inv.planStrictReduction(commodity, reduceAmount, spec)
+		return planStrictReduction(commodity, lots, amount, spec)
 	}
 
 	if spec.IsEmpty() {
-		return inv.planBookingReduction(commodity, reduceAmount, bookingMethod)
+		return planBookingReduction(commodity, lots, amount, bookingMethod)
 	}
 
 	// Non-empty spec: any combination of cost, date, and label narrows
 	// the candidate lots via lotMatchesReductionSpec.
-	return inv.planSpecificReduction(commodity, reduceAmount, spec, bookingMethod)
+	return planSpecificReduction(commodity, lots, amount, spec, bookingMethod)
 }
 
-func (inv *Inventory) planStrictReduction(
+func planStrictReduction(
 	commodity string,
+	lots []*lot,
 	amount decimal.Decimal,
 	spec *lotSpec,
 ) (*reductionPlan, error) {
-	lots := inv.lots[commodity]
 	if len(lots) == 0 {
 		return nil, fmt.Errorf("no lots available for %s", commodity)
 	}
@@ -268,9 +354,9 @@ func (inv *Inventory) planStrictReduction(
 
 	if len(matches) == 1 {
 		lot := matches[0]
-		if lot.Amount.LessThan(amount) {
+		if lot.Amount.Abs().LessThan(amount) {
 			return nil, fmt.Errorf("insufficient amount in lot %s: have %s, need %s",
-				spec.String(), lot.Amount.String(), amount.String())
+				spec.String(), lot.Amount.Abs().String(), amount.String())
 		}
 		return &reductionPlan{
 			commodity:  commodity,
@@ -280,7 +366,7 @@ func (inv *Inventory) planStrictReduction(
 
 	total := decimal.Zero
 	for _, lot := range matches {
-		total = total.Add(lot.Amount)
+		total = total.Add(lot.Amount.Abs())
 	}
 
 	if total.LessThan(amount) {
@@ -291,7 +377,7 @@ func (inv *Inventory) planStrictReduction(
 	if total.Equal(amount) {
 		reductions := make([]lotReduction, 0, len(matches))
 		for _, lot := range matches {
-			reductions = append(reductions, lotReduction{lot: lot, amount: lot.Amount})
+			reductions = append(reductions, lotReduction{lot: lot, amount: lot.Amount.Abs()})
 		}
 		return &reductionPlan{
 			commodity:  commodity,
@@ -307,16 +393,17 @@ func (inv *Inventory) planStrictReduction(
 	}
 }
 
-func (inv *Inventory) planSpecificReduction(
+func planSpecificReduction(
 	commodity string,
+	lots []*lot,
 	amount decimal.Decimal,
 	spec *lotSpec,
 	bookingMethod BookingMethod,
 ) (*reductionPlan, error) {
 	// The spec acts as a filter: lots match on the components it provides
 	// (cost, date, label), so a spec without a date still matches dated lots.
-	matches := make([]*lot, 0, len(inv.lots[commodity]))
-	for _, lot := range inv.lots[commodity] {
+	matches := make([]*lot, 0, len(lots))
+	for _, lot := range lots {
 		if lotMatchesReductionSpec(lot, spec) {
 			matches = append(matches, lot)
 		}
@@ -330,17 +417,16 @@ func (inv *Inventory) planSpecificReduction(
 }
 
 func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
-	_, err := inv.planSpecificReduction(commodity, amount, spec, BookingFIFO)
+	_, err := planSpecificReduction(commodity, inv.lots[commodity], amount, spec, BookingFIFO)
 	return err
 }
 
-func (inv *Inventory) planBookingReduction(
+func planBookingReduction(
 	commodity string,
+	lots []*lot,
 	amount decimal.Decimal,
 	bookingMethod BookingMethod,
 ) (*reductionPlan, error) {
-	lots := inv.lots[commodity]
-
 	if len(lots) == 0 {
 		return nil, fmt.Errorf("no lots available for %s", commodity)
 	}
@@ -358,7 +444,7 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 			break
 		}
 
-		reduction := decimal.Min(lot.Amount, remaining)
+		reduction := decimal.Min(lot.Amount.Abs(), remaining)
 		reductions = append(reductions, lotReduction{lot: lot, amount: reduction})
 		remaining = remaining.Sub(reduction)
 	}
@@ -379,15 +465,15 @@ func (inv *Inventory) canReduceWithBooking(
 	amount decimal.Decimal,
 	bookingMethod BookingMethod,
 ) error {
-	_, err := inv.planBookingReduction(commodity, amount, bookingMethod)
+	_, err := planBookingReduction(commodity, inv.lots[commodity], amount, bookingMethod)
 	return err
 }
 
-func (inv *Inventory) planMergeReduction(
+func planMergeReduction(
 	commodity string,
+	lots []*lot,
 	amount decimal.Decimal,
 ) (*reductionPlan, error) {
-	lots := inv.lots[commodity]
 	if len(lots) == 0 {
 		return nil, fmt.Errorf("no lots available for %s", commodity)
 	}
@@ -396,11 +482,11 @@ func (inv *Inventory) planMergeReduction(
 	totalCost := decimal.Zero
 	costCurrency := ""
 	for _, lot := range lots {
-		totalUnits = totalUnits.Add(lot.Amount)
+		totalUnits = totalUnits.Add(lot.Amount.Abs())
 		if lot.Spec == nil || lot.Spec.Cost == nil {
 			continue
 		}
-		totalCost = totalCost.Add(lot.Spec.Cost.Mul(lot.Amount))
+		totalCost = totalCost.Add(lot.Spec.Cost.Mul(lot.Amount.Abs()))
 		if costCurrency == "" {
 			costCurrency = lot.Spec.CostCurrency
 		} else if costCurrency != lot.Spec.CostCurrency {
@@ -447,7 +533,7 @@ func (inv *Inventory) applyReduction(plan *reductionPlan) {
 	}
 
 	for _, reduction := range plan.reductions {
-		reduction.lot.Amount = reduction.lot.Amount.Sub(reduction.amount)
+		reduction.lot.Amount = reduction.lot.Amount.Add(reduction.amount)
 		if reduction.lot.Amount.IsZero() {
 			inv.removeLot(plan.commodity, reduction.lot)
 		}

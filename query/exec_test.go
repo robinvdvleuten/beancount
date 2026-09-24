@@ -179,6 +179,35 @@ func TestExecuteOpenOnSummarizes(t *testing.T) {
 	assert.Equal(t, "Opening balance for 'Assets:Checking' (Summarization)", result.Rows[0][3].(string))
 }
 
+func TestExecuteOpenOnPostsEquityLegPerLot(t *testing.T) {
+	// Each summarized lot is followed by its own equity leg, as in
+	// beancount's create_entries_from_balances.
+	ctx, tree := newContextFromSource(t, `
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-02 * "Buy"
+  Assets:Stock  10 HOOL {100.00 USD}
+  Equity:Opening-Balances
+
+2020-01-03 * "Buy"
+  Assets:Stock   5 HOOL {110.00 USD}
+  Equity:Opening-Balances
+`)
+	result := runQueryOn(t, ctx, tree, "SELECT account, weight FROM OPEN ON 2020-01-04 WHERE narration ~ 'Assets:Stock'")
+
+	var got []string
+	for _, row := range result.Rows {
+		got = append(got, row[0].(string)+" "+valueString(row[1]))
+	}
+	assert.Equal(t, []string{
+		"Assets:Stock 1000 USD",
+		"Equity:Opening-Balances -1000 USD",
+		"Assets:Stock 550 USD",
+		"Equity:Opening-Balances -550 USD",
+	}, got)
+}
+
 func TestExecuteCancellation(t *testing.T) {
 	qctx, tree := newTestContext(t)
 	stmt, err := bql.Parse("SELECT date")

@@ -1,0 +1,15 @@
+* Accounts
+:PROPERTIES:
+:VISIBILITY: folded
+:END:
+#+STARTUP: showall
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+** Transactions
+! reviewed below
+S generated heading
+2020-01-02 * "Lunch"
+  Expenses:Food  12.50 USD
+  Assets:Cash
+#+END_SRC

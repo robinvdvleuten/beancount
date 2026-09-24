@@ -1,0 +1,31 @@
+; An amount-less posting absorbs the residual of every currency: it is
+; booked once per currency with a non-zero residual, and not at all when
+; every residual is zero.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euro
+2020-01-01 open Assets:Broker
+2020-01-01 open Expenses:Travel
+
+2020-01-05 * "One payment, two currencies"
+  Expenses:Travel  200.00 EUR
+  Expenses:Travel   50.00 USD
+  Assets:Cash
+
+2020-01-06 * "EUR nets to zero, only USD is booked"
+  Expenses:Travel   30.00 EUR
+  Expenses:Travel   12.00 USD
+  Assets:Euro      -30.00 EUR
+  Assets:Cash
+
+2020-01-07 * "Weight currency of a cost is its cost currency"
+  Assets:Broker      2 HOOL {10.00 USD}
+  Expenses:Travel    5.00 EUR
+  Assets:Cash
+
+2020-01-08 * "Fully balanced"
+  Expenses:Travel   10.00 USD
+  Assets:Euro      -10.00 USD
+  Assets:Cash
+
+2020-01-09 balance Assets:Cash  -82.00 USD
+2020-01-09 balance Assets:Cash -205.00 EUR

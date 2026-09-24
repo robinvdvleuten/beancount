@@ -43,7 +43,7 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 				kept = append(kept, entry)
 				continue
 			}
-			bookTransaction(accounts, txn)
+			bookTransaction(qctx, accounts, txn)
 			continue
 		}
 		kept = append(kept, entry)
@@ -108,7 +108,7 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 			lastDate = entry.Date().Time
 		}
 		if txn, ok := entry.(*ast.Transaction); ok {
-			bookTransaction(accounts, txn)
+			bookTransaction(qctx, accounts, txn)
 		}
 	}
 
@@ -131,38 +131,31 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 }
 
 // bookTransaction books a transaction's postings into the per-account
-// inventories with the same lot-date semantics as row generation.
-func bookTransaction(accounts map[string]*Inventory, txn *ast.Transaction) {
+// inventories, using the same booked positions as row generation.
+func bookTransaction(qctx *Context, accounts map[string]*Inventory, txn *ast.Transaction) {
 	for _, posting := range txn.Postings {
 		inventory, ok := accounts[string(posting.Account)]
 		if !ok {
 			inventory = NewInventory()
 			accounts[string(posting.Account)] = inventory
 		}
-		position := postingPosition(posting, txn.Date())
-		if position == nil {
-			continue
+		for _, position := range postingPositions(qctx, posting, txn.Date()) {
+			inventory.AddPosition(position)
 		}
-		if position.Cost != nil && (posting.Cost == nil || posting.Cost.Date == nil) {
-			if inherited := inventory.matchLotDate(position); inherited != nil {
-				position.Cost.Date = inherited
-			}
-		}
-		inventory.AddPosition(position)
 	}
 }
 
-// balanceTransaction builds a synthetic two-legged transaction moving an
-// account's inventory to (or from) an equity account. When negate is set the
-// account leg carries the negated balance (transfers); otherwise the account
-// leg restates the balance (opening balances). The equity legs are the cost
-// value of the opposite side, one posting per currency.
+// balanceTransaction builds a synthetic transaction moving an account's
+// inventory to (or from) an equity account, like beancount's
+// create_entries_from_balances: every position gets an account leg followed
+// directly by an equity leg for that position's cost value. When negate is
+// set the account legs carry the negated balance (transfers); otherwise they
+// restate it (opening balances).
 func balanceTransaction(date *ast.Date, narration, flag, account, equity string, inventory *Inventory, negate bool) *ast.Transaction {
-	var postings []*ast.Posting
-	equityTotals := make(map[string]decimal.Decimal)
-	var equityOrder []string
+	positions := inventory.Positions()
+	postings := make([]*ast.Posting, 0, 2*len(positions))
 
-	for _, p := range inventory.Positions() {
+	for _, p := range positions {
 		units := p.Units.Number
 		if negate {
 			units = units.Neg()
@@ -181,15 +174,8 @@ func balanceTransaction(date *ast.Date, narration, flag, account, equity string,
 		if !negate {
 			number = number.Neg()
 		}
-		if _, ok := equityTotals[value.Currency]; !ok {
-			equityOrder = append(equityOrder, value.Currency)
-		}
-		equityTotals[value.Currency] = equityTotals[value.Currency].Add(number)
-	}
-
-	for _, currency := range equityOrder {
 		postings = append(postings, ast.NewPosting(ast.Account(equity),
-			ast.WithAmount(numberString(equityTotals[currency]), currency)))
+			ast.WithAmount(numberString(number), value.Currency)))
 	}
 
 	return ast.NewTransaction(date, narration, ast.WithFlag(flag), ast.WithPostings(postings...))

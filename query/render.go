@@ -11,13 +11,8 @@ import (
 
 // RenderText writes a result as bean-query's default text table: headers
 // centered and truncated to the data width, a dashed rule, and per-type
-// value alignment. Empty results render as "(empty)".
+// value alignment.
 func RenderText(result *Result, w io.Writer) error {
-	if len(result.Rows) == 0 {
-		_, err := io.WriteString(w, "(empty)\n")
-		return err
-	}
-
 	renderers := prepareRenderers(result, false)
 
 	var b strings.Builder
@@ -365,19 +360,42 @@ func (r *dateRenderer) format(v any) string {
 	return strings.Repeat(" ", 10)
 }
 
+// integralWidth sizes an integer field like bean-query: one sign column
+// when any value is negative, plus the most integer digits of any value.
+// Positive values are padded into the sign column, so 10 and -1 render as
+// " 10" and " -1".
+type integralWidth struct {
+	negative bool
+	digits   int
+}
+
+// observe records the integer part of a formatted number, e.g. "-12".
+func (w *integralWidth) observe(intPart string) {
+	if digits, ok := strings.CutPrefix(intPart, "-"); ok {
+		w.negative = true
+		intPart = digits
+	}
+	w.digits = max(w.digits, len(intPart))
+}
+
+func (w *integralWidth) width() int {
+	if w.negative {
+		return w.digits + 1
+	}
+	return w.digits
+}
+
 type intRenderer struct {
-	w int
+	integral integralWidth
 }
 
 func (r *intRenderer) prepare(v any) {
 	if n, ok := v.(int64); ok {
-		if width := len(fmt.Sprintf("%d", n)); width > r.w {
-			r.w = width
-		}
+		r.integral.observe(fmt.Sprintf("%d", n))
 	}
 }
 
-func (r *intRenderer) width() int { return max(r.w, 1) }
+func (r *intRenderer) width() int { return max(r.integral.width(), 1) }
 
 func (r *intRenderer) format(v any) string {
 	if n, ok := v.(int64); ok {
@@ -406,8 +424,8 @@ func (r *boolRenderer) format(v any) string {
 // decimalRenderer aligns numbers at the decimal point, preserving each
 // value's own digits (space-padded, not zero-padded).
 type decimalRenderer struct {
-	intW  int
-	fracW int
+	integral integralWidth
+	fracW    int
 }
 
 func decimalParts(d decimal.Decimal) (string, string) {
@@ -425,12 +443,12 @@ func (r *decimalRenderer) prepare(v any) {
 		return
 	}
 	intPart, fracPart := decimalParts(d)
-	r.intW = max(r.intW, len(intPart))
+	r.integral.observe(intPart)
 	r.fracW = max(r.fracW, len(fracPart))
 }
 
 func (r *decimalRenderer) width() int {
-	w := r.intW
+	w := r.integral.width()
 	if r.fracW > 0 {
 		w += 1 + r.fracW
 	}
@@ -443,7 +461,7 @@ func (r *decimalRenderer) format(v any) string {
 		return strings.Repeat(" ", r.width())
 	}
 	intPart, fracPart := decimalParts(d)
-	s := padLeft(intPart, r.intW)
+	s := padLeft(intPart, r.integral.width())
 	if r.fracW > 0 {
 		if fracPart != "" {
 			s += "." + fracPart
@@ -458,7 +476,7 @@ func (r *decimalRenderer) format(v any) string {
 // for that currency, and the fraction field is space-padded to the widest
 // currency's scale.
 type numberField struct {
-	intW     int
+	integral integralWidth
 	fracW    int // widest fraction incl. the dot
 	currFrac map[string]int
 }
@@ -471,7 +489,7 @@ func (f *numberField) observe(number decimal.Decimal, currency string) {
 	scale := int(max(-number.Exponent(), 0))
 	f.currFrac[currency] = max(f.currFrac[currency], scale)
 	intPart, _ := decimalParts(number)
-	f.intW = max(f.intW, len(intPart))
+	f.integral.observe(intPart)
 }
 
 // finish computes the fraction field width after all values are observed.
@@ -483,7 +501,7 @@ func (f *numberField) finish() {
 	}
 }
 
-func (f *numberField) width() int { return f.intW + f.fracW }
+func (f *numberField) width() int { return f.integral.width() + f.fracW }
 
 func (f *numberField) format(number decimal.Decimal, currency string) string {
 	scale := f.currFrac[currency]
@@ -494,7 +512,7 @@ func (f *numberField) format(number decimal.Decimal, currency string) string {
 	} else {
 		intPart = s
 	}
-	out := padLeft(intPart, f.intW)
+	out := padLeft(intPart, f.integral.width())
 	if fracPart != "" {
 		out += "." + fracPart
 	}
