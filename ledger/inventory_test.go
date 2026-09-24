@@ -87,8 +87,8 @@ func TestCanBook(t *testing.T) {
 			name: "reducing with empty spec {} - uses booking method FIFO",
 			setup: func() *Inventory {
 				inv := NewInventory()
-				inv.AddLot("USD", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("USD", d("60"), &lotSpec{Date: date2})
+				inv.AddLot("USD", d("50"), &lotSpec{Cost: ptrDecimal(d("1")), CostCurrency: "EUR", Date: date1})
+				inv.AddLot("USD", d("60"), &lotSpec{Cost: ptrDecimal(d("1")), CostCurrency: "EUR", Date: date2})
 				return inv
 			},
 			commodity:     "USD",
@@ -302,6 +302,34 @@ func TestBookReturnsBookedLots(t *testing.T) {
 		{Units: decimal.NewFromInt(-10), Cost: &cost100, CostCurrency: "USD", Date: date1},
 		{Units: decimal.NewFromInt(-5), Cost: &cost120, CostCurrency: "USD", Date: date2, Label: "b"},
 	}, booked)
+}
+
+func TestBookSkipsLotsWithoutCost(t *testing.T) {
+	// Like beancount's book_reductions, a cost spec never books against units
+	// held without cost, although they still make the posting a reduction.
+	date1, err := ast.NewDate("2024-01-15")
+	assert.NoError(t, err)
+	date2, err := ast.NewDate("2024-02-15")
+	assert.NoError(t, err)
+	cost10, cost12 := decimal.NewFromInt(10), decimal.NewFromInt(12)
+
+	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
+		t.Run(string(method), func(t *testing.T) {
+			inv := NewInventory()
+			inv.AddLot("HOOL", decimal.NewFromInt(1), &lotSpec{Cost: &cost10, CostCurrency: "USD", Date: date1})
+			inv.AddLot("HOOL", decimal.NewFromInt(1), &lotSpec{Cost: &cost12, CostCurrency: "USD", Date: date2})
+			inv.Add("HOOL", decimal.NewFromInt(1))
+
+			booked, err := inv.Book("HOOL", decimal.NewFromInt(-2), &lotSpec{}, method, nil)
+			assert.NoError(t, err)
+			assert.Equal(t, 2, len(booked))
+			assert.Equal(t, "1", inv.Get("HOOL").String(), "the units without cost remain")
+		})
+	}
+
+	inv := NewInventory()
+	inv.Add("HOOL", decimal.NewFromInt(3))
+	assert.Error(t, inv.CanBook("HOOL", decimal.NewFromInt(-1), &lotSpec{}, BookingFIFO))
 }
 
 func TestInventoryStringSortsCommodities(t *testing.T) {
@@ -803,8 +831,8 @@ func TestStrictBookingReduction(t *testing.T) {
 
 	t.Run("ambiguous partial reduction errors", func(t *testing.T) {
 		inv := NewInventory()
-		inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-		inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
+		inv.AddLot("STOCK", d("50"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date1})
+		inv.AddLot("STOCK", d("60"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date2})
 
 		err := inv.CanBook("STOCK", d("-40"), &lotSpec{}, BookingSTRICT)
 		assert.Error(t, err)
@@ -813,8 +841,8 @@ func TestStrictBookingReduction(t *testing.T) {
 
 	t.Run("full reduction across matching lots passes", func(t *testing.T) {
 		inv := NewInventory()
-		inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-		inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
+		inv.AddLot("STOCK", d("50"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date1})
+		inv.AddLot("STOCK", d("60"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date2})
 
 		err := inv.CanBook("STOCK", d("-110"), &lotSpec{}, BookingSTRICT)
 		assert.NoError(t, err)

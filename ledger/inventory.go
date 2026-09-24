@@ -280,13 +280,20 @@ func (inv *Inventory) planBooking(
 		}, nil
 	}
 
-	// A reduction consumes only lots of the opposite sign. The strategies
-	// work on magnitudes; the resulting deltas take the posting's sign.
+	// A reduction consumes only lots of the opposite sign, and a cost spec
+	// only matches lots held at cost: like beancount's book_reductions, units
+	// held without cost are never booked against, although they still make
+	// the posting a reduction. The strategies work on magnitudes; the
+	// resulting deltas take the posting's sign.
 	lots := make([]*lot, 0, len(inv.lots[commodity]))
 	for _, lot := range inv.lots[commodity] {
-		if lot.Amount.Sign() != amount.Sign() {
-			lots = append(lots, lot)
+		if lot.Amount.Sign() == amount.Sign() {
+			continue
 		}
+		if !spec.Merge && (lot.Spec == nil || lot.Spec.Cost == nil) {
+			continue
+		}
+		lots = append(lots, lot)
 	}
 
 	plan, err := planReduction(commodity, lots, amount.Abs(), spec, bookingMethod)

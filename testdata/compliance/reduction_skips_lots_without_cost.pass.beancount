@@ -1,0 +1,30 @@
+; A reduction with a cost spec books only against lots held at cost; units
+; held without cost in the same account are never matched.
+2006-01-01 open Assets:Stock "FIFO"
+2006-01-01 open Assets:Strict
+2006-01-01 open Assets:Cash
+
+2006-01-02 * "Buy at cost"
+  Assets:Stock   1 HOOL {10 USD}
+  Assets:Strict  1 HOOL {10 USD}
+  Assets:Cash
+
+2006-01-03 * "Buy at cost"
+  Assets:Stock   1 HOOL {12 USD}
+  Assets:Cash
+
+2006-01-04 * "Units without cost"
+  Assets:Stock   1 HOOL @ 10 USD
+  Assets:Strict  3 HOOL @ 10 USD
+  Assets:Cash
+
+2006-01-05 * "Sell across the cost lots under FIFO"
+  Assets:Stock  -2 HOOL {}
+  Assets:Cash   22 USD
+
+2006-01-06 * "STRICT: the single cost lot is unambiguous"
+  Assets:Strict -1 HOOL {}
+  Assets:Cash   10 USD
+
+2006-01-07 balance Assets:Stock   1 HOOL
+2006-01-07 balance Assets:Strict  3 HOOL

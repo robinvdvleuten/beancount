@@ -1,0 +1,12 @@
+; Units held without cost make a posting a reduction, but a cost spec has
+; no lot to book against.
+2006-01-01 open Assets:Stock "FIFO"
+2006-01-01 open Assets:Cash
+
+2006-01-04 * "Units without cost"
+  Assets:Stock   3 HOOL @ 10 USD
+  Assets:Cash
+
+2006-01-05 * "No lot held at cost"
+  Assets:Stock  -1 HOOL {}
+  Assets:Cash   10 USD
