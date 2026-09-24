@@ -1,0 +1,25 @@
+; Pushed metadata keeps its type and applies the innermost value; explicit
+; metadata overrides it.
+pushmeta source: "bank"
+pushmeta count: 42
+pushmeta when: 2020-05-01
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Pushed"
+  Assets:A  1 USD
+  Assets:B
+
+pushmeta source: "card"
+2020-01-03 * "Innermost value"
+  Assets:A  1 USD
+  Assets:B
+popmeta source:
+
+2020-01-04 * "Explicit wins"
+  source: "manual"
+  Assets:A  1 USD
+  Assets:B
+popmeta source:
+popmeta count:
+popmeta when:

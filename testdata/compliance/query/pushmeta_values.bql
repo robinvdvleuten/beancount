@@ -1,0 +1,1 @@
+SELECT date, entry_meta('source'), entry_meta('count') + 1, entry_meta('when') WHERE account = 'Assets:A'

@@ -124,9 +124,22 @@ func (p *Poptag) SetPosition(pos Position) { p.pos = pos }
 type Pushmeta struct {
 	pos   Position
 	Key   string
-	Value string
+	Value string // Source text of the value, as the formatter prints it
+	// MetaValue is the parsed value applied to transactions; nil when the
+	// source text is not a single metadata value.
+	MetaValue *MetadataValue
 
 	withComment
+}
+
+// metadataValue returns the value pushed transactions receive: the parsed
+// value, or else the source text as a string.
+func (p *Pushmeta) metadataValue() *MetadataValue {
+	if p.MetaValue != nil {
+		return p.MetaValue
+	}
+	raw := NewRawString(p.Value)
+	return &MetadataValue{StringValue: &raw}
 }
 
 func (p *Pushmeta) Position() Position { return p.pos }

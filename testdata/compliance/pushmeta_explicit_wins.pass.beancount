@@ -1,0 +1,15 @@
+; Pushed metadata only reaches transactions, and a transaction's explicit
+; metadata for the same key wins without a duplicate-key error.
+pushmeta source: "bank"
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Pushed"
+  Assets:A  1 USD
+  Assets:B
+
+2020-01-03 * "Explicit wins"
+  source: "manual"
+  Assets:A  1 USD
+  Assets:B
+popmeta source:

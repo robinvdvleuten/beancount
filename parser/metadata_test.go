@@ -527,3 +527,20 @@ func TestParseMetadataWithPrecision(t *testing.T) {
 	assert.Equal(t, "number", txn.Metadata[1].Value.Type())
 	assert.Equal(t, "3.141592653589793", txn.Metadata[1].Value.String())
 }
+
+func TestParsePushmetaTypedValue(t *testing.T) {
+	source := `pushmeta source: "bank"
+pushmeta count: 42
+pushmeta words: some value here
+`
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(result.Pushmetas))
+
+	// The source text is kept for the formatter; the parsed value is what
+	// transactions receive.
+	assert.Equal(t, `"bank"`, result.Pushmetas[0].Value)
+	assert.Equal(t, "bank", result.Pushmetas[0].MetaValue.StringValue.Value)
+	assert.Equal(t, "42", *result.Pushmetas[1].MetaValue.Number)
+	assert.Zero(t, result.Pushmetas[2].MetaValue, "more than one value is kept as text only")
+}

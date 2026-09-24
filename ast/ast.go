@@ -288,15 +288,15 @@ func ApplyPushPopDirectives(ast *AST) []error {
 				}
 			}
 
-			// Apply the innermost pushed value of each active key
-			if withMeta, ok := item.directive.(WithMetadata); ok {
+			// Like beancount, only transactions receive pushed metadata:
+			// each key's innermost value, unless set explicitly.
+			if txn, ok := item.directive.(*Transaction); ok {
 				for _, key := range metadataKeys {
 					stack := activeMetadata[key]
-					if len(stack) == 0 {
+					if len(stack) == 0 || slices.ContainsFunc(txn.Metadata, func(m *Metadata) bool { return m.Key == key }) {
 						continue
 					}
-					rawStr := NewRawString(stack[len(stack)-1].Value)
-					withMeta.AddMetadata(&Metadata{Key: key, Value: &MetadataValue{StringValue: &rawStr}})
+					txn.AddMetadata(&Metadata{Key: key, Value: stack[len(stack)-1].metadataValue()})
 				}
 			}
 		}
@@ -315,7 +315,7 @@ func ApplyPushPopDirectives(ast *AST) []error {
 		}
 		values := make([]string, len(stack))
 		for i, pushed := range stack {
-			values[i] = pushed.Value
+			values[i] = pushed.metadataValue().String()
 		}
 		errs = append(errs, &PushPopError{
 			Pos:     stack[0].Position(),
