@@ -22,7 +22,7 @@ jobs:
           fuzz-time: 30s
           fuzz-regexp: FuzzParser
           fuzz-minimize-time: 1m
-          go-version: "1.25"
+          go-version: "1.26"
 
   fuzz-lexer:
     runs-on: ubuntu-latest
@@ -36,7 +36,7 @@ jobs:
           fuzz-time: 30s
           fuzz-regexp: FuzzLexer
           fuzz-minimize-time: 1m
-          go-version: "1.25"
+          go-version: "1.26"
 
   fuzz-formatter:
     runs-on: ubuntu-latest
@@ -50,7 +50,7 @@ jobs:
           fuzz-time: 30s
           fuzz-regexp: FuzzFormatter
           fuzz-minimize-time: 1m
-          go-version: "1.25"
+          go-version: "1.26"
 
   fuzz-query-parser:
     runs-on: ubuntu-latest
@@ -64,4 +64,4 @@ jobs:
           fuzz-time: 30s
           fuzz-regexp: FuzzParseQuery
           fuzz-minimize-time: 1m
-          go-version: "1.25"
+          go-version: "1.26"
