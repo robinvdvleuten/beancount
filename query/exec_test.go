@@ -220,3 +220,18 @@ func TestExecuteCancellation(t *testing.T) {
 	_, err = Execute(cancelled, qctx, tree, compiled)
 	assert.Error(t, err)
 }
+
+func TestInventoryKeepsInsertionOrder(t *testing.T) {
+	// Like beancount's dict-backed inventory: first-added order, and a
+	// position that sums to zero goes to the end when added again.
+	inv := NewInventory()
+	aapl := &Amount{Number: decimal.NewFromInt(1), Currency: "AAPL"}
+	zzz := &Amount{Number: decimal.NewFromInt(2), Currency: "ZZZ"}
+	inv.AddAmount(aapl)
+	inv.AddAmount(zzz)
+	assert.Equal(t, "1 AAPL, 2 ZZZ", valueString(inv))
+
+	inv.AddAmount(&Amount{Number: decimal.NewFromInt(-1), Currency: "AAPL"})
+	inv.AddAmount(aapl)
+	assert.Equal(t, "2 ZZZ, 1 AAPL", valueString(inv))
+}

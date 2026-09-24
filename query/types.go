@@ -84,13 +84,16 @@ func (p *Position) costKey() string {
 
 // Inventory is a collection of positions keyed by currency and cost basis.
 // Summing amounts or positions in aggregate functions produces an Inventory.
+// Like beancount's inventory (a Python dict), positions keep the order they
+// were first added in, and a position that sums to zero is dropped.
 type Inventory struct {
-	positions map[string]*Position
+	positions []*Position
+	index     map[string]int // costKey -> index into positions
 }
 
 // NewInventory creates an empty inventory.
 func NewInventory() *Inventory {
-	return &Inventory{positions: make(map[string]*Position)}
+	return &Inventory{index: make(map[string]int)}
 }
 
 // AddAmount adds a cost-less amount to the inventory.
@@ -103,17 +106,28 @@ func (inv *Inventory) AddAmount(a *Amount) {
 // zero are removed, matching official inventories.
 func (inv *Inventory) AddPosition(p *Position) {
 	key := p.costKey()
-	if existing, ok := inv.positions[key]; ok {
+	if i, ok := inv.index[key]; ok {
+		existing := inv.positions[i]
 		existing.Units.Number = existing.Units.Number.Add(p.Units.Number)
 		if existing.Units.Number.IsZero() {
-			delete(inv.positions, key)
+			inv.remove(i)
 		}
 		return
 	}
 	if p.Units.Number.IsZero() {
 		return
 	}
-	inv.positions[key] = &Position{Units: p.Units, Cost: p.Cost}
+	inv.index[key] = len(inv.positions)
+	inv.positions = append(inv.positions, &Position{Units: p.Units, Cost: p.Cost})
+}
+
+// remove drops the position at i, keeping the order of the others.
+func (inv *Inventory) remove(i int) {
+	delete(inv.index, inv.positions[i].costKey())
+	inv.positions = append(inv.positions[:i], inv.positions[i+1:]...)
+	for j := i; j < len(inv.positions); j++ {
+		inv.index[inv.positions[j].costKey()] = j
+	}
 }
 
 // AddInventory merges another inventory into this one.
@@ -125,51 +139,20 @@ func (inv *Inventory) AddInventory(other *Inventory) {
 
 // IsEmpty reports whether the inventory has no non-zero positions.
 func (inv *Inventory) IsEmpty() bool {
-	for _, p := range inv.positions {
-		if !p.Units.Number.IsZero() {
-			return false
-		}
-	}
-	return true
+	return len(inv.positions) == 0
 }
 
-// Positions returns the inventory positions in a stable order: by units
-// currency, then cost currency, number, date, and label.
+// Positions returns the inventory positions in the order they were first
+// added, as beancount's inventory iterates them.
 func (inv *Inventory) Positions() []*Position {
-	positions := make([]*Position, 0, len(inv.positions))
-	for _, p := range inv.positions {
-		positions = append(positions, p)
-	}
-	sort.Slice(positions, func(i, j int) bool {
-		a, b := positions[i], positions[j]
-		if a.Units.Currency != b.Units.Currency {
-			return a.Units.Currency < b.Units.Currency
-		}
-		ac, bc := a.Cost, b.Cost
-		switch {
-		case ac == nil && bc == nil:
-			return false
-		case ac == nil:
-			return true
-		case bc == nil:
-			return false
-		}
-		if ac.Currency != bc.Currency {
-			return ac.Currency < bc.Currency
-		}
-		if !ac.Number.Equal(bc.Number) {
-			return ac.Number.LessThan(bc.Number)
-		}
-		return ac.Date.String() < bc.Date.String()
-	})
-	return positions
+	return append([]*Position(nil), inv.positions...)
 }
 
 // Copy returns a deep copy of the inventory.
 func (inv *Inventory) Copy() *Inventory {
 	copied := NewInventory()
-	for key, p := range inv.positions {
-		copied.positions[key] = &Position{Units: p.Units, Cost: p.Cost}
+	for _, p := range inv.positions {
+		copied.AddPosition(p)
 	}
 	return copied
 }
@@ -177,11 +160,11 @@ func (inv *Inventory) Copy() *Inventory {
 // Neg returns a new inventory with all unit numbers negated.
 func (inv *Inventory) Neg() *Inventory {
 	negated := NewInventory()
-	for key, p := range inv.positions {
-		negated.positions[key] = &Position{
+	for _, p := range inv.positions {
+		negated.AddPosition(&Position{
 			Units: Amount{Number: p.Units.Number.Neg(), Currency: p.Units.Currency},
 			Cost:  p.Cost,
-		}
+		})
 	}
 	return negated
 }

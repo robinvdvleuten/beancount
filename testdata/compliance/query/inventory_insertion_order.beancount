@@ -1,0 +1,18 @@
+; Inventory positions keep the order they first appear in, and a position
+; that sums to zero goes to the end when it comes back: AAPL is sold off
+; and bought back, so it follows ZZZ.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock   1 AAPL {150.00 USD}
+  Assets:Stock   2 ZZZ {10.00 USD}
+  Assets:Cash
+
+2020-01-03 * "Sell all AAPL"
+  Assets:Stock  -1 AAPL {150.00 USD}
+  Assets:Cash
+
+2020-01-04 * "Buy AAPL back"
+  Assets:Stock   1 AAPL {150.00 USD}
+  Assets:Cash
