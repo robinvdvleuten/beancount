@@ -1,0 +1,4 @@
+; A file included twice (here: including itself) is loaded once, and the
+; repeat is an error.
+include "duplicate_include.fail.beancount"
+2020-01-01 open Assets:Cash

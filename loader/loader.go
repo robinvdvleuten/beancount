@@ -80,6 +80,24 @@ func (e *IncludeGlobNoMatchError) Severity() diagnostic.Severity { return diagno
 
 func (e *IncludeGlobNoMatchError) GetPosition() ast.Position { return e.Include.Position() }
 
+// DuplicateIncludeError reports an include of a file that is already loaded,
+// such as an include cycle or two files including the same one. The file is
+// loaded only once.
+type DuplicateIncludeError struct {
+	Include *ast.Include
+	Path    string // The included path, relative to the including file
+}
+
+func (e *DuplicateIncludeError) Error() string {
+	pos := e.Include.Position()
+	return fmt.Sprintf("%s:%d: Duplicate filename parsed: %q", pos.Filename, pos.Line, e.Path)
+}
+
+// Severity is fatal: official beancount reports a duplicate include as an error.
+func (e *DuplicateIncludeError) Severity() diagnostic.Severity { return diagnostic.SeverityError }
+
+func (e *DuplicateIncludeError) GetPosition() ast.Position { return e.Include.Position() }
+
 // DocumentRootError reports a documents option pointing at a missing directory.
 type DocumentRootError struct {
 	Option *ast.Option
@@ -508,6 +526,15 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		}
 
 		for _, path := range resolvedPaths {
+			if absInclude, err := filepath.Abs(path); err == nil && l.visited[absInclude] {
+				shown := path
+				if rel, err := filepath.Rel(baseDir, path); err == nil {
+					shown = rel
+				}
+				l.diagnostics = append(l.diagnostics, &DuplicateIncludeError{Include: inc, Path: shown})
+				continue
+			}
+
 			// Recursively load the included file
 			includedAST, err := l.loadRecursive(ctx, path)
 			if err != nil {

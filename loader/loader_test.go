@@ -297,7 +297,8 @@ include "a.beancount"
 	absFileA, err := filepath.Abs(fileA)
 	assert.NoError(t, err)
 
-	// Load A - circular includes are handled via deduplication (not an error)
+	// Load A - circular includes are loaded once, and the repeat is a
+	// non-fatal error like beancount's "Duplicate filename parsed".
 	// A is loaded first, then B is loaded, then A is requested again but already visited
 	ldr := New(WithFollowIncludes())
 	result, err := ldr.Load(context.Background(), fileA)
@@ -306,6 +307,9 @@ include "a.beancount"
 	// Should have 2 directives (one from A, one from B)
 	// The second include of A is skipped due to deduplication
 	assert.Equal(t, 2, len(result.AST.Directives))
+	loadErrors := diagnostic.Errors(result.Diagnostics)
+	assert.Equal(t, 1, len(loadErrors))
+	assert.Contains(t, loadErrors[0].Error(), `b.beancount:2: Duplicate filename parsed: "a.beancount"`)
 
 	// Verify Root and Includes (B is included, A is root)
 	assert.Equal(t, absFileA, result.Root)
@@ -417,11 +421,12 @@ include "common.beancount"
 	result, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
-	// Should have 2 directives (not 3 - deduplication should work)
-	// Actually, looking at the implementation, we visit each include directive,
-	// so it would try to include twice. But the second time it should be skipped
-	// because it's already in visited map.
+	// Should have 2 directives (not 3): the second include is skipped and
+	// reported.
 	assert.Equal(t, 2, len(result.AST.Directives))
+	loadErrors := diagnostic.Errors(result.Diagnostics)
+	assert.Equal(t, 1, len(loadErrors))
+	assert.Contains(t, loadErrors[0].Error(), `main.beancount:3: Duplicate filename parsed: "common.beancount"`)
 
 	// Verify Root and Includes (common.beancount only appears once)
 	assert.Equal(t, absMainFile, result.Root)
