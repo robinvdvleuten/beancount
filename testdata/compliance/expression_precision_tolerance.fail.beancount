@@ -1,0 +1,8 @@
+; An arithmetic amount keeps the precision Python's decimal gives it:
+; 1 + 2.20 is 3.20, so the tolerance is 0.005 and the 0.03 residual fails.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Residual beyond the stated precision"
+  Assets:A  (1 + 2.20) USD
+  Assets:B  -3.23 USD

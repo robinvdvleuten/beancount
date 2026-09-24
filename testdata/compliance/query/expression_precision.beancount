@@ -1,0 +1,11 @@
+; Arithmetic amounts keep Python decimal's precision: sums take the finer
+; operand, products add decimals, exact quotients keep the ideal exponent.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Expressions"
+  Assets:A  (1 + 2.20) USD
+  Assets:A  2 * 3.50 USD
+  Assets:A  10.00 / 2 USD
+  Assets:A  -3.30 / 1.1 USD
+  Assets:B
