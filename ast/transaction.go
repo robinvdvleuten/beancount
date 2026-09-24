@@ -74,6 +74,15 @@ func (t *Transaction) AllLinks() []Link {
 func (t *Transaction) Position() Position  { return t.pos }
 func (t *Transaction) Date() *Date         { return t.date }
 func (t *Transaction) Kind() DirectiveKind { return KindTransaction }
+
+// Accounts returns the account of each posting.
+func (t *Transaction) Accounts() []Account {
+	accounts := make([]Account, len(t.Postings))
+	for i, posting := range t.Postings {
+		accounts[i] = posting.Account
+	}
+	return accounts
+}
 func (t *Transaction) AffectedNodes() []string {
 	nodes := make([]string, 0, len(t.Postings))
 	seenAccounts := make(map[string]bool)

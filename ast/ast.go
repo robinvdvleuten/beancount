@@ -149,6 +149,12 @@ type Directive interface {
 	Kind() DirectiveKind
 }
 
+// WithAccounts is implemented by directives that reference accounts, the
+// counterpart of beancount's getters.get_entry_accounts.
+type WithAccounts interface {
+	Accounts() []Account
+}
+
 // positionedItem represents any AST item that has a position in the source file.
 type positionedItem struct {
 	pos       Position

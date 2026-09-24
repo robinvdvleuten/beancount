@@ -207,17 +207,19 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"has_account": {overloads: []funcOverload{
+		// Like bean-query, a case-insensitive search through every
+		// account the entry references, not only transaction postings.
 		{[]DType{TString}, TBool, func(row *Row, args []any) any {
-			txn, ok := row.Entry.(*ast.Transaction)
+			entry, ok := row.Entry.(ast.WithAccounts)
 			if !ok {
 				return false
 			}
-			re, err := regexp.Compile(args[0].(string))
+			re, err := regexp.Compile("(?i)" + args[0].(string))
 			if err != nil {
 				return false
 			}
-			for _, posting := range txn.Postings {
-				if re.MatchString(string(posting.Account)) {
+			for _, account := range entry.Accounts() {
+				if re.MatchString(string(account)) {
 					return true
 				}
 			}

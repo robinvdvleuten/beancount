@@ -95,6 +95,9 @@ func (o *Open) AffectedNodes() []string {
 	return nodes
 }
 
+// Accounts returns the account the directive opens.
+func (o *Open) Accounts() []Account { return []Account{o.Account} }
+
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (o *Open) SetPosition(pos Position) { o.pos = pos }
 
@@ -126,6 +129,9 @@ func (c *Close) Kind() DirectiveKind { return KindClose }
 func (c *Close) AffectedNodes() []string {
 	return []string{string(c.Account)}
 }
+
+// Accounts returns the account the directive closes.
+func (c *Close) Accounts() []Account { return []Account{c.Account} }
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (c *Close) SetPosition(pos Position) { c.pos = pos }
@@ -172,6 +178,9 @@ func (b *Balance) AffectedNodes() []string {
 	return nodes
 }
 
+// Accounts returns the account whose balance is asserted.
+func (b *Balance) Accounts() []Account { return []Account{b.Account} }
+
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (b *Balance) SetPosition(pos Position) { b.pos = pos }
 
@@ -206,6 +215,9 @@ func (p *Pad) AffectedNodes() []string {
 	return []string{string(p.Account), string(p.AccountPad)}
 }
 
+// Accounts returns the padded account and the source account.
+func (p *Pad) Accounts() []Account { return []Account{p.Account, p.AccountPad} }
+
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (p *Pad) SetPosition(pos Position) { p.pos = pos }
 
@@ -238,6 +250,9 @@ func (n *Note) Kind() DirectiveKind { return KindNote }
 func (n *Note) AffectedNodes() []string {
 	return []string{string(n.Account)}
 }
+
+// Accounts returns the account the note is attached to.
+func (n *Note) Accounts() []Account { return []Account{n.Account} }
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (n *Note) SetPosition(pos Position) { n.pos = pos }
@@ -274,6 +289,9 @@ func (d *Document) Kind() DirectiveKind { return KindDocument }
 func (d *Document) AffectedNodes() []string {
 	return []string{string(d.Account)}
 }
+
+// Accounts returns the account the document is attached to.
+func (d *Document) Accounts() []Account { return []Account{d.Account} }
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (d *Document) SetPosition(pos Position) { d.pos = pos }

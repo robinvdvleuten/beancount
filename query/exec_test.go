@@ -2,6 +2,7 @@ package query
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -234,4 +235,27 @@ func TestInventoryKeepsInsertionOrder(t *testing.T) {
 	inv.AddAmount(&Amount{Number: decimal.NewFromInt(-1), Currency: "AAPL"})
 	inv.AddAmount(aapl)
 	assert.Equal(t, "2 ZZZ, 1 AAPL", valueString(inv))
+}
+
+func TestHasAccountMatchesEveryEntryAccount(t *testing.T) {
+	// Like bean-query, has_account searches every account an entry
+	// references, case-insensitively, so it also selects open and pad
+	// directives.
+	ctx, tree := newContextFromSource(t, `
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+2020-01-02 pad Assets:Cash Equity:Opening
+2020-01-03 balance Assets:Cash 10 USD
+2020-01-04 open Expenses:Food
+`)
+	stmt, err := bql.Parse("PRINT FROM has_account('opening')")
+	assert.NoError(t, err)
+	compiled, err := CompilePrint(ctx, stmt.(*bql.Print))
+	assert.NoError(t, err)
+	var out strings.Builder
+	assert.NoError(t, ExecutePrint(context.Background(), ctx, tree, compiled, &out))
+	assert.Contains(t, out.String(), "open Equity:Opening")
+	assert.Contains(t, out.String(), "pad Assets:Cash Equity:Opening")
+	assert.NotContains(t, out.String(), "balance")
+	assert.NotContains(t, out.String(), "Expenses:Food")
 }
