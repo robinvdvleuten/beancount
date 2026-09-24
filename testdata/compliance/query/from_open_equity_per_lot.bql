@@ -1,0 +1,1 @@
+SELECT date, flag, account, position, weight FROM OPEN ON 2020-01-06 WHERE flag = 'S'
