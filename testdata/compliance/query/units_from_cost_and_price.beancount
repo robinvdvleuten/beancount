@@ -1,0 +1,15 @@
+; A posting that states only its currency gets its units from the residual
+; of the currency it weighs in, divided by its per-unit cost or price.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Units from a per-unit cost"
+  Assets:Stock  HOOL {10 USD}
+  Assets:Cash   -20.00 USD
+
+2020-01-03 * "Units from a price"
+  Assets:Stock  GOOG @ 10 USD
+  Assets:Cash   -30.00 USD
+
+2020-01-04 balance Assets:Stock  2.00 HOOL
+2020-01-04 balance Assets:Stock  3.00 GOOG

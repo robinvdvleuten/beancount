@@ -1,0 +1,7 @@
+; With neither units nor a cost number there are too many missing numbers.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Nothing to divide by"
+  Assets:Stock  HOOL {}
+  Assets:Cash   -20.00 USD

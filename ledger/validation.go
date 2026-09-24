@@ -559,16 +559,32 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 	}
 
 	// Complete a currency-only amount: the missing number is the residual
-	// of its declared currency.
+	// of the currency it balances in. Held at a per-unit cost or at a price,
+	// the units are the residual of that currency divided by it (less a
+	// compound cost's total part), like beancount's interpolate_group.
 	if len(currencyOnlyAmounts) == 1 {
 		posting := currencyOnlyAmounts[0]
 		currency := posting.Amount.Currency
-		needed := roundInterpolated(balance[currency].Neg(), v.transactionTolerance(currency, stated[currency], specCostTolerances))
+		weightCurrency, perUnit, total, ok := unitsWeightTerms(posting)
+		if !ok {
+			return delta, unbalancedValidation(balance), nil
+		}
+
+		weight := balance[weightCurrency].Neg()
+		needed := weight
+		if weightCurrency != currency {
+			needed = pydecimal.Quo(weight.Sub(total), perUnit)
+		}
+		needed = roundInterpolated(needed, v.transactionTolerance(currency, stated[currency], specCostTolerances))
 		delta.InferredAmounts[posting] = &ast.Amount{
 			Value:    formatInferredNumber(needed),
 			Currency: currency,
 		}
-		balance[currency] = balance[currency].Add(needed)
+		if weightCurrency == currency {
+			balance[currency] = balance[currency].Add(needed)
+		} else {
+			balance[weightCurrency] = balance[weightCurrency].Add(needed.Mul(perUnit).Add(total))
+		}
 	}
 
 	// Complete a value-less price annotation (bare @ or currency-only): the
@@ -1516,6 +1532,36 @@ func roundInterpolated(number, tolerance decimal.Decimal) decimal.Decimal {
 		return number
 	}
 	return number.RoundBank(-quantum.Exponent())
+}
+
+// unitsWeightTerms returns how a posting whose units number is missing
+// weighs: in its cost currency at a per-unit cost (plus a compound total),
+// in its price currency at a price, or in its own currency. ok is false
+// when the units cannot be solved for, as with a total-only or empty cost.
+func unitsWeightTerms(posting *ast.Posting) (currency string, perUnit, total decimal.Decimal, ok bool) {
+	if cost := posting.Cost; cost != nil {
+		if cost.IsTotal || cost.IsMergeCost() || cost.Amount == nil || cost.Amount.Value == "" {
+			return "", decimal.Zero, decimal.Zero, false
+		}
+		perUnit, err := ParseAmount(cost.Amount)
+		if err != nil || perUnit.IsZero() {
+			return "", decimal.Zero, decimal.Zero, false
+		}
+		if cost.Total != nil {
+			if total, err = ParseAmount(cost.Total); err != nil {
+				return "", decimal.Zero, decimal.Zero, false
+			}
+		}
+		return cost.Amount.Currency, perUnit, total, true
+	}
+	if price := posting.Price; price != nil && price.Value != "" && price.Currency != "" && !posting.PriceTotal {
+		perUnit, err := ParseAmount(price)
+		if err != nil || perUnit.IsZero() {
+			return "", decimal.Zero, decimal.Zero, false
+		}
+		return price.Currency, perUnit, decimal.Zero, true
+	}
+	return posting.Amount.Currency, decimal.Zero, decimal.Zero, true
 }
 
 // residualCurrencies returns the currencies with a non-zero residual, in the
