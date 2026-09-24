@@ -65,6 +65,21 @@ func (w *IncludedOptionWarning) Severity() diagnostic.Severity {
 
 func (w *IncludedOptionWarning) GetPosition() ast.Position { return w.Option.Position() }
 
+// IncludeGlobNoMatchError reports an include pattern that matched no files.
+type IncludeGlobNoMatchError struct {
+	Include *ast.Include
+}
+
+func (e *IncludeGlobNoMatchError) Error() string {
+	pos := e.Include.Position()
+	return fmt.Sprintf("%s:%d: File glob %q does not match any files", pos.Filename, pos.Line, e.Include.Filename.Value)
+}
+
+// Severity is fatal: official beancount reports an unmatched include glob as an error.
+func (e *IncludeGlobNoMatchError) Severity() diagnostic.Severity { return diagnostic.SeverityError }
+
+func (e *IncludeGlobNoMatchError) GetPosition() ast.Position { return e.Include.Position() }
+
 // DocumentRootError reports a documents option pointing at a missing directory.
 type DocumentRootError struct {
 	Option *ast.Option
@@ -474,20 +489,33 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 
 		// Resolve path relative to the including file's directory
 		includePath := inc.Filename.Value
-		if !filepath.IsAbs(includePath) {
-			includePath = filepath.Join(baseDir, includePath)
+		resolvedPaths := []string{includePath}
+		if hasGlobMeta(includePath) {
+			matches, err := globInclude(baseDir, includePath)
+			if err != nil {
+				mergeTimer.End()
+				return nil, fmt.Errorf("invalid include pattern %q: %w", includePath, err)
+			}
+			if len(matches) == 0 {
+				l.diagnostics = append(l.diagnostics, &IncludeGlobNoMatchError{Include: inc})
+			}
+			resolvedPaths = matches
+		} else if !filepath.IsAbs(includePath) {
+			resolvedPaths[0] = filepath.Join(baseDir, includePath)
 		}
 
-		// Recursively load the included file
-		includedAST, err := l.loadRecursive(ctx, includePath)
-		if err != nil {
-			mergeTimer.End()
-			// Don't wrap ParseError - it already contains full path information
-			// Just propagate the error up the include chain
-			return nil, err
-		}
+		for _, path := range resolvedPaths {
+			// Recursively load the included file
+			includedAST, err := l.loadRecursive(ctx, path)
+			if err != nil {
+				mergeTimer.End()
+				// Don't wrap ParseError - it already contains full path information
+				// Just propagate the error up the include chain
+				return nil, err
+			}
 
-		includedASTs = append(includedASTs, includedAST)
+			includedASTs = append(includedASTs, includedAST)
+		}
 	}
 
 	// Merge ASTs

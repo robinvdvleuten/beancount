@@ -1,0 +1,3 @@
+include "include_glob/**/*.beancount"
+2020-01-02 balance Assets:Top     0 USD
+2020-01-02 balance Assets:Nested  0 USD

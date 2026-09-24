@@ -1,0 +1,2 @@
+include "include_glob/*.beancount"
+2020-01-02 balance Assets:Hidden  0 USD
