@@ -2,226 +2,266 @@
 
 ![beancounting-gopher](https://github.com/user-attachments/assets/e73f4046-22d2-4824-b8f0-11a1b4702cfa)
 
-A fast, lightweight [Beancount](https://beancount.github.io/) parser and formatter written in Go.
+A [Beancount](https://beancount.github.io/) toolkit written in Go, for bookkeeping with AI agents and for extending in your own code. An agent edits your plain-text ledger, and one command checks each change. It rejects wrong entries with a line number and a reason, so the agent can fix them before they reach your books. When the built-in checks are not enough, you write your own in Go, using the same parser and ledger that the command line uses, and build it into one binary. Every check, format, and query result is tested against the official Beancount tools.
 
-[![Latest Release](https://img.shields.io/github/release/robinvdvleuten/beancount.svg?style=flat-square)](https://github.com/robinvdvleuten/beancount/releases)
-[![Build Status](https://img.shields.io/github/actions/workflow/status/robinvdvleuten/beancount/build.yml?style=flat-square&branch=main)](https://github.com/robinvdvleuten/beancount/actions?query=workflow%3Abuild)
-[![GPL-2.0 license](https://img.shields.io/github/license/robinvdvleuten/beancount.svg?style=flat-square)](https://github.com/robinvdvleuten/beancount/blob/main/COPYING)
-[![PkgGoDev](https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square)](https://pkg.go.dev/github.com/robinvdvleuten/beancount)
-[![Go ReportCard](https://goreportcard.com/badge/github.com/robinvdvleuten/beancount?style=flat-square)](https://goreportcard.com/report/robinvdvleuten/beancount)
+- **Built for agents.** The ledger is a text file, so the agent edits it like code, and you review each change as a `git diff`. Errors give the file, the line, and a reason, plus exit code `1`.
+- **Extend in plain Go.** Write importers, house rules, and reports with the `loader`, `ast`, `ledger`, `formatter`, and `query` packages. You get typed directives, typed errors, and a source position on each one.
+- **Same answers as the official tools.** 155 ledger fixtures run through both `bean-check` and this tool. 93 BQL queries must match `bean-query` output byte for byte, in both text and CSV. The rare differences are listed in [`KNOWN_GAPS.md`](testdata/compliance/KNOWN_GAPS.md).
+- **Quick enough to run after every edit.** On a 59,000-line ledger, `beancount check` takes 0.16 s, against 0.69 s for `bean-check` 2.3.6 (Apple M1 Pro).
+- **Clean diffs.** `beancount format` aligns amounts with the same rules as `bean-format`, so agent edits and hand edits look the same.
+- **One binary, no Python.** Linux, macOS, and Windows builds, Homebrew, and a Docker image. There is also a local web editor for you to review the books.
 
-## What is it?
+The built-in checks plus a house rule of your own, in a few lines of Go:
 
-[Beancount](https://beancount.github.io/) is a double-entry bookkeeping system that uses plain text files to track personal or business finances. It allows you to maintain your accounting ledger as readable text files, making it easy to version control, search, and programmatically manipulate your financial data. The Beancount file format uses a simple, human-readable syntax to record transactions, accounts, and other financial directives.
+```go
+result, _ := loader.New(loader.WithFollowIncludes()).Load(ctx, "ledger.beancount")
+l := ledger.New()
+l.Process(ctx, result.AST)
+for _, err := range l.Errors() {
+    fmt.Println(err) // ledger.beancount:7: Invalid reference to unknown account 'Expenses:Coffee'
+}
+for _, d := range result.AST.Directives {
+    if txn, ok := d.(*ast.Transaction); ok && txn.Payee.Value == "" {
+        fmt.Printf("%s: transaction has no payee\n", txn.Position()) // ledger.beancount:7:12: transaction has no payee
+    }
+}
+```
 
-This project is a Go implementation of a Beancount file parser, formatter, validator, and query engine. While the official Beancount implementation is written in Python and includes a full accounting engine with balance calculations, reports, queries, and a web interface, this Go version focuses on parsing, formatting, ledger validation, and BQL queries. It's designed to be fast and lightweight, making it ideal for tooling, text editors, build pipelines, or any situation where you need to work with Beancount files without the overhead of the full accounting system.
+> **Not included:** plugins. `plugin` directives are parsed, but they do not run. If your ledger depends on a plugin such as `auto_accounts` or `implicit_prices`, results can differ from `bean-check`.
 
-## Features
+---
 
-This implementation currently supports:
+- [Install](#install)
+- [Getting started](#getting-started)
+- [Let an agent keep the books](#let-an-agent-keep-the-books)
+- [Commands](#commands)
+- [Extend it in Go](#extend-it-in-go)
+- [Contributing](#contributing)
+- [License](#license)
 
-- **Parsing**: Full parsing of Beancount file syntax
-- **Formatting**: Auto-align currencies, numbers, and accounts
-- **Validation**: Balance checks, account lifecycle, assertions
-- **Inventory**: Lot-based tracking with cost basis (FIFO/LIFO)
-- **Includes**: Recursive loading of modular Beancount files
-- **Queries**: The Beancount Query Language (BQL), compatible with `bean-query`
-- **CLI Interface**: Simple command-line tools for common operations
+---
 
-**Note**: This implementation includes ledger validation with transaction balancing, account management, inventory tracking, and BQL queries. It does not include reporting or plugins like the official Python implementation.
+## Install
 
-## Compatibility
-
-This Go implementation is stricter than the official Python Beancount parser in some areas:
-
-- Arithmetic expressions in amounts must be enclosed in parentheses: `(155.74 + 304.58) USD` instead of `155.74 + 304.58 USD`
-- Amount values must include both a number and currency: `100.00 USD` (not just `100.00`)
-
-## Installation
-
-### Packages & Binaries
-
-If you use Brew, you can simply install the package:
+**Homebrew:**
 
 ```sh
 brew install robinvdvleuten/tap/beancount
 ```
 
-Or download a binary from the [releases](https://github.com/robinvdvleuten/beancount/releases)
-page. Linux (including ARM) binaries are available, as well as Debian, RPM AND APK
-packages.
+**Binaries:** download one from the [releases page](https://github.com/robinvdvleuten/beancount/releases). Builds are available for Linux, macOS, and Windows.
 
-### Build From Source
-
-Alternatively you can also build `beancount` from source. Make sure you have a
-working Go environment (Go 1.24 or higher is required). See the
-[install instructions](https://golang.org/doc/install.html).
-
-To install beancount, simply run:
+**Docker:**
 
 ```sh
-go install github.com/robinvdvleuten/beancount
+docker run --rm -v "$PWD:/data" ghcr.io/robinvdvleuten/beancount check /data/ledger.beancount
 ```
 
-## Usage
-
-### Check a Beancount file
-
-Validate a Beancount file with full ledger checks:
+**From source** (Go 1.26 or newer):
 
 ```sh
-beancount check example.beancount
+go install github.com/robinvdvleuten/beancount/cmd/beancount@latest
 ```
 
-Or read from stdin (omit filename or use `-`):
+## Getting started
+
+1. Create a small ledger:
+
+   ```sh
+   cat > ledger.beancount <<'EOF'
+   2024-01-01 open Assets:Checking USD
+   2024-01-01 open Expenses:Food USD
+
+   2024-01-15 * "Grocery shopping"
+     Expenses:Food  42.50 USD
+     Assets:Checking  -42.50 USD
+   EOF
+   ```
+
+2. Check it:
+
+   ```sh
+   beancount check ledger.beancount
+   ```
+
+   ```
+   ✓ Check passed
+   ```
+
+3. Align the numbers. Format writes to stdout, so save the output to a temporary file and then replace the original:
+
+   ```sh
+   beancount format ledger.beancount > ledger.tmp && mv ledger.tmp ledger.beancount
+   ```
+
+   ```
+   2024-01-15 * "Grocery shopping"
+     Expenses:Food     42.50 USD
+     Assets:Checking  -42.50 USD
+   ```
+
+4. Ask a question:
+
+   ```sh
+   beancount query ledger.beancount "BALANCES"
+   ```
+
+   ```
+       account     sum_positi
+   --------------- ----------
+   Assets:Checking -42.50 USD
+   Expenses:Food    42.50 USD
+   ```
+
+5. Open it in the browser editor at <http://127.0.0.1:8080>:
+
+   ```sh
+   beancount web ledger.beancount
+   ```
+
+## Let an agent keep the books
+
+Any coding agent that can run shell commands can use this tool, for example Claude Code, Codex, or Cursor. Put the rules in the instructions file your agent reads, such as `AGENTS.md` or `CLAUDE.md`, next to your ledger:
+
+```markdown
+# Bookkeeping
+
+The ledger is `ledger.beancount`.
+
+- After every edit, run `beancount check ledger.beancount`.
+  Fix each reported line and run it again until it exits with 0.
+- Then run `beancount format ledger.beancount > ledger.tmp && mv ledger.tmp ledger.beancount`.
+- Answer questions about the books with `beancount query ledger.beancount "<BQL>"`.
+  Do not do the arithmetic yourself.
+- Never add an account without an `open` directive.
+```
+
+When the agent makes a mistake, the check tells it where:
 
 ```sh
-echo "2024-01-01 open Assets:Checking USD" | beancount check
+$ beancount check ledger.beancount
+/home/you/books/ledger.beancount:7: Invalid reference to unknown account 'Expenses:Coffee'
+
+✗ 1 validation error(s) found
+$ echo $?
+1
 ```
 
-This command validates:
-- Transaction balance across all currencies
-- Account open/close dates are respected
-- Balance assertions match actual balances
-- All referenced accounts exist
+Keep the ledger in git and review each change as a diff before you commit it.
 
-Example error output:
-```
-example.beancount:15: Transaction does not balance: (-500.00 USD)
+## Commands
 
-   2020-01-15 * "Grocery shopping"
-     Assets:Checking   1000.00 USD
-     Expenses:Food      500.00 USD
+Every command that takes a file also reads from stdin. To use stdin, leave out the filename or use `-`.
 
-1 validation error(s) found
-```
-
-### Format a Beancount file
-
-Format a Beancount file with automatic alignment:
+### `check`: validate a ledger
 
 ```sh
-beancount format example.beancount
-
-# Specify currency column position
-beancount format --currency-column 60 example.beancount
-
-# Customize account name and number widths
-beancount format --prefix-width 50 --num-width 12 example.beancount
+beancount check ledger.beancount
 ```
 
-Or read from stdin (omit filename or use `-`):
+It checks that each transaction balances in every currency, that postings use accounts only while they are open, that balance assertions hold, and that all referenced accounts exist. Each error gives the absolute file path, the line, and the reason, and the command exits with `1`:
+
+```
+/home/you/books/ledger.beancount:3: Transaction does not balance: (1500 USD)
+
+✗ 1 validation error(s) found
+```
+
+### `format`: align numbers and currencies
 
 ```sh
-echo "2024-01-01 open Assets:Checking USD" | beancount format
+beancount format ledger.beancount
+beancount format --currency-column 60 ledger.beancount
+beancount format --prefix-width 50 --num-width 12 ledger.beancount
 ```
 
-### Query a Beancount file
+It follows `bean-format`'s rules, so it changes the same lines and leaves the rest as written.
 
-Run [Beancount Query Language](https://beancount.github.io/docs/beancount_query_language.html) (BQL) queries against a ledger, just like `bean-query`:
+### `query`: run BQL
 
 ```sh
-beancount query example.beancount "SELECT account, sum(position) GROUP BY account ORDER BY account"
+beancount query ledger.beancount "BALANCES AT cost"
+beancount query ledger.beancount 'JOURNAL "Checking"'
+beancount query -f csv -m ledger.beancount "SELECT account, sum(position) GROUP BY account"
 ```
 
-```
-        account                sum_position
------------------------ --------------------------
-Assets:Checking          3495.50 USD
-Assets:Invest              10    HOOL {500.00 USD}
-Equity:Opening-Balances -1000.00 USD
-...
-```
-
-The full SELECT grammar is supported (FROM with OPEN/CLOSE/CLEAR summarization, WHERE, GROUP BY, ORDER BY, LIMIT, DISTINCT), along with the aggregate functions, the simple-function library, and the `BALANCES`, `JOURNAL`, and `PRINT` shortcut statements:
+It supports the full `SELECT` syntax: `FROM` with `OPEN`/`CLOSE`/`CLEAR`, `WHERE`, `GROUP BY`, `ORDER BY`, `LIMIT`, and `DISTINCT`. It also has the aggregate and simple functions and the `BALANCES`, `JOURNAL`, and `PRINT` shortcuts. Leave out the query to start an interactive shell, or pipe one in:
 
 ```sh
-# Balances per account, at cost
-beancount query example.beancount "BALANCES AT cost"
-
-# A running journal for accounts matching a regex
-beancount query example.beancount 'JOURNAL "Checking"'
-
-# CSV output, with amounts split into per-currency number columns
-beancount query -f csv -m example.beancount "SELECT account, sum(position) GROUP BY account"
+echo "SELECT payee, narration WHERE 'trip' IN tags" | beancount query ledger.beancount
 ```
 
-Omit the query to start an interactive shell, or pipe one in:
+### `web`: edit in the browser
 
 ```sh
-beancount query example.beancount
-echo "SELECT payee, narration WHERE 'trip' IN tags" | beancount query example.beancount
+beancount web ledger.beancount --watch
 ```
 
-Output is byte-for-byte compatible with `bean-query` from beancount v2; the compliance suite in `testdata/compliance/query` enforces this against the official tool.
+This starts a local server on `127.0.0.1:8080`. It has a source editor and balance sheet and income statement reports. Use `--read-only` to turn off writes, `--watch` to reload when the file changes, and `--host`/`--port` to change the address.
 
-### Telemetry
-
-Use the global `--telemetry` flag to see detailed timing breakdowns for any command:
+### `doctor lex`: show tokens
 
 ```sh
-beancount --telemetry check example.beancount
-beancount --telemetry format example.beancount
+beancount doctor lex ledger.beancount
 ```
 
-This displays a hierarchical breakdown of where time is spent during execution:
+### `--telemetry`: see where the time goes
+
+```sh
+beancount --telemetry check ledger.beancount
+```
+
+This writes a timing tree to stderr:
 
 ```
-✓ Check passed
-
-check example.beancount: 125ms
-├─ loader.load example.beancount: 85ms
+check ledger.beancount: 125ms
+├─ loader.load ledger.beancount: 85ms
 │  └─ loader.parse: 85ms
 │     ├─ parser.lexing: 75ms
-│     ├─ parser.parsing: 8ms
-│     ├─ parser.push_pop: ~1ms
-│     └─ parser.sorting: 245µs
-├─ loader.load accounts.beancount: 35ms
-│  └─ loader.parse: 35ms
-│     ├─ parser.lexing: 30ms
-│     ├─ parser.parsing: ~4ms
-│     ├─ parser.push_pop: 823µs
-│     └─ parser.sorting: 156µs
+│     └─ parser.parsing: 8ms
 ├─ ast.merging: ~2ms
 └─ ledger.processing (1523 directives): ~3ms
 ```
 
-The telemetry output is written to stderr, making it easy to separate from command results.
+## Extend it in Go
 
-## Programmatic Usage
+Every command is built from Go packages you can import. Use them when you need something the CLI does not do: an importer for your bank, a rule only your books follow, or a report of your own. The result is a Go program that builds into one binary.
 
-This library can be used programmatically in your Go applications to parse, manipulate, and generate Beancount files.
-
-### Parsing Beancount Files
-
-Load and parse a Beancount file:
-
-```go
-import (
-    "context"
-    "github.com/robinvdvleuten/beancount/loader"
-)
-
-// Load a single file
-ldr := loader.New()
-ast, err := ldr.Load(context.Background(), "example.beancount")
-if err != nil {
-    log.Fatal(err)
-}
-
-// Load with recursive include resolution
-ldr = loader.New(loader.WithFollowIncludes())
-ast, err = ldr.Load(context.Background(), "main.beancount")
+```sh
+go get github.com/robinvdvleuten/beancount
 ```
 
-### Building Transactions Programmatically
-
-Create Beancount transactions using the builder API:
+**Load and check a ledger.** `Errors()` returns typed errors, such as `*ledger.TransactionNotBalancedError`, and each one carries its source position:
 
 ```go
-import "github.com/robinvdvleuten/beancount/ast"
+ctx := context.Background()
+result, err := loader.New(loader.WithFollowIncludes()).Load(ctx, "ledger.beancount")
+if err != nil {
+    log.Fatal(err) // I/O and syntax errors
+}
 
-// Create a transaction with the functional options pattern
+l := ledger.New()
+if err := l.Process(ctx, result.AST); err != nil {
+    log.Fatal(err)
+}
+for _, err := range l.Errors() {
+    fmt.Println(err)
+}
+```
+
+**Add a house rule.** Walk the directives, which are ordinary Go structs, after the ledger has processed them:
+
+```go
+for _, d := range result.AST.Directives {
+    if txn, ok := d.(*ast.Transaction); ok && txn.Payee.Value == "" {
+        fmt.Printf("%s: transaction has no payee\n", txn.Position())
+    }
+}
+```
+
+**Build a transaction** and print it in Beancount syntax:
+
+```go
 date, _ := ast.NewDate("2024-01-15")
 checking, _ := ast.NewAccount("Assets:Checking")
 groceries, _ := ast.NewAccount("Expenses:Groceries")
@@ -229,74 +269,38 @@ groceries, _ := ast.NewAccount("Expenses:Groceries")
 txn := ast.NewTransaction(date, "Grocery shopping",
     ast.WithFlag("*"),
     ast.WithPayee("Whole Foods"),
-    ast.WithTags("food", "weekly"),
     ast.WithPostings(
         ast.NewPosting(groceries, ast.WithAmount("125.43", "USD")),
-        ast.NewPosting(checking), // Balancing posting
+        ast.NewPosting(checking),
     ),
 )
+
+formatter.New().FormatTransaction(txn, os.Stdout)
+// 2024-01-15 * "Whole Foods" "Grocery shopping"
+//     Expenses:Groceries  125.43 USD
+//     Assets:Checking
 ```
 
-### Formatting Output
-
-Format transactions back to Beancount syntax:
-
-```go
-import (
-    "context"
-    "os"
-    "github.com/robinvdvleuten/beancount/formatter"
-)
-
-// Create a formatter
-fmtr := formatter.New()
-
-// Format a single transaction
-fmtr.FormatTransaction(txn, os.Stdout)
-
-// Format an entire AST
-fmtr.Format(context.Background(), ast, sourceContent, os.Stdout)
-```
-
-### Complete Example
-
-See the [CSV Importer example](_examples/csv_importer/) for a complete working example that demonstrates:
-- Reading CSV files with Go's `encoding/csv`
-- Building transactions programmatically with the builder API
-- Automatic expense categorization
-- Error handling and validation
-- Formatting output
-
-Run the example:
+The [CSV importer example](_examples/csv_importer/) is a complete program. It reads a bank CSV, sorts the expenses into categories, and writes out formatted transactions:
 
 ```sh
 cd _examples/csv_importer
 go run main.go transactions.csv
 ```
 
-For more details on the builder API, see the [package documentation](https://pkg.go.dev/github.com/robinvdvleuten/beancount/ast).
+For the full API, see the [package docs on pkg.go.dev](https://pkg.go.dev/github.com/robinvdvleuten/beancount).
 
 ## Contributing
 
-Everyone is encouraged to help improve this project. Here are a few ways you can help:
+To report a bug, open an [issue](https://github.com/robinvdvleuten/beancount/issues). To fix one, open a [pull request](https://github.com/robinvdvleuten/beancount/pulls). For bigger ideas, open an issue first so you can get feedback before you spend a lot of time on it.
 
-- [Report bugs](https://github.com/robinvdvleuten/beancount/issues)
-- Fix bugs and [submit pull requests](https://github.com/robinvdvleuten/beancount/pulls)
-- Write, clarify, or fix documentation
-- Suggest or add new features
-
-To get started with development:
-
-```
+```sh
 git clone https://github.com/robinvdvleuten/beancount.git
 cd beancount
 go test ./...
 ```
 
-Before submitting a pull request, please make sure to run
-`go fmt` on any Go source files you touched so the code stays consistent.
-
-Feel free to open an issue to get feedback on your idea before spending too much time on it.
+Before you open a pull request, run `gofmt -l .`, `golangci-lint run`, and `go test ./...`. If your change affects Beancount behavior, add a fixture under `testdata/compliance/`. If `bean-check` is on your `PATH`, the test suite compares this tool against it.
 
 ## License
 
