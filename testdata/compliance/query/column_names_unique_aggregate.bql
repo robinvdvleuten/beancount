@@ -1,0 +1,1 @@
+SELECT account, sum(number), sum(number), count(account) AS n, count(date) AS n GROUP BY account

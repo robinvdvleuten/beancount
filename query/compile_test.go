@@ -309,3 +309,18 @@ func TestCompileFallbackClassErrors(t *testing.T) {
 		assert.Equal(t, want, compileErr.Message, query)
 	}
 }
+
+func TestCompileMakesTargetNamesUnique(t *testing.T) {
+	// Like bean-query's find_unique_name, a repeated name, derived or given
+	// with AS, gets _1, _2, … and ORDER BY a name finds its first column.
+	ctx, _ := newTestContext(t)
+	compiled := mustCompile(t, ctx, "SELECT account, account, number AS n, date AS n, number AS n ORDER BY n")
+	var names []string
+	for _, target := range compiled.Targets {
+		if !target.Hidden {
+			names = append(names, target.Name)
+		}
+	}
+	assert.Equal(t, []string{"account", "account_1", "n", "n_1", "n_2"}, names)
+	assert.Equal(t, []int{2}, compiled.OrderBy)
+}

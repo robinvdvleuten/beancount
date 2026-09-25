@@ -130,6 +130,7 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 			targets[i] = bql.Target{Expr: &bql.Ident{Name: name}}
 		}
 	}
+	allocated := make(map[string]bool, len(targets))
 	for _, target := range targets {
 		expr, err := c.compileExpr(target.Expr)
 		if err != nil {
@@ -139,6 +140,8 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 		if name == "" {
 			name = deriveName(target.Expr)
 		}
+		name = uniqueName(name, allocated)
+		allocated[name] = true
 		compiled.Targets = append(compiled.Targets, CompiledTarget{
 			Name:  name,
 			Type:  expr.typ(),
@@ -315,6 +318,16 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, clause st
 		key:    key,
 	})
 	return len(compiled.Targets) - 1, nil
+}
+
+// uniqueName returns name, or name_1, name_2, … when it is allocated, like
+// bean-query's find_unique_name.
+func uniqueName(name string, allocated map[string]bool) string {
+	unique := name
+	for i := 1; allocated[unique]; i++ {
+		unique = fmt.Sprintf("%s_%d", name, i)
+	}
+	return unique
 }
 
 // targetIndex resolves a 1-based index into the visible targets.
