@@ -1,0 +1,1 @@
+SELECT account, number, position, weight
