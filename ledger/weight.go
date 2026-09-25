@@ -1,6 +1,8 @@
 package ledger
 
 import (
+	"fmt"
+
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
@@ -47,56 +49,26 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 		return weightSet{}, nil
 
 	} else if hasExplicitCost {
-		// Cost: {X CURR} or {X CURR} @ Y CURR2 or {{X CURR}} (total cost)
-		// When there's a cost, ONLY the cost contributes to balance!
-		// The price (if present) is just informational (market value)
-		costAmount, err := ParseAmount(posting.Cost.Amount)
-		if err != nil {
-			return nil, err
+		// When there's a cost, only the cost contributes to balance; a
+		// price is informational. Like beancount, a total or compound cost
+		// becomes a per-unit cost first, and the weight is the units times
+		// that (possibly rounded) per-unit cost.
+		perUnit, costCurrency, ok := PerUnitCost(posting)
+		if !ok {
+			return nil, fmt.Errorf("invalid cost specification")
 		}
-
-		costCurrency := posting.Cost.Amount.Currency
-
-		// Like beancount, a total cost {{X CURR}} or compound cost
-		// {X # Y CURR} becomes a per-unit cost first, and the weight is the
-		// units times that (possibly rounded) per-unit cost.
-		var totalCost decimal.Decimal
-		if posting.Cost.IsTotal {
-			totalCost = perUnitWeight(amount, costAmount)
-		} else {
-			if posting.Cost.Total != nil {
-				additionalTotal, err := ParseAmount(posting.Cost.Total)
-				if err != nil {
-					return nil, err
-				}
-				if !amount.IsZero() {
-					costAmount = pydecimal.Add(costAmount, pydecimal.Quo(additionalTotal, amount.Abs()))
-				}
-			}
-			totalCost = pydecimal.Mul(amount, costAmount)
-		}
-
 		weights = weightSet{
-			{Amount: totalCost, Currency: costCurrency},
+			{Amount: pydecimal.Mul(amount, perUnit), Currency: costCurrency},
 		}
 
 	} else if hasPrice {
-		// Price only: @ or @@
-		// When there's only a price, use it for balance
-		priceAmount, err := ParseAmount(posting.Price)
-		if err != nil {
-			return nil, err
+		// Price only: the units convert at the per-unit price.
+		perUnit, priceCurrency, ok := PerUnitPrice(posting)
+		if !ok {
+			return nil, fmt.Errorf("invalid price specification")
 		}
-
-		priceCurrency := posting.Price.Currency
-
-		priceWeight := pydecimal.Mul(amount, priceAmount)
-		if posting.PriceTotal {
-			priceWeight = perUnitWeight(amount, priceAmount)
-		}
-
 		weights = weightSet{
-			{Amount: priceWeight, Currency: priceCurrency},
+			{Amount: pydecimal.Mul(amount, perUnit), Currency: priceCurrency},
 		}
 
 	} else {
@@ -107,16 +79,6 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 	}
 
 	return weights, nil
-}
-
-// perUnitWeight returns the weight of units bought at a total, derived like
-// beancount from the per-unit number total / |units|: 3 units at a total of
-// 10 weigh 9.999999999999999999999999999. Zero units weigh the signless total.
-func perUnitWeight(units, total decimal.Decimal) decimal.Decimal {
-	if units.IsZero() {
-		return total
-	}
-	return pydecimal.Mul(units, pydecimal.Quo(total, units.Abs()))
 }
 
 // balanceWeights accumulates weights from multiple postings

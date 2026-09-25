@@ -451,11 +451,11 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr))
 			return nil, nil, nil, errs
 		}
-		priceNumber, perr := decimal.NewFromString(posting.Price.Value)
-		if perr != nil {
+		if _, perr := decimal.NewFromString(posting.Price.Value); perr != nil {
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Price.Value, perr))
 			return nil, nil, nil, errs
 		}
+		perUnit, _, _ := PerUnitPrice(posting)
 		currency := posting.Price.Currency
 		if currency == "" {
 			if len(balance) != 1 {
@@ -465,10 +465,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				currency = c
 			}
 		}
-		weight := pydecimal.Mul(units, priceNumber)
-		if posting.PriceTotal {
-			weight = perUnitWeight(units, priceNumber)
-		}
+		weight := pydecimal.Mul(units, perUnit)
 		delta.InferredPrices[posting] = &ast.Amount{Value: posting.Price.Value, Currency: currency}
 		balance[currency] = pydecimal.Add(balance[currency], weight)
 	}
@@ -611,9 +608,10 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			currency := group.currency
 			residual := balance[currency]
 			// A total cost {{USD}} completes its total, like beancount's
-			// number_total; the lot's per-unit cost follows from it.
+			// number_total; the lot's per-unit cost follows from it, and
+			// the weight is the units at that (rounded) per-unit cost.
 			number := residual.Neg()
-			weight := perUnitWeight(amount, number)
+			weight := pydecimal.Mul(amount, pydecimal.Quo(number, amount.Abs()))
 			if !posting.Cost.IsTotal {
 				number = pydecimal.Quo(number, amount)
 				weight = pydecimal.Mul(amount, number)

@@ -214,3 +214,35 @@ func PerUnitCost(posting *ast.Posting) (number decimal.Decimal, currency string,
 	}
 	return *spec.Cost, spec.CostCurrency, true
 }
+
+// PerUnitPrice returns the per-unit price a posting converts at, as
+// beancount's parser computes it: the price number made positive, and for a
+// total price (@@) that total spread over the units, zero for zero units.
+// The currency is empty when the source leaves it to interpolation. ok is
+// false without a price number, and for a total price on a posting without
+// units, which beancount drops.
+func PerUnitPrice(posting *ast.Posting) (number decimal.Decimal, currency string, ok bool) {
+	if posting.Price == nil || posting.Price.Value == "" {
+		return decimal.Zero, "", false
+	}
+	number, err := ParseAmount(posting.Price)
+	if err != nil {
+		return decimal.Zero, "", false
+	}
+	number = number.Abs()
+	if posting.PriceTotal {
+		if posting.Amount == nil || posting.Amount.Value == "" {
+			return decimal.Zero, "", false
+		}
+		units, err := ParseAmount(posting.Amount)
+		if err != nil {
+			return decimal.Zero, "", false
+		}
+		if units.IsZero() {
+			number = decimal.Zero
+		} else {
+			number = pydecimal.Quo(number, units.Abs())
+		}
+	}
+	return number, posting.Price.Currency, true
+}

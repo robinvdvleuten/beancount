@@ -961,7 +961,7 @@ func specToleranceShares(postings []*ast.Posting) []toleranceShare {
 		if !ok {
 			continue
 		}
-		share := toleranceShare{units: units, price: perUnitPrice(posting, units)}
+		share := toleranceShare{units: units, price: perUnitPrice(posting)}
 		if posting.Cost != nil {
 			share.hasCost = true
 			share.costCurrency = costCurrency(posting.Cost)
@@ -990,7 +990,7 @@ func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, boo
 		if !ok {
 			continue
 		}
-		price := perUnitPrice(posting, units)
+		price := perUnitPrice(posting)
 
 		if lots, ok := bookedLots[posting]; ok {
 			for _, lot := range lots {
@@ -1023,23 +1023,14 @@ type priceAmount struct {
 	currency string
 }
 
-// perUnitPrice returns a posting's stated price per unit, or nil; beancount's
-// parser turns a total price (@@) into a per-unit one.
-func perUnitPrice(posting *ast.Posting, units decimal.Decimal) *priceAmount {
-	if posting.Price == nil || posting.Price.Value == "" || posting.Price.Currency == "" {
+// perUnitPrice returns a posting's stated price per unit (PerUnitPrice),
+// or nil when it has none or leaves its currency to interpolation.
+func perUnitPrice(posting *ast.Posting) *priceAmount {
+	number, currency, ok := PerUnitPrice(posting)
+	if !ok || currency == "" {
 		return nil
 	}
-	number, err := ParseAmount(posting.Price)
-	if err != nil {
-		return nil
-	}
-	if posting.PriceTotal {
-		if units.IsZero() {
-			return nil
-		}
-		number = pydecimal.Quo(number, units.Abs())
-	}
-	return &priceAmount{number: number.Abs(), currency: posting.Price.Currency}
+	return &priceAmount{number: number, currency: currency}
 }
 
 // roundInterpolated rounds an interpolated units number like beancount's

@@ -1,0 +1,19 @@
+; A posting's per-unit price, as beancount's parser computes it: a total
+; price (@@) is spread over the units, zero for zero units, and negative
+; units keep a positive price.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "zero units"
+  Assets:A      0 HOOL @@ 10 USD
+  Assets:A      1 HOOL @@ 10 USD
+  Assets:Cash  -10 USD
+
+2020-01-03 * "negative units"
+  Assets:A     -4 HOOL @@ 10 USD
+  Assets:Cash   10 USD
+
+2020-01-04 * "per unit"
+  Assets:A      3 HOOL @ 2.50 USD
+  Assets:A     -3 HOOL @ 2.50 USD
+  Assets:A      0 HOOL @ 7 USD

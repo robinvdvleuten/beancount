@@ -131,14 +131,11 @@ func implicitPrices(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 			var price *ast.Price
 			switch {
 			case posting.Price != nil:
-				number, err := ParseAmount(posting.Price)
-				if err != nil {
+				number, currency, ok := PerUnitPrice(posting)
+				if !ok {
 					continue
 				}
-				if posting.PriceTotal && !units.IsZero() {
-					number = pydecimal.Quo(number, units.Abs())
-				}
-				price = newImplicitPrice(txn, posting, number, posting.Price.Currency, "from_price")
+				price = newImplicitPrice(txn, posting, number, currency, "from_price")
 			case posting.Cost != nil && !reduced:
 				perUnit, currency, ok := PerUnitCost(posting)
 				if !ok {

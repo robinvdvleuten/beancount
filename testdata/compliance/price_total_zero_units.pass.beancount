@@ -1,0 +1,9 @@
+; Like beancount, a total price (@@) on zero units is a per-unit price of
+; zero, so the posting weighs nothing.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "z"
+  Assets:A      0 HOOL @@ 10 USD
+  Assets:A      1 HOOL @@ 10 USD
+  Assets:Cash  -10 USD

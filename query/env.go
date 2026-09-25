@@ -286,25 +286,14 @@ func postingPosition(posting *ast.Posting, entryDate *ast.Date) *Position {
 	return position
 }
 
-// postingPrice returns the per-unit price attached to a posting. Total
-// prices (@@) are normalized to per-unit, matching the official booking
-// behavior.
+// postingPrice returns the per-unit price attached to a posting
+// (ledger.PerUnitPrice), or nil.
 func postingPrice(posting *ast.Posting) any {
-	if posting.Price == nil {
+	number, currency, ok := ledger.PerUnitPrice(posting)
+	if !ok {
 		return nil
 	}
-	number, err := ledger.ParseAmount(posting.Price)
-	if err != nil {
-		return nil
-	}
-	if posting.PriceTotal {
-		units, err := ledger.ParseAmount(posting.Amount)
-		if err != nil || units.IsZero() {
-			return nil
-		}
-		number = pydecimal.Quo(number, units.Abs())
-	}
-	return &Amount{Number: number, Currency: posting.Price.Currency}
+	return &Amount{Number: number, Currency: currency}
 }
 
 // postingWeight computes the booking weight of a booked position: units at

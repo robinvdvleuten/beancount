@@ -1,0 +1,1 @@
+SELECT account, units(position), price, getprice('HOOL', 'USD') AS hool, getprice('GOOG', 'USD') AS goog

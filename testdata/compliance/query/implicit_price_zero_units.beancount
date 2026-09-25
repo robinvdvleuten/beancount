@@ -1,0 +1,11 @@
+; implicit_prices records the per-unit price of a zero-units posting at a
+; total price: zero.
+plugin "beancount.plugins.implicit_prices"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "z"
+  Assets:A      0 HOOL @@ 10 USD
+  Assets:A      1 GOOG @@ 10 USD
+  Assets:Cash  -10 USD

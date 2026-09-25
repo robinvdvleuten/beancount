@@ -139,3 +139,30 @@ func TestCalculateWeights_Price(t *testing.T) {
 	assert.Equal(t, "USD", stockWeights[0].Currency)
 	assert.Equal(t, "-1500", stockWeights[0].Amount.String())
 }
+
+func TestPerUnitPrice(t *testing.T) {
+	// Expected values are beancount's: its parser makes a price positive and
+	// spreads a total price over the units, zero for zero units.
+	for _, tt := range []struct {
+		name    string
+		posting *ast.Posting
+		want    string
+		ok      bool
+	}{
+		{"per unit", ast.NewPosting("Assets:A", ast.WithAmount("3", "HOOL"), ast.WithPrice(ast.NewAmount("2.50", "USD"))), "2.50", true},
+		{"total", ast.NewPosting("Assets:A", ast.WithAmount("4", "HOOL"), ast.WithTotalPrice(ast.NewAmount("10", "USD"))), "2.5", true},
+		{"total on negative units", ast.NewPosting("Assets:A", ast.WithAmount("-4", "HOOL"), ast.WithTotalPrice(ast.NewAmount("10", "USD"))), "2.5", true},
+		{"total on zero units", ast.NewPosting("Assets:A", ast.WithAmount("0", "HOOL"), ast.WithTotalPrice(ast.NewAmount("10", "USD"))), "0", true},
+		{"negative price", ast.NewPosting("Assets:A", ast.WithAmount("2", "HOOL"), ast.WithPrice(ast.NewAmount("-3", "USD"))), "3", true},
+		{"negative total", ast.NewPosting("Assets:A", ast.WithAmount("4", "HOOL"), ast.WithTotalPrice(ast.NewAmount("-10", "USD"))), "2.5", true},
+		{"total without units", ast.NewPosting("Assets:A", ast.WithTotalPrice(ast.NewAmount("10", "USD"))), "", false},
+		{"no price", ast.NewPosting("Assets:A", ast.WithAmount("2", "HOOL")), "", false},
+	} {
+		number, currency, ok := PerUnitPrice(tt.posting)
+		assert.Equal(t, tt.ok, ok, tt.name)
+		if tt.ok {
+			assert.Equal(t, tt.want, number.StringFixed(max(-number.Exponent(), 0)), tt.name)
+			assert.Equal(t, "USD", currency, tt.name)
+		}
+	}
+}
