@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-plugin"
@@ -45,7 +47,7 @@ type Importer interface {
 func Serve(impl Importer) {
 	plugin.Serve(&plugin.ServeConfig{
 		HandshakeConfig:  Handshake,
-		VersionedPlugins: map[int]plugin.PluginSet{ProtocolVersion: {pluginName: &grpcPlugin{impl: impl}}},
+		VersionedPlugins: map[int]plugin.PluginSet{ProtocolVersion: {pluginName: &grpcPlugin{impl: impl, stderr: os.Stderr}}},
 		GRPCServer:       plugin.DefaultGRPCServer,
 		Logger:           hclog.NewNullLogger(),
 	})
@@ -134,11 +136,12 @@ func rpcError(err error) error {
 // grpcPlugin connects an Importer to go-plugin's gRPC transport.
 type grpcPlugin struct {
 	plugin.NetRPCUnsupportedPlugin
-	impl Importer
+	impl   Importer
+	stderr *os.File
 }
 
 func (p *grpcPlugin) GRPCServer(_ *plugin.GRPCBroker, s *grpc.Server) error {
-	pb.RegisterImporterServer(s, &server{impl: p.impl})
+	pb.RegisterImporterServer(s, &server{impl: p.impl, stderr: p.stderr})
 	return nil
 }
 
@@ -150,9 +153,22 @@ func (p *grpcPlugin) GRPCClient(_ context.Context, _ *plugin.GRPCBroker, c *grpc
 type server struct {
 	pb.UnimplementedImporterServer
 	impl Importer
+
+	stderr        *os.File
+	restoreStderr sync.Once
+}
+
+// useProcessStderr points os.Stderr back at the process's own stderr.
+// plugin.Serve redirects it into a gRPC stream that Client.Close does not
+// drain, so output written just before Close would be lost; the process's
+// stderr is read until the Importer exits. Serve swaps os.Stderr before it
+// accepts calls, so the first call can swap it back.
+func (s *server) useProcessStderr() {
+	s.restoreStderr.Do(func() { os.Stderr = s.stderr })
 }
 
 func (s *server) Identify(ctx context.Context, req *pb.IdentifyRequest) (*pb.IdentifyResponse, error) {
+	s.useProcessStderr()
 	matches, err := s.impl.Identify(ctx, req.GetStatementPath())
 	if err != nil {
 		return nil, err
@@ -161,6 +177,7 @@ func (s *server) Identify(ctx context.Context, req *pb.IdentifyRequest) (*pb.Ide
 }
 
 func (s *server) Extract(ctx context.Context, req *pb.ExtractRequest) (*pb.ExtractResponse, error) {
+	s.useProcessStderr()
 	directives, err := s.impl.Extract(ctx, req.GetStatementPath())
 	if err != nil {
 		return nil, err
