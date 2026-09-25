@@ -1,0 +1,8 @@
+; implicit_prices does not open accounts.
+plugin "beancount.plugins.implicit_prices"
+
+2020-01-01 open Assets:Cash
+
+2020-01-05 * "Exchange"
+  Assets:EUR   100 EUR @ 1.10 USD
+  Assets:Cash

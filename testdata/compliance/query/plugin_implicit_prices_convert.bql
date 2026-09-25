@@ -1,0 +1,1 @@
+select date, account, position, convert(position, 'USD', 2020-01-10) where account ~ 'Stock|EUR'

@@ -1,0 +1,31 @@
+plugin "beancount.plugins.implicit_prices"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:EUR
+2020-01-01 open Income:Gains
+
+2020-01-02 * "Buy"
+  Assets:Stock  10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "Sell at a price"
+  Assets:Stock  -5 HOOL {100 USD} @ 120 USD
+  Assets:Cash   600 USD
+  Income:Gains
+
+2020-01-04 * "Sell without a price"
+  Assets:Stock  -5 HOOL {}
+  Assets:Cash   500 USD
+
+2020-01-05 * "Exchange at a total price"
+  Assets:EUR   100 EUR @@ 110 USD
+  Assets:Cash
+
+2020-01-05 * "Same price again"
+  Assets:EUR   100 EUR @ 1.10 USD
+  Assets:Cash
+
+2020-01-06 * "Buy at a total cost"
+  Assets:Stock  4 HOOL {{500 USD}}
+  Assets:Cash

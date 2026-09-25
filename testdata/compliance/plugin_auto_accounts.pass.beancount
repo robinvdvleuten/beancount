@@ -1,0 +1,9 @@
+plugin "beancount.plugins.auto_accounts"
+
+2020-01-01 pad Assets:Cash Equity:Opening
+2020-01-02 balance Assets:Cash 100 USD
+2020-01-03 note Assets:Other "first use is a note"
+
+2020-01-05 * "Groceries"
+  Expenses:Food   20 USD
+  Assets:Cash

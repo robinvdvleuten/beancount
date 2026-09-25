@@ -1,0 +1,2 @@
+; implicit_prices takes no configuration; given one, it is not applied.
+plugin "beancount.plugins.implicit_prices" "config"
