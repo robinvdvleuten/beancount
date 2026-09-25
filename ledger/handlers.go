@@ -13,15 +13,18 @@ import (
 // The delta is directive-specific (e.g., OpenDelta, TransactionDelta) and contains
 // mutations to apply if validation passes.
 //
-// Apply receives the directive, validator context, and delta (if any) and mutates
-// the ledger state. Apply is only called if Validate returned no errors.
+// Apply receives the directive, validator context, and delta and mutates the
+// ledger state. Apply is called whenever Validate returns a delta; a handler
+// returns none when its errors must leave the ledger untouched. Transactions
+// return their booked delta even with errors, because beancount applies every
+// transaction that Booking kept.
 type Handler interface {
 	// Validate checks if a directive is valid without mutating state.
 	// Returns a slice of errors (empty if valid) and an optional delta describing mutations.
 	// The delta type is specific to each handler (OpenDelta, TransactionDelta, etc.).
 	Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any)
 
-	// Apply mutates ledger state after successful validation.
+	// Apply mutates ledger state with the delta Validate returned.
 	// It receives the directive, the validator state snapshot, and the delta from Validate.
 	Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any)
 }
@@ -33,7 +36,11 @@ func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) 
 	open := d.(*ast.Open)
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
-	return v.validateOpen(ctx, open)
+	errs, delta := v.validateOpen(ctx, open)
+	if delta == nil {
+		return errs, nil
+	}
+	return errs, delta
 }
 
 func (h *OpenHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
@@ -51,6 +58,9 @@ func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive)
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs, delta := v.validateClose(ctx, close)
+	if delta == nil {
+		return errs, nil
+	}
 	return errs, delta
 }
 
@@ -66,13 +76,16 @@ func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Dire
 	txn := d.(*ast.Transaction)
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
-	return v.validateTransaction(ctx, txn)
+	errs, booked := v.validateTransaction(ctx, txn, l.booked[txn])
+	if booked == nil {
+		return errs, nil
+	}
+	return errs, booked
 }
 
 func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	txn := d.(*ast.Transaction)
-	txnDelta := delta.(*TransactionDelta)
-	l.applyTransaction(txn, txnDelta)
+	l.applyTransaction(txn, delta.(*bookedTransaction))
 }
 
 // BalanceHandler processes Balance directives.
@@ -181,8 +194,10 @@ type PriceHandler struct{}
 
 func (h *PriceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	price := d.(*ast.Price)
-	errs := validatePrice(price)
-	return errs, price
+	if errs := validatePrice(price); len(errs) > 0 {
+		return errs, nil
+	}
+	return nil, price
 }
 
 func (h *PriceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {

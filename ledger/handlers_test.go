@@ -119,9 +119,11 @@ func TestTransactionHandler(t *testing.T) {
 		handler.Apply(ctx, ledger, tree.Directives[i], delta)
 	}
 
-	// Process transaction
+	// Book, then process the transaction
 	txnHandler := &TransactionHandler{}
 	txnDirective := tree.Directives[2]
+	ledger.booker = newBooker(ledger.config, tree.Directives)
+	assert.True(t, ledger.bookTransaction(txnDirective.(*ast.Transaction)))
 	errs, delta := txnHandler.Validate(ctx, ledger, txnDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 	assert.NotZero(t, delta, "delta should not be nil")

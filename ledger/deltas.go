@@ -64,14 +64,6 @@ func (d *TransactionDelta) HasMutations() bool {
 	return d != nil && (len(d.InferredAmounts) > 0 || len(d.InferredCosts) > 0 || len(d.InferredPrices) > 0)
 }
 
-// postings returns the transaction's booked postings.
-func (d *TransactionDelta) postings(txn *ast.Transaction) []*ast.Posting {
-	if d.Postings != nil {
-		return d.Postings
-	}
-	return txn.Postings
-}
-
 func (d *TransactionDelta) amountFor(posting *ast.Posting) *ast.Amount {
 	if amount := d.InferredAmounts[posting]; amount != nil {
 		return amount
