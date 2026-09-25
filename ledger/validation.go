@@ -812,8 +812,9 @@ func createPaddingTransaction(
 //   - Calculates padding adjustments needed
 //   - Generates synthetic padding transaction if needed
 //
-// Returns BalanceDelta (mutations) and error (validation failure).
-// Errors are returned separately from the delta to keep deltas pure.
+// Returns BalanceDelta (mutations) and error (validation failure). A failed
+// assertion returns both, since its padding still applies; a pad dated on or
+// after the assertion returns only the error.
 //
 // CRITICAL: Pad timing validation - pad must come BEFORE balance (Beancount compliance).
 //
@@ -900,8 +901,9 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 		return nil, err
 	}
 	if !AmountEqual(delta.ExpectedAmount, actualAmountAfterPadding, tolerance) {
-		// Return error separately, not in delta
-		return nil, NewBalanceMismatchError(
+		// Like beancount, whose pad plugin inserts padding before any
+		// assertion is checked, the delta still applies: the pad is used.
+		return delta, NewBalanceMismatchError(
 			balance,
 			delta.ExpectedAmount.String(),
 			actualAmountAfterPadding.String(),

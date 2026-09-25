@@ -141,15 +141,16 @@ func TestOfficialBeancountDifferential(t *testing.T) {
 // with the reason. Remove an entry when its gap closes.
 var lineGaps = map[string]string{
 	// Deliberate: our line is more precise (KNOWN_GAPS.md).
-	"body_tags_after_posting": "we blame the tag's line, v2 the transaction's",
-	"documents_missing_root":  "we blame the option's line, v2 line 0",
-	"duplicate_include":       "we blame the include's line, v2 <load>:0",
-	"include_glob_no_match":   "we blame the include's line, v2 <load>:0",
-	"unbalanced_pushmeta":     "we blame the pushmeta's line, v2 line 0",
-	"unbalanced_pushtag":      "we blame the pushtag's line, v2 line 0",
+	"body_tags_after_posting":       "we blame the tag's line, v2 the transaction's",
+	"documents_missing_root":        "we blame the option's line, v2 line 0",
+	"duplicate_include":             "we blame the include's line, v2 <load>:0",
+	"include_glob_no_match":         "we blame the include's line, v2 <load>:0",
+	"plugin_auto_accounts_config":   "we blame the plugin's line, v2 <load>:0",
+	"plugin_implicit_prices_config": "we blame the plugin's line, v2 <load>:0",
+	"unbalanced_pushmeta":           "we blame the pushmeta's line, v2 line 0",
+	"unbalanced_pushtag":            "we blame the pushtag's line, v2 line 0",
 	// #446: a different set of errors after error recovery.
 	"org_line_ends_directive": "#446",
-	"pad_from_itself":         "#446",
 }
 
 // runOurCheck runs the check command on path and returns its stderr.
