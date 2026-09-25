@@ -263,6 +263,74 @@ func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decim
 	}
 }
 
+// MergeCostError is reported for a merge cost {*}, which beancount v2 rejects
+// and then books like an empty cost {}.
+type MergeCostError struct {
+	directiveError
+	Account ast.Account
+}
+
+func (e *MergeCostError) Error() string {
+	return fmt.Sprintf("%s: Cost merging is not supported yet (account %s)", e.formatLocation(), e.Account)
+}
+
+func (e *MergeCostError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *MergeCostError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "MergeCostError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"date":     e.Date().String(),
+	})
+}
+
+// NewMergeCostError creates an error for a posting with a merge cost {*}.
+// Like beancount, it blames the posting's line.
+func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *MergeCostError {
+	directiveErr := newDirectiveError(txn)
+	directiveErr.pos = posting.Position()
+	return &MergeCostError{directiveError: directiveErr, Account: posting.Account}
+}
+
+// CurrencyGroupError is reported when Booking cannot sort a posting into a
+// Currency group, or cannot complete a group's missing numbers. Like
+// beancount, it blames the posting's line.
+type CurrencyGroupError struct {
+	directiveError
+	Account ast.Account
+	Message string
+}
+
+func (e *CurrencyGroupError) Error() string {
+	return fmt.Sprintf("%s: %s (account %s)", e.formatLocation(), e.Message, e.Account)
+}
+
+func (e *CurrencyGroupError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *CurrencyGroupError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "CurrencyGroupError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"date":     e.Date().String(),
+	})
+}
+
+// NewCurrencyGroupError creates an error blaming a posting for its
+// Currency group.
+func NewCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *CurrencyGroupError {
+	directiveErr := newDirectiveError(txn)
+	directiveErr.pos = posting.Position()
+	return &CurrencyGroupError{directiveError: directiveErr, Account: posting.Account, Message: message}
+}
+
 // InvalidBookingMethodError is returned for an open directive naming an
 // unknown booking method.
 type InvalidBookingMethodError struct {
@@ -489,7 +557,6 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency st
 // Common causes:
 //   - Invalid decimal in cost amount (e.g., {abc USD})
 //   - Zero or invalid cost date
-//   - Merge costs {*} not yet implemented
 //
 // Example error message:
 //

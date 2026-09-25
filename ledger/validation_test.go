@@ -458,7 +458,7 @@ func TestCalculateBalance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newTestBooker(nil)
-			delta, validation, errs := b.calculateBalance(tt.txn)
+			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings})
 
 			assert.Equal(t, 0, len(errs))
 
@@ -2199,7 +2199,7 @@ func TestCheckLots(t *testing.T) {
 				},
 			}
 
-			errs := newTestBooker(accounts).checkLots(tt.txn)
+			errs := newTestBooker(accounts).checkLots(tt.txn, tt.txn.Postings, &TransactionDelta{})
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 

@@ -37,12 +37,20 @@ _Avoid_: core plugin, standard plugin
 ### Checking the ledger
 
 **Booking**:
-Completing a transaction's postings: matching its reductions to the lots its accounts already hold, completing its missing numbers, and splitting an amount-less posting per currency. It happens once, before Plugins run. A transaction whose Booking fails is a Dropped transaction.
+Completing a transaction's postings, one Currency group at a time: matching its reductions to the lots its accounts already hold, completing its missing numbers, and splitting an amount-less posting per currency. It happens once, before Plugins run. A group whose Booking fails is a Dropped group.
 _Avoid_: lot matching, interpolation (for the whole step)
 
+**Currency group**:
+The postings of a transaction that balance in one currency. A posting joins the group of its cost or price currency, or else of its units' currency; an amount-less posting joins every group.
+_Avoid_: currency bucket, weight currency
+
 **Dropped transaction**:
-A transaction whose Booking failed, reported and left out of the ledger entirely, so balances and queries do not see it.
+A transaction whose postings could not be sorted into Currency groups, reported and left out of the ledger entirely, so balances and queries do not see it.
 _Avoid_: rejected, skipped, invalid transaction
+
+**Dropped group**:
+A Currency group whose Booking failed, reported and removed from its transaction. The transaction's other groups stay, so later directives see them.
+_Avoid_: partial transaction, dropped postings
 
 **Applied transaction**:
 A transaction that was booked, so later directives see its effects, even when it is reported for another error such as not balancing or posting to an unopened or closed account.

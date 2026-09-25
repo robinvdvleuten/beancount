@@ -151,23 +151,7 @@ func TestCanBook(t *testing.T) {
 			errContains:   "lot not found",
 		},
 		{
-			name: "reducing with merge cost {*} - merges all lots and reduces",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				cost200 := d("200")
-				inv.AddLot("STOCK", d("5"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				inv.AddLot("STOCK", d("5"), &lotSpec{Cost: &cost200, CostCurrency: "USD"})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("-7"),
-			spec:          &lotSpec{Merge: true},
-			bookingMethod: "",
-			wantErr:       false,
-		},
-		{
-			name: "reducing with merge cost {*} - insufficient total units",
+			name: "reducing under AVERAGE fails like beancount v2",
 			setup: func() *Inventory {
 				inv := NewInventory()
 				cost100 := d("100")
@@ -175,11 +159,11 @@ func TestCanBook(t *testing.T) {
 				return inv
 			},
 			commodity:     "STOCK",
-			amount:        d("-10"),
-			spec:          &lotSpec{Merge: true},
-			bookingMethod: "",
+			amount:        d("-5"),
+			spec:          &lotSpec{},
+			bookingMethod: BookingAVERAGE,
 			wantErr:       true,
-			errContains:   "not enough lots to reduce",
+			errContains:   "AVERAGE method is not supported",
 		},
 	}
 

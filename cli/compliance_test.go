@@ -147,11 +147,6 @@ var lineGaps = map[string]string{
 	"include_glob_no_match":   "we blame the include's line, v2 <load>:0",
 	"unbalanced_pushmeta":     "we blame the pushmeta's line, v2 line 0",
 	"unbalanced_pushtag":      "we blame the pushtag's line, v2 line 0",
-	// #445: booking failures report "does not balance" on the header.
-	"booking_none":                  "#445",
-	"merge_cost_avg":                "#445",
-	"two_incomplete_two_currencies": "#445",
-	"units_from_empty_cost":         "#445",
 	// #446: a different set of errors after error recovery.
 	"org_line_ends_directive": "#446",
 	"pad_from_itself":         "#446",

@@ -1,0 +1,14 @@
+; Beancount v2 reports a merge cost {*} and books it like an empty cost {}.
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+
+2020-02-01 * "Buy"
+  Assets:Brokerage  10 HOOL {100.00 USD}
+  Assets:Cash      -1000.00 USD
+
+2020-03-01 * "Sell with a merge cost"
+  Assets:Brokerage  -4 HOOL {*}
+  Assets:Cash       400.00 USD
+
+2020-04-01 balance Assets:Brokerage 6 HOOL
+2020-04-01 balance Assets:Cash -600.00 USD

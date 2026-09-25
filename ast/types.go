@@ -72,7 +72,7 @@ func (a *Amount) HasRaw() bool {
 
 // Cost represents the cost basis specification for a posting, used primarily for tracking
 // the acquisition cost of investments and other commodities. An empty cost {} selects any
-// lot automatically. A merge cost {*} averages all lots together. Otherwise, you can specify
+// lot automatically. A merge cost {*} parses, but beancount v2 rejects it. Otherwise, you can specify
 // the per-unit cost amount, acquisition date, and/or a label to identify specific lots for
 // capital gains calculations.
 //
@@ -86,7 +86,7 @@ func (a *Amount) HasRaw() bool {
 //	10 HOOL {518.73 USD, 2014-05-01}  ; Cost with acquisition date
 //	-5 HOOL {502.12 USD, "first-lot"} ; Cost with label for lot selection
 //	10 HOOL {}                        ; Any lot (automatic selection)
-//	10 HOOL {*}                       ; Merge/average all lots
+//	10 HOOL {*}                       ; Merge cost (rejected by beancount v2)
 type Cost struct {
 	IsMerge  bool
 	IsTotal  bool // True if specified with {{}} (total cost syntax)
@@ -104,7 +104,6 @@ func (c *Cost) IsEmpty() bool {
 }
 
 // IsMergeCost returns true if this is a merge cost specification {*}.
-// Used to average all lots together.
 func (c *Cost) IsMergeCost() bool {
 	return c != nil && c.IsMerge
 }
