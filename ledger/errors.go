@@ -263,6 +263,39 @@ func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decim
 	}
 }
 
+// MergeCostError is reported for a merge cost {*}, which beancount v2 rejects
+// and then books like an empty cost {}.
+type MergeCostError struct {
+	directiveError
+	Account ast.Account
+}
+
+func (e *MergeCostError) Error() string {
+	return fmt.Sprintf("%s: Cost merging is not supported yet (account %s)", e.formatLocation(), e.Account)
+}
+
+func (e *MergeCostError) GetAccount() ast.Account {
+	return e.Account
+}
+
+func (e *MergeCostError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "MergeCostError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"date":     e.Date().String(),
+	})
+}
+
+// NewMergeCostError creates an error for a posting with a merge cost {*}.
+// Like beancount, it blames the posting's line.
+func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *MergeCostError {
+	directiveErr := newDirectiveError(txn)
+	directiveErr.pos = posting.Position()
+	return &MergeCostError{directiveError: directiveErr, Account: posting.Account}
+}
+
 // InvalidBookingMethodError is returned for an open directive naming an
 // unknown booking method.
 type InvalidBookingMethodError struct {
@@ -489,7 +522,6 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency st
 // Common causes:
 //   - Invalid decimal in cost amount (e.g., {abc USD})
 //   - Zero or invalid cost date
-//   - Merge costs {*} not yet implemented
 //
 // Example error message:
 //

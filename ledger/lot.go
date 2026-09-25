@@ -15,18 +15,11 @@ type lotSpec struct {
 	CostCurrency string           // Currency of the cost
 	Date         *ast.Date        // Optional acquisition date
 	Label        string           // Optional label
-	Merge        bool             // True if this is a merge cost {*} operation
 }
 
 // IsEmpty returns true if this is an empty cost specification {}
 func (ls *lotSpec) IsEmpty() bool {
-	return ls.Cost == nil && ls.Date == nil && ls.Label == "" && !ls.Merge
-}
-
-// IsMerge returns true if this represents a merge cost {*}
-// Note: This is handled separately in ast.Cost.IsMergeCost()
-func (ls *lotSpec) IsMerge() bool {
-	return false // Merge is handled at parser level
+	return ls.Cost == nil && ls.Date == nil && ls.Label == ""
 }
 
 // Equal checks if two lot specs are equal
@@ -35,11 +28,6 @@ func (ls *lotSpec) Equal(other *lotSpec) bool {
 		return true
 	}
 	if ls == nil || other == nil {
-		return false
-	}
-
-	// Compare merge flag
-	if ls.Merge != other.Merge {
 		return false
 	}
 
@@ -76,10 +64,6 @@ func (ls *lotSpec) Equal(other *lotSpec) bool {
 func (ls *lotSpec) String() string {
 	if ls == nil {
 		return "{}"
-	}
-
-	if ls.Merge {
-		return "{*}"
 	}
 
 	if ls.IsEmpty() {
@@ -142,14 +126,10 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 		return nil, nil
 	}
 
-	// Empty cost {}
-	if cost.IsEmpty() {
+	// Empty cost {}, and a merge cost {*}, which beancount v2 reports and
+	// then books like {}.
+	if cost.IsEmpty() || cost.IsMergeCost() {
 		return &lotSpec{}, nil
-	}
-
-	// Merge cost {*} - return special marker for merge operations
-	if cost.IsMergeCost() {
-		return &lotSpec{Merge: true}, nil
 	}
 
 	spec := &lotSpec{

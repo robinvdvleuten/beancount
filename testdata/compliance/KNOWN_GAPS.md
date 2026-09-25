@@ -74,13 +74,6 @@ limits:
 
 ## Deliberate deviations
 
-- **AVERAGE booking**: official v2 *rejects* AVERAGE at reduction time
-  ("AVERAGE method is not supported"); we implement average-cost merging
-  via the `{*}` merge spec. Deviation by excess, kept deliberately (matches
-  the v3 direction). The `average_account.fail` fixture pins the common
-  ground: an ambiguous reduction under AVERAGE fails in both
-  implementations (with different messages), so check exit codes agree.
-
 - **Pad runs after Booking, inside Apply**: beancount's `pad` is a built-in
   plugin that runs after Booking and before user Plugins. Ours inserts padding
   while applying balance assertions, after Plugins would run. The padding

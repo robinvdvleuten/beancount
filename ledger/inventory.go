@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -34,12 +33,10 @@ type BookedLot struct {
 }
 
 type reductionPlan struct {
-	commodity       string
-	reductions      []lotReduction
-	replaceLots     bool
-	replacementLots []*lot
-	addAmount       *decimal.Decimal
-	addSpec         *lotSpec
+	commodity  string
+	reductions []lotReduction
+	addAmount  *decimal.Decimal
+	addSpec    *lotSpec
 }
 
 type ambiguousBookingMatchError struct {
@@ -66,6 +63,10 @@ func (e *ambiguousBookingMatchError) Error() string {
 // errNotEnoughLots marks a reduction larger than the lots it can book
 // against; planBooking reports it as a notEnoughLotsError.
 var errNotEnoughLots = errors.New("not enough lots")
+
+// errAverageUnsupported fails every reduction under the AVERAGE booking
+// method, which beancount v2 accepts as an option but never implemented.
+var errAverageUnsupported = errors.New("AVERAGE method is not supported")
 
 // notEnoughLotsError reports a reduction larger than the lots it can book
 // against, in beancount's words.
@@ -208,13 +209,6 @@ func (inv *Inventory) book(
 func (inv *Inventory) planChanges(plan *reductionPlan) []lotChange {
 	var changes []lotChange
 	switch {
-	case plan.replaceLots:
-		for _, lot := range inv.lots[plan.commodity] {
-			changes = append(changes, lotChange{spec: lot.Spec, amount: lot.Amount.Neg()})
-		}
-		for _, lot := range plan.replacementLots {
-			changes = append(changes, lotChange{spec: lot.Spec, amount: lot.Amount})
-		}
 	case plan.addAmount != nil:
 		changes = append(changes, lotChange{spec: plan.addSpec, amount: *plan.addAmount})
 	default:
@@ -355,7 +349,7 @@ func (inv *Inventory) planBooking(
 		if lot.Amount.Sign() == amount.Sign() {
 			continue
 		}
-		if !spec.Merge && (lot.Spec == nil || lot.Spec.Cost == nil) {
+		if lot.Spec == nil || lot.Spec.Cost == nil {
 			continue
 		}
 		lots = append(lots, lot)
@@ -372,11 +366,6 @@ func (inv *Inventory) planBooking(
 		for i := range plan.reductions {
 			plan.reductions[i].amount = plan.reductions[i].amount.Neg()
 		}
-	} else {
-		// Merged lots left over from covering a short stay short.
-		for _, lot := range plan.replacementLots {
-			lot.Amount = lot.Amount.Neg()
-		}
 	}
 	return plan, nil
 }
@@ -389,8 +378,9 @@ func planReduction(
 	spec *lotSpec,
 	bookingMethod BookingMethod,
 ) (*reductionPlan, error) {
-	if spec.Merge {
-		return planMergeReduction(commodity, lots, amount)
+	// Beancount v2 never implemented AVERAGE: every reduction under it fails.
+	if bookingMethod == BookingAVERAGE {
+		return nil, errAverageUnsupported
 	}
 
 	if bookingMethod == BookingSTRICT {
@@ -544,64 +534,7 @@ func (inv *Inventory) canReduceWithBooking(
 	return err
 }
 
-func planMergeReduction(
-	commodity string,
-	lots []*lot,
-	amount decimal.Decimal,
-) (*reductionPlan, error) {
-	if len(lots) == 0 {
-		return nil, fmt.Errorf("no lots available for %s", commodity)
-	}
-
-	totalUnits := decimal.Zero
-	totalCost := decimal.Zero
-	costCurrency := ""
-	for _, lot := range lots {
-		totalUnits = totalUnits.Add(lot.Amount.Abs())
-		if lot.Spec == nil || lot.Spec.Cost == nil {
-			continue
-		}
-		totalCost = totalCost.Add(lot.Spec.Cost.Mul(lot.Amount.Abs()))
-		if costCurrency == "" {
-			costCurrency = lot.Spec.CostCurrency
-		} else if costCurrency != lot.Spec.CostCurrency {
-			return nil, fmt.Errorf("merge cost {*} not supported for mixed currencies")
-		}
-	}
-
-	if totalUnits.IsZero() {
-		return nil, fmt.Errorf("no units available for %s", commodity)
-	}
-	if totalUnits.LessThan(amount) {
-		return nil, fmt.Errorf("%w: insufficient total amount for %s: have %s, need %s",
-			errNotEnoughLots, commodity, totalUnits.String(), amount.String())
-	}
-
-	plan := &reductionPlan{
-		commodity:   commodity,
-		replaceLots: true,
-	}
-	remainingUnits := totalUnits.Sub(amount)
-	if remainingUnits.GreaterThan(decimal.Zero) {
-		averageCost := pydecimal.Quo(totalCost, totalUnits)
-		plan.replacementLots = []*lot{newLot(commodity, remainingUnits, &lotSpec{
-			Cost:         &averageCost,
-			CostCurrency: costCurrency,
-		})}
-	}
-	return plan, nil
-}
-
 func (inv *Inventory) applyReduction(plan *reductionPlan) {
-	if plan.replaceLots {
-		if len(plan.replacementLots) == 0 {
-			delete(inv.lots, plan.commodity)
-		} else {
-			inv.lots[plan.commodity] = plan.replacementLots
-		}
-		return
-	}
-
 	if plan.addAmount != nil {
 		inv.AddLot(plan.commodity, *plan.addAmount, plan.addSpec)
 		return

@@ -149,7 +149,6 @@ var lineGaps = map[string]string{
 	"unbalanced_pushtag":      "we blame the pushtag's line, v2 line 0",
 	// #445: booking failures report "does not balance" on the header.
 	"booking_none":                  "#445",
-	"merge_cost_avg":                "#445",
 	"two_incomplete_two_currencies": "#445",
 	"units_from_empty_cost":         "#445",
 	// #446: a different set of errors after error recovery.

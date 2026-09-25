@@ -116,7 +116,6 @@ func (v *validator) validateAmounts(txn *ast.Transaction) []error {
 //   - Cost amounts are parseable as decimal numbers
 //   - Cost dates are valid (not zero dates)
 //   - Cost labels are non-empty if present
-//   - Merge costs {*} are flagged as not yet implemented
 //   - Empty costs {} are accepted (for automatic lot selection)
 //   - ParseLotSpec can parse the cost specification
 //
@@ -377,7 +376,7 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 
 			// Cost specs without an amount (empty {} or date/label-only)
 			// need their cost resolved from booked lots or inferred.
-			if posting.Cost != nil && !posting.Cost.IsMergeCost() {
+			if posting.Cost != nil {
 				if posting.Cost.Amount == nil {
 					pc.withEmptyCosts = append(pc.withEmptyCosts, posting)
 				} else {
@@ -1132,7 +1131,7 @@ func roundInterpolated(number, tolerance decimal.Decimal) decimal.Decimal {
 // when the units cannot be solved for, as with a total-only or empty cost.
 func unitsWeightTerms(posting *ast.Posting) (currency string, perUnit, total decimal.Decimal, ok bool) {
 	if cost := posting.Cost; cost != nil {
-		if cost.IsTotal || cost.IsMergeCost() || cost.Amount == nil || cost.Amount.Value == "" {
+		if cost.IsTotal || cost.Amount == nil || cost.Amount.Value == "" {
 			return "", decimal.Zero, decimal.Zero, false
 		}
 		perUnit, err := ParseAmount(cost.Amount)
@@ -1305,12 +1304,13 @@ func costCurrency(cost *ast.Cost) string {
 	return ""
 }
 
-// newBookingError classifies a failed booking: an ambiguous match, or
-// inventory that cannot cover the reduction.
+// newBookingError classifies a failed booking: an ambiguous match (or a
+// reduction under AVERAGE, which beancount counts as one), or inventory that
+// cannot cover the reduction.
 func newBookingError(txn *ast.Transaction, account ast.Account, err error) error {
 	var ambiguousErr *ambiguousBookingMatchError
-	if errors.As(err, &ambiguousErr) {
-		return NewAmbiguousBookingError(txn, account, ambiguousErr)
+	if errors.As(err, &ambiguousErr) || errors.Is(err, errAverageUnsupported) {
+		return NewAmbiguousBookingError(txn, account, err)
 	}
 	return NewInsufficientInventoryError(txn, account, err)
 }

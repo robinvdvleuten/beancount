@@ -101,6 +101,13 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 
 // bookTransaction books txn and reports whether it stays in the ledger.
 func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
+	// Beancount v2 reports a merge cost {*} while parsing, so it is reported
+	// whether or not the transaction books.
+	for _, posting := range txn.Postings {
+		if posting.Cost.IsMergeCost() {
+			l.errors = append(l.errors, NewMergeCostError(txn, posting))
+		}
+	}
 	booked, errs := l.booker.book(txn)
 	if len(errs) > 0 {
 		l.errors = append(l.errors, errs...)
@@ -163,7 +170,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			inv.Add(currency, amount)
 		} else {
 			// An augmentation whose cost could not be inferred holds no lot.
-			if posting.Cost.Amount == nil && !posting.Cost.IsMergeCost() && !inv.isReducedBy(currency, amount) {
+			if posting.Cost.Amount == nil && !inv.isReducedBy(currency, amount) {
 				continue
 			}
 			spec, err := ParseLotSpec(posting.Cost)
@@ -240,7 +247,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		}
 
 		// Check if this is a cost spec without an amount (returns empty weights)
-		if len(weights) == 0 && posting.Cost != nil && posting.Cost.Amount == nil && !posting.Cost.IsMergeCost() {
+		if len(weights) == 0 && posting.Cost != nil && posting.Cost.Amount == nil {
 			// Reductions resolve their weight from the booked lots' cost basis,
 			// matching beancount, which books lots before interpolation. The
 			// spec's date/label (if any) narrows which lots are booked.

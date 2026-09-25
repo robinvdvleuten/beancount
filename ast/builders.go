@@ -329,7 +329,6 @@ func NewEmptyCost() *Cost {
 }
 
 // NewMergeCost creates a merge cost specification {*}.
-// This averages all lots together.
 func NewMergeCost() *Cost {
 	return &Cost{
 		IsMerge: true,
