@@ -3,6 +3,10 @@ name: Lint
 on: 
   push:
     branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'COPYING'
   pull_request:
     branches: [main]
 
