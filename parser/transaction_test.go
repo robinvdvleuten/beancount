@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -555,4 +556,21 @@ func TestParseBodyTagsLinks(t *testing.T) {
 	_, err = ParseString(context.Background(), "2020-01-02 * \"x\"\n  Assets:A  1 USD\n  #late\n  Assets:B\n")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "tags or links not allowed after first posting")
+}
+
+func TestParsePostingNumberMustBeOnItsLine(t *testing.T) {
+	// Like beancount, a number on the next line does not continue the
+	// posting above; it is a syntax error there, even at the end of input.
+	for _, source := range []string{
+		"2020-01-02 *\n  Assets:A\n100 USD\n",
+		"2020-01-02 *\n  Assets:A\n100",
+		"2020-01-02 *\n  Assets:A 1 HOOL @\n100 USD\n",
+	} {
+		_, err := ParseString(context.Background(), source)
+		assert.Error(t, err, source)
+		var parseErr *ParseError
+		assert.True(t, errors.As(err, &parseErr), source)
+		assert.Equal(t, 3, parseErr.Pos.Line, source)
+		assert.Equal(t, 1, parseErr.Pos.Column, source)
+	}
 }

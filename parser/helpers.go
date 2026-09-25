@@ -96,7 +96,8 @@ func (p *Parser) continuesPreviousLine() bool {
 // Interpolation completes the missing part during validation. Returns nil
 // when neither part is present on the given line.
 func (p *Parser) parseIncompleteAmount(line int) (*ast.Amount, error) {
-	if p.check(NUMBER) || p.check(EXPRESSION) || p.isExpressionStartToken(p.peek()) {
+	// Like its currency, a posting's number must be on the posting's line.
+	if p.peek().Line == line && (p.check(NUMBER) || p.check(EXPRESSION) || p.isExpressionStartToken(p.peek())) {
 		valueTok, isExpression, value, err := p.parseAmountValueToken()
 		if err != nil {
 			return nil, err

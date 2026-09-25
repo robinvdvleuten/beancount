@@ -1,0 +1,9 @@
+; A number on the line after a posting does not continue it; bean-check
+; reports a syntax error at the number.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:B -100 USD
+  Assets:A
+100
