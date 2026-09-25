@@ -491,6 +491,48 @@ func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
 	return NewBalanceCurrencyError(balance)
 }
 
+// duplicateBalances returns the balance assertions whose account, currency
+// and date repeat an earlier one's with a different number, like beancount's
+// validate_duplicate_balances: each is compared with the first assertion
+// for its key, in directive order, whatever else is reported about either.
+// The tolerance is not compared.
+func duplicateBalances(directives []ast.Directive) map[*ast.Balance]bool {
+	type key struct {
+		account  ast.Account
+		currency string
+		date     string
+	}
+	first := make(map[key]*ast.Balance)
+	duplicates := make(map[*ast.Balance]bool)
+	for _, directive := range directives {
+		balance, ok := directive.(*ast.Balance)
+		if !ok {
+			continue
+		}
+		k := key{balance.Account, balance.Amount.Currency, balance.Date().String()}
+		reference, ok := first[k]
+		if !ok {
+			first[k] = balance
+			continue
+		}
+		if !sameNumber(reference.Amount, balance.Amount) {
+			duplicates[balance] = true
+		}
+	}
+	return duplicates
+}
+
+// sameNumber reports whether two amounts have equal numbers, comparing
+// their text when either does not parse.
+func sameNumber(a, b *ast.Amount) bool {
+	x, errA := ParseAmount(a)
+	y, errB := ParseAmount(b)
+	if errA != nil || errB != nil {
+		return a.Value == b.Value
+	}
+	return x.Equal(y)
+}
+
 // validatePad checks if a pad directive is valid.
 //
 // It validates that:

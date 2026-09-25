@@ -1,0 +1,12 @@
+; Repeated balance assertions compare numbers only: 5 and 5.0 are equal,
+; and a tolerance is not compared.
+2020-01-01 open Assets:A
+2020-01-01 open Equity:O
+
+2020-01-10 * "x"
+  Assets:A  5 EUR
+  Equity:O
+
+2020-02-01 balance Assets:A 5 EUR
+2020-02-01 balance Assets:A 5.0 EUR
+2020-02-01 balance Assets:A 5 ~ 1 EUR

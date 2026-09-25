@@ -254,6 +254,39 @@ func NewBalanceCurrencyError(balance *ast.Balance) *BalanceCurrencyError {
 	}
 }
 
+// DuplicateBalanceError is returned for a balance assertion whose account,
+// currency and date repeat an earlier one's with a different amount.
+type DuplicateBalanceError struct {
+	directiveError
+	Account  ast.Account
+	Currency string
+}
+
+func (e *DuplicateBalanceError) Error() string {
+	return fmt.Sprintf("%s: Duplicate balance assertion with different amounts", e.formatLocation())
+}
+
+func (e *DuplicateBalanceError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "DuplicateBalanceError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"currency": e.Currency,
+		"date":     e.Date().String(),
+	})
+}
+
+// NewDuplicateBalanceError creates an error for a balance assertion that
+// repeats an earlier one with a different amount.
+func NewDuplicateBalanceError(balance *ast.Balance) *DuplicateBalanceError {
+	return &DuplicateBalanceError{
+		directiveError: newDirectiveError(balance),
+		Account:        balance.Account,
+		Currency:       balance.Amount.Currency,
+	}
+}
+
 // NegativeCostError is returned for a posting whose per-unit cost, once
 // booked, is negative.
 type NegativeCostError struct {

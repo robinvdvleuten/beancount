@@ -94,24 +94,26 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 
-	// Basic validation
+	var delta *BalanceDelta
 	errs := v.validateBalance(balance)
-	if len(errs) > 0 {
-		return errs, nil
+	if len(errs) == 0 {
+		// A currency the account does not allow is reported next to the
+		// assertion's own result, which still counts.
+		if err := v.validateBalanceCurrency(balance); err != nil {
+			errs = append(errs, err)
+		}
+
+		padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
+
+		// A failed assertion is reported and its padding still applies.
+		var err error
+		delta, err = v.calculateBalanceDelta(balance, padEntry)
+		if err != nil {
+			errs = append(errs, err)
+		}
 	}
-
-	// A currency the account does not allow is reported next to the
-	// assertion's own result, which still counts.
-	if err := v.validateBalanceCurrency(balance); err != nil {
-		errs = append(errs, err)
-	}
-
-	padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
-
-	// A failed assertion is reported and its padding still applies.
-	delta, err := v.calculateBalanceDelta(balance, padEntry)
-	if err != nil {
-		errs = append(errs, err)
+	if l.duplicateBalances[balance] {
+		errs = append(errs, NewDuplicateBalanceError(balance))
 	}
 	return errs, deltaOf(delta)
 }

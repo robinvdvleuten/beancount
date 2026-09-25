@@ -60,18 +60,20 @@ import (
 // use, verifies balance assertions, and processes pad directives. All validation errors
 // are collected and returned together after processing.
 type Ledger struct {
-	graph        *Graph // Unified graph of accounts, currencies, and relationships
-	accounts     map[string]*Account
-	config       *Config
-	errors       []error
-	pads         *pads
-	bookedLots   map[*ast.Posting][]BookedLot
-	booker       *booker
-	booked       map[*ast.Transaction]*bookedTransaction
-	unopened     map[string]*Account // Accounts posted to before any open
-	display      *DisplayContext
-	priceGraphMu sync.RWMutex
-	priceGraphs  map[string]*Graph
+	graph    *Graph // Unified graph of accounts, currencies, and relationships
+	accounts map[string]*Account
+	config   *Config
+	errors   []error
+	pads     *pads
+	// Balance assertions repeating an earlier one with a different amount
+	duplicateBalances map[*ast.Balance]bool
+	bookedLots        map[*ast.Posting][]BookedLot
+	booker            *booker
+	booked            map[*ast.Transaction]*bookedTransaction
+	unopened          map[string]*Account // Accounts posted to before any open
+	display           *DisplayContext
+	priceGraphMu      sync.RWMutex
+	priceGraphs       map[string]*Graph
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -179,6 +181,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		return err
 	}
 	l.runPlugins(ctx, tree)
+	l.duplicateBalances = duplicateBalances(tree.Directives)
 
 	var validationTimer telemetry.Timer
 	if transactionCount > 0 {

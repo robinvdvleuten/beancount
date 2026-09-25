@@ -245,3 +245,31 @@ func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {
 	assert.Equal(t, "USD", currencyErr.Currency)
 	assert.Equal(t, 5, currencyErr.Position().Line)
 }
+
+func TestDuplicateBalanceWithADifferentAmount(t *testing.T) {
+	source := `
+2020-01-01 open Assets:Euro
+2020-01-01 open Equity:O
+
+2020-01-10 * "x"
+  Assets:Euro  5 EUR
+  Equity:O
+
+2020-02-01 balance Assets:Euro 5 EUR
+2020-02-01 balance Assets:Euro 6 EUR
+2020-02-01 balance Assets:Euro 5 EUR
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	// Line 10 fails and repeats line 9 with another amount; line 11 is an
+	// identical repeat.
+	errs := l.Errors()
+	assert.Equal(t, 2, len(errs), "errors: %v", errs)
+	var mismatch *BalanceMismatchError
+	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
+	var duplicate *DuplicateBalanceError
+	assert.True(t, errors.As(errs[1], &duplicate), "got %v", errs[1])
+	assert.Equal(t, 10, duplicate.Position().Line)
+}

@@ -1,0 +1,25 @@
+; A balance assertion that repeats an earlier one's account, currency and
+; date with a different amount is reported, next to its own result. Each is
+; compared with the first for its key; an identical repeat is fine.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+2020-01-01 open Equity:O
+
+2020-01-10 * "x"
+  Assets:A  5 EUR
+  Assets:B  5 EUR
+  Assets:C  5 EUR
+  Equity:O
+
+2020-02-01 balance Assets:A 5 EUR
+2020-02-01 balance Assets:A 6 EUR
+2020-02-01 balance Assets:A 5 EUR
+
+2020-02-01 balance Assets:B 5 EUR
+2020-02-01 balance Assets:B 4 EUR
+2020-02-01 balance Assets:B 6 EUR
+
+2020-02-01 balance Assets:C 5 EUR
+2020-02-01 note Assets:C "between"
+2020-02-01 balance Assets:C 7 EUR
