@@ -81,3 +81,19 @@ func TestDatedAmountLayout(t *testing.T) {
 	_, _, ok := datedAmountLayout("H", "(2 * 3)")
 	assert.False(t, ok)
 }
+
+func TestFormatLeavesNumbersGluedToCurrenciesAsWritten(t *testing.T) {
+	// bean-format's pattern needs whitespace between number and currency,
+	// so "1USD" lines pass through and do not widen the columns; neither
+	// does a dated line without a plainly spelled number.
+	source := "2020-01-02 *\n" +
+		"  Assets:A 1USD\n" +
+		"  Assets:Longer  -1 USD\n" +
+		"2020-01-03 balance Assets:A 1USD\n" +
+		"2020-01-04 price HOOL (2 * 3)  EUR\n"
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	var out bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
+	assert.Equal(t, source, out.String())
+}

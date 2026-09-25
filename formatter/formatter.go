@@ -237,7 +237,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 		switch d := directive.(type) {
 		case *ast.Transaction:
 			for _, posting := range d.Postings {
-				if posting.Flag != "" || !isAlignedAmount(posting.Amount) {
+				if !f.alignsPosting(posting) {
 					continue
 				}
 				// bean-format quirk: width maxima come from the original,
@@ -251,13 +251,13 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			}
 
 		case *ast.Balance:
-			if prefix, number, ok := f.balanceLayout(d); ok {
-				record(runewidth.StringWidth(prefix), number)
+			if line := f.balanceLine(d); line.aligned {
+				record(runewidth.StringWidth(line.prefix), line.number)
 			}
 
 		case *ast.Price:
-			if prefix, number, ok := f.priceLayout(d); ok {
-				record(runewidth.StringWidth(prefix), number)
+			if line := f.priceLine(d); line.aligned {
+				record(runewidth.StringWidth(line.prefix), line.number)
 			}
 		}
 	}
@@ -822,16 +822,17 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 
 // formatBalance formats a balance directive.
 func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
-	f.formatDatedAmount(b, string(b.Account), balanceAmountText(b), balanceCurrency(b), buf)
+	f.formatDatedLine(b, f.balanceLine(b), buf)
 }
 
-// balanceLayout splits a balance line into bean-format's aligned prefix
-// and number.
-func (f *Formatter) balanceLayout(b *ast.Balance) (prefix, number string, ok bool) {
-	if b.Amount == nil || balanceCurrency(b) == "" {
-		return "", "", false
+// balanceLine lays out a balance's line; the number before the currency is
+// the tolerance's when there is one.
+func (f *Formatter) balanceLine(b *ast.Balance) datedLine {
+	last := b.Amount
+	if b.Tolerance != nil {
+		last = b.Tolerance
 	}
-	return datedAmountLayout(f.datedHead(b, string(b.Account)), balanceAmountText(b))
+	return f.newDatedLine(b, string(b.Account), balanceAmountText(b), amountDisplayValue(last), balanceCurrency(b))
 }
 
 // balanceAmountText spells a balance's amount, with its tolerance, without
@@ -874,26 +875,55 @@ func (f *Formatter) dateText(d ast.Directive) string {
 	return date
 }
 
-// formatDatedAmount writes a dated directive that ends in an amount,
-// aligning the number bean-format aligns and keeping any text before it
-// (an expression's leading operands, a balance's amount before its
-// tolerance) in the prefix.
-func (f *Formatter) formatDatedAmount(d ast.Directive, subject, text, currency string, buf *strings.Builder) {
+// datedLine is a dated directive's line that ends in an amount, split
+// like bean-format's line pattern: when aligned, prefix and number around
+// the padding; otherwise the canonical spelling, used without source.
+type datedLine struct {
+	prefix, number string
+	aligned        bool
+	canonical      string
+	currency       string
+}
+
+// newDatedLine lays out a dated line from its spelling. bean-format aligns
+// it only when some suffix of the amount text is a plainly spelled number
+// with whitespace before the currency; a number glued to its currency in
+// the source ("10USD") leaves the line as written.
+func (f *Formatter) newDatedLine(d ast.Directive, subject, text, lastNumber, currency string) datedLine {
 	head := f.datedHead(d, subject)
-	if prefix, number, ok := datedAmountLayout(head, text); ok && currency != "" {
-		buf.WriteString(prefix)
-		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(prefix), runewidth.StringWidth(number))))
-		buf.WriteString(number)
-		buf.WriteByte(' ')
-		buf.WriteString(currency)
+	line := datedLine{canonical: strings.TrimSpace(head + " " + text), currency: currency}
+	if currency == "" || f.gluedToCurrency(d.Position().Line, lastNumber, currency) {
+		return line
+	}
+	line.prefix, line.number, line.aligned = datedAmountLayout(head, text)
+	return line
+}
+
+// gluedToCurrency reports whether the source line spells number directly
+// followed by currency, which bean-format's pattern does not align.
+func (f *Formatter) gluedToCurrency(line int, number, currency string) bool {
+	return number != "" && strings.Contains(f.getOriginalLine(line), number+currency)
+}
+
+// formatDatedLine writes a dated directive ending in an amount: aligned as
+// bean-format aligns it, or copied from the source when bean-format leaves
+// it alone.
+func (f *Formatter) formatDatedLine(d ast.Directive, line datedLine, buf *strings.Builder) {
+	if !line.aligned && f.canPreserveDirectiveLine(d.Position().Line, d.Date()) && f.tryPreserveOriginalLine(d.Position().Line, buf) {
+		f.formatMetadata(d.GetMetadata(), buf)
+		return
+	}
+
+	if line.aligned {
+		buf.WriteString(line.prefix)
+		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), runewidth.StringWidth(line.number))))
+		buf.WriteString(line.number)
 	} else {
-		buf.WriteString(head)
-		for _, part := range []string{text, currency} {
-			if part != "" {
-				buf.WriteByte(' ')
-				buf.WriteString(part)
-			}
-		}
+		buf.WriteString(line.canonical)
+	}
+	if line.currency != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(line.currency)
 	}
 
 	if d.GetComment() != nil {
@@ -979,16 +1009,13 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 
 // formatPrice formats a price directive.
 func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
-	f.formatDatedAmount(p, p.Commodity, amountDisplayValue(p.Amount), priceCurrency(p), buf)
+	f.formatDatedLine(p, f.priceLine(p), buf)
 }
 
-// priceLayout splits a price line into bean-format's aligned prefix and
-// number.
-func (f *Formatter) priceLayout(p *ast.Price) (prefix, number string, ok bool) {
-	if priceCurrency(p) == "" {
-		return "", "", false
-	}
-	return datedAmountLayout(f.datedHead(p, p.Commodity), amountDisplayValue(p.Amount))
+// priceLine lays out a price's line.
+func (f *Formatter) priceLine(p *ast.Price) datedLine {
+	number := amountDisplayValue(p.Amount)
+	return f.newDatedLine(p, p.Commodity, number, number, priceCurrency(p))
 }
 
 func priceCurrency(p *ast.Price) string {
@@ -1295,7 +1322,7 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 
 // formatPosting formats a single posting with proper alignment.
 func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	if (p.Flag != "" || p.Amount != nil && !isAlignedAmount(p.Amount)) && f.writePostingLineAsWritten(p, buf) {
+	if (p.Flag != "" || p.Amount != nil && !f.alignsPosting(p)) && f.writePostingLineAsWritten(p, buf) {
 		f.formatMetadata(p.Metadata, buf)
 		return
 	}
@@ -1376,6 +1403,14 @@ var alignedNumber = regexp.MustCompile(`^[-+]?\s*[\d,]+(?:\.\d*)?$`)
 // Any other amount leaves the line as written.
 func isAlignedAmount(amount *ast.Amount) bool {
 	return amount != nil && amount.Currency != "" && alignedNumber.MatchString(amountDisplayValue(amount))
+}
+
+// alignsPosting reports whether bean-format aligns a posting's line: not
+// flagged, with a plainly spelled number that the source does not glue to
+// its currency.
+func (f *Formatter) alignsPosting(p *ast.Posting) bool {
+	return p.Flag == "" && isAlignedAmount(p.Amount) &&
+		!f.gluedToCurrency(p.Position().Line, amountDisplayValue(p.Amount), p.Amount.Currency)
 }
 
 // datedAmountLayout splits a dated directive's amount text like

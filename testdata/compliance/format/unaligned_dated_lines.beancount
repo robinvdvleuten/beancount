@@ -1,0 +1,11 @@
+2020-01-01 open Assets:Longer
+2020-01-01 open Assets:A
+
+2020-01-02 *
+  Assets:A 1USD
+  Assets:Longer  -1 USD
+
+2020-01-03 balance Assets:A 1USD
+2020-01-04 price HOOL 10USD
+2020-01-04 price HOOL (2 * 3)  EUR
+2020-01-05 price HOOL 12 EUR
