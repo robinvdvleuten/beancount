@@ -1,0 +1,124 @@
+// Protocol version 1 between beancount and an Importer. A new optional field
+// stays within v1; a new directive kind needs v2 (docs/adr/0001).
+syntax = "proto3";
+
+package beancount.importer.v1;
+
+option go_package = "github.com/robinvdvleuten/beancount/importer/internal/pb";
+
+service Importer {
+  // Identify reports whether the Importer can read the Statement.
+  rpc Identify(IdentifyRequest) returns (IdentifyResponse);
+  // Extract returns the Statement's Extracted directives.
+  rpc Extract(ExtractRequest) returns (ExtractResponse);
+}
+
+message IdentifyRequest {
+  // Absolute path of the Statement.
+  string statement_path = 1;
+}
+
+message IdentifyResponse {
+  bool matches = 1;
+}
+
+message ExtractRequest {
+  // Absolute path of the Statement.
+  string statement_path = 1;
+}
+
+message ExtractResponse {
+  // In the order the Importer returned them.
+  repeated Directive directives = 1;
+}
+
+message Directive {
+  oneof kind {
+    Transaction transaction = 1;
+    Balance balance = 2;
+  }
+}
+
+message Date {
+  int32 year = 1;
+  int32 month = 2;
+  int32 day = 3;
+}
+
+// Amount is a decimal number in text, keeping the precision it was written
+// with, and a currency. Either may be empty where Beancount lets it be missing.
+message Amount {
+  string number = 1;
+  string currency = 2;
+}
+
+message Transaction {
+  Date date = 1;
+  string flag = 2;
+  optional string payee = 3;
+  string narration = 4;
+  repeated string tags = 5;
+  repeated string links = 6;
+  repeated Metadata metadata = 7;
+  repeated Posting postings = 8;
+  // The bank's own identifier, written to the transaction's import-id
+  // metadata. Empty when the Statement has none.
+  string import_id = 9;
+}
+
+message Posting {
+  string flag = 1;
+  string account = 2;
+  // Unset when Booking interpolates it.
+  Amount units = 3;
+  Cost cost = 4;
+  Price price = 5;
+  repeated Metadata metadata = 6;
+}
+
+// Cost is a cost specification as written, which may be incomplete: {} and
+// {*} set no amount.
+message Cost {
+  bool merge = 1;
+  // Written with double braces: amount is the total cost.
+  bool total = 2;
+  Amount amount = 3;
+  // The total component after '#' in a compound cost.
+  Amount compound_total = 4;
+  Date date = 5;
+  string label = 6;
+}
+
+message Price {
+  Amount amount = 1;
+  // Written with @@: amount is the total price.
+  bool total = 2;
+}
+
+message Balance {
+  Date date = 1;
+  string account = 2;
+  Amount amount = 3;
+  Amount tolerance = 4;
+  repeated Metadata metadata = 5;
+}
+
+message Metadata {
+  string key = 1;
+  // Unset for a key without a value.
+  MetadataValue value = 2;
+}
+
+message MetadataValue {
+  oneof kind {
+    string string = 1;
+    Date date = 2;
+    string account = 3;
+    string currency = 4;
+    string tag = 5;
+    string link = 6;
+    string number = 7;
+    Amount amount = 8;
+    bool boolean = 9;
+  }
+}
