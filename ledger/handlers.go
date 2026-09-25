@@ -104,12 +104,14 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 	accountName := string(balance.Account)
 	padEntry := l.activePad(accountName, balance.Amount.Currency)
 
-	// Calculate delta (returns error separately, not in delta)
+	// A failed assertion is reported and its padding still applies.
 	delta, err := v.calculateBalanceDelta(balance, padEntry)
-	if err != nil {
+	switch {
+	case delta == nil:
 		return []error{err}, nil
+	case err != nil:
+		return []error{err}, delta
 	}
-
 	return nil, delta
 }
 
