@@ -102,6 +102,15 @@ limits:
   pins the difference; amounts, positions, inventories, NULL, integers,
   booleans and sets match (`query/str_*.bql`).
 
+- **Error lines**: the differential suite compares the lines errors are
+  reported on, and we keep our line where v2's is less precise
+  (`lineGaps` in `cli/compliance_test.go`). A tag or link after the first
+  posting is blamed on its own line and column, where v2 blames the
+  transaction (`body_tags_after_posting`). An unbalanced `pushtag` or
+  `pushmeta`, a missing documents root, a duplicate include and an include
+  glob with no match are blamed on the directive that caused them, where v2
+  prints line `0` or `<load>:0`.
+
 ## Declared non-goals
 
 - **Plugin execution**: `plugin` directives are parsed but never run

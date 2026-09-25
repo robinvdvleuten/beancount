@@ -7,10 +7,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
@@ -110,15 +113,80 @@ func TestOfficialBeancountDifferential(t *testing.T) {
 
 	for _, fixture := range loadComplianceFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {
-			err := exec.Command("bean-check", fixture.path).Run()
+			abs, err := filepath.Abs(fixture.path)
+			assert.NoError(t, err)
+			out, err := exec.Command("bean-check", abs).CombinedOutput()
 			officialOK := err == nil
 			var exitErr *exec.ExitError
 			if err != nil && !errors.As(err, &exitErr) {
 				t.Fatalf("run bean-check: %v", err)
 			}
 			assert.Equal(t, fixture.wantPass, officialOK)
+
+			if fixture.wantPass || fixture.knownGap {
+				return
+			}
+			if reason, ok := lineGaps[fixture.name]; ok {
+				t.Logf("error lines not compared: %s", reason)
+				return
+			}
+			ours := runOurCheck(t, abs)
+			assert.Equal(t, errorLines(abs, string(out)), errorLines(abs, ours),
+				"bean-check:\n%s\nours:\n%s", out, ours)
 		})
 	}
+}
+
+// lineGaps lists .fail fixtures whose error lines differ from bean-check's,
+// with the reason. Remove an entry when its gap closes.
+var lineGaps = map[string]string{
+	// Deliberate: our line is more precise (KNOWN_GAPS.md).
+	"body_tags_after_posting": "we blame the tag's line, v2 the transaction's",
+	"documents_missing_root":  "we blame the option's line, v2 line 0",
+	"duplicate_include":       "we blame the include's line, v2 <load>:0",
+	"include_glob_no_match":   "we blame the include's line, v2 <load>:0",
+	"unbalanced_pushmeta":     "we blame the pushmeta's line, v2 line 0",
+	"unbalanced_pushtag":      "we blame the pushtag's line, v2 line 0",
+	// #445: booking failures report "does not balance" on the header.
+	"booking_none":                  "#445",
+	"merge_cost_avg":                "#445",
+	"two_incomplete_two_currencies": "#445",
+	"units_from_empty_cost":         "#445",
+	// #446: a different set of errors after error recovery.
+	"org_line_ends_directive": "#446",
+	"pad_from_itself":         "#446",
+}
+
+// runOurCheck runs the check command on path and returns its stderr.
+func runOurCheck(t *testing.T, path string) string {
+	t.Helper()
+
+	var cmds Commands
+	var stdout, stderr bytes.Buffer
+	parser, err := kong.New(&cmds, kong.Writers(&stdout, &stderr), kong.Bind(&cmds.Globals))
+	assert.NoError(t, err)
+	ctx, err := parser.Parse([]string{"check", path})
+	assert.NoError(t, err)
+	_ = ctx.Run()
+	return stderr.String()
+}
+
+// errorLines returns the sorted, distinct line numbers of the output lines
+// that start with "<path>:<line>:", ignoring any column that follows.
+func errorLines(path, output string) []int {
+	var lines []int
+	for line := range strings.Lines(output) {
+		rest, ok := strings.CutPrefix(line, path+":")
+		if !ok {
+			continue
+		}
+		number, _, ok := strings.Cut(rest, ":")
+		if n, err := strconv.Atoi(number); ok && err == nil && !slices.Contains(lines, n) {
+			lines = append(lines, n)
+		}
+	}
+	slices.Sort(lines)
+	return lines
 }
 
 // TestOfficialFormatParity compares our formatter's output byte-for-byte

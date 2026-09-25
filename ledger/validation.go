@@ -1326,7 +1326,7 @@ func (v *validator) validateNegativeCosts(txn *ast.Transaction) []error {
 			continue
 		}
 		if perUnit, costCurrency, ok := PerUnitCost(posting); ok && perUnit.IsNegative() {
-			errs = append(errs, NewNegativeCostError(txn, posting.Account, perUnit, costCurrency))
+			errs = append(errs, NewNegativeCostError(txn, posting, perUnit, costCurrency))
 		}
 	}
 	return errs

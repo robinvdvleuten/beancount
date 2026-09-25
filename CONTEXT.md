@@ -47,3 +47,7 @@ _Avoid_: rejected, skipped, invalid transaction
 **Applied transaction**:
 A transaction that was booked, so later directives see its effects, even when it is reported for another error such as not balancing or posting to an unopened or closed account.
 _Avoid_: valid transaction, accepted transaction
+
+**Error line**:
+The file and line an error blames, printed as `path:line:` at the start of the message so editors can jump to it.
+_Avoid_: position (a Beancount position is units held at a cost), location
