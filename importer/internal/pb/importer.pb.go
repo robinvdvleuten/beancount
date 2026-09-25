@@ -868,7 +868,7 @@ type MetadataValue struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// Types that are valid to be assigned to Kind:
 	//
-	//	*MetadataValue_String_
+	//	*MetadataValue_StringValue
 	//	*MetadataValue_Date
 	//	*MetadataValue_Account
 	//	*MetadataValue_Currency
@@ -919,10 +919,10 @@ func (x *MetadataValue) GetKind() isMetadataValue_Kind {
 	return nil
 }
 
-func (x *MetadataValue) GetString_() string {
+func (x *MetadataValue) GetStringValue() string {
 	if x != nil {
-		if x, ok := x.Kind.(*MetadataValue_String_); ok {
-			return x.String_
+		if x, ok := x.Kind.(*MetadataValue_StringValue); ok {
+			return x.StringValue
 		}
 	}
 	return ""
@@ -1004,8 +1004,8 @@ type isMetadataValue_Kind interface {
 	isMetadataValue_Kind()
 }
 
-type MetadataValue_String_ struct {
-	String_ string `protobuf:"bytes,1,opt,name=string,proto3,oneof"`
+type MetadataValue_StringValue struct {
+	StringValue string `protobuf:"bytes,1,opt,name=string_value,json=stringValue,proto3,oneof"`
 }
 
 type MetadataValue_Date struct {
@@ -1040,7 +1040,7 @@ type MetadataValue_Boolean struct {
 	Boolean bool `protobuf:"varint,9,opt,name=boolean,proto3,oneof"`
 }
 
-func (*MetadataValue_String_) isMetadataValue_Kind() {}
+func (*MetadataValue_StringValue) isMetadataValue_Kind() {}
 
 func (*MetadataValue_Date) isMetadataValue_Kind() {}
 
@@ -1120,9 +1120,9 @@ const file_importer_proto_rawDesc = "" +
 	"\bmetadata\x18\x05 \x03(\v2\x1f.beancount.importer.v1.MetadataR\bmetadata\"X\n" +
 	"\bMetadata\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12:\n" +
-	"\x05value\x18\x02 \x01(\v2$.beancount.importer.v1.MetadataValueR\x05value\"\xb7\x02\n" +
-	"\rMetadataValue\x12\x18\n" +
-	"\x06string\x18\x01 \x01(\tH\x00R\x06string\x121\n" +
+	"\x05value\x18\x02 \x01(\v2$.beancount.importer.v1.MetadataValueR\x05value\"\xc2\x02\n" +
+	"\rMetadataValue\x12#\n" +
+	"\fstring_value\x18\x01 \x01(\tH\x00R\vstringValue\x121\n" +
 	"\x04date\x18\x02 \x01(\v2\x1b.beancount.importer.v1.DateH\x00R\x04date\x12\x1a\n" +
 	"\aaccount\x18\x03 \x01(\tH\x00R\aaccount\x12\x1c\n" +
 	"\bcurrency\x18\x04 \x01(\tH\x00R\bcurrency\x12\x12\n" +
@@ -1209,7 +1209,7 @@ func file_importer_proto_init() {
 	}
 	file_importer_proto_msgTypes[7].OneofWrappers = []any{}
 	file_importer_proto_msgTypes[13].OneofWrappers = []any{
-		(*MetadataValue_String_)(nil),
+		(*MetadataValue_StringValue)(nil),
 		(*MetadataValue_Date)(nil),
 		(*MetadataValue_Account)(nil),
 		(*MetadataValue_Currency)(nil),

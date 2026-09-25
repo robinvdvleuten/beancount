@@ -111,7 +111,7 @@ message Metadata {
 
 message MetadataValue {
   oneof kind {
-    string string = 1;
+    string string_value = 1;
     Date date = 2;
     string account = 3;
     string currency = 4;
