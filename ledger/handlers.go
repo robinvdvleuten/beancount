@@ -9,24 +9,31 @@ import (
 // Handler defines the interface for processing directives.
 // Each directive type has a corresponding handler that validates and applies mutations.
 //
-// Validation returns a slice of errors and an optional delta object.
-// The delta is directive-specific (e.g., OpenDelta, TransactionDelta) and contains
-// mutations to apply if validation passes.
+// Validate reports every error it finds and returns a delta describing the
+// mutations to apply, or nil when nothing can be applied. The two are
+// independent: like beancount, a directive can be reported and still applied
+// (an unbalanced transaction, a posting to a closed account), so later
+// directives see its effects instead of reporting follow-on errors.
 //
-// Apply receives the directive, validator context, and delta and mutates the
-// ledger state. Apply is called whenever Validate returns a delta; a handler
-// returns none when its errors must leave the ledger untouched. Transactions
-// return their booked delta even with errors, because beancount applies every
-// transaction that Booking kept.
+// Apply runs whenever Validate returned a delta, errors or not.
 type Handler interface {
-	// Validate checks if a directive is valid without mutating state.
-	// Returns a slice of errors (empty if valid) and an optional delta describing mutations.
-	// The delta type is specific to each handler (OpenDelta, TransactionDelta, etc.).
+	// Validate checks a directive without mutating state. It returns the
+	// errors found and the delta to apply (nil when the directive must not
+	// be applied). The delta type is specific to each handler (OpenDelta,
+	// TransactionDelta, etc.).
 	Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any)
 
 	// Apply mutates ledger state with the delta Validate returned.
-	// It receives the directive, the validator state snapshot, and the delta from Validate.
 	Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any)
+}
+
+// deltaOf returns d as a handler delta, keeping a nil pointer nil rather
+// than a non-nil interface holding one.
+func deltaOf[T any](d *T) any {
+	if d == nil {
+		return nil
+	}
+	return d
 }
 
 // OpenHandler processes Open directives.
@@ -37,10 +44,7 @@ func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) 
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs, delta := v.validateOpen(ctx, open)
-	if delta == nil {
-		return errs, nil
-	}
-	return errs, delta
+	return errs, deltaOf(delta)
 }
 
 func (h *OpenHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
@@ -58,10 +62,7 @@ func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive)
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs, delta := v.validateClose(ctx, close)
-	if delta == nil {
-		return errs, nil
-	}
-	return errs, delta
+	return errs, deltaOf(delta)
 }
 
 func (h *CloseHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
@@ -77,10 +78,7 @@ func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Dire
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
 	errs, booked := v.validateTransaction(ctx, txn, l.booked[txn])
-	if booked == nil {
-		return errs, nil
-	}
-	return errs, booked
+	return errs, deltaOf(booked)
 }
 
 func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {

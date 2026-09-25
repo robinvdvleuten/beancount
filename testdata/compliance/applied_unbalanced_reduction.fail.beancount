@@ -1,0 +1,13 @@
+; An unbalanced transaction that reduces a lot still reduces it.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock   1 HOOL {1 USD}
+  Assets:Cash   -1 USD
+
+2020-01-03 * "Sell, mistyped cash"
+  Assets:Stock  -1 HOOL {1 USD}
+  Assets:Cash   -3 USD
+
+2020-01-04 balance Assets:Stock 0 HOOL

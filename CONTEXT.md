@@ -34,8 +34,16 @@ _Avoid_: extension, hook, importer
 A Plugin that ships with Beancount v2, such as `beancount.plugins.auto_accounts`, and that this project reproduces with the same behavior.
 _Avoid_: core plugin, standard plugin
 
-### Processing the ledger
+### Checking the ledger
 
 **Booking**:
-Completing a transaction's postings: filling in missing amounts, matching reductions to the lots they reduce, and splitting an amount-less posting per currency. It happens once, before Plugins run. A transaction that cannot be matched to its lots is reported and left out of the ledger.
-_Avoid_: interpolation, matching
+Completing a transaction's postings: matching its reductions to the lots its accounts already hold, completing its missing numbers, and splitting an amount-less posting per currency. It happens once, before Plugins run. A transaction whose Booking fails is a Dropped transaction.
+_Avoid_: lot matching, interpolation (for the whole step)
+
+**Dropped transaction**:
+A transaction whose Booking failed, reported and left out of the ledger entirely, so balances and queries do not see it.
+_Avoid_: rejected, skipped, invalid transaction
+
+**Applied transaction**:
+A transaction that was booked, so later directives see its effects, even when it is reported for another error such as not balancing or posting to an unopened or closed account.
+_Avoid_: valid transaction, accepted transaction

@@ -1,0 +1,10 @@
+; An open with an invalid booking method is reported and still opens the
+; account, with the default method, so later postings to it are fine.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Other "BOGUS"
+
+2020-01-10 * "Uses the account"
+  Assets:Other   5 USD
+  Assets:Cash   -5 USD
+
+2020-02-01 balance Assets:Other 5 USD

@@ -152,3 +152,40 @@ func TestOfficialFormatParity(t *testing.T) {
 		})
 	}
 }
+
+// TestNoFollowOnErrors checks the applied_ fixtures, whose one erroneous
+// directive is still applied like beancount applies it: the later directives
+// that depend on it must pass, so both implementations report exactly one
+// error. Exit codes alone cannot show a follow-on error.
+func TestNoFollowOnErrors(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join(complianceDir, "applied_*.fail.beancount"))
+	assert.NoError(t, err)
+	assert.True(t, len(paths) > 0, "no applied_ fixtures found in %s", complianceDir)
+
+	_, lookErr := exec.LookPath("bean-check")
+	for _, path := range paths {
+		t.Run(strings.TrimSuffix(filepath.Base(path), ".fail.beancount"), func(t *testing.T) {
+			ctx := context.Background()
+			result, err := loader.New(loader.WithFollowIncludes()).Load(ctx, path)
+			assert.NoError(t, err)
+			var validationErrs *ledger.ValidationErrors
+			assert.True(t, errors.As(ledger.New().Process(ctx, result.AST), &validationErrs))
+			assert.Equal(t, 1, len(validationErrs.Errors), "%v", validationErrs)
+
+			if lookErr != nil {
+				return
+			}
+			// bean-check prints each error as "<absolute path>:<line>: <message>".
+			abs, err := filepath.Abs(path)
+			assert.NoError(t, err)
+			out, _ := exec.Command("bean-check", abs).CombinedOutput()
+			official := 0
+			for line := range strings.Lines(string(out)) {
+				if strings.HasPrefix(line, abs+":") {
+					official++
+				}
+			}
+			assert.Equal(t, 1, official, "bean-check output:\n%s", out)
+		})
+	}
+}

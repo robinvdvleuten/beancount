@@ -1,0 +1,9 @@
+; A currency the account does not allow is reported and still applied.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euro EUR
+
+2020-01-10 * "Dollars into a euro account"
+  Assets:Cash   5 USD
+  Assets:Euro  -5 USD
+
+2020-02-01 balance Assets:Cash 5 USD

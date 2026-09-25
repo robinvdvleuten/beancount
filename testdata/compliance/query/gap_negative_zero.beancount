@@ -1,0 +1,8 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-04 * "Residual rounds to zero"
+  Assets:A  1.001 USD
+  Assets:B -1.00 USD
+  Assets:C

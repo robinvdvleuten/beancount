@@ -1,0 +1,15 @@
+; An unbalanced transaction is reported and still applied, like beancount
+; books it before checking balances: the sale finds the lot the mistyped buy
+; added, so the balance assertion holds and the only error is the imbalance.
+2020-01-01 open Assets:Stock "FIFO"
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy, mistyped cash"
+  Assets:Stock   1 HOOL {10 USD}
+  Assets:Cash   -9 USD
+
+2020-01-03 * "Sell the lot"
+  Assets:Stock  -1 HOOL {}
+  Assets:Cash   10 USD
+
+2020-01-04 balance Assets:Stock 0 HOOL

@@ -117,24 +117,30 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 	return true
 }
 
-// book books txn. It returns nil without errors when txn is malformed,
-// which Validate reports, and errors when txn cannot be booked.
+// book books txn. It returns the errors that make txn a Dropped
+// transaction: a date out of range, a malformed number, cost or price,
+// missing numbers that cannot be interpolated, or a reduction that matches no
+// lot or several.
 func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
-	if validateDateRange(txn.Date()) != nil ||
-		len(b.validateAmounts(txn)) > 0 ||
-		len(b.validateCosts(txn)) > 0 ||
-		len(b.validatePrices(txn)) > 0 {
-		return nil, nil
+	if err := validateDateRange(txn.Date()); err != nil {
+		return nil, []error{err}
+	}
+	malformed := b.validateAmounts(txn)
+	malformed = append(malformed, b.validateCosts(txn)...)
+	malformed = append(malformed, b.validatePrices(txn)...)
+	if len(malformed) > 0 {
+		return nil, malformed
 	}
 
 	delta, balance, errs := b.calculateBalance(txn)
 	if len(errs) > 0 {
 		return nil, errs
 	}
-	// A transaction that does not balance keeps its postings as written.
-	if balance.isBalanced {
-		commitDelta(txn, delta)
+	if delta == nil {
+		// Missing numbers could not be interpolated.
+		return nil, []error{newNotBalancedError(txn, balance.residuals)}
 	}
+	commitDelta(txn, delta)
 	if errs := b.checkLots(txn); len(errs) > 0 {
 		return nil, errs
 	}
@@ -292,7 +298,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 			continue
 		}
 		if len(balance) != 1 {
-			return delta, unbalancedValidation(balance), nil
+			return nil, unbalancedValidation(balance), nil
 		}
 		number, nerr := decimal.NewFromString(posting.Amount.Value)
 		if nerr != nil {
@@ -327,7 +333,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		currency := posting.Price.Currency
 		if currency == "" {
 			if len(balance) != 1 {
-				return delta, unbalancedValidation(balance), nil
+				return nil, unbalancedValidation(balance), nil
 			}
 			for c := range balance {
 				currency = c
@@ -346,10 +352,10 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 	// prices, or an unresolved cost) are "too many missing numbers".
 	unknowns := len(pc.withoutAmounts) + len(currencyOnlyAmounts) + len(valuelessPrices)
 	if unknowns > 0 && len(unresolvedEmptyCosts) > 0 {
-		return delta, unbalancedValidation(balance), nil
+		return nil, unbalancedValidation(balance), nil
 	}
 	if unknowns > 1 {
-		return delta, unbalancedValidation(balance), nil
+		return nil, unbalancedValidation(balance), nil
 	}
 
 	// Beancount allows at most one posting without an amount per
@@ -386,7 +392,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		currency := posting.Amount.Currency
 		weightCurrency, perUnit, total, ok := unitsWeightTerms(posting)
 		if !ok {
-			return delta, unbalancedValidation(balance), nil
+			return nil, unbalancedValidation(balance), nil
 		}
 
 		weight := balance[weightCurrency].Neg()
@@ -420,7 +426,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		currency := posting.Price.Currency
 		if currency == "" {
 			if len(balance) != 1 {
-				return delta, unbalancedValidation(balance), nil
+				return nil, unbalancedValidation(balance), nil
 			}
 			for c := range balance {
 				currency = c
@@ -453,7 +459,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		// Beancount compliance: Cannot infer costs when multiple postings have empty cost specs
 		// This is ambiguous - which posting gets which portion of the residual?
 		if inferableEmptyCosts > 1 {
-			return delta, unbalancedValidation(balance), nil
+			return nil, unbalancedValidation(balance), nil
 		}
 
 		for _, posting := range pc.withEmptyCosts {
@@ -481,7 +487,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 				}
 			} else if len(balance) > 1 {
 				// Multiple currencies - ambiguous
-				return delta, unbalancedValidation(balance), nil
+				return nil, unbalancedValidation(balance), nil
 			}
 		}
 	}
@@ -582,10 +588,8 @@ func (b *booker) bookedReductions(account ast.Account, cost *ast.Cost, commodity
 	return plan.reductions, true, nil
 }
 
-// checkLots reports cost postings that cannot be booked: a negative cost,
-// or a reduction the account's lots cannot cover. Like beancount, a booked
-// cost may be zero but never negative; the check applies per unit, after a
-// total or compound cost is spread over the units.
+// checkLots reports cost postings whose reduction the account's lots cannot
+// cover: no matching lot, several, or too few units.
 func (b *booker) checkLots(txn *ast.Transaction) []error {
 	var errs []error
 	for _, posting := range txn.Postings {
@@ -600,12 +604,6 @@ func (b *booker) checkLots(txn *ast.Transaction) []error {
 		if err != nil {
 			continue
 		}
-
-		if perUnit, costCurrency, ok := PerUnitCost(posting); ok && perUnit.IsNegative() {
-			errs = append(errs, NewNegativeCostError(txn, posting.Account, perUnit, costCurrency))
-			continue
-		}
-
 		if err := b.inventory(posting.Account).CanBook(posting.Amount.Currency, amount, lotSpec, b.method(posting.Account)); err != nil {
 			errs = append(errs, newBookingError(txn, posting.Account, err))
 		}

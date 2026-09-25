@@ -389,42 +389,41 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 	return pc
 }
 
-// validateTransaction checks a transaction that Booking has completed.
+// validateTransaction checks a transaction that Booking kept. Booking has
+// already reported and dropped the transactions it could not book (a date
+// out of range, a malformed number, cost or price, missing numbers that
+// cannot be interpolated, a reduction that matches no lot or several).
 //
-// It reports an out-of-range date, accounts that are unknown or not open,
-// malformed amounts, costs, prices and metadata, a transaction that does not
-// balance, and currencies an account's constraint does not allow. The
-// checks do not short-circuit, so all errors are reported together.
-//
-// Like beancount, validation errors do not undo Booking: it returns the
-// booked transaction, which Apply applies even when errors were found. It
-// returns nil when Booking left the transaction unbooked.
+// Like beancount, which books every transaction before it checks it, the
+// booked transaction is returned for Apply even when it is reported for
+// posting to an unopened or inactive account, invalid metadata, not
+// balancing, a negative cost, or a currency its account does not allow;
+// later directives then see its effects instead of reporting follow-on
+// errors.
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction, booked *bookedTransaction) ([]error, *bookedTransaction) {
-	var allErrors []error
-
-	if err := validateDateRange(txn.Date()); err != nil {
-		allErrors = append(allErrors, err)
-		return allErrors, nil
+	if booked == nil {
+		return nil, nil
 	}
 
-	allErrors = append(allErrors, v.validateAccountsOpen(txn)...)
-	allErrors = append(allErrors, v.validateAmounts(txn)...)
-	allErrors = append(allErrors, v.validateCosts(txn)...)
-	allErrors = append(allErrors, v.validatePrices(txn)...)
-	allErrors = append(allErrors, v.validateMetadata(txn)...)
-	if len(allErrors) > 0 || booked == nil {
-		return allErrors, booked
-	}
-
+	var errs []error
+	errs = append(errs, v.validateAccountsOpen(txn)...)
+	errs = append(errs, v.validateMetadata(txn)...)
 	if len(booked.residuals) > 0 {
-		residualStrings := make(map[string]string, len(booked.residuals))
-		for currency, amount := range booked.residuals {
-			residualStrings[currency] = amount.String()
-		}
-		return []error{NewTransactionNotBalancedError(txn, residualStrings)}, booked
+		errs = append(errs, newNotBalancedError(txn, booked.residuals))
 	}
+	errs = append(errs, v.validateNegativeCosts(txn)...)
+	errs = append(errs, v.validateConstraintCurrencies(txn)...)
+	return errs, booked
+}
 
-	return v.validateConstraintCurrencies(txn), booked
+// newNotBalancedError reports the residuals of a transaction that does not
+// balance.
+func newNotBalancedError(txn *ast.Transaction, residuals map[string]decimal.Decimal) error {
+	residualStrings := make(map[string]string, len(residuals))
+	for currency, amount := range residuals {
+		residualStrings[currency] = amount.String()
+	}
+	return NewTransactionNotBalancedError(txn, residualStrings)
 }
 
 // validateBalance checks if a balance directive is valid.
@@ -674,10 +673,12 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	}
 
 	// A per-account booking method must name one of beancount's methods,
-	// matched case-sensitively.
+	// matched case-sensitively. Like beancount, an invalid one is reported
+	// and the account still opens, with the default method.
+	bookingMethod := BookingMethod(open.BookingMethod)
 	if open.BookingMethod != "" && !sharedconfig.IsBookingMethod(open.BookingMethod) {
 		errs = append(errs, NewInvalidBookingMethodError(open))
-		return errs, nil
+		bookingMethod = ""
 	}
 
 	// Copy metadata and constraint currencies to avoid shared references with AST
@@ -687,7 +688,6 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	constraintCurrenciesCopy := make([]string, len(open.ConstraintCurrencies))
 	copy(constraintCurrenciesCopy, open.ConstraintCurrencies)
 
-	bookingMethod := BookingMethod(open.BookingMethod)
 	if bookingMethod == "" {
 		bookingMethod = BookingMethod(v.config.BookingMethod)
 	}
@@ -1313,6 +1313,23 @@ func newBookingError(txn *ast.Transaction, account ast.Account, err error) error
 		return NewAmbiguousBookingError(txn, account, ambiguousErr)
 	}
 	return NewInsufficientInventoryError(txn, account, err)
+}
+
+// validateNegativeCosts reports booked cost postings with a negative cost.
+// Like beancount, a booked cost may be zero but never negative; the check
+// applies per unit, after a total or compound cost is spread over the units.
+// Beancount books such a posting anyway, so this does not stop Apply.
+func (v *validator) validateNegativeCosts(txn *ast.Transaction) []error {
+	var errs []error
+	for _, posting := range txn.Postings {
+		if posting.Amount == nil || posting.Cost == nil {
+			continue
+		}
+		if perUnit, costCurrency, ok := PerUnitCost(posting); ok && perUnit.IsNegative() {
+			errs = append(errs, NewNegativeCostError(txn, posting.Account, perUnit, costCurrency))
+		}
+	}
+	return errs
 }
 
 // validateConstraintCurrencies reports postings in a currency their

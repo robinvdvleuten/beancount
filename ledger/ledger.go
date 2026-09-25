@@ -693,7 +693,8 @@ func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *
 	return root
 }
 
-// processDirective processes a single directive
+// processDirective validates a directive, records its errors, and applies
+// its delta if Validate returned one.
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	handler := GetHandler(directive.Kind())
 	if handler == nil {

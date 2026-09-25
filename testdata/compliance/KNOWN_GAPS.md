@@ -87,10 +87,12 @@ limits:
   transactions are the same; only a Plugin that reads them would see a
   difference.
 
-- **Negative zero**: an interpolated amount rounded to zero from a negative
-  residual is `-0.00` in beancount (Python decimal keeps the sign); our
-  decimals have no signed zero, so it books and renders as `0.00`. The value
-  is the same; only the sign of zero differs.
+- **Negative zero** (#408): an interpolated amount rounded to zero from a
+  negative residual is `-0.00` in beancount (Python decimal keeps the sign);
+  our decimals have no signed zero, so it books and renders as `0.00`, in
+  BQL columns and in `print` alike. The value is the same; only the sign of
+  zero differs, and only on the booked posting: sums and `balances` match.
+  `query/gap_negative_zero.bql` pins it.
 
 - **BQL `str()` of numbers, dates and strings**: bean-query returns
   Python's `repr` for these (`Decimal('200.00')`,

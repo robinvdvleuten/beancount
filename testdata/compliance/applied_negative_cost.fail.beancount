@@ -1,0 +1,10 @@
+; A negative cost is reported and the lot is still booked.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+
+2020-01-10 * "Negative cost"
+  Assets:Cash    5 USD
+  Assets:Stock   1 HOOL {-5 USD}
+
+2020-02-01 balance Assets:Cash 5 USD
+2020-02-01 balance Assets:Stock 1 HOOL

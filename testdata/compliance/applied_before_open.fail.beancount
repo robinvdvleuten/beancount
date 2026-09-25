@@ -1,0 +1,12 @@
+; A posting dated before its account opens is reported and still counts once
+; the account opens.
+2020-01-01 open Assets:Cash
+
+2020-01-10 * "Posted before the open"
+  Assets:Cash   5 USD
+  Assets:Late  -5 USD
+
+2020-01-20 open Assets:Late
+
+2020-02-01 balance Assets:Cash 5 USD
+2020-02-01 balance Assets:Late -5 USD
