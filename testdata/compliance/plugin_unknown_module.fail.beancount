@@ -1,0 +1,5 @@
+; A plugin under beancount.plugins that beancount v2 does not ship fails to
+; import, and is reported; processing continues.
+2020-01-01 open Assets:A
+plugin "beancount.plugins.nope"
+plugin "beancount.plugins.auto_accounts.x"

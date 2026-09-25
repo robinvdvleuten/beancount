@@ -147,6 +147,7 @@ var lineGaps = map[string]string{
 	"include_glob_no_match":         "we blame the include's line, v2 <load>:0",
 	"plugin_auto_accounts_config":   "we blame the plugin's line, v2 <load>:0",
 	"plugin_implicit_prices_config": "we blame the plugin's line, v2 <load>:0",
+	"plugin_unknown_module":         "we blame the plugin's line, v2 <load>:0",
 	"unbalanced_pushmeta":           "we blame the pushmeta's line, v2 line 0",
 	"unbalanced_pushtag":            "we blame the pushtag's line, v2 line 0",
 }

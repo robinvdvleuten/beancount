@@ -351,3 +351,14 @@ func NewPluginConfigError(plugin *ast.Plugin) *Diagnostic {
 		pos:     plugin.Position(),
 	}
 }
+
+// NewPluginImportError creates an error for a plugin directive naming a
+// module under beancount.plugins that beancount v2 does not ship, which it
+// fails to import.
+func NewPluginImportError(plugin *ast.Plugin) *Diagnostic {
+	return &Diagnostic{
+		kind:    "PluginImportError",
+		message: fmt.Sprintf("Error importing %q", plugin.Name.String()),
+		pos:     plugin.Position(),
+	}
+}

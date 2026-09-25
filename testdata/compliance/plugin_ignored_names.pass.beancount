@@ -1,0 +1,6 @@
+; A v2 plugin module that does not run here, the plugins package itself, and
+; a module outside beancount all pass, like in bean-check, where they import.
+2020-01-01 open Assets:A
+plugin "beancount.plugins.noduplicates"
+plugin "beancount.plugins"
+plugin "json"

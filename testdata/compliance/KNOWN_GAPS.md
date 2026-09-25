@@ -133,6 +133,10 @@ limits:
   `leafonly`, `mark_unverified`, `merge_meta`, `noduplicates`, `nounused`,
   `onecommodity`, `pedantic`, `sellgains`, `split_expenses`, `tag_pending`,
   `unique_prices`, `unrealized`. User-written plugins do not run either.
+  A name under `beancount.plugins` that v2 does not ship is reported, like
+  v2's `Error importing`, but any other name is not checked: v2 fails to
+  import `does.not.exist` or `beancount.nope`, and we cannot tell which
+  modules outside `beancount.plugins` would import.
 - **BQL `id` column digests**: ids are unique and stable but hash the
   source location, not the directive contents like `compare.hash_entry`,
   so the hex digests differ from official output.

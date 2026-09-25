@@ -80,6 +80,7 @@ func TestErrorKinds(t *testing.T) {
 		{NewDocumentFileError(document, "/x/a.pdf"), "DocumentFileError", 10, document},
 		{NewInvalidDirectivePriceError("price currency cannot be empty", price), "InvalidDirectivePriceError", 10, price},
 		{NewPluginConfigError(plugin), "PluginConfigError", 10, nil},
+		{NewPluginImportError(plugin), "PluginImportError", 10, nil},
 	} {
 		t.Run(tt.kind, func(t *testing.T) {
 			assert.Equal(t, tt.kind, kindOf(tt.err))
