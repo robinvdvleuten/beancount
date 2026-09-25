@@ -1,0 +1,19 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Stock
+2020-01-01 open Expenses:B
+
+2020-01-02 * "number only"
+  Expenses:B  1.00 USD
+  Assets:A   -1.00
+
+2020-01-03 * "currency only"
+  Expenses:B  2.00 USD
+    Assets:A          USD ; deeper indent
+
+2020-01-04 * "units from cost"
+  Assets:Stock  HOOL {10 USD}
+  Expenses:B  -20 USD
+
+2020-01-05 * "units from price"
+  Assets:Stock  GOOG @ 10 USD
+  Expenses:B  -20 USD

@@ -249,7 +249,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 		switch d := directive.(type) {
 		case *ast.Transaction:
 			for _, posting := range d.Postings {
-				if posting.Amount == nil || posting.Amount.Value == "" {
+				if !isAlignedAmount(posting.Amount) {
 					continue
 				}
 				// bean-format quirk: width maxima come from the original,
@@ -1273,6 +1273,11 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 
 // formatPosting formats a single posting with proper alignment.
 func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
+	if p.Amount != nil && !isAlignedAmount(p.Amount) && f.writePostingLineAsWritten(p, buf) {
+		f.formatMetadata(p.Metadata, buf)
+		return
+	}
+
 	indent := f.postingIndent()
 	buf.WriteString(strings.Repeat(" ", indent))
 
@@ -1339,6 +1344,36 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	f.formatMetadata(p.Metadata, buf)
 }
 
+// isAlignedAmount reports whether bean-format aligns an amount: only a
+// number followed by a currency matches its line pattern. An amount
+// missing either part leaves the line as written.
+func isAlignedAmount(amount *ast.Amount) bool {
+	return amount != nil && amount.Value != "" && amount.Currency != ""
+}
+
+// writePostingLineAsWritten copies a posting's source line, re-indented
+// to the posting indent the way bean-format re-indents every line that
+// starts with an account. It reports false, writing nothing, when the
+// source line is unavailable, shared with other items, or does not hold
+// the whole posting.
+func (f *Formatter) writePostingLineAsWritten(p *ast.Posting, buf *strings.Builder) bool {
+	line := p.Position().Line
+	original := f.getOriginalLine(line)
+	if original == "" || f.linesWithMultipleItems[line] {
+		return false
+	}
+	// The line must hold the whole posting: its account, then its amount.
+	rest, ok := strings.CutPrefix(strings.TrimLeft(original, " \t"), string(p.Account))
+	if !ok || !strings.Contains(rest, amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency) {
+		return false
+	}
+	buf.WriteString(strings.Repeat(" ", f.postingIndent()))
+	buf.WriteString(strings.TrimLeft(original, " \t"))
+	buf.WriteByte('\n')
+	f.verbatimLines[line] = true
+	return true
+}
+
 // isValidNumericValue checks if a value looks like a valid numeric amount.
 func isValidNumericValue(value string) bool {
 	if value == "" {
@@ -1380,11 +1415,10 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 	// Use raw value if available (preserves formatting like commas), otherwise use canonical value
 	displayValue := amountDisplayValue(amount)
 
-	if !isValidNumericValue(amount.Value) {
+	if !isAlignedAmount(amount) || !isValidNumericValue(amount.Value) {
+		// Joined with single spaces, leaving out the missing part.
 		buf.WriteString(strings.Repeat(" ", MinimumSpacing))
-		buf.WriteString(displayValue)
-		buf.WriteByte(' ')
-		buf.WriteString(amount.Currency)
+		buf.WriteString(strings.Join(slices.DeleteFunc([]string{displayValue, amount.Currency}, func(s string) bool { return s == "" }), " "))
 		return
 	}
 
