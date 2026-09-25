@@ -32,6 +32,8 @@ func TestErrorKinds(t *testing.T) {
 
 	posting := ast.NewPosting(account, ast.WithAmount("1", "USD"))
 	posting.SetPosition(postingPos)
+	pricedPosting := ast.NewPosting(account, ast.WithTotalPrice(ast.NewAmount("-10", "USD")))
+	pricedPosting.SetPosition(postingPos)
 	txn := at(ast.NewTransaction(date, "x", ast.WithPostings(posting))).(*ast.Transaction)
 	open := at(ast.NewOpen(date, account, nil, "")).(*ast.Open)
 	closeDirective := at(ast.NewClose(date, account)).(*ast.Close)
@@ -61,6 +63,8 @@ func TestErrorKinds(t *testing.T) {
 		{NewNegativeCostError(txn, posting, decimal.NewFromInt(-1), "USD"), "NegativeCostError", 11, txn},
 		{NewMergeCostError(txn, posting), "MergeCostError", 11, txn},
 		{NewCurrencyGroupError(txn, posting, "Too many missing numbers"), "CurrencyGroupError", 11, txn},
+		{NewNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
+		{NewTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
 		{NewInvalidBookingMethodError(open), "InvalidBookingMethodError", 10, open},
 		{NewTransactionNotBalancedError(txn, map[string]string{"USD": "1"}), "TransactionNotBalancedError", 10, txn},
 		{NewInvalidAmountError(txn, account, "x", details), "InvalidAmountError", 10, txn},

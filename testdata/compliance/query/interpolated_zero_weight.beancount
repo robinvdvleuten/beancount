@@ -1,0 +1,15 @@
+; A posting whose missing units interpolate to a zero weight is left out,
+; like beancount's interpolate_group, as is a zero-residual auto posting.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "currency only"
+  Assets:A  10 USD
+  Assets:B  -10 USD
+  Assets:C  HOOL
+
+2020-01-03 * "auto zero"
+  Assets:A  10 USD
+  Assets:B  -10 USD
+  Assets:C

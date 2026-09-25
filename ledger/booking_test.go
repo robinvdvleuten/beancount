@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -100,4 +101,47 @@ func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 		}
 	}
 	assert.Equal(t, map[string]int{"buy": 2, "sell too many": 0}, postings)
+}
+
+func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
+	// A negative price is reported on its posting and made positive; a total
+	// price without units is reported and dropped, and the posting, whose
+	// units interpolate to a zero weight, leaves the transaction.
+	source := `
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+
+2020-01-03 * "units missing total price"
+  Assets:A      HOOL @@ 10 USD
+  Assets:Cash  -10 USD
+
+2020-01-04 * "negative per unit"
+  Assets:A      2 HOOL @ -3 USD
+  Assets:Cash  6 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	var kinds []string
+	for _, err := range l.Errors() {
+		kinds = append(kinds, fmt.Sprintf("%s@%d", kindOf(err), err.(interface{ GetPosition() ast.Position }).GetPosition().Line))
+	}
+	assert.Equal(t, []string{
+		"TotalPriceWithoutUnitsError@6",
+		"NegativePriceError@10",
+		"TransactionNotBalancedError@5",
+		"TransactionNotBalancedError@9",
+	}, kinds)
+
+	postings := map[string]int{}
+	for _, d := range tree.Directives {
+		if txn, ok := d.(*ast.Transaction); ok {
+			postings[txn.Narration.String()] = len(txn.Postings)
+			if txn.Narration.String() == "negative per unit" {
+				assert.Equal(t, "3", txn.Postings[0].Price.Value)
+			}
+		}
+	}
+	assert.Equal(t, map[string]int{"units missing total price": 1, "negative per unit": 2}, postings)
 }

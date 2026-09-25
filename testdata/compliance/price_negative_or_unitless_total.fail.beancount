@@ -1,0 +1,17 @@
+; Like beancount's parser, a negative price is reported and made positive,
+; and a total price on a posting without units is reported and dropped;
+; each transaction then fails to balance.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+
+2020-01-03 * "units missing total price"
+  Assets:A      HOOL @@ 10 USD
+  Assets:Cash  -10 USD
+
+2020-01-04 * "negative per unit"
+  Assets:A      2 HOOL @ -3 USD
+  Assets:Cash  6 USD
+
+2020-01-05 * "negative total"
+  Assets:A      4 HOOL @@ -10 USD
+  Assets:Cash   10 USD

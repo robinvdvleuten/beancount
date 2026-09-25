@@ -103,12 +103,15 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 
 // bookTransaction books txn and reports whether it stays in the ledger.
 func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
-	// Beancount v2 reports a merge cost {*} while parsing, so it is reported
-	// whether or not the transaction books.
+	// Beancount v2 reports these while parsing, so they are reported
+	// whether or not the transaction books: a merge cost {*}, and a price
+	// that is negative or a total on a posting without units, which it
+	// fixes up before booking.
 	for _, posting := range txn.Postings {
 		if posting.Cost.IsMergeCost() {
 			l.errors = append(l.errors, NewMergeCostError(txn, posting))
 		}
+		l.errors = append(l.errors, fixPrice(txn, posting)...)
 	}
 	booked, errs := l.booker.book(txn)
 	l.errors = append(l.errors, errs...)
@@ -122,6 +125,29 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 		}
 	}
 	return true
+}
+
+// fixPrice reports and fixes up a posting's price like beancount's parser: a
+// negative price is made positive, and a total price (@@) on a posting
+// without units is dropped.
+func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
+	price := posting.Price
+	if price == nil {
+		return nil
+	}
+	var errs []error
+	if price.Value != "" {
+		if number, err := ParseAmount(price); err == nil && number.IsNegative() {
+			errs = append(errs, NewNegativePriceError(txn, posting))
+			posting.Price = &ast.Amount{Value: formatInferredNumber(number.Abs()), Currency: price.Currency}
+		}
+	}
+	if posting.PriceTotal && (posting.Amount == nil || posting.Amount.Value == "") {
+		errs = append(errs, NewTotalPriceWithoutUnitsError(txn, posting))
+		posting.Price = nil
+		posting.PriceTotal = false
+	}
+	return errs
 }
 
 // book books txn one Currency group at a time. A nil result with errors is a
@@ -182,6 +208,10 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		// The amount-less posting belongs to every group: it is booked once
 		// per amount, as itself the first time and as a copy after that.
 		for _, posting := range group.postings {
+			if groupDelta.Dropped[posting] {
+				delete(groupDelta.InferredAmounts, posting)
+				continue
+			}
 			if posting.Amount != nil || posting.Price != nil {
 				delta.Postings = append(delta.Postings, posting)
 				continue
@@ -412,6 +442,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
 		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
 		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
+		Dropped:         make(map[*ast.Posting]bool),
 	}
 
 	// A number-only amount or price is not a missing number in beancount:
@@ -521,6 +552,9 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 		}
 
 		weight := balance[weightCurrency].Neg()
+		if weight.IsZero() {
+			delta.Dropped[posting] = true
+		}
 		needed := weight
 		if weightCurrency != currency {
 			needed = pydecimal.Quo(pydecimal.Sub(weight, total), perUnit)

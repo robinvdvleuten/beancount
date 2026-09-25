@@ -27,6 +27,9 @@ type TransactionDelta struct {
 	// non-zero residual, as a copy of the posting per extra currency, and
 	// drops it when every residual is zero.
 	Postings []*ast.Posting
+	// Dropped holds the postings whose missing units interpolate to a zero
+	// weight, which beancount leaves out of the booked transaction.
+	Dropped map[*ast.Posting]bool
 }
 
 // balanceValidation holds validation results from balance calculation.

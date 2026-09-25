@@ -201,6 +201,22 @@ func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 		"Cost merging is not supported yet (account %s)", posting.Account).atPosting(posting)
 }
 
+// NewNegativePriceError creates an error for a posting with a negative
+// price, which beancount books at its absolute value. Like beancount, it
+// blames the posting's line.
+func NewNegativePriceError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+	return newError("NegativePriceError", txn, posting.Account,
+		"Negative prices are not allowed: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
+}
+
+// NewTotalPriceWithoutUnitsError creates an error for a total price (@@) on
+// a posting without units, which beancount drops. Like beancount, it blames
+// the posting's line.
+func NewTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+	return newError("TotalPriceWithoutUnitsError", txn, posting.Account,
+		"Total price on a posting without units: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
+}
+
 // NewCurrencyGroupError creates an error for a posting that Booking cannot
 // sort into a Currency group, or whose group's missing numbers it cannot
 // complete. Like beancount, it blames the posting's line.
