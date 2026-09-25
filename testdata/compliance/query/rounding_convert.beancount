@@ -1,0 +1,9 @@
+; A conversion at an inverted price rounds to 28 significant digits.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+
+2020-01-01 price EUR 3 USD
+
+2020-01-02 * "convert"
+  Assets:Cash  -10 USD
+  Equity:Opening

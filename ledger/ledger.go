@@ -311,7 +311,7 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 	result := decimal.NewFromInt(1)
 	for _, edge := range path {
 		if edge.Kind == EdgePrice && !edge.Weight.IsZero() {
-			result = result.Mul(edge.Weight)
+			result = pydecimal.Mul(result, edge.Weight)
 		}
 	}
 

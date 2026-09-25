@@ -70,10 +70,10 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 					return nil, err
 				}
 				if !amount.IsZero() {
-					costAmount = costAmount.Add(pydecimal.Quo(additionalTotal, amount.Abs()))
+					costAmount = pydecimal.Add(costAmount, pydecimal.Quo(additionalTotal, amount.Abs()))
 				}
 			}
-			totalCost = amount.Mul(costAmount)
+			totalCost = pydecimal.Mul(amount, costAmount)
 		}
 
 		weights = weightSet{
@@ -90,7 +90,7 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 
 		priceCurrency := posting.Price.Currency
 
-		priceWeight := amount.Mul(priceAmount)
+		priceWeight := pydecimal.Mul(amount, priceAmount)
 		if posting.PriceTotal {
 			priceWeight = perUnitWeight(amount, priceAmount)
 		}
@@ -116,7 +116,7 @@ func perUnitWeight(units, total decimal.Decimal) decimal.Decimal {
 	if units.IsZero() {
 		return total
 	}
-	return units.Mul(pydecimal.Quo(total, units.Abs()))
+	return pydecimal.Mul(units, pydecimal.Quo(total, units.Abs()))
 }
 
 // balanceWeights accumulates weights from multiple postings
@@ -128,7 +128,7 @@ func balanceWeights(allWeights []weightSet) map[string]decimal.Decimal {
 	for _, weights := range allWeights {
 		for _, weight := range weights {
 			current := balance[weight.Currency]
-			balance[weight.Currency] = current.Add(weight.Amount)
+			balance[weight.Currency] = pydecimal.Add(current, weight.Amount)
 		}
 	}
 

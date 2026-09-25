@@ -1,0 +1,7 @@
+; A number expression in the ledger rounds to 28 significant digits.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+
+2020-01-02 * "expression"
+  Assets:Cash  100 + 1/3 USD
+  Equity:Opening

@@ -1,6 +1,7 @@
 package query
 
 import (
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -132,7 +133,7 @@ type sumDecimalAcc struct {
 
 func (a *sumDecimalAcc) update(v any) {
 	if d, ok := asDecimal(v); ok {
-		a.total = a.total.Add(d)
+		a.total = pydecimal.Add(a.total, d)
 	}
 }
 func (a *sumDecimalAcc) finalize() any { return a.total }

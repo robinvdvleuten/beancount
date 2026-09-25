@@ -14,6 +14,9 @@ linters:
         - pattern: ^decimal\.Decimal\.(Div|DivRound)$
           pkg: ^github\.com/shopspring/decimal$
           msg: divide with pydecimal.Quo, which rounds like Python's decimal (28 significant digits)
+        - pattern: ^decimal\.Decimal\.(Add|Sub|Mul)$
+          pkg: ^github\.com/shopspring/decimal$
+          msg: use pydecimal.Add, Sub or Mul, which round like Python's decimal (28 significant digits)
   exclusions:
     rules:
       - path: internal/pydecimal/

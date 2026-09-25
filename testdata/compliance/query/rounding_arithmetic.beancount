@@ -1,0 +1,7 @@
+; BQL arithmetic rounds to 28 significant digits, like Python's decimal.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+
+2020-01-02 * "third"
+  Assets:Cash  1/3 USD
+  Equity:Opening

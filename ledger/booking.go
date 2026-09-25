@@ -204,7 +204,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		maps.Copy(delta.InferredCosts, groupDelta.InferredCosts)
 		maps.Copy(delta.InferredPrices, groupDelta.InferredPrices)
 		for currency, residual := range balance.residuals {
-			residuals[currency] = residuals[currency].Add(residual)
+			residuals[currency] = pydecimal.Add(residuals[currency], residual)
 		}
 	}
 	commitDelta(txn, delta)
@@ -379,7 +379,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				var weights weightSet
 				for _, lot := range booked.lots {
 					weights = append(weights, weight{
-						Amount:   lot.Units.Mul(*lot.Cost),
+						Amount:   pydecimal.Mul(lot.Units, *lot.Cost),
 						Currency: lot.CostCurrency,
 					})
 				}
@@ -436,7 +436,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				Value:    posting.Amount.Value,
 				Currency: currency,
 			}
-			balance[currency] = balance[currency].Add(number)
+			balance[currency] = pydecimal.Add(balance[currency], number)
 		}
 	}
 
@@ -465,12 +465,12 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				currency = c
 			}
 		}
-		weight := units.Mul(priceNumber)
+		weight := pydecimal.Mul(units, priceNumber)
 		if posting.PriceTotal {
 			weight = perUnitWeight(units, priceNumber)
 		}
 		delta.InferredPrices[posting] = &ast.Amount{Value: posting.Price.Value, Currency: currency}
-		balance[currency] = balance[currency].Add(weight)
+		balance[currency] = pydecimal.Add(balance[currency], weight)
 	}
 
 	// Beancount interpolates at most one missing number per transaction;
@@ -503,7 +503,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				Value:    formatInferredNumber(needed),
 				Currency: currency,
 			})
-			balance[currency] = balance[currency].Add(needed)
+			balance[currency] = pydecimal.Add(balance[currency], needed)
 		}
 
 		if len(autoAmounts) > 0 {
@@ -526,7 +526,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 		weight := balance[weightCurrency].Neg()
 		needed := weight
 		if weightCurrency != currency {
-			needed = pydecimal.Quo(weight.Sub(total), perUnit)
+			needed = pydecimal.Quo(pydecimal.Sub(weight, total), perUnit)
 		}
 		needed = roundInterpolated(needed, b.transactionTolerance(currency, stated[currency], specCostTolerances))
 		delta.InferredAmounts[posting] = &ast.Amount{
@@ -534,9 +534,9 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			Currency: currency,
 		}
 		if weightCurrency == currency {
-			balance[currency] = balance[currency].Add(needed)
+			balance[currency] = pydecimal.Add(balance[currency], needed)
 		} else {
-			balance[weightCurrency] = balance[weightCurrency].Add(needed.Mul(perUnit).Add(total))
+			balance[weightCurrency] = pydecimal.Add(balance[weightCurrency], pydecimal.Add(pydecimal.Mul(needed, perUnit), total))
 		}
 	}
 
@@ -567,7 +567,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			priceNumber = pydecimal.Quo(weight, units).Abs()
 		}
 		delta.InferredPrices[posting] = &ast.Amount{Value: priceNumber.String(), Currency: currency}
-		balance[currency] = balance[currency].Add(weight)
+		balance[currency] = pydecimal.Add(balance[currency], weight)
 	}
 
 	// Infer costs for empty cost specs {}
@@ -616,13 +616,13 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			weight := perUnitWeight(amount, number)
 			if !posting.Cost.IsTotal {
 				number = pydecimal.Quo(number, amount)
-				weight = amount.Mul(number)
+				weight = pydecimal.Mul(amount, number)
 			}
 			delta.InferredCosts[posting] = &ast.Amount{
 				Value:    number.String(),
 				Currency: currency,
 			}
-			balance[currency] = residual.Add(weight)
+			balance[currency] = pydecimal.Add(residual, weight)
 		}
 	}
 

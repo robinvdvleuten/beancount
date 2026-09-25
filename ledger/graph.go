@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -303,7 +304,7 @@ func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, dat
 		if edge.Kind != EdgePrice || edge.Weight.IsZero() {
 			return decimal.Zero, fmt.Errorf("invalid price edge in conversion path: %s→%s", edge.From, edge.To)
 		}
-		result = result.Mul(edge.Weight)
+		result = pydecimal.Mul(result, edge.Weight)
 	}
 
 	return result, nil

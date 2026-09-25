@@ -5,6 +5,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -72,7 +73,7 @@ func InferTolerance(amounts []decimal.Decimal, currency string, config *Toleranc
 			continue // Integer precision does not contribute
 		}
 
-		tolerance := decimal.New(1, exp).Mul(config.Multiplier)
+		tolerance := pydecimal.Mul(decimal.New(1, exp), config.Multiplier)
 		if !foundAny || tolerance.GreaterThan(inferred) {
 			inferred = tolerance
 			foundAny = true
@@ -93,6 +94,6 @@ func InferTolerance(amounts []decimal.Decimal, currency string, config *Toleranc
 
 // AmountEqual checks if two amounts are equal within tolerance
 func AmountEqual(a, b decimal.Decimal, tolerance decimal.Decimal) bool {
-	diff := a.Sub(b).Abs()
+	diff := pydecimal.Sub(a, b).Abs()
 	return diff.LessThanOrEqual(tolerance)
 }

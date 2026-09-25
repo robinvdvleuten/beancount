@@ -826,7 +826,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 
 	delta := &BalanceDelta{AccountName: accountName, Currency: currency}
 	if padEntry != nil {
-		difference := expectedAmount.Sub(actualAmount)
+		difference := pydecimal.Sub(expectedAmount, actualAmount)
 		if difference.Abs().GreaterThan(tolerance) {
 			// The padding has the balance amount's precision.
 			decimalPlaces := int32(2)
@@ -838,7 +838,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 			// Padding an account from itself posts both legs to it, so
 			// nothing changes and the assertion fails, as in beancount.
 			if padEntry.AccountPad != balance.Account {
-				actualAmount = actualAmount.Add(difference)
+				actualAmount = pydecimal.Add(actualAmount, difference)
 			}
 		}
 	}
@@ -862,7 +862,7 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 		// Beancount allows twice the multiplier on balance and pad assertions,
 		// as user-provided balances may be rounded further off than the amounts
 		// within a single transaction (see beancount ops/balance.py).
-		return decimal.New(1, exp).Mul(v.config.Tolerance.Multiplier).Mul(decimal.NewFromInt(2)), nil
+		return pydecimal.Mul(pydecimal.Mul(decimal.New(1, exp), v.config.Tolerance.Multiplier), decimal.NewFromInt(2)), nil
 	}
 	return ParseAmount(balance.Tolerance)
 }
@@ -928,17 +928,17 @@ func (v *validator) costTolerances(shares []toleranceShare) map[string]decimal.D
 		if share.units.Exponent() >= 0 {
 			continue
 		}
-		unitsTolerance := decimal.New(1, share.units.Exponent()).Mul(v.config.Tolerance.Multiplier)
+		unitsTolerance := pydecimal.Mul(decimal.New(1, share.units.Exponent()), v.config.Tolerance.Multiplier)
 		if share.hasCost && share.costCurrency != "" {
 			contribution := maxCostTolerance
 			for _, n := range share.costNumbers {
-				contribution = decimal.Min(contribution, unitsTolerance.Mul(n))
+				contribution = decimal.Min(contribution, pydecimal.Mul(unitsTolerance, n))
 			}
-			tolerances[share.costCurrency] = tolerances[share.costCurrency].Add(contribution)
+			tolerances[share.costCurrency] = pydecimal.Add(tolerances[share.costCurrency], contribution)
 		}
 		if share.price != nil {
-			contribution := decimal.Min(maxCostTolerance, unitsTolerance.Mul(share.price.number))
-			tolerances[share.price.currency] = tolerances[share.price.currency].Add(contribution)
+			contribution := decimal.Min(maxCostTolerance, pydecimal.Mul(unitsTolerance, share.price.number))
+			tolerances[share.price.currency] = pydecimal.Add(tolerances[share.price.currency], contribution)
 		}
 	}
 	return tolerances
@@ -1055,7 +1055,7 @@ func roundInterpolated(number, tolerance decimal.Decimal) decimal.Decimal {
 		return number
 	}
 	// Normalize the quantum (strip trailing zeros), as beancount does.
-	quantum := pydecimal.Normalize(tolerance.Mul(decimal.NewFromInt(2)))
+	quantum := pydecimal.Normalize(pydecimal.Mul(tolerance, decimal.NewFromInt(2)))
 	if len(quantum.Coefficient().String()) >= maxQuantumDigits {
 		return number
 	}

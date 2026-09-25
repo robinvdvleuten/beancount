@@ -5,6 +5,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -297,7 +298,7 @@ func TestGraph_ConvertAmount_MultiHop(t *testing.T) {
 	rate, err := g.ConvertAmount(mustParseDec("1"), "USD", "GBP", date)
 	assert.NoError(t, err)
 
-	expected := mustParseDec("0.92").Mul(mustParseDec("0.86"))
+	expected := pydecimal.Mul(mustParseDec("0.92"), mustParseDec("0.86"))
 	assert.True(t, rate.Equal(expected))
 }
 

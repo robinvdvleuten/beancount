@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
@@ -218,7 +219,7 @@ func currencyNumber(v any, currency string) (decimal.Decimal, bool) {
 		found := false
 		for _, p := range val.Positions() {
 			if p.Units.Currency == currency {
-				total = total.Add(p.Units.Number)
+				total = pydecimal.Add(total, p.Units.Number)
 				found = true
 			}
 		}

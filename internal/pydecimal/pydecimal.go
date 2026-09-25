@@ -13,7 +13,8 @@ import (
 // quotient takes the ideal exponent exp(a) - exp(b), or as few more
 // fractional digits as it needs (10.00 / 2 = 5.00, 10 / 4 = 2.5); an inexact
 // one rounds half-even to 28 significant digits (1 / 3 =
-// 0.3333333333333333333333333333). It is the project's only division.
+// 0.3333333333333333333333333333). It is the project's only division, as
+// Add, Sub and Mul are its only sum, difference and product.
 func Quo(a, b decimal.Decimal) decimal.Decimal {
 	ideal := a.Exponent() - b.Exponent()
 	if a.IsZero() {
@@ -40,6 +41,37 @@ func Quo(a, b decimal.Decimal) decimal.Decimal {
 	}
 	coefficient, exponent = roundHalfEven(coefficient, exponent)
 	if a.Sign() != b.Sign() {
+		coefficient.Neg(coefficient)
+	}
+	return decimal.NewFromBigInt(coefficient, exponent)
+}
+
+// Add adds like Python's decimal in its default context: the exact sum,
+// rounded half-even to 28 significant digits.
+func Add(a, b decimal.Decimal) decimal.Decimal {
+	return round(a.Add(b))
+}
+
+// Sub subtracts like Python's decimal in its default context: the exact
+// difference, rounded half-even to 28 significant digits.
+func Sub(a, b decimal.Decimal) decimal.Decimal {
+	return round(a.Sub(b))
+}
+
+// Mul multiplies like Python's decimal in its default context: the exact
+// product, rounded half-even to 28 significant digits.
+func Mul(a, b decimal.Decimal) decimal.Decimal {
+	return round(a.Mul(b))
+}
+
+// round rounds an exact result half-even to precision significant digits.
+// A result that fits, the only kind most ledgers produce, is returned as is.
+func round(d decimal.Decimal) decimal.Decimal {
+	if d.NumDigits() <= precision {
+		return d
+	}
+	coefficient, exponent := roundHalfEven(new(big.Int).Abs(d.Coefficient()), d.Exponent())
+	if d.Sign() < 0 {
 		coefficient.Neg(coefficient)
 	}
 	return decimal.NewFromBigInt(coefficient, exponent)

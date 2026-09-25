@@ -123,11 +123,11 @@ func (p *numberExpressionParser) parseExpr(minPrecedence int) (decimal.Decimal, 
 		}
 		switch op {
 		case '+':
-			left = left.Add(right)
+			left = pydecimal.Add(left, right)
 		case '-':
-			left = left.Sub(right)
+			left = pydecimal.Sub(left, right)
 		case '*':
-			left = left.Mul(right)
+			left = pydecimal.Mul(left, right)
 		case '/':
 			if right.IsZero() {
 				return decimal.Zero, fmt.Errorf("division by zero")

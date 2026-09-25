@@ -316,13 +316,13 @@ func postingWeight(posting *ast.Posting, position *Position) any {
 	}
 	if position.Cost != nil {
 		return &Amount{
-			Number:   position.Units.Number.Mul(position.Cost.Number),
+			Number:   pydecimal.Mul(position.Units.Number, position.Cost.Number),
 			Currency: position.Cost.Currency,
 		}
 	}
 	if price, ok := postingPrice(posting).(*Amount); ok && price != nil {
 		return &Amount{
-			Number:   position.Units.Number.Mul(price.Number),
+			Number:   pydecimal.Mul(position.Units.Number, price.Number),
 			Currency: price.Currency,
 		}
 	}

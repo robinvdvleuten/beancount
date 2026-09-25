@@ -51,3 +51,30 @@ func TestNormalize(t *testing.T) {
 		assert.Equal(t, want, got.StringFixed(max(-got.Exponent(), 0)), in)
 	}
 }
+
+func TestArithmetic(t *testing.T) {
+	third := Quo(decimal.NewFromInt(1), decimal.NewFromInt(3))
+	big := decimal.RequireFromString("1000000000000000000000000000")
+	// Expected values are Python decimal results in the default context.
+	for _, tt := range []struct {
+		name string
+		got  decimal.Decimal
+		want string
+	}{
+		{"100 + 1/3", Add(decimal.NewFromInt(100), third), "100.3333333333333333333333333"},
+		{"1/3 - 100", Sub(third, decimal.NewFromInt(100)), "-99.66666666666666666666666667"},
+		{"10 * 1/3", Mul(decimal.NewFromInt(10), third), "3.333333333333333333333333333"},
+		{"-10 * 1/3", Mul(decimal.NewFromInt(-10), third), "-3.333333333333333333333333333"},
+		{"1.10 + 0", Add(decimal.RequireFromString("1.10"), decimal.Zero), "1.10"},
+		{"1.5 * 2.0", Mul(decimal.RequireFromString("1.5"), decimal.RequireFromString("2.0")), "3.00"},
+		{"10 - 10.00", Sub(decimal.NewFromInt(10), decimal.RequireFromString("10.00")), "0.00"},
+		{"tie to even, down", Add(big, decimal.RequireFromString("0.5")), "1000000000000000000000000000"},
+		{"tie to even, up", Add(big, decimal.RequireFromString("1.5")), "1000000000000000000000000002"},
+		{"tie to even, stays", Add(big, decimal.RequireFromString("2.5")), "1000000000000000000000000002"},
+		{"carry adds a digit", Add(decimal.RequireFromString("9999999999999999999999999999"), decimal.RequireFromString("0.5")), "1.000000000000000000000000000E+28"},
+	} {
+		want := decimal.RequireFromString(tt.want)
+		assert.Equal(t, want.Coefficient().String(), tt.got.Coefficient().String(), tt.name)
+		assert.Equal(t, want.Exponent(), tt.got.Exponent(), tt.name)
+	}
+}

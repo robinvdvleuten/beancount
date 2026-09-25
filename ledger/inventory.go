@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -143,7 +144,7 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 	for _, lot := range lots {
 		if lotSpecsMatch(lot.Spec, spec) {
 			// Add to existing lot
-			lot.Amount = lot.Amount.Add(amount)
+			lot.Amount = pydecimal.Add(lot.Amount, amount)
 			if lot.Amount.IsZero() {
 				inv.removeLot(commodity, lot)
 			}
@@ -160,7 +161,7 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 func (inv *Inventory) Get(commodity string) decimal.Decimal {
 	total := decimal.Zero
 	for _, lot := range inv.lots[commodity] {
-		total = total.Add(lot.Amount)
+		total = pydecimal.Add(total, lot.Amount)
 	}
 	return total
 }
@@ -453,7 +454,7 @@ func planStrictReduction(
 
 	total := decimal.Zero
 	for _, lot := range matches {
-		total = total.Add(lot.Amount.Abs())
+		total = pydecimal.Add(total, lot.Amount.Abs())
 	}
 
 	if total.LessThan(amount) {
@@ -533,7 +534,7 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 
 		reduction := decimal.Min(lot.Amount.Abs(), remaining)
 		reductions = append(reductions, lotReduction{lot: lot, amount: reduction})
-		remaining = remaining.Sub(reduction)
+		remaining = pydecimal.Sub(remaining, reduction)
 	}
 
 	if !remaining.IsZero() {
@@ -563,7 +564,7 @@ func (inv *Inventory) applyReduction(plan *reductionPlan) {
 	}
 
 	for _, reduction := range plan.reductions {
-		reduction.lot.Amount = reduction.lot.Amount.Add(reduction.amount)
+		reduction.lot.Amount = pydecimal.Add(reduction.lot.Amount, reduction.amount)
 		if reduction.lot.Amount.IsZero() {
 			inv.removeLot(plan.commodity, reduction.lot)
 		}

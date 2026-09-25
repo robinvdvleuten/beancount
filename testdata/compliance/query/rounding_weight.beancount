@@ -1,0 +1,7 @@
+; A weight's product rounds to 28 significant digits, like Python's decimal.
+2020-01-01 open Assets:Euro
+2020-01-01 open Equity:Opening
+
+2020-01-02 * "at a price"
+  Assets:Euro  10 EUR @ 1/3 USD
+  Equity:Opening

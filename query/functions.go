@@ -277,7 +277,7 @@ var functions = map[string]*funcDef{
 			total := decimal.Decimal{}
 			for _, p := range args[1].(*Inventory).Positions() {
 				if p.Units.Currency == currency {
-					total = total.Add(p.Units.Number)
+					total = pydecimal.Add(total, p.Units.Number)
 				}
 			}
 			return &Amount{Number: total, Currency: currency}
@@ -514,7 +514,7 @@ func positionCost(p *Position) *Amount {
 	if p.Cost == nil {
 		return &Amount{Number: p.Units.Number, Currency: p.Units.Currency}
 	}
-	return &Amount{Number: p.Units.Number.Mul(p.Cost.Number), Currency: p.Cost.Currency}
+	return &Amount{Number: pydecimal.Mul(p.Units.Number, p.Cost.Number), Currency: p.Cost.Currency}
 }
 
 // priceDate defaults a missing conversion date to today, matching the
@@ -541,7 +541,7 @@ func convertAmount(row *Row, a *Amount, currency string, date *ast.Date) any {
 		return a
 	}
 	if rate, ok := priceLookup(row.Ctx, priceDate(date), a.Currency, currency); ok {
-		return &Amount{Number: a.Number.Mul(rate), Currency: currency}
+		return &Amount{Number: pydecimal.Mul(a.Number, rate), Currency: currency}
 	}
 	return a
 }

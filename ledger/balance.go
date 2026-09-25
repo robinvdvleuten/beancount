@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -90,7 +91,7 @@ func (b *Balance) Set(currency string, amount decimal.Decimal) {
 // Add adds an amount to an existing currency balance.
 func (b *Balance) Add(currency string, amount decimal.Decimal) {
 	current := b.Get(currency)
-	b.Set(currency, current.Add(amount))
+	b.Set(currency, pydecimal.Add(current, amount))
 }
 
 // IsZero returns true if all amounts are zero or balance is empty.

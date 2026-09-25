@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -108,7 +109,7 @@ func (inv *Inventory) AddPosition(p *Position) {
 	key := p.costKey()
 	if i, ok := inv.index[key]; ok {
 		existing := inv.positions[i]
-		existing.Units.Number = existing.Units.Number.Add(p.Units.Number)
+		existing.Units.Number = pydecimal.Add(existing.Units.Number, p.Units.Number)
 		if existing.Units.Number.IsZero() {
 			inv.remove(i)
 		}

@@ -819,11 +819,11 @@ func (c *cBinary) evalArithmetic(l, r any) any {
 	}
 	switch c.op {
 	case bql.PLUS:
-		return ld.Add(rd)
+		return pydecimal.Add(ld, rd)
 	case bql.MINUS:
-		return ld.Sub(rd)
+		return pydecimal.Sub(ld, rd)
 	case bql.ASTERISK:
-		return ld.Mul(rd)
+		return pydecimal.Mul(ld, rd)
 	case bql.SLASH:
 		if rd.IsZero() {
 			return nil

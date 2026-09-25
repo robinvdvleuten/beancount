@@ -221,7 +221,7 @@ func trackLots(lots map[lotKey]decimal.Decimal, booked []BookedLot, posting *ast
 // addToLot adds units to a lot and reports whether they reduced it.
 func addToLot(lots map[lotKey]decimal.Decimal, key lotKey, units decimal.Decimal) bool {
 	held, ok := lots[key]
-	sum := held.Add(units)
+	sum := pydecimal.Add(held, units)
 	if sum.IsZero() {
 		delete(lots, key)
 	} else {

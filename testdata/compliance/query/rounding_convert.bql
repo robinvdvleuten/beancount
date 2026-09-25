@@ -1,0 +1,1 @@
+SELECT number(convert(position, 'EUR')) WHERE account = 'Assets:Cash'

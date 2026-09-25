@@ -1,0 +1,1 @@
+SELECT number + 100 WHERE account = 'Assets:Cash'

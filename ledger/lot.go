@@ -193,7 +193,7 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		if err != nil {
 			return fmt.Errorf("invalid compound total: %w", err)
 		}
-		perUnitCost := lotSpec.Cost.Add(pydecimal.Quo(total, quantity.Abs()))
+		perUnitCost := pydecimal.Add(*lotSpec.Cost, pydecimal.Quo(total, quantity.Abs()))
 		lotSpec.Cost = &perUnitCost
 	}
 
