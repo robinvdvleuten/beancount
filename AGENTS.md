@@ -131,3 +131,7 @@ Default vocabulary. See `docs/agents/triage-labels.md`.
 ### Domain docs
 
 Single-context: root `CONTEXT.md` plus `docs/adr/`, created when first needed. See `docs/agents/domain.md`.
+
+### Rejected enhancements
+
+`.out-of-scope/` keeps one file per rejected enhancement, with the reason and the issues that asked for it. Read it before proposing a feature or refactor, and reopen one only when its stated reason no longer holds.
