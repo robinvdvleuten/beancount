@@ -259,3 +259,32 @@ func TestFormatLeadingBlankTriviaAfterTransactionIsIdempotent(t *testing.T) {
 		assert.Equal(t, output1.String(), output2.String())
 	}
 }
+
+func TestFormatKeepsCommentAndBlankLinesAsWritten(t *testing.T) {
+	// bean-format only touches lines holding an amount or starting with an
+	// account: comment lines keep their indentation (inside transactions
+	// too) and whitespace-only lines keep their whitespace.
+	source := "2020-01-01 open Assets:Cash\n" +
+		"  ; continues the open\n" +
+		"\t; tab-indented\n" +
+		"   \n" +
+		"2020-01-02 * \"x\"\n" +
+		"    ; deeper than the postings\n" +
+		"  Assets:Cash  1 USD\n" +
+		" ; shallower\n" +
+		"  Assets:Cash  -1 USD\n"
+	want := "2020-01-01 open Assets:Cash\n" +
+		"  ; continues the open\n" +
+		"\t; tab-indented\n" +
+		"   \n" +
+		"2020-01-02 * \"x\"\n" +
+		"    ; deeper than the postings\n" +
+		"  Assets:Cash   1 USD\n" +
+		" ; shallower\n" +
+		"  Assets:Cash  -1 USD\n"
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	var out bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
+	assert.Equal(t, want, out.String())
+}

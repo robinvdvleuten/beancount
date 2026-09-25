@@ -626,9 +626,11 @@ func (f *Formatter) formatItem(item astItem, buf *strings.Builder) {
 		if f.verbatimLines[item.comment.Position().Line] {
 			return // Already contained in a verbatim-preserved line.
 		}
-		f.formatComment(item.comment, buf)
+		if !f.writeTriviaLine(item.comment.Position().Line, item.comment.Content, buf) {
+			f.formatComment(item.comment, buf)
+		}
 	case item.blankLine != nil:
-		buf.WriteByte('\n')
+		f.writeTriviaLine(item.blankLine.Position().Line, "", buf)
 	case item.option != nil:
 		f.formatOption(item.option, buf)
 	case item.include != nil:
@@ -656,6 +658,21 @@ func (f *Formatter) formatComment(c *ast.Comment, buf *strings.Builder) {
 	if !strings.HasSuffix(c.Content, "\n") {
 		buf.WriteByte('\n')
 	}
+}
+
+// writeTriviaLine writes a comment or blank line exactly as the source has
+// it, indentation and whitespace included, like bean-format, which only
+// touches lines holding an amount or starting with an account. It reports
+// false, writing nothing, when the source line holds more than content.
+// Without source, a blank line is written empty.
+func (f *Formatter) writeTriviaLine(line int, content string, buf *strings.Builder) bool {
+	original := f.getOriginalLine(line)
+	if strings.TrimSpace(original) != strings.TrimSpace(content) {
+		return false
+	}
+	buf.WriteString(original)
+	buf.WriteByte('\n')
+	return true
 }
 
 // FormatTransaction formats a single transaction and writes the output to the writer.
@@ -1242,13 +1259,14 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 	case item.Posting != nil:
 		f.formatPosting(item.Posting, buf)
 	case item.Comment != nil:
-		if f.PreserveComments && !f.verbatimLines[item.Comment.Position().Line] {
+		if f.PreserveComments && !f.verbatimLines[item.Comment.Position().Line] &&
+			!f.writeTriviaLine(item.Comment.Position().Line, item.Comment.Content, buf) {
 			buf.WriteString(strings.Repeat(" ", f.postingIndent()))
 			f.formatComment(item.Comment, buf)
 		}
 	case item.BlankLine != nil:
 		if f.PreserveBlanks {
-			buf.WriteByte('\n')
+			f.writeTriviaLine(item.BlankLine.Position().Line, "", buf)
 		}
 	}
 }

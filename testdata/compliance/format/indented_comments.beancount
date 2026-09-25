@@ -1,0 +1,11 @@
+2020-01-01 open Assets:Cash
+  ; first
+	; tab-indented
+   
+2020-01-02 * "x"
+    ; deeper than the postings
+  Assets:Cash  1 USD
+ ; shallower
+  Assets:Cash  -1 USD
+ 	 
+2020-01-03 open Assets:Bank
