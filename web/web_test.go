@@ -12,7 +12,9 @@ import (
 	"time"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/parser"
 )
 
 func TestServerStartStopsWhenContextIsCanceled(t *testing.T) {
@@ -466,4 +468,44 @@ func TestAPIAccounts(t *testing.T) {
 		assert.True(t, hasName, "account should have 'name' field")
 		assert.True(t, hasType, "account should have 'type' field")
 	})
+}
+
+func TestAPISourceLedgerErrorsKeepTypeAndPosition(t *testing.T) {
+	// Every ledger error reaches the editor with its own type and position,
+	// so its lint lands on the right line.
+	ledgerFile := filepath.Join(t.TempDir(), "main.beancount")
+	source := "plugin \"beancount.plugins.auto_accounts\" \"config\"\n" +
+		"2024-01-01 open Assets:Checking\n" +
+		"2024-01-02 document Assets:Checking \"missing.pdf\"\n"
+	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
+
+	server := New(8080, ledgerFile)
+	_, err := server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	lines := map[string]float64{}
+	for _, raw := range decodeSourceResponse(t, rec)["errors"].([]any) {
+		sourceErr := raw.(map[string]any)
+		position, ok := sourceErr["position"].(map[string]any)
+		assert.True(t, ok, "error without position: %v", sourceErr)
+		lines[sourceErr["type"].(string)] = position["line"].(float64)
+	}
+	assert.Equal(t, map[string]float64{"PluginConfigError": 1, "DocumentFileError": 3}, lines)
+}
+
+func TestJSONSafeSourceErrorKeepsLedgerErrors(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), "2024-01-01 price HOOL 1 USD\n")
+	price := tree.Directives[0].(*ast.Price)
+	data, err := json.Marshal(jsonSafeSourceError(ledger.NewInvalidDirectivePriceError("price currency cannot be empty", price)))
+	assert.NoError(t, err)
+	var rendered map[string]any
+	assert.NoError(t, json.Unmarshal(data, &rendered))
+	assert.Equal[any](t, "InvalidDirectivePriceError", rendered["type"])
+	assert.Equal[any](t, float64(1), rendered["position"].(map[string]any)["line"])
 }

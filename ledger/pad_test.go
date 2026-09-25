@@ -150,8 +150,7 @@ func TestPadWithinTolerance(t *testing.T) {
 	var validationErrors *ValidationErrors
 	assert.True(t, errors.As(err, &validationErrors))
 	assert.Equal(t, 1, len(validationErrors.Errors))
-	var unused *UnusedPadWarning
-	assert.True(t, errors.As(validationErrors.Errors[0], &unused))
+	assert.Equal(t, "UnusedPadWarning", kindOf(validationErrors.Errors[0]))
 }
 
 func TestUnusedPadWarning(t *testing.T) {
@@ -174,7 +173,7 @@ func TestUnusedPadWarning(t *testing.T) {
 	assert.True(t, ok, "Expected ValidationErrors")
 	assert.Equal(t, 1, len(valErrs.Errors))
 
-	_, ok = valErrs.Errors[0].(*UnusedPadWarning)
+	ok = kindOf(valErrs.Errors[0]) == "UnusedPadWarning"
 	assert.True(t, ok, "Expected UnusedPadWarning")
 }
 

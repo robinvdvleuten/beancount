@@ -12,32 +12,79 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// directiveError embeds common fields from directives, providing a consistent
-// base for all ledger validation errors. It extracts position and date from the
-// directive interface, eliminating redundant field extraction in constructors.
-type directiveError struct {
+// Diagnostic is a ledger error: an error found while booking, running
+// Plugins or validating. Every kind shares this shape, so the CLI and the
+// web API render them without knowing the kind. Its text starts with the
+// Error line, path:line: (or the date when there is no source position).
+type Diagnostic struct {
+	kind      string
+	message   string
+	account   ast.Account
 	pos       ast.Position
 	date      *ast.Date
 	directive ast.Directive
 }
 
-// newDirectiveError creates a directiveError from any directive type.
-// This replaces all type-specific field extraction with a single constructor.
-func newDirectiveError(d ast.Directive) directiveError {
-	return directiveError{
+// newError creates an error of kind about directive d, positioned at d.
+func newError(kind string, d ast.Directive, account ast.Account, format string, args ...any) *Diagnostic {
+	return &Diagnostic{
+		kind:      kind,
+		message:   fmt.Sprintf(format, args...),
+		account:   account,
 		pos:       d.Position(),
 		date:      d.Date(),
 		directive: d,
 	}
 }
 
-func (e *directiveError) Position() ast.Position   { return e.pos }
-func (e *directiveError) Directive() ast.Directive { return e.directive }
-func (e *directiveError) Date() *ast.Date          { return e.date }
+// atPosting moves the error to the posting's line, which beancount blames
+// for errors about a single posting.
+func (e *Diagnostic) atPosting(posting *ast.Posting) *Diagnostic {
+	e.pos = posting.Position()
+	return e
+}
 
-// formatLocation returns a standard location string for error messages.
-// Uses filename:line if available, falls back to date string.
-func (e *directiveError) formatLocation() string {
+// Kind names the kind of error, e.g. "AccountNotOpenError".
+func (e *Diagnostic) Kind() string { return e.kind }
+
+// Message is the error's text without its location.
+func (e *Diagnostic) Message() string { return e.message }
+
+func (e *Diagnostic) Error() string { return e.location() + ": " + e.message }
+
+// GetPosition returns where the error is reported.
+func (e *Diagnostic) GetPosition() ast.Position { return e.pos }
+
+// GetDirective returns the directive the error is about, or nil.
+func (e *Diagnostic) GetDirective() ast.Directive { return e.directive }
+
+// GetAccount returns the account the error is about, or "".
+func (e *Diagnostic) GetAccount() ast.Account { return e.account }
+
+// GetDate returns the date of the directive the error is about, or nil.
+func (e *Diagnostic) GetDate() *ast.Date { return e.date }
+
+// Severity is fatal for every ledger error, like bean-check's.
+func (e *Diagnostic) Severity() diagnostic.Severity { return diagnostic.SeverityError }
+
+// MarshalJSON renders the error for the web API.
+func (e *Diagnostic) MarshalJSON() ([]byte, error) {
+	data := map[string]any{
+		"type":     e.kind,
+		"message":  e.Error(),
+		"position": e.pos,
+	}
+	if e.account != "" {
+		data["account"] = string(e.account)
+	}
+	if e.date != nil {
+		data["date"] = e.date.String()
+	}
+	return json.Marshal(data)
+}
+
+// location returns path:line, or the date when there is no source position.
+func (e *Diagnostic) location() string {
 	if e.pos.Filename != "" {
 		return fmt.Sprintf("%s:%d", e.pos.Filename, e.pos.Line)
 	}
@@ -47,976 +94,47 @@ func (e *directiveError) formatLocation() string {
 	return "unknown"
 }
 
-// Error types for ledger validation errors
-
-// AccountNotOpenError is returned when a directive references an account that hasn't been opened
-type AccountNotOpenError struct {
-	directiveError
-	Account ast.Account
-}
-
-func (e *AccountNotOpenError) Error() string {
-	return fmt.Sprintf("%s: Invalid reference to unknown account '%s'", e.formatLocation(), e.Account)
-}
-
-func (e *AccountNotOpenError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *AccountNotOpenError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "AccountNotOpenError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-	})
-}
-
-// AccountAlreadyOpenError is returned when trying to open an account that's already open
-type AccountAlreadyOpenError struct {
-	directiveError
-	Account    ast.Account
-	OpenedDate *ast.Date
-}
-
-func (e *AccountAlreadyOpenError) Error() string {
-	return fmt.Sprintf("%s: Account %s is already open (opened on %s)",
-		e.formatLocation(), e.Account, e.OpenedDate.String())
-}
-
-func (e *AccountAlreadyOpenError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *AccountAlreadyOpenError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":        "AccountAlreadyOpenError",
-		"message":     e.Error(),
-		"position":    e.pos,
-		"account":     string(e.Account),
-		"date":        e.Date().String(),
-		"opened_date": e.OpenedDate.String(),
-	})
-}
-
-// InvalidAccountNameError is returned when an account name uses an invalid account type
-type InvalidAccountNameError struct {
-	directiveError
-	Account           ast.Account
-	ValidAccountTypes []string // The configured valid account types
-}
-
-func (e *InvalidAccountNameError) Error() string {
-	// Extract account type from account name
-	idx := strings.IndexByte(string(e.Account), ':')
-	accountType := "?"
-	if idx != -1 {
-		accountType = string(e.Account)[:idx]
-	}
-
-	return fmt.Sprintf("%s: Account %q uses invalid type %q, expected one of: %s",
-		e.formatLocation(), e.Account, accountType, strings.Join(e.ValidAccountTypes, ", "))
-}
-
-func (e *InvalidAccountNameError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InvalidAccountNameError) MarshalJSON() ([]byte, error) {
-	// Extract account type from account name
-	idx := strings.IndexByte(string(e.Account), ':')
-	accountType := "?"
-	if idx != -1 {
-		accountType = string(e.Account)[:idx]
-	}
-
-	return json.Marshal(map[string]any{
-		"type":                "InvalidAccountNameError",
-		"message":             e.Error(),
-		"position":            e.pos,
-		"account":             string(e.Account),
-		"account_type":        accountType,
-		"valid_account_types": e.ValidAccountTypes,
-	})
-}
-
-// AccountAlreadyClosedError is returned when trying to use or close an account that's already closed
-type AccountAlreadyClosedError struct {
-	directiveError
-	Account    ast.Account
-	ClosedDate *ast.Date
-}
-
-func (e *AccountAlreadyClosedError) Error() string {
-	return fmt.Sprintf("%s: Account %s is already closed (closed on %s)",
-		e.formatLocation(), e.Account, e.ClosedDate.String())
-}
-
-func (e *AccountAlreadyClosedError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *AccountAlreadyClosedError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":        "AccountAlreadyClosedError",
-		"message":     e.Error(),
-		"position":    e.pos,
-		"account":     string(e.Account),
-		"date":        e.Date().String(),
-		"closed_date": e.ClosedDate.String(),
-	})
-}
-
-// AccountNotClosedError is returned when trying to close an account that was never opened
-type AccountNotClosedError struct {
-	directiveError
-	Account ast.Account
-}
-
-func (e *AccountNotClosedError) Error() string {
-	return fmt.Sprintf("%s: Cannot close account %s that was never opened",
-		e.formatLocation(), e.Account)
-}
-
-func (e *AccountNotClosedError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *AccountNotClosedError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "AccountNotClosedError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-	})
-}
-
-// DuplicateCommodityError is returned for a second commodity directive of the
-// same currency.
-type DuplicateCommodityError struct {
-	directiveError
-	Currency string
-}
-
-func (e *DuplicateCommodityError) Error() string {
-	return fmt.Sprintf("%s: Duplicate commodity directives for '%s'", e.formatLocation(), e.Currency)
-}
-
-func (e *DuplicateCommodityError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "DuplicateCommodityError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"currency": e.Currency,
-		"date":     e.Date().String(),
-	})
-}
-
-// NewDuplicateCommodityError creates an error for a repeated commodity directive.
-func NewDuplicateCommodityError(commodity *ast.Commodity) *DuplicateCommodityError {
-	return &DuplicateCommodityError{
-		directiveError: newDirectiveError(commodity),
-		Currency:       commodity.Currency,
-	}
-}
-
-// BalanceCurrencyError is returned for a balance assertion in a currency its
-// account's constraint list does not allow.
-type BalanceCurrencyError struct {
-	directiveError
-	Account  ast.Account
-	Currency string
-}
-
-func (e *BalanceCurrencyError) Error() string {
-	return fmt.Sprintf("%s: Invalid currency '%s' for Balance directive", e.formatLocation(), e.Currency)
-}
-
-func (e *BalanceCurrencyError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "BalanceCurrencyError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"currency": e.Currency,
-		"date":     e.Date().String(),
-	})
-}
-
-// NewBalanceCurrencyError creates an error for a balance assertion in a
-// currency its account does not allow.
-func NewBalanceCurrencyError(balance *ast.Balance) *BalanceCurrencyError {
-	return &BalanceCurrencyError{
-		directiveError: newDirectiveError(balance),
-		Account:        balance.Account,
-		Currency:       balance.Amount.Currency,
-	}
-}
-
-// DuplicateBalanceError is returned for a balance assertion whose account,
-// currency and date repeat an earlier one's with a different amount.
-type DuplicateBalanceError struct {
-	directiveError
-	Account  ast.Account
-	Currency string
-}
-
-func (e *DuplicateBalanceError) Error() string {
-	return fmt.Sprintf("%s: Duplicate balance assertion with different amounts", e.formatLocation())
-}
-
-func (e *DuplicateBalanceError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "DuplicateBalanceError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"currency": e.Currency,
-		"date":     e.Date().String(),
-	})
-}
-
-// NewDuplicateBalanceError creates an error for a balance assertion that
-// repeats an earlier one with a different amount.
-func NewDuplicateBalanceError(balance *ast.Balance) *DuplicateBalanceError {
-	return &DuplicateBalanceError{
-		directiveError: newDirectiveError(balance),
-		Account:        balance.Account,
-		Currency:       balance.Amount.Currency,
-	}
-}
-
-// NegativeCostError is returned for a posting whose per-unit cost, once
-// booked, is negative.
-type NegativeCostError struct {
-	directiveError
-	Account  ast.Account
-	Cost     decimal.Decimal
-	Currency string
-}
-
-func (e *NegativeCostError) Error() string {
-	return fmt.Sprintf("%s: Cost is negative: %s %s (account %s)",
-		e.formatLocation(), e.Cost.String(), e.Currency, e.Account)
-}
-
-func (e *NegativeCostError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *NegativeCostError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "NegativeCostError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"cost":     e.Cost.String() + " " + e.Currency,
-		"date":     e.Date().String(),
-	})
-}
-
-// NewNegativeCostError creates an error for a posting booked at a negative
-// cost. Like beancount, it blames the posting's line.
-func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *NegativeCostError {
-	directiveErr := newDirectiveError(txn)
-	directiveErr.pos = posting.Position()
-	return &NegativeCostError{
-		directiveError: directiveErr,
-		Account:        posting.Account,
-		Cost:           cost,
-		Currency:       currency,
-	}
-}
-
-// MergeCostError is reported for a merge cost {*}, which beancount v2 rejects
-// and then books like an empty cost {}.
-type MergeCostError struct {
-	directiveError
-	Account ast.Account
-}
-
-func (e *MergeCostError) Error() string {
-	return fmt.Sprintf("%s: Cost merging is not supported yet (account %s)", e.formatLocation(), e.Account)
-}
-
-func (e *MergeCostError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *MergeCostError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "MergeCostError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-	})
-}
-
-// NewMergeCostError creates an error for a posting with a merge cost {*}.
-// Like beancount, it blames the posting's line.
-func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *MergeCostError {
-	directiveErr := newDirectiveError(txn)
-	directiveErr.pos = posting.Position()
-	return &MergeCostError{directiveError: directiveErr, Account: posting.Account}
-}
-
-// CurrencyGroupError is reported when Booking cannot sort a posting into a
-// Currency group, or cannot complete a group's missing numbers. Like
-// beancount, it blames the posting's line.
-type CurrencyGroupError struct {
-	directiveError
-	Account ast.Account
-	Message string
-}
-
-func (e *CurrencyGroupError) Error() string {
-	return fmt.Sprintf("%s: %s (account %s)", e.formatLocation(), e.Message, e.Account)
-}
-
-func (e *CurrencyGroupError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *CurrencyGroupError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "CurrencyGroupError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-	})
-}
-
-// NewCurrencyGroupError creates an error blaming a posting for its
-// Currency group.
-func NewCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *CurrencyGroupError {
-	directiveErr := newDirectiveError(txn)
-	directiveErr.pos = posting.Position()
-	return &CurrencyGroupError{directiveError: directiveErr, Account: posting.Account, Message: message}
-}
-
-// InvalidBookingMethodError is returned for an open directive naming an
-// unknown booking method.
-type InvalidBookingMethodError struct {
-	directiveError
-	Account ast.Account
-	Method  string
-}
-
-func (e *InvalidBookingMethodError) Error() string {
-	return fmt.Sprintf("%s: Invalid booking method: %s", e.formatLocation(), e.Method)
-}
-
-func (e *InvalidBookingMethodError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InvalidBookingMethodError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "InvalidBookingMethodError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"method":   e.Method,
-		"date":     e.Date().String(),
-	})
-}
-
-// NewInvalidBookingMethodError creates an error for an open directive with an
-// unknown booking method.
-func NewInvalidBookingMethodError(open *ast.Open) *InvalidBookingMethodError {
-	return &InvalidBookingMethodError{
-		directiveError: newDirectiveError(open),
-		Account:        open.Account,
-		Method:         open.BookingMethod,
-	}
-}
-
-// TransactionNotBalancedError is returned when a transaction doesn't balance
-type TransactionNotBalancedError struct {
-	directiveError
-	Narration string            // Transaction narration
-	Residuals map[string]string // currency -> amount string (unbalanced amounts)
-}
-
-// Error returns a bean-check style error message with filename:line prefix.
-func (e *TransactionNotBalancedError) Error() string {
-	return fmt.Sprintf("%s: Transaction does not balance: %s", e.formatLocation(), e.formatResiduals())
-}
-
-// formatResiduals formats the residual amounts in a consistent order.
-func (e *TransactionNotBalancedError) formatResiduals() string {
-	if len(e.Residuals) == 0 {
-		return ""
-	}
-
-	// Sort currencies for consistent output
-	currencies := make([]string, 0, len(e.Residuals))
-	for currency := range e.Residuals {
-		currencies = append(currencies, currency)
-	}
-	slices.Sort(currencies)
-
-	// Format as "(amount1 CUR1, amount2 CUR2, ...)"
-	var buf strings.Builder
-	buf.WriteByte('(')
-	for i, currency := range currencies {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(e.Residuals[currency])
-		buf.WriteByte(' ')
-		buf.WriteString(currency)
-	}
-	buf.WriteByte(')')
-
-	return buf.String()
-}
-
-func (e *TransactionNotBalancedError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":      "TransactionNotBalancedError",
-		"message":   e.Error(),
-		"position":  e.pos,
-		"date":      e.Date().String(),
-		"narration": e.Narration,
-		"residuals": e.Residuals,
-	})
-}
-
-// InvalidAmountError is returned when an amount cannot be parsed
-type InvalidAmountError struct {
-	directiveError
-	Account    ast.Account
-	Value      string
-	Underlying error
-}
-
-func (e *InvalidAmountError) Error() string {
-	return fmt.Sprintf("%s: Invalid amount %q for account %s: %v",
-		e.formatLocation(), e.Value, e.Account, e.Underlying)
-}
-
-func (e *InvalidAmountError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InvalidAmountError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "InvalidAmountError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-		"value":    e.Value,
-	})
-}
-
-// BalanceMismatchError is returned when a balance assertion fails
+// BalanceMismatchError is returned when a balance assertion fails. It keeps
+// its amounts, which print reads to show the difference.
 type BalanceMismatchError struct {
-	directiveError
-	Account  ast.Account
+	Diagnostic
 	Expected string // Expected amount
 	Actual   string // Actual amount in inventory
-	Currency string
 	// Difference is the actual amount less the expected one, like
 	// beancount's diff_amount, with the exponent the subtraction leaves.
 	Difference decimal.Decimal
 }
 
-func (e *BalanceMismatchError) Error() string {
-	return fmt.Sprintf("%s: Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
-		e.formatLocation(), e.Account,
-		e.Expected, e.Currency,
-		e.Actual, e.Currency)
-}
-
-func (e *BalanceMismatchError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *BalanceMismatchError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "BalanceMismatchError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-		"expected": e.Expected,
-		"actual":   e.Actual,
-	})
-}
-
-// Constructor functions for ledger errors.
-// These provide a cleaner API and ensure consistent field initialization.
-
-// NewAccountNotOpenError creates an error for when a directive references an unopened account.
-// Works with any directive type (Transaction, Balance, Pad, Note, Document, etc.).
-func NewAccountNotOpenError(d ast.Directive, account ast.Account) *AccountNotOpenError {
-	return &AccountNotOpenError{
-		directiveError: newDirectiveError(d),
-		Account:        account,
-	}
-}
-
-// NewAccountAlreadyOpenError creates an error for when trying to open an already-open account.
-func NewAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *AccountAlreadyOpenError {
-	return &AccountAlreadyOpenError{
-		directiveError: newDirectiveError(open),
-		Account:        open.Account,
-		OpenedDate:     openedDate,
-	}
-}
-
-// NewAccountAlreadyClosedError creates an error for when trying to use or close an already-closed account.
-func NewAccountAlreadyClosedError(close *ast.Close, closedDate *ast.Date) *AccountAlreadyClosedError {
-	return &AccountAlreadyClosedError{
-		directiveError: newDirectiveError(close),
-		Account:        close.Account,
-		ClosedDate:     closedDate,
-	}
-}
-
-// NewAccountNotClosedError creates an error for when trying to close an account that was never opened.
-func NewAccountNotClosedError(close *ast.Close) *AccountNotClosedError {
-	return &AccountNotClosedError{
-		directiveError: newDirectiveError(close),
-		Account:        close.Account,
-	}
-}
-
-// NewTransactionNotBalancedError creates an error for when a transaction doesn't balance.
-func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *TransactionNotBalancedError {
-	return &TransactionNotBalancedError{
-		directiveError: newDirectiveError(txn),
-		Narration:      txn.Narration.Value,
-		Residuals:      residuals,
-	}
-}
-
-// NewInvalidAmountError creates an error for when an amount cannot be parsed or is invalid.
-// Works with any directive type (Transaction, Balance, etc.).
-func NewInvalidAmountError(d ast.Directive, account ast.Account, value string, err error) *InvalidAmountError {
-	return &InvalidAmountError{
-		directiveError: newDirectiveError(d),
-		Account:        account,
-		Value:          value,
-		Underlying:     err,
-	}
-}
-
 // NewBalanceMismatchError creates an error for a balance assertion whose
 // account holds actual instead of the expected amount.
 func NewBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Decimal) *BalanceMismatchError {
+	currency := balance.Amount.Currency
 	return &BalanceMismatchError{
-		directiveError: newDirectiveError(balance),
-		Account:        balance.Account,
-		Expected:       expected.String(),
-		Actual:         actual.String(),
-		Currency:       balance.Amount.Currency,
-		Difference:     pydecimal.Sub(actual, expected),
+		Diagnostic: *newError("BalanceMismatchError", balance, balance.Account,
+			"Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
+			balance.Account, expected.String(), currency, actual.String(), currency),
+		Expected:   expected.String(),
+		Actual:     actual.String(),
+		Difference: pydecimal.Sub(actual, expected),
 	}
 }
 
-// InvalidCostError is returned when a cost specification is invalid.
-//
-// Cost specifications define the acquisition cost of commodities, used for
-// lot-based inventory tracking and capital gains calculations.
-//
-// Common causes:
-//   - Invalid decimal in cost amount (e.g., {abc USD})
-//   - Zero or invalid cost date
-//
-// Example error message:
-//
-//	"file.bean:15: Invalid cost specification (Posting #1: Assets:Stock): {500.x USD}: invalid decimal"
-type InvalidCostError struct {
-	directiveError
-	Account      ast.Account
-	PostingIndex int    // Index of posting in transaction (0-based)
-	CostSpec     string // String representation of the cost spec
-	Underlying   error
+// NewAccountNotOpenError creates an error for a directive that references an
+// account that is not open.
+func NewAccountNotOpenError(d ast.Directive, account ast.Account) *Diagnostic {
+	return newError("AccountNotOpenError", d, account, "Invalid reference to unknown account '%s'", account)
 }
 
-func (e *InvalidCostError) Error() string {
-	postingInfo := ""
-	if e.PostingIndex >= 0 {
-		postingInfo = fmt.Sprintf(" (Posting #%d: %s)", e.PostingIndex+1, e.Account)
-	}
-
-	return fmt.Sprintf("%s: Invalid cost specification%s: %s: %v",
-		e.formatLocation(), postingInfo, e.CostSpec, e.Underlying)
+// NewAccountAlreadyOpenError creates an error for opening an account that is
+// already open.
+func NewAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *Diagnostic {
+	return newError("AccountAlreadyOpenError", open, open.Account,
+		"Account %s is already open (opened on %s)", open.Account, openedDate.String())
 }
 
-func (e *InvalidCostError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InvalidCostError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":          "InvalidCostError",
-		"message":       e.Error(),
-		"position":      e.pos,
-		"account":       string(e.Account),
-		"date":          e.Date().String(),
-		"cost_spec":     e.CostSpec,
-		"posting_index": e.PostingIndex,
-	})
-}
-
-// NewInvalidCostError creates an error for when a cost specification is invalid
-func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *InvalidCostError {
-	return &InvalidCostError{
-		directiveError: newDirectiveError(txn),
-		Account:        account,
-		PostingIndex:   postingIndex,
-		CostSpec:       costSpec,
-		Underlying:     err,
-	}
-}
-
-// TotalCostError is returned when a total cost specification {{}} is invalid.
-//
-// Total cost syntax allows specifying the total cost for a lot instead of per-unit cost.
-// The per-unit cost is calculated by dividing the total by the quantity.
-//
-// Common causes:
-//   - Total cost with zero quantity
-//   - Total cost without amount
-//   - Total cost without quantity
-//   - Invalid decimal in total cost amount
-//
-// Example error message:
-//
-//	"file.bean:15: Invalid total cost specification: cannot use total cost with zero quantity"
-type TotalCostError struct {
-	directiveError
-	Posting *ast.Posting
-	Message string
-}
-
-func (e *TotalCostError) Error() string {
-	return fmt.Sprintf("%s: Invalid total cost specification: %s", e.formatLocation(), e.Message)
-}
-
-func (e *TotalCostError) GetAccount() ast.Account {
-	if e.Posting != nil {
-		return e.Posting.Account
-	}
-	return ""
-}
-
-func (e *TotalCostError) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"type":     "TotalCostError",
-		"message":  e.Error(),
-		"position": e.pos,
-	}
-	if date := e.Date(); date != nil {
-		data["date"] = date.String()
-	}
-	if e.Posting != nil {
-		data["account"] = string(e.Posting.Account)
-	}
-	return json.Marshal(data)
-}
-
-// InvalidPriceError is returned when a price specification is invalid.
-//
-// Price specifications define the market value of commodities at transaction time,
-// used for conversion rates and reporting.
-//
-// Common causes:
-//   - Invalid decimal in price amount (e.g., @ abc USD)
-//   - Invalid total price specification (@@)
-//
-// Example error message:
-//
-//	"file.bean:20: Invalid price specification (Posting #2: Expenses:Foreign): @ 1.x USD: invalid decimal"
-type InvalidPriceError struct {
-	directiveError
-	Account      ast.Account
-	PostingIndex int    // Index of posting in transaction (0-based)
-	PriceSpec    string // String representation of the price spec
-	Underlying   error
-}
-
-func (e *InvalidPriceError) Error() string {
-	postingInfo := ""
-	if e.PostingIndex >= 0 {
-		postingInfo = fmt.Sprintf(" (Posting #%d: %s)", e.PostingIndex+1, e.Account)
-	}
-
-	return fmt.Sprintf("%s: Invalid price specification%s: %s: %v",
-		e.formatLocation(), postingInfo, e.PriceSpec, e.Underlying)
-}
-
-func (e *InvalidPriceError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InvalidPriceError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":          "InvalidPriceError",
-		"message":       e.Error(),
-		"position":      e.pos,
-		"account":       string(e.Account),
-		"date":          e.Date().String(),
-		"price_spec":    e.PriceSpec,
-		"posting_index": e.PostingIndex,
-	})
-}
-
-// NewInvalidPriceError creates an error for when a price specification is invalid
-func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingIndex int, priceSpec string, err error) *InvalidPriceError {
-	return &InvalidPriceError{
-		directiveError: newDirectiveError(txn),
-		Account:        account,
-		PostingIndex:   postingIndex,
-		PriceSpec:      priceSpec,
-		Underlying:     err,
-	}
-}
-
-// InvalidMetadataError is returned when metadata is invalid.
-//
-// Metadata provides key-value annotations on directives and postings for
-// additional context like invoice numbers, confirmation codes, etc.
-//
-// Common causes:
-//   - Duplicate metadata keys within same directive/posting
-//   - Empty metadata values
-//
-// Example error messages:
-//
-//	"file.bean:10: Invalid metadata: key="invoice", value="": empty value"
-//	"file.bean:12: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
-type InvalidMetadataError struct {
-	directiveError
-	Account ast.Account // Empty if directive-level metadata
-	Key     string
-	Value   *ast.MetadataValue
-	Reason  string // Why it's invalid (e.g., "duplicate key", "empty value")
-}
-
-func (e *InvalidMetadataError) Error() string {
-	accountInfo := ""
-	if e.Account != "" {
-		accountInfo = fmt.Sprintf(" (account %s)", e.Account)
-	}
-
-	valueStr := ""
-	if e.Value != nil {
-		valueStr = e.Value.String()
-	}
-
-	return fmt.Sprintf("%s: Invalid metadata%s: key=%q, value=%q: %s",
-		e.formatLocation(), accountInfo, e.Key, valueStr, e.Reason)
-}
-
-func (e *InvalidMetadataError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InvalidMetadataError) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"type":     "InvalidMetadataError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"key":      e.Key,
-		"reason":   e.Reason,
-	}
-	if date := e.Date(); date != nil {
-		data["date"] = date.String()
-	}
-	return json.Marshal(data)
-}
-
-// NewInvalidMetadataError creates an error for when metadata is invalid.
-// Works with any directive type - no type switch needed.
-func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key string, value *ast.MetadataValue, reason string) *InvalidMetadataError {
-	return &InvalidMetadataError{
-		directiveError: newDirectiveError(directive),
-		Account:        account,
-		Key:            key,
-		Value:          value,
-		Reason:         reason,
-	}
-}
-
-// InsufficientInventoryError is returned when a transaction tries to reduce inventory but lacks enough lots
-type InsufficientInventoryError struct {
-	directiveError
-	Payee   string
-	Account ast.Account
-	Details error
-}
-
-func (e *InsufficientInventoryError) Error() string {
-	return fmt.Sprintf("%s: Insufficient inventory (account %s): %v",
-		e.formatLocation(), e.Account, e.Details)
-}
-
-func (e *InsufficientInventoryError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *InsufficientInventoryError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "InsufficientInventoryError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-		"payee":    e.Payee,
-	})
-}
-
-// NewInsufficientInventoryError creates an error for when inventory operations cannot be performed
-func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *InsufficientInventoryError {
-	return &InsufficientInventoryError{
-		directiveError: newDirectiveError(txn),
-		Payee:          txn.Payee.Value,
-		Account:        account,
-		Details:        details,
-	}
-}
-
-// AmbiguousBookingError is returned when STRICT booking cannot choose a unique lot.
-type AmbiguousBookingError struct {
-	directiveError
-	Payee   string
-	Account ast.Account
-	Details error
-}
-
-func (e *AmbiguousBookingError) Error() string {
-	return fmt.Sprintf("%s: Ambiguous booking (account %s): %v",
-		e.formatLocation(), e.Account, e.Details)
-}
-
-func (e *AmbiguousBookingError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *AmbiguousBookingError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "AmbiguousBookingError",
-		"message":  e.Error(),
-		"position": e.pos,
-		"account":  string(e.Account),
-		"date":     e.Date().String(),
-		"payee":    e.Payee,
-		"details":  e.Details.Error(),
-	})
-}
-
-// NewAmbiguousBookingError creates an error for ambiguous STRICT booking matches.
-func NewAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details error) *AmbiguousBookingError {
-	return &AmbiguousBookingError{
-		directiveError: newDirectiveError(txn),
-		Payee:          txn.Payee.Value,
-		Account:        account,
-		Details:        details,
-	}
-}
-
-// CurrencyConstraintError is returned when a posting uses a currency not allowed by the account
-type CurrencyConstraintError struct {
-	directiveError
-	Payee             string
-	Account           ast.Account
-	Currency          string
-	AllowedCurrencies []string
-}
-
-func (e *CurrencyConstraintError) Error() string {
-	return fmt.Sprintf("%s: Currency %s not allowed for account %s (allowed: %v)",
-		e.formatLocation(), e.Currency, e.Account, e.AllowedCurrencies)
-}
-
-func (e *CurrencyConstraintError) GetAccount() ast.Account {
-	return e.Account
-}
-
-func (e *CurrencyConstraintError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":               "CurrencyConstraintError",
-		"message":            e.Error(),
-		"position":           e.pos,
-		"account":            string(e.Account),
-		"date":               e.Date().String(),
-		"currency":           e.Currency,
-		"allowed_currencies": e.AllowedCurrencies,
-	})
-}
-
-// NewCurrencyConstraintError creates an error for when a posting violates currency constraints
-func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account,
-	currency string, allowedCurrencies []string) *CurrencyConstraintError {
-	return &CurrencyConstraintError{
-		directiveError:    newDirectiveError(txn),
-		Payee:             txn.Payee.Value,
-		Account:           account,
-		Currency:          currency,
-		AllowedCurrencies: allowedCurrencies,
-	}
-}
-
-// UnusedPadWarning is returned when a pad directive is never consumed by a balance assertion
-type UnusedPadWarning struct {
-	Pad     *ast.Pad
-	Account string
-}
-
-// Severity is fatal because official bean-check rejects unused pad entries.
-func (e *UnusedPadWarning) Severity() diagnostic.Severity {
-	return diagnostic.SeverityError
-}
-
-func (e *UnusedPadWarning) Error() string {
-	pos := e.Pad.Position()
-	location := fmt.Sprintf("%s:%d", pos.Filename, pos.Line)
-	if pos.Filename == "" {
-		location = e.Pad.Date().String()
-	}
-
-	// The pad itself is shown by renderers through GetDirective.
-	return fmt.Sprintf("%s: Unused Pad entry", location)
-}
-
-func (e *UnusedPadWarning) GetPosition() ast.Position {
-	return e.Pad.Position()
-}
-
-func (e *UnusedPadWarning) GetDirective() ast.Directive {
-	return e.Pad
-}
-
-func (e *UnusedPadWarning) GetAccount() ast.Account {
-	return e.Pad.Account
-}
-
-func (e *UnusedPadWarning) GetDate() *ast.Date {
-	return e.Pad.Date()
-}
-
-func (e *UnusedPadWarning) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "UnusedPadWarning",
-		"message":  e.Error(),
-		"position": e.Pad.Position(),
-		"account":  e.Account,
-		"date":     e.Pad.Date().String(),
-	})
-}
-
-// NewInvalidAccountNameError creates an error for an account with an invalid account type
-func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *InvalidAccountNameError {
+// NewInvalidAccountNameError creates an error for an account whose type is
+// not one of the configured account types.
+func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *Diagnostic {
 	validAccountTypes := []string{
 		cfg.AccountNames.Assets,
 		cfg.AccountNames.Liabilities,
@@ -1024,87 +142,196 @@ func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *InvalidAccountName
 		cfg.AccountNames.Income,
 		cfg.AccountNames.Expenses,
 	}
-	return &InvalidAccountNameError{
-		directiveError:    newDirectiveError(open),
-		Account:           open.Account,
-		ValidAccountTypes: validAccountTypes,
+	accountType, _, found := strings.Cut(string(open.Account), ":")
+	if !found {
+		accountType = "?"
 	}
+	return newError("InvalidAccountNameError", open, open.Account,
+		"Account %q uses invalid type %q, expected one of: %s",
+		open.Account, accountType, strings.Join(validAccountTypes, ", "))
 }
 
-// NewUnusedPadWarning creates a warning for an unused pad directive
-func NewUnusedPadWarning(pad *ast.Pad) *UnusedPadWarning {
-	return &UnusedPadWarning{
-		Pad:     pad,
-		Account: string(pad.Account),
+// NewAccountAlreadyClosedError creates an error for closing an account that
+// is already closed.
+func NewAccountAlreadyClosedError(close *ast.Close, closedDate *ast.Date) *Diagnostic {
+	return newError("AccountAlreadyClosedError", close, close.Account,
+		"Account %s is already closed (closed on %s)", close.Account, closedDate.String())
+}
+
+// NewAccountNotClosedError creates an error for closing an account that was
+// never opened.
+func NewAccountNotClosedError(close *ast.Close) *Diagnostic {
+	return newError("AccountNotClosedError", close, close.Account,
+		"Cannot close account %s that was never opened", close.Account)
+}
+
+// NewDuplicateCommodityError creates an error for a repeated commodity
+// directive.
+func NewDuplicateCommodityError(commodity *ast.Commodity) *Diagnostic {
+	return newError("DuplicateCommodityError", commodity, "",
+		"Duplicate commodity directives for '%s'", commodity.Currency)
+}
+
+// NewBalanceCurrencyError creates an error for a balance assertion in a
+// currency its account does not allow.
+func NewBalanceCurrencyError(balance *ast.Balance) *Diagnostic {
+	return newError("BalanceCurrencyError", balance, balance.Account,
+		"Invalid currency '%s' for Balance directive", balance.Amount.Currency)
+}
+
+// NewDuplicateBalanceError creates an error for a balance assertion that
+// repeats an earlier one with a different amount.
+func NewDuplicateBalanceError(balance *ast.Balance) *Diagnostic {
+	return newError("DuplicateBalanceError", balance, balance.Account,
+		"Duplicate balance assertion with different amounts")
+}
+
+// NewNegativeCostError creates an error for a posting booked at a negative
+// cost. Like beancount, it blames the posting's line.
+func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *Diagnostic {
+	return newError("NegativeCostError", txn, posting.Account,
+		"Cost is negative: %s %s (account %s)", cost.String(), currency, posting.Account).atPosting(posting)
+}
+
+// NewMergeCostError creates an error for a posting with a merge cost {*},
+// which beancount v2 rejects and then books like an empty cost {}. Like
+// beancount, it blames the posting's line.
+func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+	return newError("MergeCostError", txn, posting.Account,
+		"Cost merging is not supported yet (account %s)", posting.Account).atPosting(posting)
+}
+
+// NewCurrencyGroupError creates an error for a posting that Booking cannot
+// sort into a Currency group, or whose group's missing numbers it cannot
+// complete. Like beancount, it blames the posting's line.
+func NewCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
+	return newError("CurrencyGroupError", txn, posting.Account,
+		"%s (account %s)", message, posting.Account).atPosting(posting)
+}
+
+// NewInvalidBookingMethodError creates an error for an open directive with an
+// unknown booking method.
+func NewInvalidBookingMethodError(open *ast.Open) *Diagnostic {
+	return newError("InvalidBookingMethodError", open, open.Account,
+		"Invalid booking method: %s", open.BookingMethod)
+}
+
+// NewTransactionNotBalancedError creates an error for a transaction that does
+// not balance, listing its residuals by currency.
+func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *Diagnostic {
+	var buf strings.Builder
+	if len(residuals) > 0 {
+		currencies := make([]string, 0, len(residuals))
+		for currency := range residuals {
+			currencies = append(currencies, currency)
+		}
+		slices.Sort(currencies)
+		buf.WriteByte('(')
+		for i, currency := range currencies {
+			if i > 0 {
+				buf.WriteString(", ")
+			}
+			buf.WriteString(residuals[currency])
+			buf.WriteByte(' ')
+			buf.WriteString(currency)
+		}
+		buf.WriteByte(')')
 	}
+	return newError("TransactionNotBalancedError", txn, "", "Transaction does not balance: %s", buf.String())
 }
 
-// DocumentFileError is returned when a document directive references a file
-// that does not exist, matching beancount's verify_document_files_exist.
-type DocumentFileError struct {
-	Path      string
-	Pos       ast.Position
-	Directive *ast.Document
+// NewInvalidAmountError creates an error for an amount that cannot be parsed.
+func NewInvalidAmountError(d ast.Directive, account ast.Account, value string, err error) *Diagnostic {
+	return newError("InvalidAmountError", d, account, "Invalid amount %q for account %s: %v", value, account, err)
 }
 
-func (e *DocumentFileError) Error() string {
-	return fmt.Sprintf("%s:%d: File does not exist: %q", e.Pos.Filename, e.Pos.Line, e.Path)
+// NewInvalidCostError creates an error for an invalid cost specification.
+func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *Diagnostic {
+	return newError("InvalidCostError", txn, account,
+		"Invalid cost specification%s: %s: %v", postingInfo(postingIndex, account), costSpec, err)
 }
 
-func (e *DocumentFileError) GetPosition() ast.Position {
-	return e.Pos
+// NewTotalCostError creates an error for an invalid total cost {{}}, such as
+// one on zero units.
+func NewTotalCostError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
+	return newError("TotalCostError", txn, posting.Account, "Invalid total cost specification: %s", message)
 }
 
-// NewDocumentFileError creates an error for a document referencing a missing file.
-func NewDocumentFileError(doc *ast.Document, path string) *DocumentFileError {
-	return &DocumentFileError{
-		Path:      path,
-		Pos:       doc.Position(),
-		Directive: doc,
+// NewInvalidPriceError creates an error for an invalid price specification.
+func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingIndex int, priceSpec string, err error) *Diagnostic {
+	return newError("InvalidPriceError", txn, account,
+		"Invalid price specification%s: %s: %v", postingInfo(postingIndex, account), priceSpec, err)
+}
+
+// postingInfo names a posting by its number and account, or nothing when the
+// index is unknown.
+func postingInfo(postingIndex int, account ast.Account) string {
+	if postingIndex < 0 {
+		return ""
 	}
+	return fmt.Sprintf(" (Posting #%d: %s)", postingIndex+1, account)
 }
 
-// InvalidDirectivePriceError indicates a price directive has invalid data
-type InvalidDirectivePriceError struct {
-	Message   string
-	Pos       ast.Position
-	Directive *ast.Price
-}
-
-func (e *InvalidDirectivePriceError) Error() string {
-	return fmt.Sprintf("%s at %s", e.Message, e.Pos)
-}
-
-func (e *InvalidDirectivePriceError) GetPosition() ast.Position {
-	return e.Pos
-}
-
-// NewInvalidDirectivePriceError creates an error for an invalid price directive
-func NewInvalidDirectivePriceError(message string, price *ast.Price) *InvalidDirectivePriceError {
-	return &InvalidDirectivePriceError{
-		Message:   message,
-		Pos:       price.Position(),
-		Directive: price,
+// NewInvalidMetadataError creates an error for invalid metadata, on a
+// directive or, with an account, on one of its postings.
+func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key string, value *ast.MetadataValue, reason string) *Diagnostic {
+	accountInfo := ""
+	if account != "" {
+		accountInfo = fmt.Sprintf(" (account %s)", account)
 	}
+	valueStr := ""
+	if value != nil {
+		valueStr = value.String()
+	}
+	return newError("InvalidMetadataError", directive, account,
+		"Invalid metadata%s: key=%q, value=%q: %s", accountInfo, key, valueStr, reason)
 }
 
-// PluginConfigError reports a configuration string given to a Built-in
-// Plugin that takes none. Beancount fails to apply such a plugin; so do we.
-type PluginConfigError struct {
-	Name string
-	Pos  ast.Position
+// NewInsufficientInventoryError creates an error for a reduction the
+// account's lots cannot cover.
+func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
+	return newError("InsufficientInventoryError", txn, account, "Insufficient inventory (account %s): %v", account, details)
 }
 
-func (e *PluginConfigError) Error() string {
-	return fmt.Sprintf("%s:%d: Plugin %q takes no configuration", e.Pos.Filename, e.Pos.Line, e.Name)
+// NewAmbiguousBookingError creates an error for a reduction that matches
+// several lots under STRICT booking.
+func NewAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
+	return newError("AmbiguousBookingError", txn, account, "Ambiguous booking (account %s): %v", account, details)
 }
 
-func (e *PluginConfigError) GetPosition() ast.Position {
-	return e.Pos
+// NewCurrencyConstraintError creates an error for a posting in a currency its
+// account does not allow.
+func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account, currency string, allowedCurrencies []string) *Diagnostic {
+	return newError("CurrencyConstraintError", txn, account,
+		"Currency %s not allowed for account %s (allowed: %v)", currency, account, allowedCurrencies)
+}
+
+// NewUnusedPadWarning creates an error for a pad that inserted no padding.
+// It is fatal, as official bean-check rejects unused pad entries.
+func NewUnusedPadWarning(pad *ast.Pad) *Diagnostic {
+	return newError("UnusedPadWarning", pad, pad.Account, "Unused Pad entry")
+}
+
+// NewDocumentFileError creates an error for a document directive referencing
+// a file that does not exist, matching beancount's
+// verify_document_files_exist.
+func NewDocumentFileError(doc *ast.Document, path string) *Diagnostic {
+	return newError("DocumentFileError", doc, doc.Account, "File does not exist: %q", path)
+}
+
+// NewInvalidDirectivePriceError creates an error for a price directive with
+// invalid data.
+func NewInvalidDirectivePriceError(message string, price *ast.Price) *Diagnostic {
+	return newError("InvalidDirectivePriceError", price, "", "%s", message)
 }
 
 // NewPluginConfigError creates an error for a plugin directive that passes a
-// configuration to a Built-in Plugin that takes none.
-func NewPluginConfigError(plugin *ast.Plugin) *PluginConfigError {
-	return &PluginConfigError{Name: plugin.Name.String(), Pos: plugin.Position()}
+// configuration to a Built-in Plugin that takes none. Beancount fails to
+// apply such a plugin; so do we.
+func NewPluginConfigError(plugin *ast.Plugin) *Diagnostic {
+	return &Diagnostic{
+		kind:    "PluginConfigError",
+		message: fmt.Sprintf("Plugin %q takes no configuration", plugin.Name.String()),
+		pos:     plugin.Position(),
+	}
 }

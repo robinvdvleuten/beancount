@@ -79,7 +79,7 @@ option "booking_method" "LIFO"
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*AccountAlreadyOpenError)
+				ok := kindOf(errs[0]) == "AccountAlreadyOpenError"
 				assert.True(t, ok, "should be AccountAlreadyOpenError")
 			},
 		},
@@ -158,7 +158,7 @@ func TestLedger_ProcessClose(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*AccountNotClosedError)
+				ok := kindOf(errs[0]) == "AccountNotClosedError"
 				assert.True(t, ok, "should be AccountNotClosedError")
 			},
 		},
@@ -173,7 +173,7 @@ func TestLedger_ProcessClose(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*AccountAlreadyClosedError)
+				ok := kindOf(errs[0]) == "AccountAlreadyClosedError"
 				assert.True(t, ok, "should be AccountAlreadyClosedError")
 			},
 		},
@@ -278,7 +278,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*AccountNotOpenError)
+				ok := kindOf(errs[0]) == "AccountNotOpenError"
 				assert.True(t, ok, "should be AccountNotOpenError")
 			},
 		},
@@ -297,7 +297,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*AccountNotOpenError)
+				ok := kindOf(errs[0]) == "AccountNotOpenError"
 				assert.True(t, ok, "should be AccountNotOpenError")
 			},
 		},
@@ -315,7 +315,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*TransactionNotBalancedError)
+				ok := kindOf(errs[0]) == "TransactionNotBalancedError"
 				assert.True(t, ok, "should be TransactionNotBalancedError")
 			},
 		},
@@ -333,10 +333,9 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				balErr, ok := errs[0].(*TransactionNotBalancedError)
-				assert.True(t, ok, "should be TransactionNotBalancedError")
+				assert.Equal(t, "TransactionNotBalancedError", kindOf(errs[0]))
 				// Should have residuals for both currencies
-				assert.Equal(t, 2, len(balErr.Residuals))
+				assert.Contains(t, errs[0].Error(), "(50 EUR, -100 USD)")
 			},
 		},
 	}
@@ -435,7 +434,7 @@ func TestLedger_ProcessBalance(t *testing.T) {
 				assert.True(t, ok, "should be BalanceMismatchError")
 				assert.Equal(t, "500", balErr.Expected)
 				assert.Equal(t, "1000", balErr.Actual)
-				assert.Equal(t, "USD", balErr.Currency)
+				assert.Contains(t, balErr.Error(), "Expected: 500 USD")
 			},
 		},
 		{
@@ -454,7 +453,7 @@ func TestLedger_ProcessBalance(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*BalanceMismatchError)
+				ok := kindOf(errs[0]) == "BalanceMismatchError"
 				assert.True(t, ok, "should be BalanceMismatchError")
 			},
 		},
@@ -467,7 +466,7 @@ func TestLedger_ProcessBalance(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				errs := l.Errors()
 				assert.Equal(t, 1, len(errs))
-				_, ok := errs[0].(*AccountNotOpenError)
+				ok := kindOf(errs[0]) == "AccountNotOpenError"
 				assert.True(t, ok, "should be AccountNotOpenError")
 			},
 		},
@@ -1069,7 +1068,7 @@ func TestLedger_InvalidPriceMissingAmount(t *testing.T) {
 	errs := validatePrice(price)
 	assert.True(t, len(errs) > 0)
 
-	_, ok := errs[0].(*InvalidDirectivePriceError)
+	ok := kindOf(errs[0]) == "InvalidDirectivePriceError"
 	assert.True(t, ok)
 }
 

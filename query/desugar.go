@@ -163,7 +163,7 @@ func balanceDifferences(qctx *Context) map[*ast.Balance]decimal.Decimal {
 	for _, err := range qctx.Ledger.Diagnostics() {
 		var mismatch *ledger.BalanceMismatchError
 		if errors.As(err, &mismatch) {
-			if balance, ok := mismatch.Directive().(*ast.Balance); ok {
+			if balance, ok := mismatch.GetDirective().(*ast.Balance); ok {
 				differences[balance] = mismatch.Difference
 			}
 		}

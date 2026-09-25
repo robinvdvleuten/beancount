@@ -28,14 +28,13 @@ func NewErrorRenderer(source []byte) *ErrorRenderer {
 	return &ErrorRenderer{source: source}
 }
 
-// Render formats a single error with styling and context.
+// Render formats a single error with styling and context: like bean-check,
+// an error about a directive shows the directive under it.
 func (r *ErrorRenderer) Render(err error) string {
-	if e, ok := err.(interface {
-		GetPosition() ast.Position
-		GetDirective() ast.Directive
-		Error() string
-	}); ok {
-		return r.renderWithContext(e.GetPosition(), e.Error(), e.GetDirective())
+	if e, ok := err.(interface{ GetDirective() ast.Directive }); ok {
+		if context := directiveContext(e.GetDirective()); context != "" {
+			return errorStyle.Render(err.Error()) + "\n\n" + context
+		}
 	}
 
 	if e, ok := err.(*parser.ParseError); ok {
@@ -147,108 +146,75 @@ func caretPadding(line string, byteColumn int) int {
 	return width
 }
 
-func (r *ErrorRenderer) renderWithContext(pos ast.Position, message string, directive ast.Directive) string {
-	if directive == nil {
-		return message
-	}
-
+// directiveContext renders a directive as context lines under an error, or
+// "" when there is no directive or no rendering for its kind. Every line is
+// indented, so none starts with an error's path:line:.
+func directiveContext(directive ast.Directive) string {
 	var buf strings.Builder
-
-	buf.WriteString(errorStyle.Render(message))
-	buf.WriteString("\n\n")
+	line := func(text string) {
+		buf.WriteString("   ")
+		buf.WriteString(errContextStyle.Render(text))
+		buf.WriteByte('\n')
+	}
 
 	switch d := directive.(type) {
 	case *ast.Transaction:
 		var txnBuf bytes.Buffer
-		txnFormatter := formatter.New(formatter.WithIndentation(0))
-
-		if err := txnFormatter.FormatTransaction(d, &txnBuf); err == nil {
-			lines := bytes.Split(txnBuf.Bytes(), []byte("\n"))
-			for _, line := range lines {
-				if len(line) > 0 {
-					buf.WriteString("   ")
-					buf.WriteString(errContextStyle.Render(string(line)))
-					buf.WriteByte('\n')
+		if err := formatter.New(formatter.WithIndentation(2)).FormatTransaction(d, &txnBuf); err == nil {
+			for _, text := range bytes.Split(txnBuf.Bytes(), []byte("\n")) {
+				if len(text) > 0 {
+					line(string(text))
 				}
 			}
 		}
 
 	case *ast.Balance:
-		var line string
 		if d.Amount != nil {
-			line = fmt.Sprintf("%s balance %s  %s %s", d.Date().String(), d.Account, d.Amount.Value, d.Amount.Currency)
+			line(fmt.Sprintf("%s balance %s  %s %s", d.Date().String(), d.Account, d.Amount.Value, d.Amount.Currency))
 		} else {
-			line = fmt.Sprintf("%s balance %s", d.Date().String(), d.Account)
+			line(fmt.Sprintf("%s balance %s", d.Date().String(), d.Account))
 		}
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
 
 	case *ast.Pad:
-		line := fmt.Sprintf("%s pad %s %s", d.Date().String(), d.Account, d.AccountPad)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s pad %s %s", d.Date().String(), d.Account, d.AccountPad))
 
 	case *ast.Note:
-		line := fmt.Sprintf("%s note %s %q", d.Date().String(), d.Account, d.Description)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s note %s %q", d.Date().String(), d.Account, d.Description))
 
 	case *ast.Document:
-		line := fmt.Sprintf("%s document %s %q", d.Date().String(), d.Account, d.PathToDocument)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s document %s %q", d.Date().String(), d.Account, d.PathToDocument))
 
 	case *ast.Open:
-		line := fmt.Sprintf("%s open %s", d.Date().String(), d.Account)
+		text := fmt.Sprintf("%s open %s", d.Date().String(), d.Account)
 		if len(d.ConstraintCurrencies) > 0 {
-			line += fmt.Sprintf(" %s", strings.Join(d.ConstraintCurrencies, ", "))
+			text += " " + strings.Join(d.ConstraintCurrencies, ", ")
 		}
 		if d.BookingMethod != "" {
-			line += fmt.Sprintf(" %s", d.BookingMethod)
+			text += " " + d.BookingMethod
 		}
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(text)
 
 	case *ast.Close:
-		line := fmt.Sprintf("%s close %s", d.Date().String(), d.Account)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s close %s", d.Date().String(), d.Account))
 
 	case *ast.Commodity:
-		line := fmt.Sprintf("%s commodity %s", d.Date().String(), d.Currency)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s commodity %s", d.Date().String(), d.Currency))
 
 	case *ast.Price:
-		line := fmt.Sprintf("%s price %s  %s %s", d.Date().String(), d.Commodity, d.Amount.Value, d.Amount.Currency)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		if d.Amount != nil {
+			line(fmt.Sprintf("%s price %s  %s %s", d.Date().String(), d.Commodity, d.Amount.Value, d.Amount.Currency))
+		} else {
+			line(fmt.Sprintf("%s price %s", d.Date().String(), d.Commodity))
+		}
 
 	case *ast.Event:
-		line := fmt.Sprintf("%s event %q %q", d.Date().String(), d.Name.Value, d.Value.Value)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s event %q %q", d.Date().String(), d.Name.Value, d.Value.Value))
 
 	case *ast.Query:
-		line := fmt.Sprintf("%s query %q %q", d.Date().String(), d.Name.Value, d.QueryString.Value)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s query %q %q", d.Date().String(), d.Name.Value, d.QueryString.Value))
 
 	case *ast.Custom:
-		line := fmt.Sprintf("%s custom %q", d.Date().String(), d.Type.Value)
-		buf.WriteString("   ")
-		buf.WriteString(errContextStyle.Render(line))
-		buf.WriteByte('\n')
+		line(fmt.Sprintf("%s custom %q", d.Date().String(), d.Type.Value))
 	}
 
 	return buf.String()

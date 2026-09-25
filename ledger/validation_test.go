@@ -220,7 +220,7 @@ func TestValidateAccountsOpen(t *testing.T) {
 
 			if tt.wantErrType != "" && len(errs) > 0 {
 				// Check error type matches
-				assert.Equal(t, tt.wantErrType, getErrorType(errs[0]))
+				assert.Equal(t, tt.wantErrType, kindOf(errs[0]))
 			}
 		})
 	}
@@ -887,20 +887,6 @@ func TestImplicitPostings(t *testing.T) {
 				assert.NotEqual(t, nil, result, "expected validation to pass")
 			}
 		})
-	}
-}
-
-// Helper to get error type name for testing
-func getErrorType(err error) string {
-	switch err.(type) {
-	case *AccountNotOpenError:
-		return "AccountNotOpenError"
-	case *InvalidAmountError:
-		return "InvalidAmountError"
-	case *TransactionNotBalancedError:
-		return "TransactionNotBalancedError"
-	default:
-		return "UnknownError"
 	}
 }
 
@@ -1877,7 +1863,7 @@ func TestValidateClose(t *testing.T) {
 			accounts:     map[string]*Account{},
 			close:        ast.NewClose(date2024, checking),
 			wantErrCount: 1,
-			wantErrType:  "*ledger.AccountNotClosedError",
+			wantErrType:  "AccountNotClosedError",
 		},
 		{
 			name: "closing already closed account",
@@ -1891,7 +1877,7 @@ func TestValidateClose(t *testing.T) {
 			},
 			close:        ast.NewClose(date2025, checking),
 			wantErrCount: 1,
-			wantErrType:  "*ledger.AccountAlreadyClosedError",
+			wantErrType:  "AccountAlreadyClosedError",
 		},
 		{
 			name: "valid close directive",
@@ -1915,7 +1901,7 @@ func TestValidateClose(t *testing.T) {
 			assert.Equal(t, tt.wantErrCount, len(errs))
 
 			if tt.wantErrType != "" && len(errs) > 0 {
-				errType := fmt.Sprintf("%T", errs[0])
+				errType := kindOf(errs[0])
 				assert.Equal(t, tt.wantErrType, errType)
 			}
 
@@ -1937,8 +1923,8 @@ func TestBookingReductions(t *testing.T) {
 		wantType string
 	}{
 		{"sufficient inventory", "100 HOOL {50.00 USD}", "-10 HOOL {50.00 USD}", 0, ""},
-		{"insufficient lots", "5 HOOL {50.00 USD}", "-10 HOOL {50.00 USD}", 1, "*ledger.InsufficientInventoryError"},
-		{"lot not found", "100 HOOL {60.00 USD}", "-10 HOOL {50.00 USD}", 1, "*ledger.InsufficientInventoryError"},
+		{"insufficient lots", "5 HOOL {50.00 USD}", "-10 HOOL {50.00 USD}", 1, "InsufficientInventoryError"},
+		{"lot not found", "100 HOOL {60.00 USD}", "-10 HOOL {50.00 USD}", 1, "InsufficientInventoryError"},
 		{"empty cost spec uses booking method", "100 HOOL {50.00 USD}", "-10 HOOL {}", 0, ""},
 	}
 
@@ -1963,7 +1949,7 @@ func TestBookingReductions(t *testing.T) {
 			errs := l.Errors()
 			assert.Equal(t, tt.wantErrs, len(errs), "errors: %v", errs)
 			if tt.wantType != "" && len(errs) > 0 {
-				assert.Equal(t, tt.wantType, fmt.Sprintf("%T", errs[0]))
+				assert.Equal(t, tt.wantType, kindOf(errs[0]))
 			}
 		})
 	}
@@ -2093,7 +2079,7 @@ option "booking_method" "STRICT"
 				if tt.wantAmbiguousBookingErr {
 					errs := l.Errors()
 					assert.True(t, len(errs) > 0)
-					_, ok := errs[0].(*AmbiguousBookingError)
+					ok := kindOf(errs[0]) == "AmbiguousBookingError"
 					assert.True(t, ok)
 				}
 				return
@@ -2280,8 +2266,8 @@ func TestOverReductionReportsNotEnoughLots(t *testing.T) {
 		var validationErrors *ValidationErrors
 		assert.True(t, errors.As(err, &validationErrors), spec)
 		assert.Equal(t, 1, len(validationErrors.Errors), spec)
-		var insufficient *InsufficientInventoryError
-		assert.True(t, errors.As(validationErrors.Errors[0], &insufficient), spec)
+		assert.Equal(t, "InsufficientInventoryError", kindOf(validationErrors.Errors[0]), spec)
+		insufficient := validationErrors.Errors[0]
 		assert.Contains(t, insufficient.Error(), `not enough lots to reduce "-2 HOOL`, spec)
 
 		stock, _ := l.GetAccount("Assets:Stock")

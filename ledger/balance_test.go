@@ -240,10 +240,10 @@ func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
-	var currencyErr *BalanceCurrencyError
-	assert.True(t, errors.As(errs[0], &currencyErr), "got %v", errs[0])
-	assert.Equal(t, "USD", currencyErr.Currency)
-	assert.Equal(t, 5, currencyErr.Position().Line)
+	assert.Equal(t, "BalanceCurrencyError", kindOf(errs[0]), "got %v", errs[0])
+	currencyErr := errs[0]
+	assert.Contains(t, errs[0].Error(), "Invalid currency 'USD'")
+	assert.Equal(t, 5, currencyErr.(*Diagnostic).GetPosition().Line)
 }
 
 func TestDuplicateBalanceWithADifferentAmount(t *testing.T) {
@@ -269,7 +269,7 @@ func TestDuplicateBalanceWithADifferentAmount(t *testing.T) {
 	assert.Equal(t, 2, len(errs), "errors: %v", errs)
 	var mismatch *BalanceMismatchError
 	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
-	var duplicate *DuplicateBalanceError
-	assert.True(t, errors.As(errs[1], &duplicate), "got %v", errs[1])
-	assert.Equal(t, 10, duplicate.Position().Line)
+	assert.Equal(t, "DuplicateBalanceError", kindOf(errs[1]), "got %v", errs[1])
+	duplicate := errs[1]
+	assert.Equal(t, 10, duplicate.(*Diagnostic).GetPosition().Line)
 }

@@ -148,50 +148,30 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 		// Validate total cost {{}} requirements
 		if posting.Cost.IsTotal {
 			if posting.Amount == nil {
-				errs = append(errs, &TotalCostError{
-					directiveError: newDirectiveError(txn),
-					Posting:        posting,
-					Message:        "total cost requires a quantity",
-				})
+				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires a quantity"))
 				continue
 			}
 
 			if posting.Cost.Amount == nil {
-				errs = append(errs, &TotalCostError{
-					directiveError: newDirectiveError(txn),
-					Posting:        posting,
-					Message:        "total cost requires an amount",
-				})
+				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires an amount"))
 				continue
 			}
 
 			quantity, err := decimal.NewFromString(posting.Amount.Value)
 			if err != nil {
-				errs = append(errs, &TotalCostError{
-					directiveError: newDirectiveError(txn),
-					Posting:        posting,
-					Message:        fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err),
-				})
+				errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err)))
 				continue
 			}
 
 			if posting.Cost.HasNumber() {
 				if _, err := decimal.NewFromString(posting.Cost.Amount.Value); err != nil {
-					errs = append(errs, &TotalCostError{
-						directiveError: newDirectiveError(txn),
-						Posting:        posting,
-						Message:        fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err),
-					})
+					errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err)))
 					continue
 				}
 			}
 
 			if quantity.IsZero() {
-				errs = append(errs, &TotalCostError{
-					directiveError: newDirectiveError(txn),
-					Posting:        posting,
-					Message:        "cannot use total cost with zero quantity",
-				})
+				errs = append(errs, NewTotalCostError(txn, posting, "cannot use total cost with zero quantity"))
 				continue
 			}
 		}

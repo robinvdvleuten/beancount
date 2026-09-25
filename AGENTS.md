@@ -72,7 +72,7 @@ beancount format f.beancount | bean-check /dev/stdin  # round-trip
 
 **Context and telemetry**: public functions doing I/O or processing take `context.Context` first, check `ctx.Done()` in long loops, and time work with `telemetry.FromContext(ctx).Start("package.operation <context>")` (e.g. `parser.lexing`, `loader.parse main.beancount`).
 
-**Errors**: wrap I/O errors with context (`fmt.Errorf("failed to read %s: %w", filename, err)`); return parser errors as-is (they carry positions); collect validation errors into slices as structured types with `Pos` and `Directive`. Formatting for CLI text and API JSON lives in `cli/errors.go`.
+**Errors**: wrap I/O errors with context (`fmt.Errorf("failed to read %s: %w", filename, err)`); return parser errors as-is (they carry positions); collect ledger errors into slices as `*ledger.Diagnostic` values (kind, message, directive, position, account), built by a `New…Error` constructor per kind; add a Go type only where a caller matches on it with `errors.As` (`BalanceMismatchError`). The CLI renders any error with `GetDirective()` with the directive under it (`cli/errors.go`), and the web API marshals the shared shape.
 
 **Performance**: `strings.Builder` for concatenation, `sync.Pool` for frequently allocated maps, capacity hints when the size is known.
 

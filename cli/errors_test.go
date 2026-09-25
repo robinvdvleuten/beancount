@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -131,9 +133,6 @@ func TestCaretPaddingUsesDisplayWidth(t *testing.T) {
 }
 
 func TestErrorRenderer_RenderWithContext_AllDirectiveTypes(t *testing.T) {
-	renderer := NewErrorRenderer(nil)
-	pos := ast.Position{Filename: "test.beancount", Line: 1, Column: 1}
-
 	date, _ := ast.NewDate("2024-01-15")
 
 	tests := []struct {
@@ -165,7 +164,7 @@ func TestErrorRenderer_RenderWithContext_AllDirectiveTypes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			output := renderer.renderWithContext(pos, "test error", tt.directive)
+			output := directiveContext(tt.directive)
 			assert.Contains(t, output, tt.contains, "directive context should be rendered")
 		})
 	}
@@ -199,4 +198,18 @@ func TestErrorRenderer_UnusedPadShowsPadOnce(t *testing.T) {
 	for _, line := range strings.Split(output, "\n") {
 		assert.Equal(t, strings.TrimRight(line, " "), line, "no trailing padding")
 	}
+}
+
+func TestCheckShowsTheDirectiveUnderALedgerError(t *testing.T) {
+	// Like bean-check, the transaction is printed under the error, indented
+	// so that no context line starts with path:line:.
+	path := filepath.Join(t.TempDir(), "unknown.beancount")
+	source := "2020-01-01 open Assets:A\n\n2020-01-02 * \"x\"\n  Assets:A  1 USD\n  Assets:B\n"
+	assert.NoError(t, os.WriteFile(path, []byte(source), 0o644))
+
+	output := runOurCheck(t, path)
+	assert.Contains(t, output, path+":3: Invalid reference to unknown account 'Assets:B'")
+	assert.Contains(t, output, "   2020-01-02 * \"x\"\n")
+	assert.Contains(t, output, "     Assets:B  -1 USD\n")
+	assert.Equal(t, []int{3}, errorLines(path, output))
 }

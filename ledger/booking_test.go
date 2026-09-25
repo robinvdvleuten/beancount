@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -40,10 +39,8 @@ func TestBookingKeepsTransactionsThatFailValidation(t *testing.T) {
 
 	errs := l.Errors()
 	assert.Equal(t, 2, len(errs), "errors: %v", errs)
-	var notBalanced *TransactionNotBalancedError
-	assert.True(t, errors.As(errs[0], &notBalanced), "got %v", errs[0])
-	var notOpen *AccountNotOpenError
-	assert.True(t, errors.As(errs[1], &notOpen), "got %v", errs[1])
+	assert.Equal(t, "TransactionNotBalancedError", kindOf(errs[0]), "got %v", errs[0])
+	assert.Equal(t, "AccountNotOpenError", kindOf(errs[1]), "got %v", errs[1])
 }
 
 func TestBookingErrorListsLotsAtTheFailedPosting(t *testing.T) {
@@ -93,8 +90,7 @@ func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
-	var insufficient *InsufficientInventoryError
-	assert.True(t, errors.As(errs[0], &insufficient), "got %v", errs[0])
+	assert.Equal(t, "InsufficientInventoryError", kindOf(errs[0]), "got %v", errs[0])
 
 	// Like beancount, the transaction stays without its only group's postings.
 	postings := map[string]int{}

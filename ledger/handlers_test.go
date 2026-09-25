@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -273,8 +272,7 @@ func TestDocumentHandlerMissingFile(t *testing.T) {
 	docHandler := &DocumentHandler{}
 	errs, _ := docHandler.Validate(ctx, ledger, tree.Directives[1])
 	assert.Equal(t, 1, len(errs), "missing file should be an error like bean-check")
-	var fileErr *DocumentFileError
-	assert.True(t, errors.As(errs[0], &fileErr))
+	assert.Equal(t, "DocumentFileError", kindOf(errs[0]))
 }
 
 func TestPriceHandler(t *testing.T) {
