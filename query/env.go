@@ -7,6 +7,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
@@ -301,7 +302,7 @@ func postingPrice(posting *ast.Posting) any {
 		if err != nil || units.IsZero() {
 			return nil
 		}
-		number = number.Div(units.Abs())
+		number = pydecimal.Quo(number, units.Abs())
 	}
 	return &Amount{Number: number, Currency: posting.Price.Currency}
 }

@@ -17,6 +17,21 @@ official printer (metadata indented by 4 spaces instead of 2, prices not
 padded to the printer's fixed column). The content is equivalent beancount
 text that round-trips through `bean-check`.
 
+`query/gap_integer_division.bql` diverges on integer division: bean-query
+divides two integer literals with Python's true division, so `SELECT 1 / 3`
+is a float and prints its exact binary value
+(`0.333333333333333314829616256247390992939472198486328125`), and the float
+carries through later arithmetic (`7 / 2 * 2` is `7.0`). We give a decimal
+rounded to 28 significant digits. Division with a decimal operand, which
+covers every column, matches (`query/division*.bql`).
+
+**Sums and products keep every digit** (#439): division rounds to Python's
+28 significant digits like v2, but v2 also rounds `+`, `-` and `*` once an
+operand has that many digits, and we don't. `1/3 USD` plus `100 USD` sums
+to `100.3333333333333333333333333` in bean-query and to
+`100.3333333333333333333333333333` here. Check outcomes agree, since the
+difference is far below any tolerance.
+
 `beancount format` re-renders the parsed AST, while `bean-format` only
 rewrites whitespace line by line with one regular expression. The
 formatter follows that expression's rules (which lines align, which

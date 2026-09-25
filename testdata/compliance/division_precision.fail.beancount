@@ -1,0 +1,9 @@
+; A total cost becomes a per-unit cost first, so the residual is units times
+; the rounded per-unit cost, not the stated total: asserting exactly -10 USD
+; fails.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-04 * "total cost"
+  Assets:Stock  3 STK {{10 USD}}
+  Assets:Cash
+2020-01-05 balance Assets:Cash  -10 USD

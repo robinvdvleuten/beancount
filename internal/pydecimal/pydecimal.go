@@ -9,17 +9,71 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Quo divides like Python's decimal: an exact quotient takes the ideal
-// exponent exp(a) - exp(b), or as few more fractional digits as it needs
-// (10.00 / 2 = 5.00, 10 / 4 = 2.5, 20.00 / 10 = 2.00). An inexact quotient
-// keeps shopspring's division precision (#392 tracks Python's 28
-// significant digits).
+// Quo divides like Python's decimal in its default context: an exact
+// quotient takes the ideal exponent exp(a) - exp(b), or as few more
+// fractional digits as it needs (10.00 / 2 = 5.00, 10 / 4 = 2.5); an inexact
+// one rounds half-even to 28 significant digits (1 / 3 =
+// 0.3333333333333333333333333333). It is the project's only division.
 func Quo(a, b decimal.Decimal) decimal.Decimal {
-	q := a.Div(b)
-	if !q.Mul(b).Equal(a) {
-		return q
+	ideal := a.Exponent() - b.Exponent()
+	if a.IsZero() {
+		return decimal.New(0, min(ideal, 0))
 	}
-	return reduce(q, a.Exponent()-b.Exponent())
+	// Python's _divide: compute prec+1 digits, fold a remainder into a
+	// sticky last digit, then round the whole to prec digits.
+	ca, cb := new(big.Int).Abs(a.Coefficient()), new(big.Int).Abs(b.Coefficient())
+	shift := len(cb.String()) - len(ca.String()) + precision + 1
+	exponent := ideal - int32(shift)
+	if shift >= 0 {
+		ca.Mul(ca, pow10(shift))
+	} else {
+		cb.Mul(cb, pow10(-shift))
+	}
+	coefficient, remainder := new(big.Int).QuoRem(ca, cb, new(big.Int))
+	if remainder.Sign() != 0 {
+		if new(big.Int).Rem(coefficient, big.NewInt(5)).Sign() == 0 {
+			coefficient.Add(coefficient, big.NewInt(1))
+		}
+	} else {
+		reduced := reduce(decimal.NewFromBigInt(coefficient, exponent), ideal)
+		coefficient, exponent = reduced.Coefficient(), reduced.Exponent()
+	}
+	coefficient, exponent = roundHalfEven(coefficient, exponent)
+	if a.Sign() != b.Sign() {
+		coefficient.Neg(coefficient)
+	}
+	return decimal.NewFromBigInt(coefficient, exponent)
+}
+
+// precision is Python's default decimal context precision.
+const precision = 28
+
+// roundHalfEven rounds a non-negative coefficient to precision digits.
+func roundHalfEven(coefficient *big.Int, exponent int32) (*big.Int, int32) {
+	drop := len(coefficient.String()) - precision
+	if drop <= 0 {
+		return coefficient, exponent
+	}
+	divisor := pow10(drop)
+	quotient, remainder := new(big.Int).QuoRem(coefficient, divisor, new(big.Int))
+	switch remainder.Lsh(remainder, 1).Cmp(divisor) {
+	case 1:
+		quotient.Add(quotient, big.NewInt(1))
+	case 0:
+		if quotient.Bit(0) == 1 {
+			quotient.Add(quotient, big.NewInt(1))
+		}
+	}
+	exponent += int32(drop)
+	if len(quotient.String()) > precision {
+		quotient.Quo(quotient, big.NewInt(10))
+		exponent++
+	}
+	return quotient, exponent
+}
+
+func pow10(n int) *big.Int {
+	return new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(n)), nil)
 }
 
 // Normalize strips trailing zeros, like Python's Decimal.normalize.

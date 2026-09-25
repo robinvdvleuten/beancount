@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -57,23 +58,23 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 
 		costCurrency := posting.Cost.Amount.Currency
 
+		// Like beancount, a total cost {{X CURR}} or compound cost
+		// {X # Y CURR} becomes a per-unit cost first, and the weight is the
+		// units times that (possibly rounded) per-unit cost.
 		var totalCost decimal.Decimal
 		if posting.Cost.IsTotal {
-			// Total cost {{X CURR}} - use the amount directly
-			totalCost = costAmount
+			totalCost = perUnitWeight(amount, costAmount)
 		} else {
-			// Per-unit cost {X CURR} - multiply by quantity
-			totalCost = amount.Mul(costAmount)
 			if posting.Cost.Total != nil {
 				additionalTotal, err := ParseAmount(posting.Cost.Total)
 				if err != nil {
 					return nil, err
 				}
-				if amount.IsNegative() {
-					additionalTotal = additionalTotal.Neg()
+				if !amount.IsZero() {
+					costAmount = costAmount.Add(pydecimal.Quo(additionalTotal, amount.Abs()))
 				}
-				totalCost = totalCost.Add(additionalTotal)
 			}
+			totalCost = amount.Mul(costAmount)
 		}
 
 		weights = weightSet{
@@ -90,17 +91,9 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 
 		priceCurrency := posting.Price.Currency
 
-		var priceWeight decimal.Decimal
+		priceWeight := amount.Mul(priceAmount)
 		if posting.PriceTotal {
-			// @@ total price with sign
-			if amount.IsNegative() {
-				priceWeight = priceAmount.Neg()
-			} else {
-				priceWeight = priceAmount
-			}
-		} else {
-			// @ per-unit price
-			priceWeight = amount.Mul(priceAmount)
+			priceWeight = perUnitWeight(amount, priceAmount)
 		}
 
 		weights = weightSet{
@@ -115,6 +108,16 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 	}
 
 	return weights, nil
+}
+
+// perUnitWeight returns the weight of units bought at a total, derived like
+// beancount from the per-unit number total / |units|: 3 units at a total of
+// 10 weigh 9.999999999999999999999999999. Zero units weigh the signless total.
+func perUnitWeight(units, total decimal.Decimal) decimal.Decimal {
+	if units.IsZero() {
+		return total
+	}
+	return units.Mul(pydecimal.Quo(total, units.Abs()))
 }
 
 // balanceWeights accumulates weights from multiple postings

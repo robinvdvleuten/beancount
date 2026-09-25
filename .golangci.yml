@@ -4,3 +4,18 @@ run:
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
+linters:
+  enable:
+    - forbidigo
+  settings:
+    forbidigo:
+      analyze-types: true
+      forbid:
+        - pattern: ^decimal\.Decimal\.(Div|DivRound)$
+          pkg: ^github\.com/shopspring/decimal$
+          msg: divide with pydecimal.Quo, which rounds like Python's decimal (28 significant digits)
+  exclusions:
+    rules:
+      - path: internal/pydecimal/
+        linters:
+          - forbidigo

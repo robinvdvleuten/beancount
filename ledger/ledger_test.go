@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -981,7 +982,7 @@ plugin "beancount.plugins.auto_accounts"
 	// Verify bidirectional lookup (inverse created automatically)
 	rate2, found2 := ledger.GetPrice(date115, "CAD", "USD")
 	assert.True(t, found2)
-	expectedInv := mustParseDec("1").Div(mustParseDec("1.08"))
+	expectedInv := pydecimal.Quo(mustParseDec("1"), mustParseDec("1.08"))
 	assert.True(t, rate2.Equal(expectedInv))
 
 	// Verify EUR price

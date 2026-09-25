@@ -520,10 +520,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		}
 		weight := units.Mul(priceNumber)
 		if posting.PriceTotal {
-			weight = priceNumber
-			if units.IsNegative() {
-				weight = priceNumber.Neg()
-			}
+			weight = perUnitWeight(units, priceNumber)
 		}
 		delta.InferredPrices[posting] = &ast.Amount{Value: posting.Price.Value, Currency: currency}
 		balance[currency] = balance[currency].Add(weight)
@@ -618,7 +615,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 		weight := balance[currency].Neg()
 		priceNumber := weight.Abs()
 		if !posting.PriceTotal && !units.IsZero() {
-			priceNumber = weight.Div(units).Abs()
+			priceNumber = pydecimal.Quo(weight, units).Abs()
 		}
 		delta.InferredPrices[posting] = &ast.Amount{Value: priceNumber.String(), Currency: currency}
 		balance[currency] = balance[currency].Add(weight)
@@ -658,7 +655,7 @@ func (v *validator) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *
 
 			if len(balance) == 1 {
 				for currency, residual := range balance {
-					costPerUnit := residual.Neg().Div(amount)
+					costPerUnit := pydecimal.Quo(residual.Neg(), amount)
 					delta.InferredCosts[posting] = &ast.Amount{
 						Value:    costPerUnit.String(),
 						Currency: currency,
@@ -1518,7 +1515,7 @@ func perUnitPrice(posting *ast.Posting, units decimal.Decimal) *priceAmount {
 		if units.IsZero() {
 			return nil
 		}
-		number = number.Div(units.Abs())
+		number = pydecimal.Quo(number, units.Abs())
 	}
 	return &priceAmount{number: number.Abs(), currency: posting.Price.Currency}
 }

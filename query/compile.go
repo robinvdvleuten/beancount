@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
@@ -827,7 +828,7 @@ func (c *cBinary) evalArithmetic(l, r any) any {
 		if rd.IsZero() {
 			return nil
 		}
-		return ld.Div(rd)
+		return pydecimal.Quo(ld, rd)
 	}
 	return nil
 }

@@ -43,6 +43,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
@@ -390,7 +391,7 @@ func (l *Ledger) buildForwardFillGraph(date *ast.Date) *Graph {
 					To:       edge.From,
 					Kind:     EdgePrice,
 					Date:     edge.Date,
-					Weight:   decimal.NewFromInt(1).Div(edge.Weight),
+					Weight:   pydecimal.Quo(decimal.NewFromInt(1), edge.Weight),
 					Meta:     edge.Meta,
 					Inferred: true,
 				}
@@ -909,7 +910,7 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 		To:       from,
 		Kind:     EdgePrice,
 		Date:     price.Date(),
-		Weight:   decimal.NewFromInt(1).Div(amount),
+		Weight:   pydecimal.Quo(decimal.NewFromInt(1), amount),
 		Meta:     price,
 		Inferred: true,
 	})

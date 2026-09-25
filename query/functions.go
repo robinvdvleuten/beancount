@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
@@ -603,7 +604,7 @@ func safeDiv(a, b decimal.Decimal) decimal.Decimal {
 	if b.IsZero() {
 		return decimal.Decimal{}
 	}
-	return a.Div(b)
+	return pydecimal.Quo(a, b)
 }
 
 // accountOrder is the canonical account type ordering used for sort keys and

@@ -433,7 +433,7 @@ func TestGraph_InferredEdgeFlag(t *testing.T) {
 		To:       "USD",
 		Kind:     "price",
 		Date:     date,
-		Weight:   mustParseDec("1.0869").Div(mustParseDec("1")), // 1/0.92
+		Weight:   mustParseDec("1.0869"), // 1/0.92
 		Inferred: true,
 	}
 

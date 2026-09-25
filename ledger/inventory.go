@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -541,7 +542,7 @@ func planMergeReduction(
 	}
 	remainingUnits := totalUnits.Sub(amount)
 	if remainingUnits.GreaterThan(decimal.Zero) {
-		averageCost := totalCost.Div(totalUnits)
+		averageCost := pydecimal.Quo(totalCost, totalUnits)
 		plan.replacementLots = []*lot{newLot(commodity, remainingUnits, &lotSpec{
 			Cost:         &averageCost,
 			CostCurrency: costCurrency,
