@@ -263,3 +263,44 @@ func TestPadFromItselfDoesNotSatisfyBalance(t *testing.T) {
 	var mismatch *BalanceMismatchError
 	assert.True(t, slices.ContainsFunc(validationErrors.Errors, func(err error) bool { return errors.As(err, &mismatch) }))
 }
+
+func TestPaddingAppliesAtItsBalanceAssertion(t *testing.T) {
+	// Like bean-check, the spending after the padded opening balance sees
+	// the padding, so the later assertion passes.
+	source := `
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+2020-01-01 open Equity:Opening-Balances
+2020-01-02 pad Assets:Cash Equity:Opening-Balances
+2020-01-03 balance Assets:Cash 5 USD
+2020-01-04 * "spend"
+  Expenses:Food  5 USD
+  Assets:Cash
+2020-01-05 balance Assets:Cash 0 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+	assert.Equal(t, 1, len(findPaddingTransactions(tree)))
+}
+
+func TestPadFillsOnlyTheFirstAssertion(t *testing.T) {
+	// The second assertion is checked against the padded 5 USD, as
+	// bean-check reports "accumulated 5 USD".
+	source := `
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening-Balances
+2020-01-02 pad Assets:Cash Equity:Opening-Balances
+2020-01-03 balance Assets:Cash 5 USD
+2020-01-04 balance Assets:Cash 7 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	var mismatch *BalanceMismatchError
+	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
+	assert.Equal(t, "5", mismatch.Actual)
+}

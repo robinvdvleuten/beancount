@@ -100,9 +100,7 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 		return errs, nil
 	}
 
-	// Get pad entry if exists
-	accountName := string(balance.Account)
-	padEntry := l.activePad(accountName, balance.Amount.Currency)
+	padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
 
 	// A failed assertion is reported and its padding still applies.
 	delta, err := v.calculateBalanceDelta(balance, padEntry)
@@ -117,20 +115,9 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 
 func (h *BalanceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	balanceDelta := delta.(*BalanceDelta)
-	l.applyBalance(balanceDelta)
-
-	// The first assertion per currency after a pad consumes it for that
-	// currency; the pad is used once it inserts padding.
-	if state, ok := l.pads[balanceDelta.AccountName]; ok && !state.consumed[balanceDelta.Currency] {
-		state.consumed[balanceDelta.Currency] = true
-		if balanceDelta.SyntheticTransaction != nil {
-			state.used = true
-		}
-	}
-
-	// Store synthetic transaction for AST insertion if it exists
-	if balanceDelta.SyntheticTransaction != nil {
-		l.syntheticTransactions = append(l.syntheticTransactions, balanceDelta.SyntheticTransaction)
+	l.pads.consume(balanceDelta.AccountName, balanceDelta.Currency, balanceDelta.Padding)
+	if balanceDelta.Padding != nil {
+		l.applyPadding(ctx, balanceDelta.Padding)
 	}
 }
 
@@ -149,14 +136,7 @@ func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) (
 }
 
 func (h *PadHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	pad := delta.(*ast.Pad)
-	accountName := string(pad.Account)
-	// A new pad supersedes the previous one; beancount reports that one as
-	// unused if it never inserted padding.
-	if previous, ok := l.pads[accountName]; ok && !previous.used {
-		l.unusedPads = append(l.unusedPads, previous.pad)
-	}
-	l.pads[accountName] = &padState{pad: pad, consumed: make(map[string]bool)}
+	l.pads.add(delta.(*ast.Pad))
 }
 
 // NoteHandler processes Note directives.

@@ -1,0 +1,14 @@
+; The padding takes effect at the balance assertion it fills, so the
+; spending after it and the later assertion see the padded balance.
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-02 pad Assets:Cash Equity:Opening-Balances
+2020-01-03 balance Assets:Cash 5 USD
+
+2020-01-04 * "spend"
+  Expenses:Food  5 USD
+  Assets:Cash
+
+2020-01-05 balance Assets:Cash 0 USD

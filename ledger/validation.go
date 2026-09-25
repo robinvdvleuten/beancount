@@ -751,168 +751,55 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	return errs, delta
 }
 
-// createPaddingTransaction creates a synthetic transaction for pad directive.
-// The transaction has flag "P" and narration matching official beancount format.
+// calculateBalanceDelta checks a balance assertion against its account's
+// inventory. With a pad whose currency the assertion is the first to reach,
+// the account is padded to the asserted amount: the delta carries the
+// padding transaction, dated at the pad, and the assertion is checked as if
+// it were applied.
 //
-// Example output:
-//
-//	2020-01-01 P "(Padding inserted for Balance of 1000.00 USD for difference 1000.00 USD)"
-//	  Assets:Checking         1000.00 USD
-//	  Equity:Opening-Balances -1000.00 USD
-func createPaddingTransaction(
-	date *ast.Date,
-	paddedAccount ast.Account,
-	padSourceAccount ast.Account,
-	difference decimal.Decimal,
-	differenceStr string, // Original string representation for formatting
-	currency string,
-	expectedAmount decimal.Decimal,
-	expectedAmountStr string, // Original string representation for formatting
-) *ast.Transaction {
-	// Format narration matching official beancount
-	// Use strings.Builder for efficient string construction
-	var narration strings.Builder
-	narration.WriteString("(Padding inserted for Balance of ")
-	narration.WriteString(expectedAmountStr)
-	narration.WriteString(" ")
-	narration.WriteString(currency)
-	narration.WriteString(" for difference ")
-	narration.WriteString(differenceStr)
-	narration.WriteString(" ")
-	narration.WriteString(currency)
-	narration.WriteString(")")
-
-	// Calculate negative amount string (preserve formatting)
-	var negDifferenceStr string
-	if strings.HasPrefix(differenceStr, "-") {
-		negDifferenceStr = differenceStr[1:] // Remove minus sign
-	} else {
-		negDifferenceStr = "-" + differenceStr // Add minus sign
-	}
-
-	// Build transaction using AST builders
-	txn := ast.NewTransaction(date, narration.String(),
-		ast.WithFlag("P"),
-		ast.WithPostings(
-			ast.NewPosting(paddedAccount,
-				ast.WithAmount(differenceStr, currency),
-			),
-			ast.NewPosting(padSourceAccount,
-				ast.WithAmount(negDifferenceStr, currency),
-			),
-		),
-	)
-
-	return txn
-}
-
-// calculateBalanceDelta calculates the balance delta for a balance assertion.
-//
-// It validates that:
-//   - Pad directive (if present) comes chronologically BEFORE the balance assertion
-//   - Account balance matches expected balance (within tolerance)
-//   - Calculates padding adjustments needed
-//   - Generates synthetic padding transaction if needed
-//
-// Returns BalanceDelta (mutations) and error (validation failure). A failed
-// assertion returns both, since its padding still applies; a pad dated on or
-// after the assertion returns only the error.
-//
-// CRITICAL: Pad timing validation - pad must come BEFORE balance (Beancount compliance).
-//
-// Example:
-//
-//	v := newValidator(ledger.accounts)
-//	delta, err := v.calculateBalanceDelta(balance, padEntry)
-//	if err != nil {
-//	    // Validation failed
-//	}
+// A failed assertion returns both the delta and the error, since its
+// padding still applies, as in beancount, whose pad plugin inserts padding
+// before any assertion is checked.
 func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad) (*BalanceDelta, error) {
-	// Basic validation already done by validateBalance()
-
 	expectedAmount, _ := ParseAmount(balance.Amount)
 	currency := balance.Amount.Currency
 	accountName := string(balance.Account)
-	account := v.accounts[accountName]
+	actualAmount := v.accounts[accountName].Inventory.Get(currency)
 
-	actualAmount := account.Inventory.Get(currency)
-
-	delta := &BalanceDelta{
-		AccountName:        accountName,
-		Currency:           currency,
-		ExpectedAmount:     expectedAmount,
-		ActualAmount:       actualAmount,
-		PaddingAdjustments: make(map[string]decimal.Decimal),
-	}
-
-	// Calculate what the amount will be after padding
-	actualAmountAfterPadding := actualAmount
-
-	// Calculate padding if pad directive exists
-	if padEntry != nil {
-		// BEANCOUNT COMPLIANCE: Pad must come chronologically BEFORE balance
-		if !padEntry.Date().Time.Before(balance.Date().Time) { //nolint:staticcheck
-			return nil, fmt.Errorf("pad directive dated %s must come before balance assertion dated %s",
-				padEntry.Date().String(), balance.Date().String())
-		}
-
-		difference := expectedAmount.Sub(actualAmount)
-		tolerance, err := v.balanceTolerance(balance)
-		if err != nil {
-			return nil, err
-		}
-
-		if difference.Abs().GreaterThan(tolerance) {
-			delta.PaddingAdjustments[currency] = difference
-			delta.PadAccountName = string(padEntry.AccountPad)
-
-			// Generate synthetic padding transaction
-			// Determine decimal places from balance amount
-			decimalPlaces := int32(2) // default
-			if dotIndex := strings.Index(balance.Amount.Value, "."); dotIndex >= 0 {
-				decimalPlaces = int32(len(balance.Amount.Value) - dotIndex - 1)
-			}
-
-			delta.SyntheticTransaction = createPaddingTransaction(
-				padEntry.Date(),                       // Use pad date, not balance date
-				balance.Account,                       // Account being padded
-				padEntry.AccountPad,                   // Source of padding
-				difference,                            // Amount to pad
-				difference.StringFixed(decimalPlaces), // Format with same precision as balance
-				currency,                              // Currency
-				expectedAmount,                        // For narration
-				balance.Amount.Value,                  // Original string for expected amount
-			)
-
-			// Calculate what actual will be after padding. Padding an
-			// account from itself posts both legs to it, so nothing changes
-			// and the assertion fails, as in beancount.
-			if padEntry.AccountPad != balance.Account {
-				actualAmountAfterPadding = actualAmount.Add(difference)
-			}
-		}
-
-		// Mark pad as used (but don't remove it yet - may be needed for other currencies)
-		// Removal happens at end of processing
-		delta.ShouldRemovePad = false
-	}
-
-	// Check if amounts match within tolerance (after padding)
 	tolerance, err := v.balanceTolerance(balance)
 	if err != nil {
 		return nil, err
 	}
-	if !AmountEqual(delta.ExpectedAmount, actualAmountAfterPadding, tolerance) {
-		// Like beancount, whose pad plugin inserts padding before any
-		// assertion is checked, the delta still applies: the pad is used.
-		return delta, NewBalanceMismatchError(
-			balance,
-			delta.ExpectedAmount.String(),
-			actualAmountAfterPadding.String(),
-			currency,
-		)
+
+	delta := &BalanceDelta{AccountName: accountName, Currency: currency}
+	if padEntry != nil {
+		difference := expectedAmount.Sub(actualAmount)
+		if difference.Abs().GreaterThan(tolerance) {
+			// The padding has the balance amount's precision.
+			decimalPlaces := int32(2)
+			if dotIndex := strings.Index(balance.Amount.Value, "."); dotIndex >= 0 {
+				decimalPlaces = int32(len(balance.Amount.Value) - dotIndex - 1)
+			}
+			delta.Padding = createPaddingTransaction(
+				padEntry.Date(),
+				balance.Account,
+				padEntry.AccountPad,
+				difference.StringFixed(decimalPlaces),
+				currency,
+				balance.Amount.Value,
+			)
+
+			// Padding an account from itself posts both legs to it, so
+			// nothing changes and the assertion fails, as in beancount.
+			if padEntry.AccountPad != balance.Account {
+				actualAmount = actualAmount.Add(difference)
+			}
+		}
 	}
 
+	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
+		return delta, NewBalanceMismatchError(balance, expectedAmount.String(), actualAmount.String(), currency)
+	}
 	return delta, nil
 }
 

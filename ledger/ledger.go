@@ -34,7 +34,6 @@
 package ledger
 
 import (
-	"cmp"
 	"context"
 	"fmt"
 	"slices"
@@ -61,20 +60,18 @@ import (
 // use, verifies balance assertions, and processes pad directives. All validation errors
 // are collected and returned together after processing.
 type Ledger struct {
-	graph                 *Graph // Unified graph of accounts, currencies, and relationships
-	accounts              map[string]*Account
-	config                *Config
-	errors                []error
-	pads                  map[string]*padState // account -> its latest pad
-	unusedPads            []*ast.Pad           // superseded pads that inserted no padding
-	syntheticTransactions []*ast.Transaction   // Padding transactions to insert into AST
-	bookedLots            map[*ast.Posting][]BookedLot
-	booker                *booker
-	booked                map[*ast.Transaction]*bookedTransaction
-	unopened              map[string]*Account // Accounts posted to before any open
-	display               *DisplayContext
-	priceGraphMu          sync.RWMutex
-	priceGraphs           map[string]*Graph
+	graph        *Graph // Unified graph of accounts, currencies, and relationships
+	accounts     map[string]*Account
+	config       *Config
+	errors       []error
+	pads         *pads
+	bookedLots   map[*ast.Posting][]BookedLot
+	booker       *booker
+	booked       map[*ast.Transaction]*bookedTransaction
+	unopened     map[string]*Account // Accounts posted to before any open
+	display      *DisplayContext
+	priceGraphMu sync.RWMutex
+	priceGraphs  map[string]*Graph
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -111,7 +108,7 @@ func New() *Ledger {
 		accounts:    make(map[string]*Account),
 		config:      NewConfig(),
 		errors:      make([]error, 0),
-		pads:        make(map[string]*padState),
+		pads:        newPads(),
 		priceGraphs: make(map[string]*Graph),
 		bookedLots:  make(map[*ast.Posting][]BookedLot),
 		booked:      make(map[*ast.Transaction]*bookedTransaction),
@@ -212,44 +209,14 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	}
 	processTimer.End()
 
-	// Insert synthetic padding transactions into AST and process them
-	if len(l.syntheticTransactions) > 0 {
-		insertTimer := collector.StartStructured(telemetry.TimerConfig{
-			Name:  "ledger.synthetic_txn_insertion",
-			Count: len(l.syntheticTransactions),
-			Unit:  "transactions",
-		})
-
-		// Add synthetic transactions to AST
-		for _, txn := range l.syntheticTransactions {
-			tree.Directives = append(tree.Directives, txn)
+	// The padding transactions join the AST at their pads' dates.
+	if len(l.pads.padding) > 0 {
+		for _, padding := range l.pads.padding {
+			tree.Directives = append(tree.Directives, padding)
 		}
-
-		// Re-sort to maintain chronological order
-		// Use stable sort to preserve original ordering for same-date directives
 		_ = ast.SortDirectives(tree)
-
-		// Process synthetic transactions to update inventory.
-		for _, txn := range l.syntheticTransactions {
-			if l.bookTransaction(txn) {
-				l.processDirective(ctx, txn)
-			}
-		}
-
-		insertTimer.End()
 	}
-
-	// Report pads that inserted no padding, in source order.
-	unused := l.unusedPads
-	for _, state := range l.pads {
-		if !state.used {
-			unused = append(unused, state.pad)
-		}
-	}
-	slices.SortFunc(unused, func(a, b *ast.Pad) int {
-		return cmp.Or(strings.Compare(a.Position().Filename, b.Position().Filename), cmp.Compare(a.Position().Offset, b.Position().Offset))
-	})
-	for _, pad := range unused {
+	for _, pad := range l.pads.unusedPads() {
 		l.errors = append(l.errors, NewUnusedPadWarning(pad))
 	}
 
@@ -812,31 +779,6 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransactio
 			Posting:     bp.posting,
 		})
 	}
-}
-
-// padState tracks an account's latest pad. Like beancount's ops/pad.py, a pad
-// pads each currency at most once, at the first balance assertion for that
-// currency after it, and counts as used only if it inserted padding.
-type padState struct {
-	pad      *ast.Pad
-	consumed map[string]bool // currencies whose first balance assertion was seen
-	used     bool
-}
-
-// activePad returns the pad that applies to a balance assertion of account
-// in currency, or nil when there is none or its currency was consumed.
-func (l *Ledger) activePad(account, currency string) *ast.Pad {
-	if state, ok := l.pads[account]; ok && !state.consumed[currency] {
-		return state.pad
-	}
-	return nil
-}
-
-// applyBalance applies the balance delta to the ledger (mutation only)
-func (l *Ledger) applyBalance(delta *BalanceDelta) {
-	// Note: Padding adjustments are applied by processing synthetic transactions
-	// (not here, to avoid double-application)
-	// Pad removal happens at end of processing to support multiple currencies
 }
 
 // applyPrice adds price edges to the ledger's graph (mutation only)

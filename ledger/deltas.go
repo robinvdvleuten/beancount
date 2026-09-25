@@ -59,11 +59,6 @@ type balanceValidation struct {
 	residuals  map[string]decimal.Decimal
 }
 
-// HasMutations returns true if delta requires state changes.
-func (d *TransactionDelta) HasMutations() bool {
-	return d != nil && (len(d.InferredAmounts) > 0 || len(d.InferredCosts) > 0 || len(d.InferredPrices) > 0)
-}
-
 func (d *TransactionDelta) amountFor(posting *ast.Posting) *ast.Amount {
 	if amount := d.InferredAmounts[posting]; amount != nil {
 		return amount
@@ -91,11 +86,6 @@ type OpenDelta struct {
 	Metadata             []*ast.Metadata
 }
 
-// HasMutations returns true if delta requires state changes
-func (d *OpenDelta) HasMutations() bool {
-	return true // Opening always creates/modifies account
-}
-
 // HasMetadata returns true if the delta has metadata
 func (d *OpenDelta) HasMetadata() bool {
 	return len(d.Metadata) > 0
@@ -107,38 +97,12 @@ type CloseDelta struct {
 	CloseDate   *ast.Date
 }
 
-// HasMutations returns true if delta requires state changes
-func (d *CloseDelta) HasMutations() bool {
-	return true // Closing always modifies account
-}
-
 // BalanceDelta describes changes from a balance assertion.
 // Does NOT include validation errors - those are returned separately.
 type BalanceDelta struct {
-	AccountName          string
-	Currency             string
-	ExpectedAmount       decimal.Decimal
-	ActualAmount         decimal.Decimal            // Before padding
-	PaddingAdjustments   map[string]decimal.Decimal // currency -> amount
-	PadAccountName       string                     // Where padding comes from
-	ShouldRemovePad      bool                       // True if pad was consumed
-	SyntheticTransaction *ast.Transaction           // Padding transaction to insert into AST (nil if no padding)
-}
-
-// HasMutations returns true if delta requires state changes
-func (d *BalanceDelta) HasMutations() bool {
-	return len(d.PaddingAdjustments) > 0 || d.ShouldRemovePad || d.SyntheticTransaction != nil
-}
-
-// PadDelta describes storing a pad directive (no immediate mutation)
-type PadDelta struct {
 	AccountName string
-	PadEntry    *ast.Pad // Store for next balance
-}
-
-// HasMutations returns true if delta requires state changes
-func (d *PadDelta) HasMutations() bool {
-	return true // Always stores the pad entry
+	Currency    string
+	Padding     *ast.Transaction // Padding the assertion's pad inserts; nil when none
 }
 
 // CommodityDelta describes changes from a commodity declaration.
@@ -147,11 +111,6 @@ type CommodityDelta struct {
 	CommodityID string          // Currency/commodity code
 	Date        *ast.Date       // Effective date
 	Metadata    []*ast.Metadata // Commodity metadata
-}
-
-// HasMutations returns true if delta requires state changes
-func (d *CommodityDelta) HasMutations() bool {
-	return true // Commodity declaration always creates/updates node
 }
 
 // NoteDelta - no mutations needed (validation only)
