@@ -3,6 +3,7 @@ package parser
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 )
@@ -12,6 +13,30 @@ type ParseError struct {
 	Pos         ast.Position
 	Message     string
 	SourceRange SourceRange // Range in source for context extraction
+}
+
+// ParseErrors lists a source's syntax errors in source order. The parser
+// drops the directive each one is in and returns it with the AST of the rest.
+type ParseErrors []*ParseError
+
+func (e ParseErrors) Error() string {
+	var b strings.Builder
+	for i, err := range e {
+		if i > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString(err.Error())
+	}
+	return b.String()
+}
+
+// Unwrap lets errors.As find each *ParseError.
+func (e ParseErrors) Unwrap() []error {
+	errs := make([]error, len(e))
+	for i, err := range e {
+		errs[i] = err
+	}
+	return errs
 }
 
 // SourceRange defines a range in the source content for error context.

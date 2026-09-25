@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"io"
 	"strings"
 
@@ -23,6 +24,7 @@ type Parser struct {
 	pos      int       // Current token position
 	filename string    // Filename for error reporting
 	interner *Interner // String interning pool
+	errs     ParseErrors
 }
 
 // NewParser creates a new parser with the given source and tokens.
@@ -35,7 +37,9 @@ func NewParser(source []byte, tokens []Token, filename string, interner *Interne
 	}
 }
 
-// Parse parses the token stream into an AST.
+// Parse parses the token stream into an AST. Like beancount, a syntax error
+// drops the directive it is in and parsing goes on; the error is a
+// ParseErrors listing each one, returned with the AST of everything else.
 func (p *Parser) Parse() (*ast.AST, error) {
 	tree := &ast.AST{}
 
@@ -50,7 +54,9 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		tokType := tok.Type
 		continuesDirective := tokType == COMMENT && tok.Column > 1 && tok.Line == continuationLine
 		if tok.Column > 1 && tokType != NEWLINE && tokType != EOF && !continuesDirective {
-			return nil, p.errorAtToken(tok, "unexpected indentation")
+			p.recover(p.errorAtToken(tok, "unexpected indentation"))
+			continuationLine = 0
+			continue
 		}
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0
@@ -76,61 +82,78 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				continue
 			}
 			tok := p.peek()
-			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+			p.recover(p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source)))
+			continuationLine = 0
 
 		case OPTION:
 			opt, err := p.parseOption()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Options = append(tree.Options, opt)
 
 		case INCLUDE:
 			inc, err := p.parseInclude()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Includes = append(tree.Includes, inc)
 
 		case PLUGIN:
 			plugin, err := p.parsePlugin()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Plugins = append(tree.Plugins, plugin)
 
 		case PUSHTAG:
 			pushtag, err := p.parsePushtag()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Pushtags = append(tree.Pushtags, pushtag)
 
 		case POPTAG:
 			poptag, err := p.parsePoptag()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Poptags = append(tree.Poptags, poptag)
 
 		case PUSHMETA:
 			pushmeta, err := p.parsePushmeta()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Pushmetas = append(tree.Pushmetas, pushmeta)
 
 		case POPMETA:
 			popmeta, err := p.parsePopmeta()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Popmetas = append(tree.Popmetas, popmeta)
 
 		case DATE:
 			directive, err := p.parseDirective()
 			if err != nil {
-				return nil, err
+				p.recover(err)
+				continuationLine = 0
+				continue
 			}
 			tree.Directives = append(tree.Directives, directive)
 			continuationLine = p.lineAfterPrevious()
@@ -140,11 +163,33 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 		default:
 			tok := p.peek()
-			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+			p.recover(p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source)))
+			continuationLine = 0
 		}
 	}
 
+	if len(p.errs) > 0 {
+		return tree, p.errs
+	}
 	return tree, nil
+}
+
+// recover records a syntax error and skips to the next line that starts in
+// column 1, dropping the rest of the directive the error is in, like
+// beancount's grammar. Parsing resumes there.
+func (p *Parser) recover(err error) {
+	var parseErr *ParseError
+	if !errors.As(err, &parseErr) {
+		parseErr = NewParseError(p.filename, err)
+	}
+	p.errs = append(p.errs, parseErr)
+	for !p.isAtEnd() {
+		tok := p.peek()
+		if tok.Line > parseErr.Pos.Line && tok.Column == 1 {
+			return
+		}
+		p.advance()
+	}
 }
 
 // parseComment parses a comment token into a Comment AST node.
@@ -551,6 +596,8 @@ func MustParseBytes(ctx context.Context, data []byte) *ast.AST {
 
 // ParseBytesWithFilename parses a raw source AST from bytes with a filename for position tracking.
 // Parsing preserves directive source order and does not apply semantic push/pop directives.
+// On syntax errors it returns a ParseErrors together with the AST of the
+// directives that parsed.
 func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (*ast.AST, error) {
 	// Check for cancellation
 	select {
@@ -578,11 +625,8 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	tree, err := parser.Parse()
 	parseTimer.End()
 
-	if err != nil {
-		return nil, err
-	}
-
-	return tree, nil
+	// A ParseErrors comes with the AST of everything that parsed.
+	return tree, err
 }
 
 // MustParseBytesWithFilename parses AST from bytes with a filename, panicking on error.

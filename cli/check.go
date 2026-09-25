@@ -13,6 +13,7 @@ import (
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -56,7 +57,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return fmt.Errorf("failed to read file for error context: %w", err)
 	}
 
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
+	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
 		renderer := NewErrorRenderer(sourceContent)
@@ -73,7 +74,14 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		printInfof(ctx.Stderr, "%s", warning)
 	}
 	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
+	mainFile := cmd.File.GetAbsoluteFilename()
 	for _, loadErr := range loadErrors {
+		// A syntax error in the main file is shown in its source context,
+		// like a failed load.
+		if syntaxErr, ok := loadErr.(*parser.ParseError); ok && syntaxErr.Pos.Filename == mainFile {
+			_, _ = fmt.Fprintln(ctx.Stderr, NewErrorRenderer(sourceContent).Render(syntaxErr))
+			continue
+		}
 		// A positioned error already starts with "path:line:", which editors
 		// jump to only when it starts the line.
 		if _, ok := loadErr.(interface{ GetPosition() ast.Position }); ok {

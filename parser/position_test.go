@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"testing"
 
@@ -53,8 +54,8 @@ func TestErrorPositioning(t *testing.T) {
 			assert.Error(t, err)
 
 			// Check error is a ParseError with correct line
-			parseErr, ok := err.(*ParseError)
-			assert.True(t, ok, "expected *ParseError, got %T: %v", err, err)
+			var parseErr *ParseError
+			assert.True(t, errors.As(err, &parseErr), "expected *ParseError, got %T: %v", err, err)
 
 			assert.Equal(t, tt.expectedLine, parseErr.Pos.Line,
 				"error should be on line %d, got line %d: %s",
@@ -278,8 +279,8 @@ func TestCalculateSourceRangeIncludesContext(t *testing.T) {
 	_, err := ParseString(context.Background(), source)
 	assert.Error(t, err)
 
-	parseErr, ok := err.(*ParseError)
-	assert.True(t, ok)
+	var parseErr *ParseError
+	assert.True(t, errors.As(err, &parseErr))
 
 	// Error should be on line 4
 	assert.Equal(t, 4, parseErr.Pos.Line)
@@ -325,8 +326,8 @@ func TestCalculateSourceRangeEdgeCases(t *testing.T) {
 			_, err := ParseString(context.Background(), tt.source)
 			assert.Error(t, err)
 
-			parseErr, ok := err.(*ParseError)
-			assert.True(t, ok)
+			var parseErr *ParseError
+			assert.True(t, errors.As(err, &parseErr))
 
 			rangeStr := string(parseErr.SourceRange.Source)
 			for _, want := range tt.contains {

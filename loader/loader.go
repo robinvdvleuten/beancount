@@ -23,6 +23,7 @@ package loader
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -132,6 +133,12 @@ type Loader struct {
 	// beancount.ops.documents plugin. Formatting-only consumers should
 	// leave this off: bean-format never runs document discovery.
 	DiscoverDocuments bool
+
+	// SyntaxRecovery keeps loading past syntax errors, like beancount: each
+	// one becomes a diagnostic and drops only the directive it is in.
+	// Without it, the first syntax error fails the load. LoadBytes always
+	// fails on the first one, since it returns no diagnostics.
+	SyntaxRecovery bool
 }
 
 // Option configures how files are loaded.
@@ -159,6 +166,14 @@ func WithFollowIncludes() Option {
 func WithDocumentsDiscovery() Option {
 	return func(l *Loader) {
 		l.DiscoverDocuments = true
+	}
+}
+
+// WithSyntaxRecovery keeps loading past syntax errors, reporting them as
+// diagnostics (see Loader.SyntaxRecovery).
+func WithSyntaxRecovery() Option {
+	return func(l *Loader) {
+		l.SyntaxRecovery = true
 	}
 }
 
@@ -195,14 +210,12 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 		}
-		result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+		result, diagnostics, err := parseFile(ctx, filename, data, l.SyntaxRecovery)
 		if err != nil {
-			// Wrap parser errors for consistent formatting
-			return nil, parser.NewParseErrorWithSource(filename, err, data)
+			return nil, err
 		}
-		var diagnostics []error
 		if l.DiscoverDocuments {
-			diagnostics = discoverDocuments(result, absPath)
+			diagnostics = append(diagnostics, discoverDocuments(result, absPath)...)
 		}
 		return &LoadResult{
 			AST:         result,
@@ -216,10 +229,11 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 	// Use root timer for hierarchy if available, otherwise create flat timers
 	rootTimer := telemetry.RootTimerFromContext(ctx)
 	state := &loaderState{
-		visited:   make(map[string]bool),
-		collector: collector,
-		rootTimer: rootTimer,
-		root:      absPath,
+		visited:        make(map[string]bool),
+		collector:      collector,
+		rootTimer:      rootTimer,
+		root:           absPath,
+		syntaxRecovery: l.SyntaxRecovery,
 	}
 
 	ast, err := state.loadRecursive(ctx, filename)
@@ -360,9 +374,9 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 	parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", displayName))
 	defer parseTimer.End()
 
-	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+	result, _, err := parseFile(ctx, filename, data, false)
 	if err != nil {
-		return nil, parser.NewParseErrorWithSource(filename, err, data)
+		return nil, err
 	}
 
 	// If following includes is requested but we're parsing from stdin,
@@ -400,11 +414,34 @@ func (l *Loader) MustLoadBytes(ctx context.Context, filename string, data []byte
 
 // loaderState tracks state during recursive loading.
 type loaderState struct {
-	visited     map[string]bool     // Absolute paths of files already loaded
-	collector   telemetry.Collector // Telemetry collector for tracking load operations
-	rootTimer   telemetry.Timer     // Root check timer from context
-	root        string
-	diagnostics []error
+	visited        map[string]bool     // Absolute paths of files already loaded
+	collector      telemetry.Collector // Telemetry collector for tracking load operations
+	rootTimer      telemetry.Timer     // Root check timer from context
+	root           string
+	diagnostics    []error
+	syntaxRecovery bool
+}
+
+// parseFile parses one file. With recovery, its syntax errors come back as
+// diagnostics alongside the AST of the directives that parsed; without, the
+// first one fails the load.
+func parseFile(ctx context.Context, filename string, data []byte, recovery bool) (*ast.AST, []error, error) {
+	tree, err := parser.ParseBytesWithFilename(ctx, filename, data)
+	var syntaxErrs parser.ParseErrors
+	if errors.As(err, &syntaxErrs) {
+		if !recovery {
+			return nil, nil, syntaxErrs[0]
+		}
+		diagnostics := make([]error, len(syntaxErrs))
+		for i, syntaxErr := range syntaxErrs {
+			diagnostics[i] = syntaxErr
+		}
+		return tree, diagnostics, nil
+	}
+	if err != nil {
+		return nil, nil, parser.NewParseErrorWithSource(filename, err, data)
+	}
+	return tree, nil, nil
 }
 
 // loadRecursive recursively loads a file and all its includes.
@@ -452,14 +489,14 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
 
-	result, err := parser.ParseBytesWithFilename(ctx, filename, data)
+	result, syntaxErrs, err := parseFile(ctx, filename, data, l.syntaxRecovery)
 	parseTimer.End()
 
 	if err != nil {
 		loadTimer.End()
-		// Wrap parser errors for consistent formatting
-		return nil, parser.NewParseErrorWithSource(filename, err, data)
+		return nil, err
 	}
+	l.diagnostics = append(l.diagnostics, syntaxErrs...)
 
 	// Unbalanced pushes and pops are non-fatal load errors, per file.
 	pushPopErrors, err := prepareLoadedAST(result)

@@ -104,7 +104,15 @@ limits:
   `pushmeta`, a missing documents root, a duplicate include, an include
   glob with no match and a Built-in Plugin given a configuration are blamed
   on the directive that caused them, where v2 prints line `0` or
-  `<load>:0`.
+  `<load>:0`. A syntax error at the end of a line (`option "title"` without
+  its value) is blamed on that line; v2's lexer counts the line break as
+  part of the next line and blames that one.
+
+- **Syntax errors drop only their own directive**: like v2, `check` and
+  `query` report every syntax error, drop the directive it is in and check
+  or query the rest. v2's generated parser also drops the directive right
+  above a line of invalid tokens when no blank line separates them, which
+  hides that directive's own errors; we keep it.
 
 ## Declared non-goals
 
