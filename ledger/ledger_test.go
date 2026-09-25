@@ -1060,27 +1060,6 @@ func TestLedger_GraphAccessor(t *testing.T) {
 	assert.True(t, rate.Equal(mustParseDec("1.08")))
 }
 
-func TestLedger_InvalidPriceZeroAmount(t *testing.T) {
-	source := `
-2024-01-15 price USD 0 CAD
-`
-
-	ctx := context.Background()
-	tree := parser.MustParseString(ctx, source)
-
-	ledger := New()
-	err := ledger.Process(ctx, tree)
-
-	assert.Error(t, err)
-	verrs, ok := err.(*ValidationErrors)
-	assert.True(t, ok)
-	assert.True(t, len(verrs.Errors) > 0)
-
-	// Check that it's an InvalidDirectivePriceError
-	_, ok = verrs.Errors[0].(*InvalidDirectivePriceError)
-	assert.True(t, ok)
-}
-
 func TestLedger_InvalidPriceMissingAmount(t *testing.T) {
 	// Test validatePrice directly with a manually constructed price
 	date := newTestDate("2024-01-15")
@@ -1126,4 +1105,29 @@ func TestLedger_PricesWithAccounts(t *testing.T) {
 	assert.True(t, found1)
 	_, found2 := ledger.GetPrice(date, "EUR", "USD")
 	assert.True(t, found2)
+}
+
+func TestZeroPrice(t *testing.T) {
+	// Like beancount, a zero price is recorded and converts to zero, and it
+	// has no inverse: the inverse falls back to an earlier price, or none.
+	source := `
+2019-12-01 price GOOG 4 USD
+2020-01-01 price HOOL 0 USD
+2020-01-02 price GOOG 0 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+
+	date, _ := ast.NewDate("2020-01-03")
+	rate, ok := l.GetPrice(date, "HOOL", "USD")
+	assert.True(t, ok)
+	assert.True(t, rate.IsZero(), "rate: %s", rate)
+
+	_, ok = l.GetPrice(date, "USD", "HOOL")
+	assert.False(t, ok)
+
+	rate, ok = l.GetPrice(date, "USD", "GOOG")
+	assert.True(t, ok)
+	assert.Equal(t, "0.25", rate.String())
 }

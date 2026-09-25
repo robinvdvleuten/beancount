@@ -1,0 +1,15 @@
+; A zero price converts to zero and has no inverse: converting back falls
+; back to an earlier price, or to none.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:O
+
+2019-12-01 price GOOG 4 USD
+2020-01-01 price HOOL 0 USD
+2020-01-02 price GOOG 0 USD
+
+2020-01-04 * "buy"
+  Assets:Stock  10 HOOL {1 USD}
+  Assets:Stock  3 GOOG {1 USD}
+  Assets:Cash   8 USD
+  Equity:O

@@ -301,7 +301,7 @@ func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, dat
 	// Calculate conversion by multiplying all edge weights
 	result := amount
 	for _, edge := range path {
-		if edge.Kind != EdgePrice || edge.Weight.IsZero() {
+		if edge.Kind != EdgePrice {
 			return decimal.Zero, fmt.Errorf("invalid price edge in conversion path: %s→%s", edge.From, edge.To)
 		}
 		result = pydecimal.Mul(result, edge.Weight)

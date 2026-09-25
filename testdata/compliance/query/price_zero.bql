@@ -1,0 +1,1 @@
+SELECT account, position, convert(position, 'USD') AS in_usd, convert(position, 'HOOL') AS in_hool, convert(position, 'GOOG') AS in_goog, getprice('HOOL', 'USD') AS hool_usd, getprice('USD', 'HOOL') AS usd_hool, getprice('USD', 'GOOG') AS usd_goog WHERE account ~ '^Assets'

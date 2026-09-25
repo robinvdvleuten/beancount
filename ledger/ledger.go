@@ -307,10 +307,10 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 		return decimal.Zero, false
 	}
 
-	// Multiply rates along the path
+	// Multiply rates along the path; a zero price makes the rate zero.
 	result := decimal.NewFromInt(1)
 	for _, edge := range path {
-		if edge.Kind == EdgePrice && !edge.Weight.IsZero() {
+		if edge.Kind == EdgePrice {
 			result = pydecimal.Mul(result, edge.Weight)
 		}
 	}
@@ -357,8 +357,9 @@ func (l *Ledger) buildForwardFillGraph(date *ast.Date) *Graph {
 			seenPairs[pairKey] = true
 		}
 
-		// Also add inverse if not inferred and not already seen
-		if !edge.Inferred {
+		// Also add inverse if not inferred and not already seen. Like
+		// beancount, a zero price has no inverse.
+		if !edge.Inferred && !edge.Weight.IsZero() {
 			inversePairKey := edge.To + "->" + edge.From
 			if !seenPairs[inversePairKey] {
 				inverseEdge := &Edge{
@@ -805,16 +806,20 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 		Inferred: false,
 	})
 
-	// Add inverse price edge (bidirectional)
-	l.graph.AddEdge(&Edge{
-		From:     to,
-		To:       from,
-		Kind:     EdgePrice,
-		Date:     price.Date(),
-		Weight:   pydecimal.Quo(decimal.NewFromInt(1), amount),
-		Meta:     price,
-		Inferred: true,
-	})
+	// Add inverse price edge (bidirectional). Like beancount, which filters
+	// out zero prices for zero-cost postings such as gifted options, a zero
+	// price has no inverse: the inverse falls back to an earlier price.
+	if !amount.IsZero() {
+		l.graph.AddEdge(&Edge{
+			From:     to,
+			To:       from,
+			Kind:     EdgePrice,
+			Date:     price.Date(),
+			Weight:   pydecimal.Quo(decimal.NewFromInt(1), amount),
+			Meta:     price,
+			Inferred: true,
+		})
+	}
 
 	l.priceGraphMu.Lock()
 	clear(l.priceGraphs)

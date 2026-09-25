@@ -1226,15 +1226,9 @@ func validatePrice(price *ast.Price) []error {
 		return errs
 	}
 
-	// Parse and validate amount is non-zero
-	amount, err := ParseAmount(price.Amount)
-	if err != nil {
+	// Like beancount, any number is a price, zero and negative included.
+	if _, err := ParseAmount(price.Amount); err != nil {
 		errs = append(errs, NewInvalidDirectivePriceError(fmt.Sprintf("invalid price amount: %v", err), price))
-		return errs
-	}
-
-	if amount.IsZero() {
-		errs = append(errs, NewInvalidDirectivePriceError("price amount cannot be zero", price))
 	}
 
 	return errs
