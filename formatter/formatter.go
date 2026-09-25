@@ -34,6 +34,7 @@ import (
 	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
+	"github.com/shopspring/decimal"
 )
 
 const (
@@ -127,6 +128,9 @@ type Formatter struct {
 	// preservation), so trivia parsed from those lines (inline comments) is
 	// not emitted a second time. Set during Format() and cleared after.
 	verbatimLines map[int]bool
+
+	// parsedNumbers renders numbers as parsed rather than as spelled.
+	parsedNumbers bool
 }
 
 // Option is a functional option for configuring a Formatter.
@@ -181,6 +185,15 @@ func WithIndentation(indent int) Option {
 func WithStringEscapeStyle(style StringEscapeStyle) Option {
 	return func(f *Formatter) {
 		f.StringEscapeStyle = style
+	}
+}
+
+// WithParsedNumbers renders every number as parsed (1,000.50 as 1000.50,
+// +2 as 2), like beancount's printer, rather than as the source spells it,
+// which is what bean-format keeps.
+func WithParsedNumbers() Option {
+	return func(f *Formatter) {
+		f.parsedNumbers = true
 	}
 }
 
@@ -247,7 +260,7 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 				if column := posting.Position().Column; column > 1 {
 					indent = column - 1
 				}
-				record(indent+runewidth.StringWidth(string(posting.Account)), amountDisplayValue(posting.Amount))
+				record(indent+runewidth.StringWidth(string(posting.Account)), f.amountDisplayValue(posting.Amount))
 			}
 
 		case *ast.Balance:
@@ -832,18 +845,18 @@ func (f *Formatter) balanceLine(b *ast.Balance) datedLine {
 	if b.Tolerance != nil {
 		last = b.Tolerance
 	}
-	return f.newDatedLine(b, string(b.Account), balanceAmountText(b), amountDisplayValue(last), balanceCurrency(b))
+	return f.newDatedLine(b, string(b.Account), f.balanceAmountText(b), f.amountDisplayValue(last), balanceCurrency(b))
 }
 
 // balanceAmountText spells a balance's amount, with its tolerance, without
 // the currency.
-func balanceAmountText(b *ast.Balance) string {
+func (f *Formatter) balanceAmountText(b *ast.Balance) string {
 	if b.Amount == nil {
 		return ""
 	}
-	text := amountDisplayValue(b.Amount)
+	text := f.amountDisplayValue(b.Amount)
 	if b.Tolerance != nil {
-		text += " ~ " + amountDisplayValue(b.Tolerance)
+		text += " ~ " + f.amountDisplayValue(b.Tolerance)
 	}
 	return text
 }
@@ -1014,7 +1027,7 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 
 // priceLine lays out a price's line.
 func (f *Formatter) priceLine(p *ast.Price) datedLine {
-	number := amountDisplayValue(p.Amount)
+	number := f.amountDisplayValue(p.Amount)
 	return f.newDatedLine(p, p.Commodity, number, number, priceCurrency(p))
 }
 
@@ -1099,11 +1112,7 @@ func (f *Formatter) formatCustom(c *ast.Custom, buf *strings.Builder) {
 		} else if val.BooleanValue != nil {
 			buf.WriteString(*val.BooleanValue)
 		} else if val.Amount != nil {
-			displayValue := val.Amount.Value
-			if val.Amount.HasRaw() {
-				displayValue = val.Amount.Raw
-			}
-			buf.WriteString(displayValue)
+			buf.WriteString(f.amountDisplayValue(val.Amount))
 			buf.WriteByte(' ')
 			buf.WriteString(val.Amount.Currency)
 		} else if val.Number != nil {
@@ -1344,7 +1353,7 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 
 	if p.Amount != nil {
 		if suffix, ok := f.alignedPostingSuffix(p); ok {
-			displayValue := amountDisplayValue(p.Amount)
+			displayValue := f.amountDisplayValue(p.Amount)
 			buf.WriteString(strings.Repeat(" ", f.columns.padding(currentWidth, runewidth.StringWidth(displayValue))))
 			buf.WriteString(displayValue)
 			buf.WriteByte(' ')
@@ -1369,7 +1378,7 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 			}
 			// Partial annotations (bare @, number-only, currency-only) print
 			// only the components present in the source.
-			if value := amountDisplayValue(p.Price); value != "" {
+			if value := f.amountDisplayValue(p.Price); value != "" {
 				buf.WriteByte(' ')
 				buf.WriteString(value)
 			}
@@ -1413,16 +1422,16 @@ var alignedNumber = regexp.MustCompile(`^[-+]?\s*[\d,]+(?:\.\d*)?$`)
 // isAlignedAmount reports whether bean-format aligns an amount: only a
 // plainly spelled number followed by a currency matches its line pattern.
 // Any other amount leaves the line as written.
-func isAlignedAmount(amount *ast.Amount) bool {
-	return amount != nil && amount.Currency != "" && alignedNumber.MatchString(amountDisplayValue(amount))
+func (f *Formatter) isAlignedAmount(amount *ast.Amount) bool {
+	return amount != nil && amount.Currency != "" && alignedNumber.MatchString(f.amountDisplayValue(amount))
 }
 
 // alignsPosting reports whether bean-format aligns a posting's line: not
 // flagged, with a plainly spelled number that the source does not glue to
 // its currency.
 func (f *Formatter) alignsPosting(p *ast.Posting) bool {
-	return p.Flag == "" && isAlignedAmount(p.Amount) &&
-		!f.gluedToCurrency(p.Position().Line, amountDisplayValue(p.Amount), p.Amount.Currency)
+	return p.Flag == "" && f.isAlignedAmount(p.Amount) &&
+		!f.gluedToCurrency(p.Position().Line, f.amountDisplayValue(p.Amount), p.Amount.Currency)
 }
 
 // datedAmountLayout splits a dated directive's amount text like
@@ -1466,7 +1475,7 @@ func (f *Formatter) postingSource(p *ast.Posting) (text, rest string, ok bool) {
 	if !ok {
 		return "", "", false
 	}
-	if p.Amount != nil && (!strings.Contains(rest, amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency)) {
+	if p.Amount != nil && (!strings.Contains(rest, f.amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency)) {
 		return "", "", false
 	}
 	return text, rest, true
@@ -1503,7 +1512,7 @@ func (f *Formatter) alignedPostingSuffix(p *ast.Posting) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	afterNumber, ok := strings.CutPrefix(strings.TrimLeft(rest, " \t"), amountDisplayValue(p.Amount))
+	afterNumber, ok := strings.CutPrefix(strings.TrimLeft(rest, " \t"), f.amountDisplayValue(p.Amount))
 	if !ok {
 		return "", false
 	}
@@ -1553,9 +1562,9 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 	}
 
 	// Use raw value if available (preserves formatting like commas), otherwise use canonical value
-	displayValue := amountDisplayValue(amount)
+	displayValue := f.amountDisplayValue(amount)
 
-	if !isAlignedAmount(amount) || !isValidNumericValue(amount.Value) {
+	if !f.isAlignedAmount(amount) || !isValidNumericValue(amount.Value) {
 		// Joined with single spaces, leaving out the missing part.
 		buf.WriteString(strings.Repeat(" ", MinimumSpacing))
 		buf.WriteString(strings.Join(slices.DeleteFunc([]string{displayValue, amount.Currency}, func(s string) bool { return s == "" }), " "))
@@ -1568,12 +1577,20 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 	buf.WriteString(amount.Currency)
 }
 
-func amountDisplayValue(amount *ast.Amount) string {
-	if amount != nil && amount.HasRaw() {
-		return amount.Raw
-	}
+// amountDisplayValue returns an amount's number as the source spells it, or
+// as parsed with WithParsedNumbers.
+func (f *Formatter) amountDisplayValue(amount *ast.Amount) string {
 	if amount == nil {
 		return ""
+	}
+	if f.parsedNumbers {
+		if number, err := decimal.NewFromString(amount.Value); err == nil {
+			return number.StringFixed(max(-number.Exponent(), 0))
+		}
+		return amount.Value
+	}
+	if amount.HasRaw() {
+		return amount.Raw
 	}
 	return amount.Value
 }
@@ -1615,10 +1632,10 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		writeSeparator()
 		// A currency-only cost {USD} has no number to write.
 		if cost.HasNumber() {
-			buf.WriteString(amountDisplayValue(cost.Amount))
+			buf.WriteString(f.amountDisplayValue(cost.Amount))
 			if cost.Total != nil {
 				buf.WriteString(" # ")
-				buf.WriteString(amountDisplayValue(cost.Total))
+				buf.WriteString(f.amountDisplayValue(cost.Total))
 			}
 			buf.WriteByte(' ')
 		}

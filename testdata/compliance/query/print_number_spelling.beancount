@@ -1,0 +1,17 @@
+; print renders numbers as parsed, like beancount's printer: thousands
+; separators, a plus sign and an expression are not kept.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:O
+
+2020-01-04 * "separators"
+  Assets:Cash   1,000.50 USD
+  Assets:Stock  2 HOOL {1,000 USD} @ 1,100.00 USD
+  Assets:Cash   -1,000.50 USD
+  Equity:O
+
+2020-01-05 * "sign and expression"
+  Assets:Cash   +2 USD
+  Assets:Cash   (1 + 2) USD
+  Assets:Cash   9 EUR @ 1,000 USD
+  Equity:O

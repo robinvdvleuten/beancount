@@ -117,7 +117,7 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
 
-	f := formatter.New()
+	f := formatter.New(formatter.WithParsedNumbers())
 	for _, entry := range entries {
 		if compiled.From != nil && compiled.From.Expr != nil {
 			row := &Row{Ctx: qctx, Entry: entry}

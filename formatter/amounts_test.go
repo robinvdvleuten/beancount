@@ -97,3 +97,23 @@ func TestFormatLeavesNumbersGluedToCurrenciesAsWritten(t *testing.T) {
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Equal(t, source, out.String())
 }
+
+func TestFormatWithParsedNumbers(t *testing.T) {
+	// Like beancount's printer, parsed numbers drop the source's thousands
+	// separators and plus sign; by default they are kept as written.
+	source := "2020-01-02 * \"x\"\n" +
+		"  Assets:A  +1,000.50 USD @ 1,100 EUR\n" +
+		"  Assets:B\n" +
+		"2020-01-03 balance Assets:A  1,000.50 USD\n"
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	var parsed bytes.Buffer
+	assert.NoError(t, New(WithParsedNumbers()).Format(context.Background(), tree, nil, &parsed))
+	assert.Contains(t, parsed.String(), "1000.50 USD @ 1100 EUR")
+	assert.Contains(t, parsed.String(), "balance Assets:A  1000.50 USD")
+	assert.NotContains(t, parsed.String(), ",")
+
+	var spelled bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, nil, &spelled))
+	assert.Contains(t, spelled.String(), "+1,000.50 USD @ 1,100 EUR")
+}
