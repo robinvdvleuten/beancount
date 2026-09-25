@@ -27,9 +27,15 @@ The account an import posts to when the Importer cannot say where the money went
 _Avoid_: suspense account, uncategorized account, placeholder
 
 **Plugin**:
-Code named by a `plugin` directive that rewrites the ledger's directives each time the ledger loads, before checks run.
+Code named by a `plugin` directive that rewrites the ledger's directives each time the ledger loads, after Booking and before checks run.
 _Avoid_: extension, hook, importer
 
 **Built-in Plugin**:
 A Plugin that ships with Beancount v2, such as `beancount.plugins.auto_accounts`, and that this project reproduces with the same behavior.
 _Avoid_: core plugin, standard plugin
+
+### Processing the ledger
+
+**Booking**:
+Completing a transaction's postings: filling in missing amounts, matching reductions to the lots they reduce, and splitting an amount-less posting per currency. It happens once, before Plugins run. A transaction that cannot be matched to its lots is reported and left out of the ledger.
+_Avoid_: interpolation, matching
