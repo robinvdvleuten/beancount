@@ -86,6 +86,14 @@ limits:
   decimals have no signed zero, so it books and renders as `0.00`. The value
   is the same; only the sign of zero differs.
 
+- **BQL `str()` of numbers, dates and strings**: bean-query returns
+  Python's `repr` for these (`Decimal('200.00')`,
+  `datetime.date(2023, 1, 1)`, `'Assets:Cash'`), a v2 implementation
+  accident rather than a designed format. We print `200.00`, `2023-01-01`
+  and `Assets:Cash`, with every written digit kept. `query/gap_str_scalars.bql`
+  pins the difference; amounts, positions, inventories, NULL, integers,
+  booleans and sets match (`query/str_*.bql`).
+
 ## Declared non-goals
 
 - **Plugin execution**: `plugin` directives are parsed but never run

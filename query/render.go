@@ -322,14 +322,23 @@ func (r *objectRenderer) format(v any) string {
 	return objectString(v)
 }
 
-// objectString renders a value like Python's str(): numbers keep the digits
-// they were written with (3.10, 10.50 USD).
+// objectString renders a value like Python's str(), for object columns and
+// the str() function: numbers keep the digits they were written with (3.10,
+// 10.50 USD), and an inventory is parenthesized like beancount's. Unlike
+// bean-query, numbers, dates and strings are not spelled as Python's repr
+// (Decimal('3.10')); see KNOWN_GAPS.md.
 func objectString(v any) string {
 	switch val := v.(type) {
+	case nil:
+		return "None"
 	case decimal.Decimal:
 		return decimalLiteral(val)
 	case *Amount:
 		return decimalLiteral(val.Number) + " " + val.Currency
+	case *Position:
+		return positionString(val, decimalLiteral)
+	case *Inventory:
+		return "(" + inventoryString(val, decimalLiteral) + ")"
 	}
 	return valueString(v)
 }

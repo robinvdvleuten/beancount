@@ -323,25 +323,22 @@ func valueString(v any) string {
 	case *Amount:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)
 	case *Position:
-		return positionString(val)
+		return positionString(val, decimal.Decimal.String)
 	case *Inventory:
-		positions := val.Positions()
-		parts := make([]string, len(positions))
-		for i, p := range positions {
-			parts[i] = positionString(p)
-		}
-		return strings.Join(parts, ", ")
+		return inventoryString(val, decimal.Decimal.String)
 	default:
 		return fmt.Sprintf("%v", v)
 	}
 }
 
-func positionString(p *Position) string {
-	units := fmt.Sprintf("%s %s", p.Units.Number.String(), p.Units.Currency)
+// positionString renders a position as "units {cost, date, "label"}",
+// spelling its numbers with number.
+func positionString(p *Position, number func(decimal.Decimal) string) string {
+	units := number(p.Units.Number) + " " + p.Units.Currency
 	if p.Cost == nil {
 		return units
 	}
-	cost := fmt.Sprintf("%s %s", p.Cost.Number.String(), p.Cost.Currency)
+	cost := number(p.Cost.Number) + " " + p.Cost.Currency
 	if p.Cost.Date != nil {
 		cost += ", " + p.Cost.Date.String()
 	}
@@ -349,4 +346,14 @@ func positionString(p *Position) string {
 		cost += fmt.Sprintf(", \"%s\"", p.Cost.Label)
 	}
 	return fmt.Sprintf("%s {%s}", units, cost)
+}
+
+// inventoryString joins an inventory's positions with ", ".
+func inventoryString(inv *Inventory, number func(decimal.Decimal) string) string {
+	positions := inv.Positions()
+	parts := make([]string, len(positions))
+	for i, p := range positions {
+		parts[i] = positionString(p, number)
+	}
+	return strings.Join(parts, ", ")
 }

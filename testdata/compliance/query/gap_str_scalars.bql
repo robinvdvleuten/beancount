@@ -1,0 +1,1 @@
+SELECT str(number), str(1.50), str(date), str(account)

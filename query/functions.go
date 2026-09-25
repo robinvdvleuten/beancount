@@ -386,7 +386,7 @@ var functions = map[string]*funcDef{
 	// String functions.
 	"str": {overloads: []funcOverload{
 		{[]DType{TAny}, TString, func(_ *Row, args []any) any {
-			return valueString(args[0])
+			return objectString(args[0])
 		}},
 	}},
 	"length": {overloads: []funcOverload{

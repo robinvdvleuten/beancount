@@ -1,0 +1,1 @@
+SELECT account, str(position), str(units(position)), str(cost(position)), str(null), str(2), str(true), str(tags)
