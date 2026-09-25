@@ -69,7 +69,9 @@ type Ledger struct {
 	unusedPads            []*ast.Pad           // superseded pads that inserted no padding
 	syntheticTransactions []*ast.Transaction   // Padding transactions to insert into AST
 	bookedLots            map[*ast.Posting][]BookedLot
-	pendingPostings       map[string][]*AccountPosting // postings applied before their account's open
+	booker                *booker
+	booked                map[*ast.Transaction]*bookedTransaction
+	unopened              map[string]*Account // Accounts posted to before any open
 	display               *DisplayContext
 	priceGraphMu          sync.RWMutex
 	priceGraphs           map[string]*Graph
@@ -112,9 +114,9 @@ func New() *Ledger {
 		pads:        make(map[string]*padState),
 		priceGraphs: make(map[string]*Graph),
 		bookedLots:  make(map[*ast.Posting][]BookedLot),
+		booked:      make(map[*ast.Transaction]*bookedTransaction),
+		unopened:    make(map[string]*Account),
 		display:     newDisplayContext(),
-
-		pendingPostings: make(map[string][]*AccountPosting),
 	}
 }
 
@@ -175,6 +177,11 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		l.display.updateFromDirective(directive)
 	}
 
+	if err := l.book(ctx, tree); err != nil {
+		processTimer.End()
+		return err
+	}
+
 	var validationTimer telemetry.Timer
 	if transactionCount > 0 {
 		validationTimer = collector.StartStructured(telemetry.TimerConfig{
@@ -184,9 +191,6 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		})
 	}
 
-	// Transactions that could not be booked are left out of the processed
-	// AST, like beancount drops them from its entries.
-	dropped := make(map[ast.Directive]bool)
 	for _, directive := range tree.Directives {
 		// Check for cancellation
 		select {
@@ -199,7 +203,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		default:
 		}
 
-		l.processDirective(ctx, directive, dropped)
+		l.processDirective(ctx, directive)
 	}
 
 	if validationTimer != nil {
@@ -226,14 +230,12 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 		// Process synthetic transactions to update inventory.
 		for _, txn := range l.syntheticTransactions {
-			l.processDirective(ctx, txn, dropped)
+			if l.bookTransaction(txn) {
+				l.processDirective(ctx, txn)
+			}
 		}
 
 		insertTimer.End()
-	}
-
-	if len(dropped) > 0 {
-		tree.Directives = slices.DeleteFunc(tree.Directives, func(d ast.Directive) bool { return dropped[d] })
 	}
 
 	// Report pads that inserted no padding, in source order.
@@ -692,9 +694,8 @@ func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *
 }
 
 // processDirective validates a directive, records its errors, and applies
-// its delta if Validate returned one. A transaction without a delta could
-// not be booked and is added to dropped.
-func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive, dropped map[ast.Directive]bool) {
+// its delta if Validate returned one.
+func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	handler := GetHandler(directive.Kind())
 	if handler == nil {
 		// Unknown directive kind - ignore
@@ -703,13 +704,9 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive, 
 
 	errs, delta := handler.Validate(ctx, l, directive)
 	l.errors = append(l.errors, errs...)
-	if delta == nil {
-		if directive.Kind() == ast.KindTransaction {
-			dropped[directive] = true
-		}
-		return
+	if delta != nil {
+		handler.Apply(ctx, l, directive, delta)
 	}
-	handler.Apply(ctx, l, directive, delta)
 }
 
 // applyOpen applies the open delta to the ledger (mutation only)
@@ -732,6 +729,12 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 		Metadata:             delta.Metadata,
 		Inventory:            NewInventory(),
 	}
+	// Postings made before the open keep counting, as in beancount.
+	if early, ok := l.unopened[accountName]; ok {
+		account.Inventory = early.Inventory
+		account.Postings = early.Postings
+		delete(l.unopened, accountName)
+	}
 	node := l.graph.AddNode(accountName, NodeAccount, account)
 	node.Kind = NodeAccount
 	node.Meta = account
@@ -739,15 +742,6 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 
 	// Create implicit parent nodes and hierarchy edges
 	l.ensureAccountHierarchy(accountName)
-
-	// Postings dated before the open were reported but still count, like
-	// beancount's; book them now that the account exists. Their lots were
-	// never checked against an inventory, so one that cannot be booked is
-	// left out rather than treated as a bug.
-	for _, pending := range l.pendingPostings[accountName] {
-		_ = l.applyPosting(account, pending.Transaction, pending.Posting)
-	}
-	delete(l.pendingPostings, accountName)
 }
 
 // ensureAccountHierarchy creates parent nodes and hierarchy edges for an account.
@@ -795,87 +789,28 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 	}
 }
 
-// applyTransaction mutates ledger state (inventory updates) and records posting history.
-// Only called after validation passes. Panics on bugs (invariant violations).
-func (l *Ledger) applyTransaction(txn *ast.Transaction, delta *TransactionDelta) {
-	// The processed AST carries booked postings, like beancount's booked
-	// entries; the source layout (BodyItems) is left as written.
-	if delta.Postings != nil {
-		txn.Postings = delta.Postings
-	}
-	for posting, amount := range delta.InferredAmounts {
-		posting.Amount = amount
-		posting.Inferred = true
-	}
-	for posting, amount := range delta.InferredCosts {
-		posting.Cost.Amount = amount
-		posting.Cost.Inferred = true
-	}
-	for posting, price := range delta.InferredPrices {
-		posting.Price = price
-	}
-
-	for _, posting := range txn.Postings {
-		if posting.Amount == nil {
-			continue
-		}
-
-		accountName := string(posting.Account)
+// applyTransaction replays a booked transaction's lot changes onto its
+// accounts' inventories and records the posting history. A posting to an
+// account that is not open yet is kept for the account's open.
+func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransaction) {
+	for _, bp := range booked.postings {
+		accountName := string(bp.posting.Account)
 		account, ok := l.accounts[accountName]
 		if !ok {
-			// A posting to an account that is not open yet is reported but
-			// still counts, like beancount's; it is booked when the account
-			// opens (never, if it never does).
-			l.pendingPostings[accountName] = append(l.pendingPostings[accountName], &AccountPosting{Transaction: txn, Posting: posting})
-			continue
+			account, ok = l.unopened[accountName]
+			if !ok {
+				account = &Account{Name: bp.posting.Account, Inventory: NewInventory()}
+				l.unopened[accountName] = account
+			}
 		}
-		if err := l.applyPosting(account, txn, posting); err != nil {
-			// This should never happen after validation - panic to catch bugs
-			panic(fmt.Sprintf("BUG: %v after validation", err))
+		for _, change := range bp.changes {
+			account.Inventory.AddLot(bp.commodity, change.amount, change.spec)
 		}
+		account.Postings = append(account.Postings, &AccountPosting{
+			Transaction: txn,
+			Posting:     bp.posting,
+		})
 	}
-}
-
-// applyPosting books a posting into its account's inventory and history.
-func (l *Ledger) applyPosting(account *Account, txn *ast.Transaction, posting *ast.Posting) error {
-	amount, err := ParseAmount(posting.Amount)
-	if err != nil {
-		return fmt.Errorf("amount parsing failed: %w", err)
-	}
-	currency := posting.Amount.Currency
-
-	// Update inventory if posting has cost specification
-	if posting.Cost != nil {
-		lotSpec, err := ParseLotSpec(posting.Cost)
-		if err != nil {
-			return fmt.Errorf("lot spec parsing failed: %w", err)
-		}
-
-		// Convert total cost to per-unit cost for inventory operations
-		if err := normalizeLotSpecForPosting(lotSpec, posting); err != nil {
-			return fmt.Errorf("lot spec normalization failed: %w", err)
-		}
-
-		// Beancount records an acquisition date on every new lot,
-		// defaulting to the transaction date; LIFO/FIFO ordering and
-		// dated lot specs depend on it.
-		booked, err := account.Inventory.Book(currency, amount, lotSpec, account.BookingMethod, txn.Date())
-		if err != nil {
-			return fmt.Errorf("lot booking failed: %w", err)
-		}
-		if len(booked) > 0 {
-			l.bookedLots[posting] = booked
-		}
-	} else {
-		account.Inventory.Add(currency, amount)
-	}
-
-	// Record posting in account history (after mutation for correct ordering)
-	account.Postings = append(account.Postings, &AccountPosting{
-		Transaction: txn,
-		Posting:     posting,
-	})
-	return nil
 }
 
 // padState tracks an account's latest pad. Like beancount's ops/pad.py, a pad

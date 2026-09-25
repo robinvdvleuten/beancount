@@ -27,7 +27,7 @@ The account an import posts to when the Importer cannot say where the money went
 _Avoid_: suspense account, uncategorized account, placeholder
 
 **Plugin**:
-Code named by a `plugin` directive that rewrites the ledger's directives each time the ledger loads, before checks run.
+Code named by a `plugin` directive that rewrites the ledger's directives each time the ledger loads, after Booking and before checks run.
 _Avoid_: extension, hook, importer
 
 **Built-in Plugin**:
@@ -37,7 +37,7 @@ _Avoid_: core plugin, standard plugin
 ### Checking the ledger
 
 **Booking**:
-Matching a transaction's reductions to the lots its accounts already hold, and completing its missing numbers. A transaction whose Booking fails is a Dropped transaction.
+Completing a transaction's postings: matching its reductions to the lots its accounts already hold, completing its missing numbers, and splitting an amount-less posting per currency. It happens once, before Plugins run. A transaction whose Booking fails is a Dropped transaction.
 _Avoid_: lot matching, interpolation (for the whole step)
 
 **Dropped transaction**:

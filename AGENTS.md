@@ -23,17 +23,18 @@ Fuzz with `go test -fuzz=FuzzName -fuzztime=30s ./package`; `make fuzz-promote` 
 
 Library docs: Context7 for third-party dependencies (shopspring/decimal, alecthomas/kong, mattn/go-runewidth); read the source for stdlib and project code.
 
-## Parse → Validate → Apply
+## Parse → Book → Validate → Apply
 
-Each phase owns one job and trusts the one before it.
+Each phase owns one job and trusts the one before it. Booking comes before validation because beancount books before Plugins and checks run ([ADR 0003](docs/adr/0003-booking-before-plugins.md)).
 
 | Phase | Does | Leaves to another phase |
 |-------|------|-------------------------|
 | **Parser** | Parse tokens into AST, report syntax errors | Semantic validation, cross-directive checks, business logic |
-| **Validation** | All semantic checks; compute mutation deltas | Mutating ledger state |
-| **Apply** | Apply the delta Validate returned, compute derived state | Checking correctness |
+| **Booking** | Interpolate missing numbers, match reductions to lots, write booked postings onto the AST, drop transactions that cannot be booked (`ledger/booking.go`, own inventory per account) | Account open/close checks, balance errors, mutating ledger state |
+| **Validation** | All semantic checks on booked directives; compute mutation deltas | Booking, mutating ledger state |
+| **Apply** | Apply the delta Validate returned, compute derived state | Checking correctness, re-planning bookings |
 
-Validate returns its errors and, independently, a delta or nil; Apply runs whenever there is a delta, errors or not. Like beancount, a directive is reported and still applied unless it cannot be booked, so later directives see it instead of reporting follow-on errors. A transaction without a delta is a Dropped transaction and leaves the processed AST. See `docs/adr/0002-apply-directives-that-fail-validation.md`.
+Validate returns its errors and, independently, a delta or nil; Apply runs whenever there is a delta, errors or not. Like beancount, a directive is reported and still applied unless it cannot be booked, so later directives see it instead of reporting follow-on errors. A transaction that cannot be booked is a Dropped transaction: Booking reports it and removes it from the processed AST. See `docs/adr/0002-apply-directives-that-fail-validation.md`.
 
 ## Beancount compliance
 

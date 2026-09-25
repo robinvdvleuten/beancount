@@ -77,14 +77,13 @@ func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Dire
 	txn := d.(*ast.Transaction)
 	cfg := l.config
 	v := newValidator(l.accounts, cfg)
-	errs, delta := v.validateTransaction(ctx, txn)
-	return errs, deltaOf(delta)
+	errs, booked := v.validateTransaction(ctx, txn, l.booked[txn])
+	return errs, deltaOf(booked)
 }
 
 func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	txn := d.(*ast.Transaction)
-	txnDelta := delta.(*TransactionDelta)
-	l.applyTransaction(txn, txnDelta)
+	l.applyTransaction(txn, delta.(*bookedTransaction))
 }
 
 // BalanceHandler processes Balance directives.

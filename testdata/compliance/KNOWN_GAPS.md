@@ -81,6 +81,12 @@ limits:
   ground: an ambiguous reduction under AVERAGE fails in both
   implementations (with different messages), so check exit codes agree.
 
+- **Pad runs after Booking, inside Apply**: beancount's `pad` is a built-in
+  plugin that runs after Booking and before user Plugins. Ours inserts padding
+  while applying balance assertions, after Plugins would run. The padding
+  transactions are the same; only a Plugin that reads them would see a
+  difference.
+
 - **Negative zero** (#408): an interpolated amount rounded to zero from a
   negative residual is `-0.00` in beancount (Python decimal keeps the sign);
   our decimals have no signed zero, so it books and renders as `0.00`, in
