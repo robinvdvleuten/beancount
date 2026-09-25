@@ -1,0 +1,22 @@
+plugin "beancount.plugins.implicit_prices"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock "NONE"
+2020-01-01 open Income:Gains
+
+2020-01-02 * "Buy"
+  Assets:Stock  10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "Sell the same lot"
+  Assets:Stock  -4 HOOL {100 USD}
+  Assets:Cash   400 USD
+
+2020-01-04 * "Sell at another cost"
+  Assets:Stock  -2 HOOL {90 USD}
+  Assets:Cash   180 USD
+
+2020-01-05 * "Sell at a price"
+  Assets:Stock  -1 HOOL {100 USD} @ 130 USD
+  Assets:Cash   130 USD
+  Income:Gains

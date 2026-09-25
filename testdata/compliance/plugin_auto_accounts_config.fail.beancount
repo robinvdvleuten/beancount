@@ -1,0 +1,6 @@
+; auto_accounts takes no configuration; given one, it is not applied.
+plugin "beancount.plugins.auto_accounts" "config"
+
+2020-01-01 * "x"
+  Assets:Cash     10 USD
+  Equity:Opening

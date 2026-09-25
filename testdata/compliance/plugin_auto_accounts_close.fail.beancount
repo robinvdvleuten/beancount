@@ -1,0 +1,9 @@
+; An account closed but never opened is opened on its close date, so a
+; later posting to it is to an inactive account.
+plugin "beancount.plugins.auto_accounts"
+
+2020-01-10 close Assets:Old
+
+2020-01-20 * "After close"
+  Assets:Old     1 USD
+  Equity:Opening

@@ -181,6 +181,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		processTimer.End()
 		return err
 	}
+	l.runPlugins(ctx, tree)
 
 	var validationTimer telemetry.Timer
 	if transactionCount > 0 {

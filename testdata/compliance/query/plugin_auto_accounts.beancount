@@ -1,0 +1,9 @@
+plugin "beancount.plugins.auto_accounts"
+
+2020-01-01 open Assets:Cash
+2020-01-03 note Assets:Other "first use is a note"
+2020-01-10 close Assets:Old
+
+2020-01-05 * "Groceries"
+  Expenses:Food   20 USD
+  Assets:Cash

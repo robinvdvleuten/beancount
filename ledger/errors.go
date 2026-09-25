@@ -948,3 +948,24 @@ func NewInvalidDirectivePriceError(message string, price *ast.Price) *InvalidDir
 		Directive: price,
 	}
 }
+
+// PluginConfigError reports a configuration string given to a Built-in
+// Plugin that takes none. Beancount fails to apply such a plugin; so do we.
+type PluginConfigError struct {
+	Name string
+	Pos  ast.Position
+}
+
+func (e *PluginConfigError) Error() string {
+	return fmt.Sprintf("%s:%d: Plugin %q takes no configuration", e.Pos.Filename, e.Pos.Line, e.Name)
+}
+
+func (e *PluginConfigError) GetPosition() ast.Position {
+	return e.Pos
+}
+
+// NewPluginConfigError creates an error for a plugin directive that passes a
+// configuration to a Built-in Plugin that takes none.
+func NewPluginConfigError(plugin *ast.Plugin) *PluginConfigError {
+	return &PluginConfigError{Name: plugin.Name.String(), Pos: plugin.Position()}
+}

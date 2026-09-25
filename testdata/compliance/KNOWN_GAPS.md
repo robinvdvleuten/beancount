@@ -83,9 +83,10 @@ limits:
 
 - **Pad runs after Booking, inside Apply**: beancount's `pad` is a built-in
   plugin that runs after Booking and before user Plugins. Ours inserts padding
-  while applying balance assertions, after Plugins would run. The padding
-  transactions are the same; only a Plugin that reads them would see a
-  difference.
+  while applying balance assertions, after Plugins run. The padding
+  transactions are the same, and neither supported Plugin sees a difference:
+  a pad directive already names both accounts on its own date, and padding
+  carries no price or cost.
 
 - **Negative zero** (#408): an interpolated amount rounded to zero from a
   negative residual is `-0.00` in beancount (Python decimal keeps the sign);
@@ -113,9 +114,15 @@ limits:
 
 ## Declared non-goals
 
-- **Plugin execution**: `plugin` directives are parsed but never run
-  (official v2 ships 28 plugins; `auto_accounts` and `implicit_prices`
-  change check outcomes for ledgers that rely on them).
+- **Other Built-in Plugins**: of the plugins official v2 ships, only
+  `auto_accounts` and `implicit_prices` run (`plugin_*` fixtures). These are
+  parsed but ignored: `auto`, `book_conversions`, `check_average_cost`,
+  `check_closing`, `check_commodity`, `check_drained`, `close_tree`,
+  `coherent_cost`, `commodity_attr`, `currency_accounts`, `divert_expenses`,
+  `exclude_tag`, `fill_account`, `fix_payees`, `forecast`, `ira_contribs`,
+  `leafonly`, `mark_unverified`, `merge_meta`, `noduplicates`, `nounused`,
+  `onecommodity`, `pedantic`, `sellgains`, `split_expenses`, `tag_pending`,
+  `unique_prices`, `unrealized`. User-written plugins do not run either.
 - **BQL `id` column digests**: ids are unique and stable but hash the
   source location, not the directive contents like `compare.hash_entry`,
   so the hex digests differ from official output.

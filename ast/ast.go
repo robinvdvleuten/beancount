@@ -411,7 +411,9 @@ func SortDirectives(ast *AST) error {
 		return nil
 	}
 
-	// Use pdqsort for better performance when sorting is needed
-	slices.SortFunc(ast.Directives, compareDirectives)
+	// A stable sort keeps directives that compare equal in their current
+	// order, like Python's sorted in beancount: a price a plugin inserted
+	// after its transaction stays after it.
+	slices.SortStableFunc(ast.Directives, compareDirectives)
 	return nil
 }

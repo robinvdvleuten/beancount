@@ -27,7 +27,7 @@ for _, d := range result.AST.Directives {
 }
 ```
 
-> **Not included:** plugins. `plugin` directives are parsed, but they do not run. If your ledger depends on a plugin such as `auto_accounts` or `implicit_prices`, results can differ from `bean-check`.
+> **Plugins:** only the Built-in Plugins `beancount.plugins.auto_accounts` and `beancount.plugins.implicit_prices` run. Other `plugin` directives are parsed but ignored, so a ledger that depends on another plugin can give different results from `bean-check`.
 
 ---
 

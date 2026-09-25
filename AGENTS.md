@@ -23,7 +23,7 @@ Fuzz with `go test -fuzz=FuzzName -fuzztime=30s ./package`; `make fuzz-promote` 
 
 Library docs: Context7 for third-party dependencies (shopspring/decimal, alecthomas/kong, mattn/go-runewidth); read the source for stdlib and project code.
 
-## Parse → Book → Validate → Apply
+## Parse → Book → Plugins → Validate → Apply
 
 Each phase owns one job and trusts the one before it. Booking comes before validation because beancount books before Plugins and checks run ([ADR 0003](docs/adr/0003-booking-before-plugins.md)).
 
@@ -31,6 +31,7 @@ Each phase owns one job and trusts the one before it. Booking comes before valid
 |-------|------|-------------------------|
 | **Parser** | Parse tokens into AST, report syntax errors | Semantic validation, cross-directive checks, business logic |
 | **Booking** | Interpolate missing numbers, match reductions to lots, write booked postings onto the AST, drop transactions that cannot be booked (`ledger/booking.go`, own inventory per account) | Account open/close checks, balance errors, mutating ledger state |
+| **Plugins** | Built-in Plugins rewrite the booked directives, in `plugin` directive order, dispatched through `pluginRegistry` (`ledger/plugins.go`) | Validation, mutating ledger state |
 | **Validation** | All semantic checks on booked directives; compute mutation deltas | Booking, mutating ledger state |
 | **Apply** | Apply the delta Validate returned, compute derived state | Checking correctness, re-planning bookings |
 

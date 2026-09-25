@@ -1,0 +1,6 @@
+; auto_accounts opens accounts but does not hide other errors.
+plugin "beancount.plugins.auto_accounts"
+
+2020-01-01 * "Unbalanced"
+  Assets:Cash     10 USD
+  Equity:Opening  -9 USD
