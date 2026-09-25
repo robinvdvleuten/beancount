@@ -16,6 +16,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
@@ -44,7 +45,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return fmt.Errorf("failed to read file for error context: %w", err)
 	}
 
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
+	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
 		renderer := NewErrorRenderer(sourceContent)
@@ -52,6 +53,12 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return NewCommandError(1)
 	}
 	tree := loadResult.AST
+
+	// Like bean-query, load errors (syntax errors included) are reported and
+	// the rest of the ledger is queried.
+	for _, loadErr := range diagnostic.Errors(loadResult.Diagnostics) {
+		_, _ = fmt.Fprintln(ctx.Stderr, loadErr.Error())
+	}
 
 	// Like bean-query, validation problems are reported but do not prevent
 	// querying the loadable portion of the ledger.
