@@ -828,12 +828,9 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	if padEntry != nil {
 		difference := pydecimal.Sub(expectedAmount, actualAmount)
 		if difference.Abs().GreaterThan(tolerance) {
-			// The padding has the balance amount's precision.
-			decimalPlaces := int32(2)
-			if dotIndex := strings.Index(balance.Amount.Value, "."); dotIndex >= 0 {
-				decimalPlaces = int32(len(balance.Amount.Value) - dotIndex - 1)
-			}
-			delta.Padding = createPaddingTransaction(padEntry, balance, difference.StringFixed(decimalPlaces))
+			// Like beancount, the padding is the difference as the
+			// subtraction leaves it, with its own exponent.
+			delta.Padding = createPaddingTransaction(padEntry, balance, formatInferredNumber(difference))
 
 			// Padding an account from itself posts both legs to it, so
 			// nothing changes and the assertion fails, as in beancount.

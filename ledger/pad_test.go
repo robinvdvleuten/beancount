@@ -304,3 +304,29 @@ func TestPadFillsOnlyTheFirstAssertion(t *testing.T) {
 	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
 	assert.Equal(t, "5", mismatch.Actual)
 }
+
+func TestPaddingKeepsTheDifferencesPrecision(t *testing.T) {
+	// Like beancount, the padding is 5.0 - 1.234 as the subtraction leaves
+	// it, so the account holds exactly the asserted 5.0 USD.
+	source := `
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:O
+2020-01-01 * "deposit"
+  Assets:Cash  1.234 USD
+  Equity:O
+2020-01-02 pad Assets:Cash Equity:O
+2020-01-03 balance Assets:Cash 5.0 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+
+	padding := findPaddingTransactions(tree)
+	assert.Equal(t, 1, len(padding))
+	assert.Equal(t, "3.766", padding[0].Postings[0].Amount.Value)
+	assert.Equal(t, "-3.766", padding[0].Postings[1].Amount.Value)
+
+	cash, ok := l.GetAccount("Assets:Cash")
+	assert.True(t, ok)
+	assert.Equal(t, "5", cash.Inventory.Get("USD").String())
+}

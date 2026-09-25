@@ -1,0 +1,15 @@
+; A padding is the difference as the subtraction leaves it: not rounded to
+; the balance amount's decimals, and without a default precision.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Empty
+2020-01-01 open Equity:O
+
+2020-01-01 * "deposit"
+  Assets:Cash  1.234 USD
+  Equity:O
+
+2020-01-02 pad Assets:Cash Equity:O
+2020-01-03 balance Assets:Cash 5.0 USD
+
+2020-01-02 pad Assets:Empty Equity:O
+2020-01-03 balance Assets:Empty 5 USD
