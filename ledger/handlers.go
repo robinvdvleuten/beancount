@@ -100,17 +100,20 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 		return errs, nil
 	}
 
+	// A currency the account does not allow is reported next to the
+	// assertion's own result, which still counts.
+	if err := v.validateBalanceCurrency(balance); err != nil {
+		errs = append(errs, err)
+	}
+
 	padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
 
 	// A failed assertion is reported and its padding still applies.
 	delta, err := v.calculateBalanceDelta(balance, padEntry)
-	switch {
-	case delta == nil:
-		return []error{err}, nil
-	case err != nil:
-		return []error{err}, delta
+	if err != nil {
+		errs = append(errs, err)
 	}
-	return nil, delta
+	return errs, deltaOf(delta)
 }
 
 func (h *BalanceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {

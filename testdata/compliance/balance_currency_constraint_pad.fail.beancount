@@ -1,0 +1,9 @@
+; A pad still fills a balance assertion in a currency its account does not
+; allow: both assertions are reported, the padding is reported on the pad's
+; line, and neither assertion fails.
+2020-01-01 open Assets:Euro EUR
+2020-01-01 open Equity:O
+
+2020-01-05 pad Assets:Euro Equity:O
+2020-02-01 balance Assets:Euro 5 USD
+2020-03-01 balance Assets:Euro 5 USD

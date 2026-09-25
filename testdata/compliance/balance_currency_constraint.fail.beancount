@@ -1,0 +1,11 @@
+; A balance assertion in a currency its account does not allow is reported,
+; and the assertion is still checked: the posting is reported too, and the
+; balance fails against the 5 USD it applied.
+2020-01-01 open Assets:Euro EUR
+2020-01-01 open Equity:O
+
+2020-01-10 * "x"
+  Assets:Euro  5 USD
+  Equity:O
+
+2020-02-01 balance Assets:Euro 0 USD

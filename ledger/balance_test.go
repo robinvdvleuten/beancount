@@ -2,10 +2,12 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
 
@@ -221,4 +223,25 @@ func TestGetBalanceInPeriod_MultiCurrency(t *testing.T) {
 
 	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(100)))
 	assert.True(t, balance.Get("EUR").Equal(decimal.NewFromInt(50)))
+}
+
+func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {
+	source := `
+2020-01-01 open Assets:Euro EUR
+2020-01-01 open Assets:Any
+
+2020-02-01 balance Assets:Euro 0 USD
+2020-02-01 balance Assets:Euro 0 EUR
+2020-02-01 balance Assets:Any 0 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	var currencyErr *BalanceCurrencyError
+	assert.True(t, errors.As(errs[0], &currencyErr), "got %v", errs[0])
+	assert.Equal(t, "USD", currencyErr.Currency)
+	assert.Equal(t, 5, currencyErr.Position().Line)
 }

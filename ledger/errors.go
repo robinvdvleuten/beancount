@@ -221,6 +221,39 @@ func NewDuplicateCommodityError(commodity *ast.Commodity) *DuplicateCommodityErr
 	}
 }
 
+// BalanceCurrencyError is returned for a balance assertion in a currency its
+// account's constraint list does not allow.
+type BalanceCurrencyError struct {
+	directiveError
+	Account  ast.Account
+	Currency string
+}
+
+func (e *BalanceCurrencyError) Error() string {
+	return fmt.Sprintf("%s: Invalid currency '%s' for Balance directive", e.formatLocation(), e.Currency)
+}
+
+func (e *BalanceCurrencyError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     "BalanceCurrencyError",
+		"message":  e.Error(),
+		"position": e.pos,
+		"account":  string(e.Account),
+		"currency": e.Currency,
+		"date":     e.Date().String(),
+	})
+}
+
+// NewBalanceCurrencyError creates an error for a balance assertion in a
+// currency its account does not allow.
+func NewBalanceCurrencyError(balance *ast.Balance) *BalanceCurrencyError {
+	return &BalanceCurrencyError{
+		directiveError: newDirectiveError(balance),
+		Account:        balance.Account,
+		Currency:       balance.Amount.Currency,
+	}
+}
+
 // NegativeCostError is returned for a posting whose per-unit cost, once
 // booked, is negative.
 type NegativeCostError struct {

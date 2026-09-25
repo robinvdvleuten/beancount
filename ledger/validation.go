@@ -480,6 +480,17 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 	return errs
 }
 
+// validateBalanceCurrency reports a balance assertion in a currency its
+// account's constraint list does not allow. Like beancount, the assertion is
+// still checked.
+func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
+	account := v.accounts[string(balance.Account)]
+	if len(account.ConstraintCurrencies) == 0 || slices.Contains(account.ConstraintCurrencies, balance.Amount.Currency) {
+		return nil
+	}
+	return NewBalanceCurrencyError(balance)
+}
+
 // validatePad checks if a pad directive is valid.
 //
 // It validates that:
@@ -780,14 +791,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 			if dotIndex := strings.Index(balance.Amount.Value, "."); dotIndex >= 0 {
 				decimalPlaces = int32(len(balance.Amount.Value) - dotIndex - 1)
 			}
-			delta.Padding = createPaddingTransaction(
-				padEntry.Date(),
-				balance.Account,
-				padEntry.AccountPad,
-				difference.StringFixed(decimalPlaces),
-				currency,
-				balance.Amount.Value,
-			)
+			delta.Padding = createPaddingTransaction(padEntry, balance, difference.StringFixed(decimalPlaces))
 
 			// Padding an account from itself posts both legs to it, so
 			// nothing changes and the assertion fails, as in beancount.

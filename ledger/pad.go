@@ -90,55 +90,39 @@ func (l *Ledger) applyPadding(ctx context.Context, padding *ast.Transaction) {
 	}
 }
 
-// createPaddingTransaction creates a synthetic transaction for pad directive.
-// The transaction has flag "P" and narration matching official beancount format.
-//
-// Example output:
+// createPaddingTransaction creates the transaction pad inserts to fill
+// balance with difference. Like beancount's, it is dated and positioned at
+// the pad, so its errors are reported on the pad's line, and its flag and
+// narration match beancount's:
 //
 //	2020-01-01 P "(Padding inserted for Balance of 1000.00 USD for difference 1000.00 USD)"
 //	  Assets:Checking         1000.00 USD
 //	  Equity:Opening-Balances -1000.00 USD
-func createPaddingTransaction(
-	date *ast.Date,
-	paddedAccount ast.Account,
-	padSourceAccount ast.Account,
-	differenceStr string,
-	currency string,
-	expectedAmountStr string,
-) *ast.Transaction {
-	// Format narration matching official beancount
-	// Use strings.Builder for efficient string construction
+func createPaddingTransaction(pad *ast.Pad, balance *ast.Balance, difference string) *ast.Transaction {
+	currency := balance.Amount.Currency
 	var narration strings.Builder
 	narration.WriteString("(Padding inserted for Balance of ")
-	narration.WriteString(expectedAmountStr)
+	narration.WriteString(balance.Amount.Value)
 	narration.WriteString(" ")
 	narration.WriteString(currency)
 	narration.WriteString(" for difference ")
-	narration.WriteString(differenceStr)
+	narration.WriteString(difference)
 	narration.WriteString(" ")
 	narration.WriteString(currency)
 	narration.WriteString(")")
 
-	// Calculate negative amount string (preserve formatting)
-	var negDifferenceStr string
-	if strings.HasPrefix(differenceStr, "-") {
-		negDifferenceStr = differenceStr[1:] // Remove minus sign
-	} else {
-		negDifferenceStr = "-" + differenceStr // Add minus sign
+	negated, ok := strings.CutPrefix(difference, "-")
+	if !ok {
+		negated = "-" + difference
 	}
 
-	// Build transaction using AST builders
-	txn := ast.NewTransaction(date, narration.String(),
+	txn := ast.NewTransaction(pad.Date(), narration.String(),
 		ast.WithFlag("P"),
 		ast.WithPostings(
-			ast.NewPosting(paddedAccount,
-				ast.WithAmount(differenceStr, currency),
-			),
-			ast.NewPosting(padSourceAccount,
-				ast.WithAmount(negDifferenceStr, currency),
-			),
+			ast.NewPosting(balance.Account, ast.WithAmount(difference, currency)),
+			ast.NewPosting(pad.AccountPad, ast.WithAmount(negated, currency)),
 		),
 	)
-
+	txn.SetPosition(pad.Position())
 	return txn
 }
