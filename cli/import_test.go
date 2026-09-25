@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -17,14 +18,14 @@ const importLedger = `2024-01-01 open Assets:Checking
 2024-01-01 open Expenses:Food
 `
 
-// buildFixtureImporter builds the importer package's fixture Importer.
-func buildFixtureImporter(t *testing.T) string {
+// buildImporter builds the Importer in pkg.
+func buildImporter(t *testing.T, pkg string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "fixture")
+	path := filepath.Join(t.TempDir(), filepath.Base(pkg))
 	if runtime.GOOS == "windows" {
 		path += ".exe"
 	}
-	out, err := exec.Command("go", "build", "-o", path, "../importer/testdata/fixture").CombinedOutput()
+	out, err := exec.Command("go", "build", "-o", path, pkg).CombinedOutput()
 	assert.NoError(t, err, string(out))
 	return path
 }
@@ -38,7 +39,11 @@ func runImport(t *testing.T, importerPath, ledger, statement string) (string, st
 	statementPath := filepath.Join(dir, statement)
 	assert.NoError(t, os.WriteFile(ledgerPath, []byte(ledger), 0o600))
 	assert.NoError(t, os.WriteFile(statementPath, nil, 0o600))
+	return runImportFiles(t, importerPath, ledgerPath, statementPath)
+}
 
+func runImportFiles(t *testing.T, importerPath, ledgerPath, statementPath string) (string, string, int) {
+	t.Helper()
 	var cmds Commands
 	var stdout, stderr bytes.Buffer
 	parser, err := kong.New(&cmds, kong.Writers(&stdout, &stderr), kong.Bind(&cmds.Globals))
@@ -56,7 +61,7 @@ func runImport(t *testing.T, importerPath, ledger, statement string) (string, st
 }
 
 func TestImportCmd(t *testing.T) {
-	importerPath := buildFixtureImporter(t)
+	importerPath := buildImporter(t, "../importer/testdata/fixture")
 
 	t.Run("PrintsExtractedDirectives", func(t *testing.T) {
 		stdout, stderr, code := runImport(t, importerPath, importLedger, "statement.csv")
@@ -117,4 +122,17 @@ func TestImportCmd(t *testing.T) {
 		assert.Equal(t, "", stdout)
 		assert.Contains(t, stderr, "as a beancount Importer")
 	})
+}
+
+func TestImportCmdCSVExample(t *testing.T) {
+	importerPath := buildImporter(t, "../_examples/csv_importer")
+	dir := "../_examples/csv_importer"
+
+	stdout, stderr, code := runImportFiles(t, importerPath, filepath.Join(dir, "ledger.beancount"), filepath.Join(dir, "transactions.csv"))
+	assert.Equal(t, 0, code, stderr)
+
+	expected, err := os.ReadFile(filepath.Join(dir, "expected.beancount"))
+	assert.NoError(t, err)
+	// Windows checkouts may turn the golden file's newlines into CRLF.
+	assert.Equal(t, strings.ReplaceAll(string(expected), "\r\n", "\n"), stdout)
 }

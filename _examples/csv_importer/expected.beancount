@@ -1,0 +1,59 @@
+2024-01-01 * "Acme Corp Payroll"
+    import-id: "TX-1001"
+    Assets:Checking   3500.00 USD
+    Income:Salary
+
+2024-01-02 * "Whole Foods Market"
+    import-id: "TX-1002"
+    Assets:Checking   -125.43 USD
+    Expenses:Groceries
+
+2024-01-05 * "City Metro Transit"
+    import-id: "TX-1003"
+    Assets:Checking    -45.00 USD
+    Expenses:Transport
+
+2024-01-07 * "Joe's Pizza Restaurant"
+    import-id: "TX-1004"
+    Assets:Checking    -32.50 USD
+    Expenses:Dining
+
+2024-01-10 * "Pacific Gas & Electric"
+    import-id: "TX-1005"
+    Assets:Checking    -89.75 USD
+    Expenses:Utilities
+
+2024-01-12 * "Safeway Grocery"
+    import-id: "TX-1006"
+    Assets:Checking    -67.28 USD
+    Expenses:Groceries
+
+2024-01-15 * "Landlord Monthly Rent"
+    import-id: "TX-1007"
+    Assets:Checking  -1500.00 USD
+    Expenses:Rent
+
+2024-01-18 * "Uber Technologies"
+    import-id: "TX-1008"
+    Assets:Checking    -28.40 USD
+    Expenses:Transport
+
+2024-01-20 * "Trader Joe's Grocery"
+    import-id: "TX-1009"
+    Assets:Checking    -54.92 USD
+    Expenses:Groceries
+
+2024-01-25 * "Downtown Cafe"
+    import-id: "TX-1010"
+    Assets:Checking    -12.75 USD
+    Expenses:Dining
+
+2024-01-28 * "City Water Utility"
+    import-id: "TX-1011"
+    Assets:Checking    -45.50 USD
+    Expenses:Utilities
+
+2024-02-01 * "Acme Corp Payroll"
+    import-id: "TX-1012"
+    Assets:Checking   3500.00 USD
+    Income:Salary

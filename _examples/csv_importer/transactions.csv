@@ -1,13 +1,13 @@
-Date,Payee,Amount
-2024-01-01,Acme Corp Payroll,3500.00
-2024-01-02,Whole Foods Market,-125.43
-2024-01-05,City Metro Transit,-45.00
-2024-01-07,Joe's Pizza Restaurant,-32.50
-2024-01-10,Pacific Gas & Electric,-89.75
-2024-01-12,Safeway Grocery,-67.28
-2024-01-15,Landlord Monthly Rent,-1500.00
-2024-01-18,Uber Technologies,-28.40
-2024-01-20,Trader Joe's Grocery,-54.92
-2024-01-25,Downtown Cafe,-12.75
-2024-01-28,City Water Utility,-45.50
-2024-02-01,Acme Corp Payroll,3500.00
+Date,ID,Payee,Amount
+2024-01-01,TX-1001,Acme Corp Payroll,3500.00
+2024-01-02,TX-1002,Whole Foods Market,-125.43
+2024-01-05,TX-1003,City Metro Transit,-45.00
+2024-01-07,TX-1004,Joe's Pizza Restaurant,-32.50
+2024-01-10,TX-1005,Pacific Gas & Electric,-89.75
+2024-01-12,TX-1006,Safeway Grocery,-67.28
+2024-01-15,TX-1007,Landlord Monthly Rent,-1500.00
+2024-01-18,TX-1008,Uber Technologies,-28.40
+2024-01-20,TX-1009,Trader Joe's Grocery,-54.92
+2024-01-25,TX-1010,Downtown Cafe,-12.75
+2024-01-28,TX-1011,City Water Utility,-45.50
+2024-02-01,TX-1012,Acme Corp Payroll,3500.00
