@@ -250,11 +250,14 @@ func (e *NegativeCostError) MarshalJSON() ([]byte, error) {
 	})
 }
 
-// NewNegativeCostError creates an error for a posting booked at a negative cost.
-func NewNegativeCostError(txn *ast.Transaction, account ast.Account, cost decimal.Decimal, currency string) *NegativeCostError {
+// NewNegativeCostError creates an error for a posting booked at a negative
+// cost. Like beancount, it blames the posting's line.
+func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *NegativeCostError {
+	directiveErr := newDirectiveError(txn)
+	directiveErr.pos = posting.Position()
 	return &NegativeCostError{
-		directiveError: newDirectiveError(txn),
-		Account:        account,
+		directiveError: directiveErr,
+		Account:        posting.Account,
 		Cost:           cost,
 		Currency:       currency,
 	}

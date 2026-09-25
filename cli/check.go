@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/kong"
 
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
@@ -73,6 +74,12 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
 	for _, loadErr := range loadErrors {
+		// A positioned error already starts with "path:line:", which editors
+		// jump to only when it starts the line.
+		if _, ok := loadErr.(interface{ GetPosition() ast.Position }); ok {
+			_, _ = fmt.Fprintln(ctx.Stderr, errorStyle.Render(loadErr.Error()))
+			continue
+		}
 		printError(ctx.Stderr, loadErr.Error())
 	}
 	ast := loadResult.AST

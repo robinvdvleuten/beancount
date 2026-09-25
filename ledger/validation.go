@@ -1745,7 +1745,7 @@ func (v *validator) validateInventoryOperations(txn *ast.Transaction, delta *Tra
 			// spread over the units.
 			booked := &ast.Posting{Amount: amountValue, Cost: costValue}
 			if perUnit, costCurrency, ok := PerUnitCost(booked); ok && perUnit.IsNegative() {
-				costErrs = append(costErrs, NewNegativeCostError(txn, posting.Account, perUnit, costCurrency))
+				costErrs = append(costErrs, NewNegativeCostError(txn, posting, perUnit, costCurrency))
 				continue
 			}
 
