@@ -1,0 +1,1 @@
+SELECT position, convert(position, 'HOOL') AS in_hool, convert(position, 'EUR') AS in_eur, convert(position, 'CHF') AS in_chf, value(position) AS val, getprice('EUR', 'HOOL') AS eur_hool, getprice('USD', 'EUR') AS usd_eur, getprice('USD', 'CHF') AS usd_chf WHERE account ~ '^Assets'

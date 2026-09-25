@@ -319,11 +319,11 @@ var functions = map[string]*funcDef{
 		}},
 		{[]DType{TPosition, TString}, TAmount, func(row *Row, args []any) any {
 			p := args[0].(*Position)
-			return convertAmount(row, &p.Units, args[1].(string), nil)
+			return convertPosition(row, p, args[1].(string), nil)
 		}},
 		{[]DType{TPosition, TString, TDate}, TAmount, func(row *Row, args []any) any {
 			p := args[0].(*Position)
-			return convertAmount(row, &p.Units, args[1].(string), args[2].(*ast.Date))
+			return convertPosition(row, p, args[1].(string), args[2].(*ast.Date))
 		}},
 		{[]DType{TInventory, TString}, TInventory, func(row *Row, args []any) any {
 			return convertInventory(row, args[0].(*Inventory), args[1].(string), nil)
@@ -546,11 +546,34 @@ func convertAmount(row *Row, a *Amount, currency string, date *ast.Date) any {
 	return a
 }
 
+// convertPosition converts a position like beancount's convert_position:
+// at its units' price in the currency, or else through its cost currency,
+// multiplying the units' price in that currency by its price in the target.
+// Without either it is returned as its units.
+func convertPosition(row *Row, p *Position, currency string, date *ast.Date) any {
+	units := &p.Units
+	if units.Currency == currency {
+		return units
+	}
+	date = priceDate(date)
+	if rate, ok := priceLookup(row.Ctx, date, units.Currency, currency); ok {
+		return &Amount{Number: pydecimal.Mul(units.Number, rate), Currency: currency}
+	}
+	if p.Cost != nil && p.Cost.Currency != currency {
+		toCost, ok := priceLookup(row.Ctx, date, units.Currency, p.Cost.Currency)
+		if ok {
+			if toTarget, ok := priceLookup(row.Ctx, date, p.Cost.Currency, currency); ok {
+				return &Amount{Number: pydecimal.Mul(pydecimal.Mul(units.Number, toCost), toTarget), Currency: currency}
+			}
+		}
+	}
+	return units
+}
+
 func convertInventory(row *Row, inv *Inventory, currency string, date *ast.Date) any {
 	result := NewInventory()
 	for _, p := range inv.Positions() {
-		converted := convertAmount(row, &p.Units, currency, date).(*Amount)
-		result.AddAmount(converted)
+		result.AddAmount(convertPosition(row, p, currency, date).(*Amount))
 	}
 	return result
 }

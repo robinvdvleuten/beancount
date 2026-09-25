@@ -295,3 +295,23 @@ func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
 	assert.True(t, strings.HasSuffix(lines[1], "10.25 USD"), lines[1])
 	assert.True(t, strings.HasSuffix(lines[2], "USD   ; Diff: 2.25 USD"), lines[2])
 }
+
+func TestConvertPositionThroughItsCostCurrency(t *testing.T) {
+	// Like beancount's convert_position, a position without a price in the
+	// target converts through its cost currency; a plain amount does not.
+	ctx, tree := newContextFromSource(t, `
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:O
+2020-01-01 price GOOG 3 USD
+2020-01-01 price USD 0.9 CHF
+2020-01-02 * "buy"
+  Assets:Stock  2 GOOG {2 USD}
+  Equity:O
+`)
+	result := runQueryOn(t, ctx, tree, "SELECT convert(position, 'CHF'), convert(units(position), 'CHF') WHERE account = 'Assets:Stock'")
+	assert.Equal(t, 1, len(result.Rows))
+	converted := result.Rows[0][0].(*Amount)
+	assert.Equal(t, "5.4 CHF", converted.Number.String()+" "+converted.Currency)
+	units := result.Rows[0][1].(*Amount)
+	assert.Equal(t, "2 GOOG", units.Number.String()+" "+units.Currency)
+}

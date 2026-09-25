@@ -1130,3 +1130,27 @@ func TestZeroPrice(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "0.25", rate.String())
 }
+
+func TestGetPriceUsesOnlyTheDirectPair(t *testing.T) {
+	// Like beancount's get_price, a pair converts through its own price or
+	// its inverse, never through a third currency.
+	source := `
+2020-01-01 price EUR 2 USD
+2020-01-01 price HOOL 5 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+	date, _ := ast.NewDate("2020-01-02")
+
+	rate, ok := l.GetPrice(date, "EUR", "USD")
+	assert.True(t, ok)
+	assert.Equal(t, "2", rate.String())
+
+	rate, ok = l.GetPrice(date, "USD", "HOOL")
+	assert.True(t, ok)
+	assert.Equal(t, "0.2", rate.String())
+
+	_, ok = l.GetPrice(date, "EUR", "HOOL")
+	assert.False(t, ok)
+}

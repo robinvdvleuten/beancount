@@ -288,34 +288,23 @@ func (l *Ledger) Accounts() map[string]*Account {
 	return result
 }
 
-// GetPrice returns the exchange rate from one currency to another at a given date,
-// using forward-fill semantics (most recent price on or before the date).
-// Returns (rate, found) where found is false if no price exists.
+// GetPrice returns the exchange rate from one currency to another at a given
+// date, using forward-fill semantics (most recent price on or before the
+// date). Like beancount's get_price, only the pair itself or its inverse
+// counts: prices are not chained through other currencies. found is false
+// when neither exists.
 //
 // Same-currency conversions always return 1.0.
 func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (decimal.Decimal, bool) {
-	// Same currency always returns 1.0
 	if fromCurrency == toCurrency {
 		return decimal.NewFromInt(1), true
 	}
-
-	tempGraph := l.forwardFillGraph(date)
-
-	// Find path using the filtered edges
-	path, err := tempGraph.FindPath(fromCurrency, toCurrency, date)
-	if err != nil {
-		return decimal.Zero, false
-	}
-
-	// Multiply rates along the path; a zero price makes the rate zero.
-	result := decimal.NewFromInt(1)
-	for _, edge := range path {
-		if edge.Kind == EdgePrice {
-			result = pydecimal.Mul(result, edge.Weight)
+	for _, edge := range l.forwardFillGraph(date).GetOutgoingEdges(fromCurrency) {
+		if edge.Kind == EdgePrice && edge.To == toCurrency {
+			return edge.Weight, true
 		}
 	}
-
-	return result, true
+	return decimal.Zero, false
 }
 
 func (l *Ledger) forwardFillGraph(date *ast.Date) *Graph {

@@ -1,0 +1,19 @@
+; Like bean-query, conversions use only a currency pair's own price or its
+; inverse: EUR has no price in HOOL or CHF, so it stays unconverted even
+; though both connect through USD. A position held at cost also converts
+; through its cost currency: GOOG {2 USD} reaches CHF through USD.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:O
+
+2020-01-01 price EUR 2 USD
+2020-01-01 price HOOL 5 USD
+2020-01-01 price USD 0.9 CHF
+2020-01-01 price GOOG 3 USD
+
+2020-01-04 * "x"
+  Assets:Cash   2 EUR
+  Assets:Cash   3 USD
+  Assets:Stock  1 HOOL {4 EUR}
+  Assets:Stock  2 GOOG {2 USD}
+  Equity:O

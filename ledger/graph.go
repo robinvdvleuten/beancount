@@ -1,12 +1,10 @@
 package ledger
 
 import (
-	"fmt"
 	"slices"
 	"time"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -22,7 +20,7 @@ import (
 //   - Account edges: opening/closing relationships (metadata-only, no weight)
 //   - Transaction edges: hyperedges connecting multiple postings (not directly stored; handled by inventory)
 //
-// The graph uses an adjacency structure optimized for path finding and currency conversion queries.
+// The graph uses an adjacency structure for price lookups and account hierarchy queries.
 // Prices automatically create bidirectional edges (USD→EUR creates EUR→USD inverse).
 type Graph struct {
 	// nodes maps node ID to node metadata
@@ -194,71 +192,6 @@ func (g *Graph) GetPriceEdgesOnDate(date *ast.Date) []*Edge {
 	return result
 }
 
-// FindPath performs breadth-first search to find a path from source to target node.
-// Used for currency conversion pathfinding (e.g., USD→EUR→GBP).
-//
-// The date parameter enables temporal edge filtering: only edges valid on or before the date are used.
-// Returns the path as a slice of edges in order, or an error if no path exists.
-//
-// Time complexity: O(V + E) where V is nodes and E is edges in the search space.
-// Space complexity: O(V) for queue and visited set.
-func (g *Graph) FindPath(fromID, toID string, date *ast.Date) ([]*Edge, error) {
-	// Same node - identity path
-	if fromID == toID {
-		return []*Edge{}, nil
-	}
-
-	// BFS to find path
-	type queueItem struct {
-		nodeID string
-		edges  []*Edge
-	}
-
-	queue := []queueItem{{nodeID: fromID, edges: []*Edge{}}}
-	visited := make(map[string]bool)
-	visited[fromID] = true
-
-	for len(queue) > 0 {
-		item := queue[0]
-		queue = queue[1:]
-
-		// Explore outgoing edges
-		for _, edge := range g.GetOutgoingEdges(item.nodeID) {
-			// Skip edges invalid for this date
-			if edge.Kind == EdgePrice && !isEdgeValidOnDate(edge, date) {
-				continue
-			}
-
-			targetID := edge.To
-
-			// Found target
-			if targetID == toID {
-				return appendPath(item.edges, edge), nil
-			}
-
-			// Skip visited nodes to avoid cycles
-			if visited[targetID] {
-				continue
-			}
-
-			visited[targetID] = true
-			queue = append(queue, queueItem{
-				nodeID: targetID,
-				edges:  appendPath(item.edges, edge),
-			})
-		}
-	}
-
-	return nil, fmt.Errorf("no path found from %s to %s on %s", fromID, toID, date.String())
-}
-
-func appendPath(path []*Edge, edge *Edge) []*Edge {
-	result := make([]*Edge, len(path)+1)
-	copy(result, path)
-	result[len(path)] = edge
-	return result
-}
-
 // isEdgeValidOnDate checks if an edge is valid on or before the given date.
 // For price edges, this means the edge's date is on or before the lookup date,
 // and the edge is not expired (ValidUntil is after the lookup date).
@@ -278,36 +211,6 @@ func isEdgeValidOnDate(edge *Edge, date *ast.Date) bool {
 	}
 
 	return true
-}
-
-// ConvertAmount converts an amount from one currency to another using price edges.
-// Uses pathfinding to find a conversion path if a direct edge doesn't exist.
-// Returns the converted amount using the most recent prices on or before the date.
-//
-// Same-currency conversions return the original amount.
-// Returns an error if no conversion path exists or if intermediate conversions fail.
-func (g *Graph) ConvertAmount(amount decimal.Decimal, fromCur, toCur string, date *ast.Date) (decimal.Decimal, error) {
-	// Same currency - identity conversion
-	if fromCur == toCur {
-		return amount, nil
-	}
-
-	// Find path from source to target currency
-	path, err := g.FindPath(fromCur, toCur, date)
-	if err != nil {
-		return decimal.Zero, err
-	}
-
-	// Calculate conversion by multiplying all edge weights
-	result := amount
-	for _, edge := range path {
-		if edge.Kind != EdgePrice {
-			return decimal.Zero, fmt.Errorf("invalid price edge in conversion path: %s→%s", edge.From, edge.To)
-		}
-		result = pydecimal.Mul(result, edge.Weight)
-	}
-
-	return result, nil
 }
 
 // GetChildren returns all direct child nodes via hierarchy edges.
