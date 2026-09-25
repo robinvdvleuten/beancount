@@ -260,12 +260,12 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 			}
 
 		case *ast.Balance:
-			if prefix, number, ok := balanceLayout(d); ok {
+			if prefix, number, ok := f.balanceLayout(d); ok {
 				record(runewidth.StringWidth(prefix), number)
 			}
 
 		case *ast.Price:
-			if prefix, number, ok := priceLayout(d); ok {
+			if prefix, number, ok := f.priceLayout(d); ok {
 				record(runewidth.StringWidth(prefix), number)
 			}
 		}
@@ -395,10 +395,12 @@ func (f *Formatter) canPreserveDirectiveLine(lineNum int, date *ast.Date) bool {
 		return false
 	}
 
-	// Check if the line starts with the date (ignoring leading whitespace)
+	// Check if the line starts with the date (ignoring leading whitespace),
+	// spelled with dashes or slashes.
 	dateStr := date.String()
 	trimmedLine := strings.TrimSpace(originalLine)
-	return strings.HasPrefix(trimmedLine, dateStr)
+	return strings.HasPrefix(trimmedLine, dateStr) ||
+		strings.HasPrefix(trimmedLine, strings.ReplaceAll(dateStr, "-", "/"))
 }
 
 // tryPreserveOriginalLine attempts to preserve the original source line for a directive.
@@ -414,7 +416,8 @@ func (f *Formatter) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) b
 	}
 
 	if originalLine := f.getOriginalLine(lineNum); originalLine != "" {
-		trimmedLine := strings.TrimSpace(originalLine)
+		// Trailing whitespace stays, as bean-format keeps it.
+		trimmedLine := strings.TrimLeft(originalLine, " \t")
 		if hasOpenStringLiteral(trimmedLine) {
 			return false
 		}
@@ -480,15 +483,8 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Extract telemetry collector from context
 	collector := telemetry.FromContext(ctx)
 
-	// Determine the currency column based on the configuration
-	widthTimer := collector.Start("formatter.width_calculation")
-	f.resolvedIndent = f.resolveIndent(tree)
-	if f.CurrencyColumn == 0 {
-		f.CurrencyColumn = f.determineCurrencyColumn(tree)
-	}
-	widthTimer.End()
-
-	// Store source lines for preserving original spacing.
+	// Store source lines for preserving original spacing, before the
+	// widths, which read spellings from them.
 	// Must split on \r\n, \r, and \n to match the lexer's lineBreakLenAt semantics.
 	f.sourceLines = ast.SplitSourceLines(string(sourceContent))
 	f.verbatimLines = make(map[int]bool)
@@ -497,6 +493,14 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 		f.linesWithMultipleItems = nil // Clear after formatting
 		f.verbatimLines = nil          // Clear after formatting
 	}()
+
+	// Determine the currency column based on the configuration
+	widthTimer := collector.Start("formatter.width_calculation")
+	f.resolvedIndent = f.resolveIndent(tree)
+	if f.CurrencyColumn == 0 {
+		f.CurrencyColumn = f.determineCurrencyColumn(tree)
+	}
+	widthTimer.End()
 
 	// Use a string builder to buffer all output, then write once
 	var buf strings.Builder
@@ -848,11 +852,11 @@ func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
 
 // balanceLayout splits a balance line into bean-format's aligned prefix
 // and number.
-func balanceLayout(b *ast.Balance) (prefix, number string, ok bool) {
+func (f *Formatter) balanceLayout(b *ast.Balance) (prefix, number string, ok bool) {
 	if b.Amount == nil || balanceCurrency(b) == "" {
 		return "", "", false
 	}
-	return datedAmountLayout(datedHead(b, string(b.Account)), balanceAmountText(b))
+	return datedAmountLayout(f.datedHead(b, string(b.Account)), balanceAmountText(b))
 }
 
 // balanceAmountText spells a balance's amount, with its tolerance, without
@@ -880,8 +884,19 @@ func balanceCurrency(b *ast.Balance) string {
 
 // datedHead spells the start of a dated directive: date, keyword and
 // subject (account or commodity).
-func datedHead(d ast.Directive, subject string) string {
-	return d.Date().String() + " " + string(d.Kind()) + " " + subject
+func (f *Formatter) datedHead(d ast.Directive, subject string) string {
+	return f.dateText(d) + " " + string(d.Kind()) + " " + subject
+}
+
+// dateText spells a directive's date as the source does, with dashes or
+// slashes; without source, with dashes.
+func (f *Formatter) dateText(d ast.Directive) string {
+	date := d.Date().String()
+	slashed := strings.ReplaceAll(date, "-", "/")
+	if strings.HasPrefix(f.getOriginalLine(d.Position().Line), slashed) {
+		return slashed
+	}
+	return date
 }
 
 // formatDatedAmount writes a dated directive that ends in an amount,
@@ -889,7 +904,7 @@ func datedHead(d ast.Directive, subject string) string {
 // (an expression's leading operands, a balance's amount before its
 // tolerance) in the prefix.
 func (f *Formatter) formatDatedAmount(d ast.Directive, subject, text, currency string, buf *strings.Builder) {
-	head := datedHead(d, subject)
+	head := f.datedHead(d, subject)
 	if prefix, number, ok := datedAmountLayout(head, text); ok && currency != "" {
 		buf.WriteString(prefix)
 		padding := f.CurrencyColumn - runewidth.StringWidth(prefix) - runewidth.StringWidth(number) - 2
@@ -995,11 +1010,11 @@ func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
 
 // priceLayout splits a price line into bean-format's aligned prefix and
 // number.
-func priceLayout(p *ast.Price) (prefix, number string, ok bool) {
+func (f *Formatter) priceLayout(p *ast.Price) (prefix, number string, ok bool) {
 	if priceCurrency(p) == "" {
 		return "", "", false
 	}
-	return datedAmountLayout(datedHead(p, p.Commodity), amountDisplayValue(p.Amount))
+	return datedAmountLayout(f.datedHead(p, p.Commodity), amountDisplayValue(p.Amount))
 }
 
 func priceCurrency(p *ast.Price) string {
@@ -1182,7 +1197,15 @@ func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
 
 // formatTransaction formats a transaction directive with proper structure.
 func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) {
-	buf.WriteString(t.Date().String())
+	// bean-format never touches a header line (its pattern cannot cross a
+	// quote), so the header keeps its spelling: txn, slash dates, the order
+	// of tags and links.
+	if line := t.Position().Line; f.canPreserveDirectiveLine(line, t.Date()) && f.tryPreserveOriginalLine(line, buf) {
+		f.formatTransactionBody(t, buf)
+		return
+	}
+
+	buf.WriteString(f.dateText(t))
 	buf.WriteByte(' ')
 	buf.WriteString(t.Flag)
 
@@ -1216,7 +1239,11 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 	}
 
 	buf.WriteByte('\n')
+	f.formatTransactionBody(t, buf)
+}
 
+// formatTransactionBody writes the lines after a transaction's header.
+func (f *Formatter) formatTransactionBody(t *ast.Transaction, buf *strings.Builder) {
 	f.formatLeadingTransactionBody(t, buf)
 
 	if len(t.BodyItems) > 0 {

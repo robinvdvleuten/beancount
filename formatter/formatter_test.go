@@ -1007,7 +1007,8 @@ func TestFormattingIdempotency(t *testing.T) {
 		assert.NoError(t, err)
 
 		formatted1 := buf1.String()
-		assert.Equal(t, "1000-01-01 note A:0 \"\\\"\\n\"\n", formatted1)
+		// Like bean-format, the literal line break stays in the string.
+		assert.Equal(t, "1000-01-01 note A:0 \"\\\"\n\"\n", formatted1)
 
 		ast2 := parser.MustParseString(context.Background(), formatted1)
 		f2 := New()
@@ -1233,4 +1234,20 @@ func TestFormatPreservesCommasInNumbers(t *testing.T) {
 		assert.True(t, strings.Contains(output, "-1,234.56 USD"), "formatter should preserve commas in negative numbers")
 		assert.True(t, strings.Contains(output, "1,234.56 USD"), "formatter should preserve commas in positive numbers")
 	})
+}
+
+func TestFormatKeepsSourceSpelling(t *testing.T) {
+	// bean-format leaves header lines untouched: the txn keyword, slash
+	// dates, the order of tags and links, and literal line breaks in
+	// strings keep their spelling.
+	source := "2020/01/01 open Assets:A\n" +
+		"2020-01-02 txn \"keyword\" #tag1 ^link1 #tag2\n" +
+		"  Assets:A  1.00 USD\n" +
+		"2020/01/03 * \"multi\nline\"\n" +
+		"  Assets:A  1.00 USD\n"
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	var out bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
+	assert.Equal(t, source, out.String())
 }

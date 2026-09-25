@@ -42,8 +42,9 @@ func (f *Formatter) escapeString(s string) string {
 // (raw tokens can't be round-tripped through parsing).
 // Otherwise, quotes and escapes the logical value.
 func (f *Formatter) formatRawString(s ast.RawString, buf *strings.Builder) {
-	// EscapeStyleOriginal: use raw token if available and safe
-	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() && !strings.ContainsAny(s.Raw, "\r\n") {
+	// EscapeStyleOriginal: use the raw token if available, literal line
+	// breaks included, as bean-format leaves them.
+	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() {
 		buf.WriteString(s.Raw)
 		return
 	}

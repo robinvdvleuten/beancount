@@ -29,6 +29,8 @@ limits:
 - On a dated line whose aligned number is not the whole amount (a balance
   tolerance, an expression's last operand), the text before that number
   is re-spelled with single spaces; `bean-format` keeps its spacing.
+- Trailing whitespace on a posting line that gets aligned is dropped;
+  `bean-format` keeps it, as it keeps the rest of such a line.
 
 ## Empirically pinned option behavior
 

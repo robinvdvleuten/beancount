@@ -1,0 +1,11 @@
+2020/01/01 open Assets:A
+2020-01-01 open Expenses:B
+
+2020-01-02 txn "keyword" #tag1 ^link1 #tag2
+  Expenses:B  1.00 USD
+  Assets:A  -1.00 USD
+
+2020/01/03 * "multi
+line narration"
+  Expenses:B  1.00 USD
+  Assets:A  -1.00 USD
