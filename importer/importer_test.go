@@ -85,9 +85,9 @@ func TestExtract(t *testing.T) {
 
 	assert.Equal(t, `2024-01-15 * "Coffee Shop" "Latte"
   import-id: "TX-001"
-  Expenses:Food                       4.50 USD
+  Expenses:Food                      4.50 USD
   Assets:Checking
-2024-01-15 balance Assets:Checking  100.00 USD
+2024-01-16 balance Assets:Checking  -4.50 USD
 `, format(t, directives))
 
 	client.Close()

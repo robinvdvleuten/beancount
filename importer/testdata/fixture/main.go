@@ -28,6 +28,7 @@ func (fixture) Extract(_ context.Context, path string) ([]ast.Directive, error) 
 	fmt.Fprintln(os.Stderr, "stderr line")
 
 	date, _ := ast.NewDate("2024-01-15")
+	nextDay, _ := ast.NewDate("2024-01-16")
 	checking, _ := ast.NewAccount("Assets:Checking")
 	food, _ := ast.NewAccount("Expenses:Food")
 
@@ -36,6 +37,23 @@ func (fixture) Extract(_ context.Context, path string) ([]ast.Directive, error) 
 		return nil, errors.New("statement is truncated")
 	case "wrong-kind":
 		return []ast.Directive{ast.NewPrice(date, "HOOL", ast.NewAmount("1", "USD"))}, nil
+	case "bad-tag":
+		return []ast.Directive{ast.NewTransaction(date, "Latte",
+			ast.WithFlag("*"),
+			ast.WithTags("bad tag"),
+			ast.WithPostings(
+				ast.NewPosting(food, ast.WithAmount("4.50", "USD")),
+				ast.NewPosting(checking),
+			),
+		)}, nil
+	case "unbalanced":
+		return []ast.Directive{ast.NewTransaction(date, "Latte",
+			ast.WithFlag("*"),
+			ast.WithPostings(
+				ast.NewPosting(food, ast.WithAmount("4.50", "USD")),
+				ast.NewPosting(checking, ast.WithAmount("-4.00", "USD")),
+			),
+		)}, nil
 	}
 
 	return []ast.Directive{
@@ -48,7 +66,7 @@ func (fixture) Extract(_ context.Context, path string) ([]ast.Directive, error) 
 				ast.NewPosting(checking),
 			),
 		),
-		ast.NewBalance(date, checking, ast.NewAmount("100.00", "USD")),
+		ast.NewBalance(nextDay, checking, ast.NewAmount("-4.50", "USD")),
 	}, nil
 }
 

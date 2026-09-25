@@ -4,6 +4,7 @@ import (
 	"context"
 	stdErrors "errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"sync"
 
@@ -70,47 +71,11 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
-	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
-		printInfof(ctx.Stderr, "%s", warning)
-	}
-	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
-	mainFile := cmd.File.GetAbsoluteFilename()
-	for _, loadErr := range loadErrors {
-		// A syntax error in the main file is shown in its source context,
-		// like a failed load.
-		if syntaxErr, ok := loadErr.(*parser.ParseError); ok && syntaxErr.Pos.Filename == mainFile {
-			_, _ = fmt.Fprintln(ctx.Stderr, NewErrorRenderer(sourceContent).Render(syntaxErr))
-			continue
-		}
-		// A positioned error already starts with "path:line:", which editors
-		// jump to only when it starts the line.
-		if _, ok := loadErr.(interface{ GetPosition() ast.Position }); ok {
-			_, _ = fmt.Fprintln(ctx.Stderr, errorStyle.Render(loadErr.Error()))
-			continue
-		}
-		printError(ctx.Stderr, loadErr.Error())
-	}
-	ast := loadResult.AST
-
-	l := ledger.New()
-	if err := l.Process(runCtx, ast); err != nil {
-		var validationErrors *ledger.ValidationErrors
-		if stdErrors.As(err, &validationErrors) {
-			renderer := NewErrorRenderer(sourceContent)
-			formatted := renderer.RenderAll(validationErrors.Errors)
-			_, _ = fmt.Fprintln(ctx.Stderr, formatted)
-
-			_, _ = fmt.Fprintln(ctx.Stderr)
-			total := len(validationErrors.Errors) + len(loadErrors)
-			printError(ctx.Stderr, fmt.Sprintf("%d validation error(s) found", total))
-
-			reportTelemetry()
-			return NewCommandError(1)
-		}
+	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, cmd.File.GetAbsoluteFilename(), sourceContent)
+	if err != nil {
 		return err
 	}
-
-	if len(loadErrors) > 0 {
+	if errorCount > 0 {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
@@ -118,4 +83,44 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	printSuccess(ctx.Stdout, "Check passed")
 
 	return nil
+}
+
+// checkLedger prints the load diagnostics, processes the loaded AST and
+// prints its validation errors. sourceContent is mainFile's. It returns how
+// many errors it printed.
+func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadResult, mainFile string, sourceContent []byte) (int, error) {
+	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
+		printInfof(stderr, "%s", warning)
+	}
+	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
+	for _, loadErr := range loadErrors {
+		// A syntax error in the main file is shown in its source context,
+		// like a failed load.
+		if syntaxErr, ok := loadErr.(*parser.ParseError); ok && syntaxErr.Pos.Filename == mainFile {
+			_, _ = fmt.Fprintln(stderr, NewErrorRenderer(sourceContent).Render(syntaxErr))
+			continue
+		}
+		// A positioned error already starts with "path:line:", which editors
+		// jump to only when it starts the line.
+		if _, ok := loadErr.(interface{ GetPosition() ast.Position }); ok {
+			_, _ = fmt.Fprintln(stderr, errorStyle.Render(loadErr.Error()))
+			continue
+		}
+		printError(stderr, loadErr.Error())
+	}
+
+	if err := ledger.New().Process(ctx, loadResult.AST); err != nil {
+		var validationErrors *ledger.ValidationErrors
+		if !stdErrors.As(err, &validationErrors) {
+			return 0, err
+		}
+		renderer := NewErrorRenderer(sourceContent)
+		_, _ = fmt.Fprintln(stderr, renderer.RenderAll(validationErrors.Errors))
+
+		_, _ = fmt.Fprintln(stderr)
+		total := len(validationErrors.Errors) + len(loadErrors)
+		printError(stderr, fmt.Sprintf("%d validation error(s) found", total))
+		return total, nil
+	}
+	return len(loadErrors), nil
 }
