@@ -2,6 +2,66 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.0](https://github.com/robinvdvleuten/beancount/compare/v0.11.0...v0.12.0) (2026-09-25)
+
+
+### Features
+
+* **loader:** support glob patterns in include directives ([#356](https://github.com/robinvdvleuten/beancount/issues/356)) ([08fefd4](https://github.com/robinvdvleuten/beancount/commit/08fefd43a9d0588d18b4af0ad0a36e4a06d0b7cc))
+
+
+### Bug Fixes
+
+* **ast:** apply pushed metadata to transactions only, typed ([86179e5](https://github.com/robinvdvleuten/beancount/commit/86179e55a6a518269a40c7e82fb3a3786a75e4fe)), closes [#413](https://github.com/robinvdvleuten/beancount/issues/413)
+* **ast:** report unbalanced pushtag/pushmeta and pops of absent ones ([3f6218f](https://github.com/robinvdvleuten/beancount/commit/3f6218f498bda06c0d8404b4177113fcb2744407)), closes [#374](https://github.com/robinvdvleuten/beancount/issues/374)
+* **config:** apply options one by one, like beancount ([485e853](https://github.com/robinvdvleuten/beancount/commit/485e853321281bbe1b8fa77777c35b6769b2fe90)), closes [#412](https://github.com/robinvdvleuten/beancount/issues/412)
+* **config:** match the booking_method option case-sensitively ([7a0e707](https://github.com/robinvdvleuten/beancount/commit/7a0e7074ab34dec220816169468abf708758ac43)), closes [#411](https://github.com/robinvdvleuten/beancount/issues/411)
+* **formatter:** align amounts where bean-format's line pattern does ([59b8915](https://github.com/robinvdvleuten/beancount/commit/59b89153017d0fc8269d6cac6a410b28a53ab10c)), closes [#386](https://github.com/robinvdvleuten/beancount/issues/386)
+* **formatter:** keep bean-format's prefix and number widths apart ([1efe215](https://github.com/robinvdvleuten/beancount/commit/1efe215aba53be618fd8d377bbda69eb170d3fb2)), closes [#426](https://github.com/robinvdvleuten/beancount/issues/426)
+* **formatter:** keep comment and whitespace-only lines as written ([6dd1da5](https://github.com/robinvdvleuten/beancount/commit/6dd1da5f8c5bbcf3935d278314918869f7e5167c)), closes [#416](https://github.com/robinvdvleuten/beancount/issues/416)
+* **formatter:** keep posting metadata lines as written ([634d92e](https://github.com/robinvdvleuten/beancount/commit/634d92e7fe11589ce8397df0224c486a0e374b0f)), closes [#425](https://github.com/robinvdvleuten/beancount/issues/425)
+* **formatter:** keep the source spelling of headers, dates and strings ([ecba440](https://github.com/robinvdvleuten/beancount/commit/ecba4405ce4f7fa340522aed6deadb8e13bbb1c3)), closes [#393](https://github.com/robinvdvleuten/beancount/issues/393)
+* **formatter:** leave numbers glued to their currency as written ([e86a78a](https://github.com/robinvdvleuten/beancount/commit/e86a78af08be5fecf2dd6d0fb5e6eec5b3654aa4)), closes [#428](https://github.com/robinvdvleuten/beancount/issues/428)
+* **formatter:** leave postings with incomplete amounts as written ([1e9fba1](https://github.com/robinvdvleuten/beancount/commit/1e9fba144264684dd919ef970522483935702cf2)), closes [#385](https://github.com/robinvdvleuten/beancount/issues/385)
+* **ledger:** a pad from an account to itself does not satisfy a balance ([2146143](https://github.com/robinvdvleuten/beancount/commit/2146143fe7bef83f548a3ba6c68faed53e9b6923)), closes [#376](https://github.com/robinvdvleuten/beancount/issues/376)
+* **ledger:** book an amount-less posting once per residual currency ([7641e38](https://github.com/robinvdvleuten/beancount/commit/7641e380dc023c41d36033bd06ab4173dae8ea34)), closes [#399](https://github.com/robinvdvleuten/beancount/issues/399)
+* **ledger:** book cost-spec reductions only against lots held at cost ([142f50d](https://github.com/robinvdvleuten/beancount/commit/142f50d727d4b013deb48dade07044b6c77d810a)), closes [#409](https://github.com/robinvdvleuten/beancount/issues/409)
+* **ledger:** book postings in beancount's currency-grouped order ([660b584](https://github.com/robinvdvleuten/beancount/commit/660b584d3cd1a8e2e1b5015e201467e02272e12a)), closes [#400](https://github.com/robinvdvleuten/beancount/issues/400)
+* **ledger:** book short positions at cost like beancount ([6d294ab](https://github.com/robinvdvleuten/beancount/commit/6d294ab8bb1c6d7abfa340c31e15dc4a6cfded25)), closes [#378](https://github.com/robinvdvleuten/beancount/issues/378)
+* **ledger:** interpolate missing units from a per-unit cost or price ([7a7c55d](https://github.com/robinvdvleuten/beancount/commit/7a7c55d1e13ec9e3af9461564c82c1ac2d36fd62)), closes [#379](https://github.com/robinvdvleuten/beancount/issues/379)
+* **ledger:** pad each currency once and only count pads that insert padding ([caf3629](https://github.com/robinvdvleuten/beancount/commit/caf3629dbe4247844da2e224ecab640c604f1acf)), closes [#415](https://github.com/robinvdvleuten/beancount/issues/415)
+* **ledger:** print an unused pad's directive only once ([bf2e45f](https://github.com/robinvdvleuten/beancount/commit/bf2e45f3876e52fe03d04edd04a85803b1712a7b)), closes [#391](https://github.com/robinvdvleuten/beancount/issues/391)
+* **ledger:** reject duplicate commodity directives ([b34b4f6](https://github.com/robinvdvleuten/beancount/commit/b34b4f60a4f55604e03de23276a566352ae9b274)), closes [#371](https://github.com/robinvdvleuten/beancount/issues/371)
+* **ledger:** reject postings booked at a negative cost ([089ed40](https://github.com/robinvdvleuten/beancount/commit/089ed40604159d3a4fa57ae3870768bdc13e2d0a)), closes [#372](https://github.com/robinvdvleuten/beancount/issues/372)
+* **ledger:** reject unknown booking methods on open directives ([1cec958](https://github.com/robinvdvleuten/beancount/commit/1cec9581fd50ee257bf7189086d95427104e5c80)), closes [#373](https://github.com/robinvdvleuten/beancount/issues/373)
+* **ledger:** report over-reductions as "not enough lots" ([1fe23ce](https://github.com/robinvdvleuten/beancount/commit/1fe23ceec786a9f3112af2c15d2499d36e52ddb5)), closes [#383](https://github.com/robinvdvleuten/beancount/issues/383)
+* **ledger:** round interpolated amounts to the transaction's tolerance ([288d688](https://github.com/robinvdvleuten/beancount/commit/288d688dde1336589b6f2787ea0c7cdf460c523a)), closes [#404](https://github.com/robinvdvleuten/beancount/issues/404)
+* **ledger:** widen tolerances by cost and price under infer_tolerance_from_cost ([af46ee3](https://github.com/robinvdvleuten/beancount/commit/af46ee3a29785a46f2744313f4a98011f1d839d9)), closes [#406](https://github.com/robinvdvleuten/beancount/issues/406)
+* **loader:** report duplicate includes instead of skipping them silently ([87996e0](https://github.com/robinvdvleuten/beancount/commit/87996e01454714e468b5784d9f8c73a4bd1bd82d)), closes [#375](https://github.com/robinvdvleuten/beancount/issues/375)
+* **parser:** accept tag and link lines in a transaction body ([d6fbd5b](https://github.com/robinvdvleuten/beancount/commit/d6fbd5b430fd2832437a413b7728a98d6d66986a)), closes [#382](https://github.com/robinvdvleuten/beancount/issues/382)
+* **parser:** accept trailing-dot numbers and repeated or spaced signs ([b682730](https://github.com/robinvdvleuten/beancount/commit/b6827301ebd83546fd9751226d15f70932571418)), closes [#381](https://github.com/robinvdvleuten/beancount/issues/381)
+* **parser:** keep org-mode lines as comments instead of dropping them ([249f864](https://github.com/robinvdvleuten/beancount/commit/249f8641e2ef9dfff5776eabb13715a140876722)), closes [#384](https://github.com/robinvdvleuten/beancount/issues/384)
+* **parser:** keep the precision of arithmetic amounts ([ccf1df6](https://github.com/robinvdvleuten/beancount/commit/ccf1df6d8754aba1c1f40a0b2819a350618527d4)), closes [#405](https://github.com/robinvdvleuten/beancount/issues/405)
+* **parser:** read a posting's number only from the posting's line ([30dbb8a](https://github.com/robinvdvleuten/beancount/commit/30dbb8ae41fc9793b3031eb64e93c4f19e0aa4c4)), closes [#427](https://github.com/robinvdvleuten/beancount/issues/427)
+* **parser:** reject indented lines at top level ([02de990](https://github.com/robinvdvleuten/beancount/commit/02de9906c2a0f0f4e721e1aa6e9a95aa3ac8aad4)), closes [#377](https://github.com/robinvdvleuten/beancount/issues/377)
+* **query:** accept a WHERE clause on the BALANCES shortcut ([af80029](https://github.com/robinvdvleuten/beancount/commit/af800291875a871c073aae4dfa7dedb42bc23b75)), closes [#387](https://github.com/robinvdvleuten/beancount/issues/387)
+* **query:** compile each clause in its own environment, like bean-query ([0417bd6](https://github.com/robinvdvleuten/beancount/commit/0417bd6e43fa9490211f5c7d7d0489b116ff3ce9)), closes [#421](https://github.com/robinvdvleuten/beancount/issues/421)
+* **query:** keep inventory positions in insertion order ([ff54dec](https://github.com/robinvdvleuten/beancount/commit/ff54dec2c36db1519e77fc5525e877adb57012d6)), closes [#388](https://github.com/robinvdvleuten/beancount/issues/388)
+* **query:** lex BQL numbers and identifiers like bean-query ([13e7bf0](https://github.com/robinvdvleuten/beancount/commit/13e7bf067665d2c556bb7eec89f62e7057a013a0)), closes [#420](https://github.com/robinvdvleuten/beancount/issues/420)
+* **query:** match bean-query's column names and empty-column widths ([971d45f](https://github.com/robinvdvleuten/beancount/commit/971d45f0699310e9dfd08cca3a62f2a20273fe6b)), closes [#389](https://github.com/robinvdvleuten/beancount/issues/389)
+* **query:** match has_account against every account an entry references ([952eb13](https://github.com/robinvdvleuten/beancount/commit/952eb1379f9efa6ead1273fc88f66094ec2e0a90)), closes [#423](https://github.com/robinvdvleuten/beancount/issues/423)
+* **query:** parse PIVOT BY as column names and reject it at compile time ([c891b36](https://github.com/robinvdvleuten/beancount/commit/c891b3675c04f2df12ea83ba52c1c4664696d596)), closes [#424](https://github.com/robinvdvleuten/beancount/issues/424)
+* **query:** post one equity leg per lot in summarized balances ([d777bea](https://github.com/robinvdvleuten/beancount/commit/d777bea400837528a188cc24458230a8c17d3b31)), closes [#398](https://github.com/robinvdvleuten/beancount/issues/398)
+* **query:** print (empty) for empty results in every output format ([a21bc2d](https://github.com/robinvdvleuten/beancount/commit/a21bc2d220a6e90835f9bca7e5f66b5ba282f6fb)), closes [#402](https://github.com/robinvdvleuten/beancount/issues/402)
+* **query:** reject function arguments like bean-query's fallback classes ([076074a](https://github.com/robinvdvleuten/beancount/commit/076074afdf133c1622dfbbeca42d613cc806c026)), closes [#419](https://github.com/robinvdvleuten/beancount/issues/419)
+* **query:** render metadata values like bean-query's ObjectRenderer ([5f3613f](https://github.com/robinvdvleuten/beancount/commit/5f3613fdcb07516e6d62d6768d2e679c92a89067)), closes [#414](https://github.com/robinvdvleuten/beancount/issues/414)
+* **query:** render numbers at the ledger's display precision ([d359e51](https://github.com/robinvdvleuten/beancount/commit/d359e51de67bc582b20b5dcb78481e5c958d1d0e)), closes [#401](https://github.com/robinvdvleuten/beancount/issues/401)
+* **query:** render set columns like bean-query ([f13214f](https://github.com/robinvdvleuten/beancount/commit/f13214f54ca7b9e8142d1ad7bc37257feaa18425)), closes [#418](https://github.com/robinvdvleuten/beancount/issues/418)
+* **query:** report BQL errors in bean-query's words ([31539a3](https://github.com/robinvdvleuten/beancount/commit/31539a3f3e0d48c01a03d852891f9a52a5c68170)), closes [#390](https://github.com/robinvdvleuten/beancount/issues/390)
+* **query:** reserve a sign column when rendering numbers ([06be44f](https://github.com/robinvdvleuten/beancount/commit/06be44f3fbee64f3993eee0de09d96f658cc0b1c)), closes [#397](https://github.com/robinvdvleuten/beancount/issues/397)
+* **query:** take a posting's per-unit cost from the ledger ([103648e](https://github.com/robinvdvleuten/beancount/commit/103648ecc2a2c45958acccfd3784e624d03c1d2d)), closes [#417](https://github.com/robinvdvleuten/beancount/issues/417)
+* **query:** take booked lots from the ledger instead of re-deriving them ([e2e0408](https://github.com/robinvdvleuten/beancount/commit/e2e040888657bb22686c9dfc3ac5593bc4d8fdbb)), closes [#395](https://github.com/robinvdvleuten/beancount/issues/395) [#396](https://github.com/robinvdvleuten/beancount/issues/396)
+
 ## [0.11.0](https://github.com/robinvdvleuten/beancount/compare/v0.10.0...v0.11.0) (2026-07-11)
 
 
