@@ -39,7 +39,7 @@ Validate returns its errors and, independently, a delta or nil; Apply runs whene
 
 ## Beancount compliance
 
-Validate every change to semantics, parsing, lexing, formatting, or queries against the matching official tool: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Internal refactors and infrastructure changes skip this.
+Validate every change to semantics, parsing, lexing, formatting, or queries against the matching official tool: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Internal refactors and infrastructure changes skip this. CI's test jobs with `compliance-check` set in the matrix (the Linux ones) install beancount 2.3.6 with `pipx`, so the suites below run there too.
 
 **Ledger semantics**: `cli/compliance_test.go` runs every `testdata/compliance/<name>.pass.beancount` / `.fail.beancount` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`) and, for `.fail` fixtures, compares the lines errors are reported on (`path:line:`, ignoring our column). A fixture whose lines differ on purpose or through an open issue goes in `lineGaps` with the reason. Record known divergences in `testdata/compliance/KNOWN_GAPS.md`. An `applied_` fixture holds one directive that is reported but still applied; `TestNoFollowOnErrors` checks that both implementations report exactly that one error, which exit codes cannot show.
 

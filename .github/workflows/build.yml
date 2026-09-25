@@ -20,12 +20,18 @@ jobs:
       matrix:
         go: [~1.26, stable]
         os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            compliance-check: true
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: ${{ matrix.go }}
+      # The compliance suites run against the official tools when they are on PATH.
+      - if: matrix.compliance-check
+        run: pipx install beancount==2.3.6
       - run: go test -tags=dev ./...
 
   build:
