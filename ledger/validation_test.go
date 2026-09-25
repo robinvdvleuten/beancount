@@ -19,6 +19,29 @@ func newTestValidator(accounts map[string]*Account) *validator {
 	return newValidator(accounts, NewConfig())
 }
 
+// newTestBooker returns a booker over the given accounts' inventories and
+// booking methods.
+func newTestBooker(accounts map[string]*Account) *booker {
+	b := newBooker(NewConfig(), nil)
+	for name, account := range accounts {
+		b.inventories[name] = account.Inventory
+		if account.BookingMethod != "" {
+			b.methods[name] = account.BookingMethod
+		}
+	}
+	return b
+}
+
+// bookAndValidate books txn against the accounts' inventories and validates
+// the result, as Process does.
+func bookAndValidate(accounts map[string]*Account, txn *ast.Transaction) ([]error, *bookedTransaction) {
+	booked, errs := newTestBooker(accounts).book(txn)
+	if len(errs) > 0 {
+		return errs, nil
+	}
+	return newTestValidator(accounts).validateTransaction(context.Background(), txn, booked)
+}
+
 func TestValidateDateRange(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -434,8 +457,8 @@ func TestCalculateBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newTestValidator(nil) // calculateBalance doesn't need accounts
-			delta, validation, errs := v.calculateBalance(tt.txn)
+			b := newTestBooker(nil)
+			delta, validation, errs := b.calculateBalance(tt.txn)
 
 			assert.Equal(t, 0, len(errs))
 
@@ -635,8 +658,7 @@ func TestValidateTransaction_Integration(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newTestValidator(accounts)
-			errs, result := v.validateTransaction(context.Background(), tt.txn)
+			errs, result := bookAndValidate(accounts, tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 
@@ -760,6 +782,7 @@ func TestImplicitPostings(t *testing.T) {
 		wantBalanced    bool
 		wantInferred    bool
 		wantInferredAmt string // Expected inferred amount value
+		wantBookedAs    int    // Postings the inferred one is booked as; 1 when zero
 	}{
 		{
 			name: "implicit posting - simple two-way transfer",
@@ -828,6 +851,7 @@ func TestImplicitPostings(t *testing.T) {
 			wantBalanced:    true,
 			wantInferred:    true,
 			wantInferredAmt: "100",
+			wantBookedAs:    2,
 		},
 		{
 			name: "implicit posting - income transaction",
@@ -847,24 +871,23 @@ func TestImplicitPostings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			v := newTestValidator(accounts)
-			errs, result := v.validateTransaction(context.Background(), tt.txn)
+			errs, result := bookAndValidate(accounts, tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs), fmt.Sprintf("errors: %v", errs))
 
 			inferredCount := 0
 			var inferredAmount *ast.Amount
-			if result != nil {
-				inferredCount = len(result.InferredAmounts)
-				for posting, amount := range result.InferredAmounts {
-					assert.False(t, posting.Inferred)
-					assert.True(t, posting.Amount == nil)
-					inferredAmount = amount
+			for _, posting := range tt.txn.Postings {
+				if posting.Inferred {
+					inferredCount++
+					if inferredAmount == nil {
+						inferredAmount = posting.Amount
+					}
 				}
 			}
 
 			if tt.wantInferred {
-				assert.Equal(t, 1, inferredCount, "expected exactly 1 inferred posting")
+				assert.Equal(t, max(tt.wantBookedAs, 1), inferredCount, "inferred postings")
 				if inferredAmount != nil {
 					assert.Equal(t, tt.wantInferredAmt, inferredAmount.Value)
 				}
@@ -920,11 +943,9 @@ func BenchmarkValidateTransaction(b *testing.B) {
 		},
 	}
 
-	v := newTestValidator(accounts)
-
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		v.validateTransaction(context.Background(), txn)
+		bookAndValidate(accounts, txn)
 	}
 }
 
@@ -2045,8 +2066,8 @@ func TestCalculateBalanceDelta(t *testing.T) {
 	}
 }
 
-// TestValidateInventoryOperations tests the validateInventoryOperations() function
-func TestValidateInventoryOperations(t *testing.T) {
+// TestCheckLots tests the booker's checkLots() function
+func TestCheckLots(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-15")
 	checking, _ := ast.NewAccount("Assets:Checking")
 	stock, _ := ast.NewAccount("Assets:Investments:Stock")
@@ -2178,9 +2199,7 @@ func TestValidateInventoryOperations(t *testing.T) {
 				},
 			}
 
-			v := newTestValidator(accounts)
-			costErrs, bookingErrs := v.validateInventoryOperations(tt.txn, tt.delta)
-			errs := append(costErrs, bookingErrs...)
+			errs := newTestBooker(accounts).checkLots(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 
@@ -2395,8 +2414,7 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 			}
 
 			v := newTestValidator(accounts)
-			delta := &TransactionDelta{}
-			errs := v.validateConstraintCurrencies(tt.txn, delta)
+			errs := v.validateConstraintCurrencies(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 		})

@@ -1,0 +1,8 @@
+2020-01-02 * "buy"
+  Assets:Stock  10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "sell"
+  Assets:Stock  -4 HOOL {}
+  Assets:Cash    480 USD
+  Income:Gains

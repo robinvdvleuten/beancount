@@ -166,9 +166,28 @@ func (inv *Inventory) Book(
 	bookingMethod BookingMethod,
 	acquisitionDate *ast.Date,
 ) ([]BookedLot, error) {
+	booked, _, err := inv.book(commodity, amount, spec, bookingMethod, acquisitionDate)
+	return booked, err
+}
+
+// lotChange is one signed change to the lot held at spec. Replaying a
+// booking's changes with AddLot reproduces it on another inventory.
+type lotChange struct {
+	spec   *lotSpec
+	amount decimal.Decimal
+}
+
+// book is Book, also returning the lot changes it made.
+func (inv *Inventory) book(
+	commodity string,
+	amount decimal.Decimal,
+	spec *lotSpec,
+	bookingMethod BookingMethod,
+	acquisitionDate *ast.Date,
+) ([]BookedLot, []lotChange, error) {
 	plan, err := inv.planBooking(commodity, amount, spec, bookingMethod, acquisitionDate)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var booked []BookedLot
@@ -180,8 +199,30 @@ func (inv *Inventory) Book(
 		booked = append(booked, lot)
 	}
 
+	changes := inv.planChanges(plan)
 	inv.applyReduction(plan)
-	return booked, nil
+	return booked, changes, nil
+}
+
+// planChanges lists the lot changes applying plan makes.
+func (inv *Inventory) planChanges(plan *reductionPlan) []lotChange {
+	var changes []lotChange
+	switch {
+	case plan.replaceLots:
+		for _, lot := range inv.lots[plan.commodity] {
+			changes = append(changes, lotChange{spec: lot.Spec, amount: lot.Amount.Neg()})
+		}
+		for _, lot := range plan.replacementLots {
+			changes = append(changes, lotChange{spec: lot.Spec, amount: lot.Amount})
+		}
+	case plan.addAmount != nil:
+		changes = append(changes, lotChange{spec: plan.addSpec, amount: *plan.addAmount})
+	default:
+		for _, reduction := range plan.reductions {
+			changes = append(changes, lotChange{spec: reduction.lot.Spec, amount: reduction.amount})
+		}
+	}
+	return changes
 }
 
 // isReducedBy reports whether adding amount of commodity would reduce the
