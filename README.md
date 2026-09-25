@@ -151,7 +151,7 @@ Keep the ledger in git and review each change as a diff before you commit it.
 
 ## Commands
 
-Every command that takes a file also reads from stdin. To use stdin, leave out the filename or use `-`.
+Every command that takes a file, except `import`, also reads from stdin. To use stdin, leave out the filename or use `-`.
 
 ### `check`: validate a ledger
 
@@ -190,6 +190,22 @@ It supports the full `SELECT` syntax: `FROM` with `OPEN`/`CLOSE`/`CLEAR`, `WHERE
 ```sh
 echo "SELECT payee, narration WHERE 'trip' IN tags" | beancount query ledger.beancount
 ```
+
+### `import`: turn a bank statement into transactions
+
+```sh
+beancount import --with ./my-importer ledger.beancount statement.csv >> ledger.beancount
+```
+
+It runs an Importer, a Go program you build with the [`importer` SDK](#write-an-importer), on the statement. It checks the transactions and balance assertions the Importer returns together with the ledger, and prints them formatted only when the check passes. Otherwise stdout stays empty, and each error gives the line in the printed output, under the statement's name:
+
+```
+statement.csv (extracted):1: Transaction does not balance: (0.5 USD)
+
+✗ 1 validation error(s) found
+```
+
+The command also exits with `1` when the Importer does not recognize the statement or reports an error. Anything the Importer logs goes to stderr.
 
 ### `web`: edit in the browser
 
@@ -281,11 +297,33 @@ formatter.New().FormatTransaction(txn, os.Stdout)
 //     Assets:Checking
 ```
 
-The [CSV importer example](_examples/csv_importer/) is a complete program. It reads a bank CSV, sorts the expenses into categories, and writes out formatted transactions:
+### Write an Importer
+
+An Importer implements `importer.Importer` and serves it from `main`. `beancount import --with` starts the binary and talks to it over a versioned protocol:
+
+```go
+type bank struct{}
+
+func (bank) Identify(ctx context.Context, path string) (bool, error) {
+    return filepath.Ext(path) == ".csv", nil
+}
+
+func (bank) Extract(ctx context.Context, path string) ([]ast.Directive, error) {
+    // Read the statement and build transactions and balance assertions with
+    // the ast builders. An import-id metadata string becomes the Import ID.
+}
+
+func main() {
+    importer.Serve(bank{})
+}
+```
+
+The [CSV importer example](_examples/csv_importer/) is a complete Importer. It reads a bank CSV and sorts the expenses into categories:
 
 ```sh
 cd _examples/csv_importer
-go run main.go transactions.csv
+go build -o csv-importer .
+beancount import --with ./csv-importer ledger.beancount transactions.csv
 ```
 
 For the full API, see the [package docs on pkg.go.dev](https://pkg.go.dev/github.com/robinvdvleuten/beancount).

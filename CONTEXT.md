@@ -7,12 +7,16 @@ A Go implementation of Beancount v2's tools, held to the official tools' behavio
 ### Extending the ledger
 
 **Importer**:
-Code that turns an external file, such as a bank statement, into new transactions to append to the ledger. It runs once per statement.
+Code that turns a Statement into Extracted directives to append to the ledger. It runs once per Statement.
 _Avoid_: plugin, extractor, ingester
 
 **Statement**:
 The external file an Importer reads, such as a bank's CSV or OFX export.
 _Avoid_: import file, source, input
+
+**Extracted directive**:
+A Transaction or Balance assertion an Importer returns for a Statement. It is checked together with the ledger and printed as Beancount text, and its Error lines point at that printed text.
+_Avoid_: imported entry, new directive
 
 **Import ID**:
 The bank's own identifier for a transaction, which an Importer supplies and which is kept in the transaction's `import-id` metadata.

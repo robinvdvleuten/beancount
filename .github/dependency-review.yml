@@ -9,3 +9,4 @@ allow_licenses:
   - LicenseRef-scancode-google-patent-license-golang
   - LGPL-2.1-only
   - MIT
+  - MPL-2.0

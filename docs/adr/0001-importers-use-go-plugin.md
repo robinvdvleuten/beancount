@@ -11,3 +11,4 @@ Importers are Go programs that `beancount import` starts and talks to through Ha
 
 - gRPC and protobuf become dependencies, and the binary grows.
 - Version 1 of the protocol carries only Transactions and Balance assertions. Adding more directive kinds means a new protocol version.
+- A new optional field stays within the current version, following protobuf's compatibility rules. A new directive kind bumps the version even though protobuf would accept it as a new `oneof` arm, because an older `beancount` would silently drop directives it does not know. The host negotiates through go-plugin's `VersionedPlugins`, so it can accept more than one version once a second one exists.
