@@ -68,15 +68,26 @@ func FuzzFormatter(f *testing.F) {
 			return
 		}
 
-		// Property 2: Format(Format(x)) == Format(x) (idempotency)
+		// Property 2: a second pass reaches a fixed point. Like bean-format,
+		// the first pass sizes columns from the source's own indentation
+		// before re-indenting, so mixed indents may still tighten once.
 		var buf2 bytes.Buffer
 		if err := fmtr.Format(ctx, ast2, formatted, &buf2); err != nil {
 			t.Errorf("Second format failed: %v", err)
 			return
 		}
+		ast3, err := parser.ParseBytes(ctx, buf2.Bytes())
+		if err != nil {
+			t.Fatalf("Second format did not reparse: %v\nFormatted: %q", err, buf2.Bytes())
+		}
+		var buf3 bytes.Buffer
+		if err := fmtr.Format(ctx, ast3, buf2.Bytes(), &buf3); err != nil {
+			t.Errorf("Third format failed: %v", err)
+			return
+		}
 
-		if !bytes.Equal(buf.Bytes(), buf2.Bytes()) {
-			t.Errorf("Not idempotent:\nFirst:  %q\nSecond: %q", buf.Bytes(), buf2.Bytes())
+		if !bytes.Equal(buf2.Bytes(), buf3.Bytes()) {
+			t.Errorf("No fixed point after two passes:\nSecond: %q\nThird:  %q", buf2.Bytes(), buf3.Bytes())
 		}
 	})
 }

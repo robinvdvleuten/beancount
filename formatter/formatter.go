@@ -37,19 +37,8 @@ import (
 )
 
 const (
-	// DefaultCurrencyColumn is the fallback column position when no amounts are found
-	// in the input (e.g., empty file). This is NOT the default behavior - the formatter
-	// auto-calculates the currency column from content by default to match bean-format.
-	DefaultCurrencyColumn = 52
-
 	// DefaultIndentation is the default indentation for postings and metadata
 	DefaultIndentation = 4
-
-	// DefaultPrefixWidth is the default width for account names when auto-calculating
-	DefaultPrefixWidth = 40
-
-	// DefaultNumWidth is the default width for numeric values when auto-calculating
-	DefaultNumWidth = 10
 
 	// MinimumSpacing is the minimum number of spaces between account/number and currency
 	MinimumSpacing = 2
@@ -111,6 +100,9 @@ type Formatter struct {
 	// indentationExplicit is true when Indentation was set via WithIndentation;
 	// otherwise the posting indent follows the source (bean-format behavior).
 	indentationExplicit bool
+
+	// columns is the number layout for this Format run.
+	columns columns
 
 	// resolvedIndent is the posting indent used for this Format run: the most
 	// frequent posting indent found in the source (ties broken by the widest,
@@ -226,7 +218,6 @@ func isValidDirective(d ast.Directive) bool {
 type widthMetrics struct {
 	maxPrefixWidth int // Maximum width of account prefix (indentation + flag + account + spacing)
 	maxNumWidth    int // Maximum width of numeric values
-	currencyColumn int // Calculated currency column position
 }
 
 // calculateWidthMetrics performs a single pass through the AST to calculate all width metrics.
@@ -271,51 +262,44 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 		}
 	}
 
-	if metrics.maxPrefixWidth > 0 {
-		metrics.currencyColumn = metrics.maxPrefixWidth + MinimumSpacing + metrics.maxNumWidth + 2
-	}
-
 	return metrics
 }
 
-// calculateCurrencyColumn auto-calculates the currency column from AST content.
-// Returns the default column if no amounts are found.
-func (f *Formatter) calculateCurrencyColumn(tree *ast.AST) int {
-	metrics := f.calculateWidthMetrics(tree)
-	if metrics.currencyColumn > 0 {
-		return metrics.currencyColumn
-	}
-	return DefaultCurrencyColumn
+// columns is the number layout of one formatting run, as bean-format lays
+// out aligned lines: at a fixed currency column when one is configured,
+// otherwise the prefix padded to one width and the number right-aligned to
+// another. The two widths stay apart, since a longer prefix or number
+// overflows its own width without taking space from the other.
+type columns struct {
+	currency       int
+	prefix, number int
 }
 
-// determineCurrencyColumn calculates the currency column based on configuration.
-// Priority: explicit widths (PrefixWidth/NumWidth) > auto-calculated from content > default.
-func (f *Formatter) determineCurrencyColumn(tree *ast.AST) int {
-	// If explicit widths are provided, use those
-	if f.PrefixWidth > 0 || f.NumWidth > 0 {
-		metrics := f.calculateWidthMetrics(tree)
-
-		prefixWidth := f.PrefixWidth
-		if prefixWidth == 0 {
-			prefixWidth = metrics.maxPrefixWidth
-			if prefixWidth == 0 {
-				prefixWidth = DefaultPrefixWidth
-			}
-		}
-
-		numWidth := f.NumWidth
-		if numWidth == 0 {
-			numWidth = metrics.maxNumWidth
-			if numWidth == 0 {
-				numWidth = DefaultNumWidth
-			}
-		}
-
-		return prefixWidth + MinimumSpacing + numWidth + 2
+// resolveColumns computes the layout for tree: the configured currency
+// column, or the configured widths with the content's maxima filling in.
+func (f *Formatter) resolveColumns(tree *ast.AST) columns {
+	if f.CurrencyColumn > 0 {
+		return columns{currency: f.CurrencyColumn}
 	}
+	metrics := f.calculateWidthMetrics(tree)
+	c := columns{prefix: f.PrefixWidth, number: f.NumWidth}
+	if c.prefix == 0 {
+		c.prefix = metrics.maxPrefixWidth
+	}
+	if c.number == 0 {
+		c.number = metrics.maxNumWidth
+	}
+	return c
+}
 
-	// Auto-calculate from content
-	return f.calculateCurrencyColumn(tree)
+// padding returns the spaces between a prefix and a number of the given
+// display widths: bean-format's '{:<W}  {:>N}', or with a currency column,
+// what reaches that column but at least two spaces.
+func (c columns) padding(prefixWidth, numberWidth int) int {
+	if c.currency > 0 {
+		return max(c.currency-prefixWidth-numberWidth-2, MinimumSpacing)
+	}
+	return max(c.prefix-prefixWidth, 0) + MinimumSpacing + max(c.number-numberWidth, 0)
 }
 
 // astItem represents any item in the AST with its position
@@ -497,9 +481,7 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Determine the currency column based on the configuration
 	widthTimer := collector.Start("formatter.width_calculation")
 	f.resolvedIndent = f.resolveIndent(tree)
-	if f.CurrencyColumn == 0 {
-		f.CurrencyColumn = f.determineCurrencyColumn(tree)
-	}
+	f.columns = f.resolveColumns(tree)
 	widthTimer.End()
 
 	// Use a string builder to buffer all output, then write once
@@ -675,14 +657,7 @@ func (f *Formatter) writeTriviaLine(line int, content string, buf *strings.Build
 // This method is useful for rendering individual transactions, such as in error messages.
 // The currency column is calculated from the transaction itself if not explicitly set.
 func (f *Formatter) FormatTransaction(txn *ast.Transaction, w io.Writer) error {
-	// Determine the currency column if not set
-	if f.CurrencyColumn == 0 {
-		// Create a minimal AST with just this transaction to calculate metrics
-		tree := &ast.AST{
-			Directives: []ast.Directive{txn},
-		}
-		f.CurrencyColumn = f.determineCurrencyColumn(tree)
-	}
+	f.columns = f.resolveColumns(&ast.AST{Directives: []ast.Directive{txn}})
 
 	// Use a string builder to buffer output
 	var buf strings.Builder
@@ -907,8 +882,7 @@ func (f *Formatter) formatDatedAmount(d ast.Directive, subject, text, currency s
 	head := f.datedHead(d, subject)
 	if prefix, number, ok := datedAmountLayout(head, text); ok && currency != "" {
 		buf.WriteString(prefix)
-		padding := f.CurrencyColumn - runewidth.StringWidth(prefix) - runewidth.StringWidth(number) - 2
-		buf.WriteString(strings.Repeat(" ", max(padding, MinimumSpacing)))
+		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(prefix), runewidth.StringWidth(number))))
 		buf.WriteString(number)
 		buf.WriteByte(' ')
 		buf.WriteString(currency)
@@ -1510,14 +1484,7 @@ func (f *Formatter) formatAmountAligned(amount *ast.Amount, currentWidth int, bu
 		return
 	}
 
-	// CurrencyColumn is the 1-based column where the currency starts,
-	// matching bean-format's --currency-column semantics.
-	padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(displayValue) - 2
-	if padding < MinimumSpacing {
-		padding = MinimumSpacing
-	}
-
-	buf.WriteString(strings.Repeat(" ", padding))
+	buf.WriteString(strings.Repeat(" ", f.columns.padding(currentWidth, runewidth.StringWidth(displayValue))))
 	buf.WriteString(displayValue)
 	buf.WriteByte(' ')
 	buf.WriteString(amount.Currency)

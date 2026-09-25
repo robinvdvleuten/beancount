@@ -180,105 +180,46 @@ func TestFormat(t *testing.T) {
 		err := f.Format(context.Background(), ast, []byte(source), &buf)
 		assert.NoError(t, err)
 
-		// Should have calculated a currency column
-		assert.True(t, f.CurrencyColumn > 0, "Should have auto-calculated currency column")
+		// The layout is computed per run and not stored in the options.
+		assert.Equal(t, 0, f.CurrencyColumn)
+		assert.Contains(t, buf.String(), "    Assets:Checking  100.00 USD")
 	})
 }
 
-func TestCalculateCurrencyColumn(t *testing.T) {
-	t.Run("EmptyAST", func(t *testing.T) {
-		ast := &ast.AST{}
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-		assert.Equal(t, 52, column, "Should return default column for empty AST")
-	})
+func TestResolveColumns(t *testing.T) {
+	// The widths are bean-format's: the longest prefix and the longest
+	// number among the lines it aligns.
+	for name, tc := range map[string]struct {
+		source string
+		want   columns
+	}{
+		"Empty":     {"", columns{}},
+		"Posting":   {"2021-01-01 * \"T\"\n    Assets:Checking  100.00 USD\n", columns{prefix: 19, number: 6}},
+		"Longest":   {"2021-01-01 * \"T\"\n    Assets:Checking  100.00 USD\n    Expenses:Food:Restaurant  50.00 USD\n", columns{prefix: 28, number: 6}},
+		"Flagged":   {"2021-01-01 * \"T\"\n    ! Assets:Checking  100.00 USD\n", columns{}},
+		"Balance":   {"2021-01-02 balance Assets:US:BofA:Checking  3793.56 USD\n", columns{prefix: 42, number: 7}},
+		"Price":     {"2021-01-01 price VBMPX  170.30 USD\n", columns{prefix: 22, number: 6}},
+		"Tolerance": {"2021-01-02 balance Assets:A  1.00 ~ 0.005 USD\n", columns{prefix: 34, number: 5}},
+	} {
+		tree := parser.MustParseString(context.Background(), tc.source)
+		assert.Equal(t, tc.want, New().resolveColumns(tree), name)
+	}
 
-	t.Run("SinglePosting", func(t *testing.T) {
-		source := `
-2021-01-01 * "Test"
-    Assets:Checking  100.00 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
+	tree := parser.MustParseString(context.Background(), "2021-01-01 price VBMPX  170.30 USD\n")
+	assert.Equal(t, columns{prefix: 40, number: 6}, New(WithPrefixWidth(40)).resolveColumns(tree))
+	assert.Equal(t, columns{currency: 60}, New(WithCurrencyColumn(60), WithPrefixWidth(40)).resolveColumns(tree))
+}
 
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-
-		// Width calculation: 4 (indent) + 15 (Assets:Checking) + 2 (spacing) + 6 (100.00) + 2 (buffer) = 29
-		assert.True(t, column >= 29, "Column should be at least 29")
-	})
-
-	t.Run("MultiplePostingsWithDifferentLengths", func(t *testing.T) {
-		source := `
-2021-01-01 * "Test"
-    Assets:Checking  100.00 USD
-    Expenses:Food:Restaurant  50.00 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-
-		// Should align to the longest: 4 + 24 (Expenses:Food:Restaurant) + 2 + 5 (50.00) + 2 = 37
-		assert.True(t, column >= 37, "Column should accommodate longest account name")
-	})
-
-	t.Run("WithFlaggedPosting", func(t *testing.T) {
-		source := `
-2021-01-01 * "Test"
-    ! Assets:Checking  100.00 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-
-		// Width with flag: 4 + 2 (flag+space) + 15 + 2 + 6 + 2 = 31
-		assert.True(t, column >= 31, "Column should account for flag")
-	})
-
-	t.Run("WithBalanceDirective", func(t *testing.T) {
-		source := `
-2021-01-02 balance Assets:US:BofA:Checking  3793.56 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-
-		// Width: 11 (date) + 8 (balance) + 27 (account) + 2 + 7 (number) + 2 = 57
-		// But let's check what we actually get
-		assert.True(t, column >= 50, "Column should accommodate balance directive, got: %d", column)
-	})
-
-	t.Run("WithPriceDirective", func(t *testing.T) {
-		source := `
-2021-01-01 price VBMPX  170.30 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-
-		// Width: 11 (date) + 6 (price) + 5 (VBMPX) + 2 + 6 (number) + 2 = 32
-		assert.True(t, column >= 32, "Column should accommodate price directive")
-	})
-
-	t.Run("MixedDirectives", func(t *testing.T) {
-		source := `
-2021-01-01 * "Test"
-  Assets:Checking  100.00 USD
-  
-2021-01-02 balance Assets:US:BofA:Checking  3793.56 USD
-2021-01-03 price VBMPX  170.30 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		column := f.calculateCurrencyColumn(ast)
-
-		// Should align to the longest (balance directive in this case)
-		assert.True(t, column >= 50, "Column should accommodate all directive types")
-	})
+func TestColumnsPadding(t *testing.T) {
+	// Like bean-format's '{:<W}  {:>N}', a prefix or number longer than its
+	// width overflows without taking space from the other.
+	c := columns{prefix: 30, number: 6}
+	assert.Equal(t, 2+2, c.padding(28, 6))
+	assert.Equal(t, 2+3, c.padding(34, 3))
+	assert.Equal(t, 2, c.padding(34, 8))
+	// A currency column pads up to it, but at least two spaces.
+	assert.Equal(t, 60-20-6-2, columns{currency: 60}.padding(20, 6))
+	assert.Equal(t, 2, columns{currency: 10}.padding(20, 6))
 }
 
 func TestFormatUsesRawParserSourceOrder(t *testing.T) {
@@ -1074,9 +1015,13 @@ func TestFormatterWidthOptions(t *testing.T) {
 
 		// bean-format renders prefix(40) + 2 spaces + number(12) + 1 space,
 		// putting the currency at 1-based column 56.
-		assert.Equal(t, 56, f.CurrencyColumn)
-
 		output := buf.String()
+		for _, line := range strings.Split(output, "\n") {
+			if strings.Contains(line, "Assets:Bank:Checking") {
+				assert.Equal(t, 55, strings.Index(line, "USD"), line)
+			}
+		}
+
 		assert.Contains(t, output, "Assets:Bank:Checking")
 		assert.Contains(t, output, "USD")
 	})

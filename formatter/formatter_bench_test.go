@@ -193,7 +193,7 @@ func BenchmarkCurrencyColumnCalculation(b *testing.B) {
 	b.ReportAllocs()
 
 	for i := 0; i < b.N; i++ {
-		f.calculateCurrencyColumn(ast)
+		f.resolveColumns(ast)
 	}
 }
 

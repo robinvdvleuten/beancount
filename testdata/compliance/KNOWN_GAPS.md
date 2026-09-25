@@ -12,10 +12,10 @@ None among the `.pass`/`.fail` check fixtures. Every one agrees with
 `bean-check` 2.3.x; the differential suite enforces it.
 
 For BQL, `query/gap_print_*.bql` diverge from `bean-query` in whitespace
-only: PRINT renders through our formatter, whose canonical layout differs
-from the official printer (per-entry number alignment, 2-space metadata
-indent). The content is equivalent beancount text that round-trips through
-`bean-check`.
+only: PRINT renders through our formatter, whose layout differs from the
+official printer (metadata indented by 4 spaces instead of 2, prices not
+padded to the printer's fixed column). The content is equivalent beancount
+text that round-trips through `bean-check`.
 
 `beancount format` re-renders the parsed AST, while `bean-format` only
 rewrites whitespace line by line with one regular expression. The
