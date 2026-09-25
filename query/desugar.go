@@ -2,11 +2,14 @@ package query
 
 import (
 	"context"
+	"errors"
 	"io"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/formatter"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/query/bql"
+	"github.com/shopspring/decimal"
 )
 
 // Desugar rewrites the BALANCES and JOURNAL shortcut statements into the
@@ -119,6 +122,7 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 	}
 
 	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithIndentation(2))
+	differences := balanceDifferences(qctx)
 	var previous ast.DirectiveKind
 	first := true
 	for _, entry := range entries {
@@ -135,8 +139,13 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 			}
 		}
 		previous, first = kind, false
-		if txn, ok := entry.(*ast.Transaction); ok {
-			entry = printedTransaction(qctx, txn)
+		switch d := entry.(type) {
+		case *ast.Transaction:
+			entry = printedTransaction(qctx, d)
+		case *ast.Balance:
+			if difference, ok := differences[d]; ok {
+				entry = printedFailedBalance(d, difference)
+			}
 		}
 		single := &ast.AST{Directives: ast.Directives{entry}}
 		if err := f.Format(ctx, single, nil, w); err != nil {
@@ -144,6 +153,30 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		}
 	}
 	return nil
+}
+
+// balanceDifferences maps each balance assertion that failed to its
+// account's actual amount less the expected one.
+func balanceDifferences(qctx *Context) map[*ast.Balance]decimal.Decimal {
+	differences := make(map[*ast.Balance]decimal.Decimal)
+	for _, err := range qctx.Ledger.Diagnostics() {
+		var mismatch *ledger.BalanceMismatchError
+		if errors.As(err, &mismatch) {
+			if balance, ok := mismatch.Directive().(*ast.Balance); ok {
+				differences[balance] = mismatch.Difference
+			}
+		}
+	}
+	return differences
+}
+
+// printedFailedBalance returns a copy of a failed balance assertion that
+// carries its difference as a comment, like beancount's printer. The
+// formatter writes one space before a comment; bean-query writes three.
+func printedFailedBalance(balance *ast.Balance, difference decimal.Decimal) *ast.Balance {
+	printed := *balance
+	printed.SetComment(&ast.Comment{Content: "  ; Diff: " + numberString(difference) + " " + balance.Amount.Currency})
+	return &printed
 }
 
 // printedTransaction returns a copy of txn holding the postings beancount

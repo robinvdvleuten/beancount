@@ -841,7 +841,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	}
 
 	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
-		return delta, NewBalanceMismatchError(balance, expectedAmount.String(), actualAmount.String(), currency)
+		return delta, NewBalanceMismatchError(balance, expectedAmount, actualAmount)
 	}
 	return delta, nil
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -521,6 +522,9 @@ type BalanceMismatchError struct {
 	Expected string // Expected amount
 	Actual   string // Actual amount in inventory
 	Currency string
+	// Difference is the actual amount less the expected one, like
+	// beancount's diff_amount, with the exponent the subtraction leaves.
+	Difference decimal.Decimal
 }
 
 func (e *BalanceMismatchError) Error() string {
@@ -604,14 +608,16 @@ func NewInvalidAmountError(d ast.Directive, account ast.Account, value string, e
 	}
 }
 
-// NewBalanceMismatchError creates an error for when a balance assertion fails.
-func NewBalanceMismatchError(balance *ast.Balance, expected, actual, currency string) *BalanceMismatchError {
+// NewBalanceMismatchError creates an error for a balance assertion whose
+// account holds actual instead of the expected amount.
+func NewBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Decimal) *BalanceMismatchError {
 	return &BalanceMismatchError{
 		directiveError: newDirectiveError(balance),
 		Account:        balance.Account,
-		Expected:       expected,
-		Actual:         actual,
-		Currency:       currency,
+		Expected:       expected.String(),
+		Actual:         actual.String(),
+		Currency:       balance.Amount.Currency,
+		Difference:     pydecimal.Sub(actual, expected),
 	}
 }
 

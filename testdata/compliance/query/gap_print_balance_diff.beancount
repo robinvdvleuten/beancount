@@ -1,0 +1,13 @@
+; A failed balance assertion prints with its difference, the actual amount
+; less the expected one, as a "; Diff:" comment; a passing one without.
+; Only the balance line's fixed columns differ; see KNOWN_GAPS.md.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:O
+
+2020-01-02 * "x"
+  Assets:Cash  10.25 USD
+  Equity:O
+
+2020-01-03 balance Assets:Cash 12.00 USD
+2020-01-04 balance Assets:Cash 10.25 USD
+2020-01-05 balance Assets:Cash 8 ~ 0.5 USD

@@ -7,6 +7,9 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
 )
@@ -258,4 +261,37 @@ func TestHasAccountMatchesEveryEntryAccount(t *testing.T) {
 	assert.Contains(t, out.String(), "pad Assets:Cash Equity:Opening")
 	assert.NotContains(t, out.String(), "balance")
 	assert.NotContains(t, out.String(), "Expenses:Food")
+}
+
+func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
+	// Like bean-query, a failed assertion carries the actual amount less
+	// the expected one; a passing one carries nothing.
+	source := `
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:O
+2020-01-02 * "x"
+  Assets:Cash  10.25 USD
+  Equity:O
+2020-01-03 balance Assets:Cash 12.00 USD
+2020-01-04 balance Assets:Cash 10.25 USD
+2020-01-05 balance Assets:Cash 8 ~ 0.5 USD
+`
+	tree, err := parser.ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	l := ledger.New()
+	assert.Error(t, l.Process(context.Background(), tree))
+	ctx := &Context{Ledger: l, Config: config.New()}
+
+	stmt, err := bql.Parse("PRINT FROM type = 'balance'")
+	assert.NoError(t, err)
+	compiled, err := CompilePrint(ctx, stmt.(*bql.Print))
+	assert.NoError(t, err)
+	var out strings.Builder
+	assert.NoError(t, ExecutePrint(context.Background(), ctx, tree, compiled, &out))
+
+	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
+	assert.Equal(t, 3, len(lines), out.String())
+	assert.True(t, strings.HasSuffix(lines[0], "12.00 USD   ; Diff: -1.75 USD"), lines[0])
+	assert.True(t, strings.HasSuffix(lines[1], "10.25 USD"), lines[1])
+	assert.True(t, strings.HasSuffix(lines[2], "USD   ; Diff: 2.25 USD"), lines[2])
 }
