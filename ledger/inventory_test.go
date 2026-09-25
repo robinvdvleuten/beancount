@@ -325,7 +325,7 @@ func TestInventoryStringSortsCommodities(t *testing.T) {
 	assert.Equal(t, "{20 EUR, 10 USD}", inv.String())
 }
 
-func TestCanReduceSpecificLot(t *testing.T) {
+func TestPlanSpecificReduction(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-15")
 
 	// Helper to create decimal from string
@@ -451,7 +451,7 @@ func TestCanReduceSpecificLot(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inv := tt.setup()
-			err := inv.canReduceSpecificLot(tt.commodity, tt.amount, tt.spec)
+			_, err := planSpecificReduction(tt.commodity, inv.GetLots(tt.commodity), tt.amount, tt.spec, BookingFIFO)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -465,7 +465,7 @@ func TestCanReduceSpecificLot(t *testing.T) {
 	}
 }
 
-func TestCanReduceWithBooking(t *testing.T) {
+func TestPlanBookingReduction(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-15")
 	date2, _ := ast.NewDate("2024-02-15")
 	date3, _ := ast.NewDate("2024-03-15")
@@ -791,7 +791,7 @@ func TestCanReduceWithBooking(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inv := tt.setup()
-			err := inv.canReduceWithBooking(tt.commodity, tt.amount, tt.bookingMethod)
+			_, err := planBookingReduction(tt.commodity, inv.GetLots(tt.commodity), tt.amount, tt.bookingMethod)
 
 			if tt.wantErr {
 				assert.Error(t, err)

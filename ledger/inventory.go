@@ -504,11 +504,6 @@ func planSpecificReduction(
 	return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
 }
 
-func (inv *Inventory) canReduceSpecificLot(commodity string, amount decimal.Decimal, spec *lotSpec) error {
-	_, err := planSpecificReduction(commodity, inv.lots[commodity], amount, spec, BookingFIFO)
-	return err
-}
-
 func planBookingReduction(
 	commodity string,
 	lots []*lot,
@@ -546,15 +541,6 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 		commodity:  commodity,
 		reductions: reductions,
 	}, nil
-}
-
-func (inv *Inventory) canReduceWithBooking(
-	commodity string,
-	amount decimal.Decimal,
-	bookingMethod BookingMethod,
-) error {
-	_, err := planBookingReduction(commodity, inv.lots[commodity], amount, bookingMethod)
-	return err
 }
 
 func (inv *Inventory) applyReduction(plan *reductionPlan) {

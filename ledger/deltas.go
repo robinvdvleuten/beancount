@@ -16,27 +16,6 @@ import (
 //   - Validation errors are returned separately from deltas
 //   - Deltas can be inspected, logged, or discarded without applying
 
-// LotOpType describes the type of inventory operation
-type LotOpType int
-
-const (
-	LotOpAdd LotOpType = iota
-	LotOpReduceSpecific
-	LotOpReduceFIFO
-	LotOpReduceLIFO
-)
-
-// LotOperation describes a single inventory mutation to perform.
-// NOTE: This is reserved for future enhancement - not populated in current implementation.
-type LotOperation struct {
-	Posting   *ast.Posting
-	Account   string
-	Currency  string
-	Amount    decimal.Decimal
-	Operation LotOpType
-	LotSpec   *lotSpec
-}
-
 // TransactionDelta describes mutations from a transaction.
 // This is a pure data structure describing WHAT TO CHANGE, not validation results.
 type TransactionDelta struct {
@@ -48,8 +27,6 @@ type TransactionDelta struct {
 	// non-zero residual, as a copy of the posting per extra currency, and
 	// drops it when every residual is zero.
 	Postings []*ast.Posting
-	// NOTE: LotOps is reserved for future enhancement - not populated in this implementation
-	// LotOps []LotOperation  // Pre-calculated, validated inventory operations
 }
 
 // balanceValidation holds validation results from balance calculation.
