@@ -114,14 +114,15 @@ func CompilePrint(ctx *Context, p *bql.Print) (*CompiledPrint, error) {
 // ExecutePrint renders the directives passing the FROM filter as beancount
 // text. Like beancount's print_entries, a blank line precedes every
 // transaction and commodity, and every directive of another kind than the
-// one printed before it; postings are indented by two spaces.
+// one printed before it; postings are indented by two spaces. The source's
+// comments are left out, as beancount's parser discards them.
 func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *CompiledPrint, w io.Writer) error {
 	entries := []ast.Directive(tree.Directives)
 	if compiled.From != nil {
 		entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
 
-	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithIndentation(2))
+	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithIndentation(2), formatter.WithPreserveComments(false))
 	differences := balanceDifferences(qctx)
 	var previous ast.DirectiveKind
 	first := true

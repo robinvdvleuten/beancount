@@ -1,0 +1,13 @@
+; print leaves out the source's comments, like bean-query, whose parser
+; discards them.
+2020-01-01 open Assets:Cash ; open comment
+2020-01-01 open Equity:O
+
+2020-01-02 * "x" ; header comment
+  ; body comment
+  Assets:Cash  10 USD ; posting comment
+  Equity:O ; another posting comment
+
+2020-01-04 note Assets:Cash "n" ; note comment
+2020-01-05 event "location" "Home" ; event comment
+2020-01-06 close Equity:O ; close comment

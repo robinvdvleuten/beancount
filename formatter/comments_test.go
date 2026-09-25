@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -302,4 +303,24 @@ func TestFormatKeepsPostingMetadataLinesAsWritten(t *testing.T) {
 	var out bytes.Buffer
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Contains(t, out.String(), "\n    note: \"kept\" ; comment\n     spacing:   4.50\n")
+}
+
+func TestFormatWithoutSourceComments(t *testing.T) {
+	// Without PreserveComments the source's comments are left out, inline
+	// ones included; a comment attached without a position is still written.
+	source := "; standalone\n" +
+		"2020-01-02 * \"x\" ; header\n" +
+		"  Assets:A  1 USD ; posting\n" +
+		"  Assets:B\n" +
+		"2020-01-03 balance Assets:A  1 USD ; balance\n"
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	balance := tree.Directives[1].(*ast.Balance)
+	balance.SetComment(&ast.Comment{Content: "; attached"})
+
+	var out bytes.Buffer
+	assert.NoError(t, New(WithPreserveComments(false)).Format(context.Background(), tree, nil, &out))
+	for _, left := range []string{"standalone", "header", "posting", "; balance"} {
+		assert.NotContains(t, out.String(), left)
+	}
+	assert.Contains(t, out.String(), "1 USD ; attached\n")
 }

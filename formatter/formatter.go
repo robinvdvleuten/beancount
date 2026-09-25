@@ -86,7 +86,9 @@ type Formatter struct {
 	// If 0, a good value is selected automatically from the contents.
 	NumWidth int
 
-	// PreserveComments controls whether comments are preserved during formatting.
+	// PreserveComments controls whether the comments read from the source,
+	// standalone and inline, are written. A comment attached without a
+	// source position, like print's balance Diff, is always written.
 	// Default: true
 	PreserveComments bool
 
@@ -158,7 +160,7 @@ func WithNumWidth(width int) Option {
 	}
 }
 
-// WithPreserveComments enables or disables comment preservation.
+// WithPreserveComments enables or disables writing the source's comments.
 func WithPreserveComments(preserve bool) Option {
 	return func(f *Formatter) {
 		f.PreserveComments = preserve
@@ -724,10 +726,7 @@ func (f *Formatter) formatOption(opt *ast.Option, buf *strings.Builder) {
 	f.formatRawString(opt.Name, buf)
 	buf.WriteByte(' ')
 	f.formatRawString(opt.Value, buf)
-	if opt.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(opt.GetComment().Content)
-	}
+	f.writeInlineComment(opt.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -739,10 +738,7 @@ func (f *Formatter) formatInclude(inc *ast.Include, buf *strings.Builder) {
 
 	buf.WriteString("include ")
 	f.formatRawString(inc.Filename, buf)
-	if inc.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(inc.GetComment().Content)
-	}
+	f.writeInlineComment(inc.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -939,10 +935,7 @@ func (f *Formatter) formatDatedLine(d ast.Directive, line datedLine, buf *string
 		buf.WriteString(line.currency)
 	}
 
-	if d.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(d.GetComment().Content)
-	}
+	f.writeInlineComment(d.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(d.GetMetadata(), buf)
 }
@@ -1077,10 +1070,7 @@ func (f *Formatter) formatQuery(q *ast.Query, buf *strings.Builder) {
 	f.formatRawString(q.Name, buf)
 	buf.WriteByte(' ')
 	f.formatRawString(q.QueryString, buf)
-	if q.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(q.GetComment().Content)
-	}
+	f.writeInlineComment(q.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(q.Metadata, buf)
 }
@@ -1135,10 +1125,7 @@ func (f *Formatter) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 		buf.WriteByte(' ')
 		f.formatRawString(p.Config, buf)
 	}
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
-	}
+	f.writeInlineComment(p.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -1150,10 +1137,7 @@ func (f *Formatter) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
 
 	buf.WriteString("pushtag #")
 	buf.WriteString(string(p.Tag))
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
-	}
+	f.writeInlineComment(p.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -1165,10 +1149,7 @@ func (f *Formatter) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
 
 	buf.WriteString("poptag #")
 	buf.WriteString(string(p.Tag))
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
-	}
+	f.writeInlineComment(p.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -1182,10 +1163,7 @@ func (f *Formatter) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
 	buf.WriteString(p.Key)
 	buf.WriteString(": ")
 	buf.WriteString(p.Value)
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
-	}
+	f.writeInlineComment(p.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -1198,10 +1176,7 @@ func (f *Formatter) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
 	buf.WriteString("popmeta ")
 	buf.WriteString(p.Key)
 	buf.WriteByte(':')
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
-	}
+	f.writeInlineComment(p.GetComment(), buf)
 	buf.WriteByte('\n')
 }
 
@@ -1244,10 +1219,7 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 	}
 
 	// Append inline comment if present
-	if t.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(t.GetComment().Content)
-	}
+	f.writeInlineComment(t.GetComment(), buf)
 
 	buf.WriteByte('\n')
 	f.formatTransactionBody(t, buf)
@@ -1403,15 +1375,22 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	}
 
 	// Append inline comment if present
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
-	}
+	f.writeInlineComment(p.GetComment(), buf)
 
 	buf.WriteByte('\n')
 
 	// Block metadata, on the lines below; kept as written when possible.
 	f.formatMetadata(p.Metadata, buf)
+}
+
+// writeInlineComment writes a comment at the end of a line, unless it was
+// read from the source and PreserveComments is off.
+func (f *Formatter) writeInlineComment(c *ast.Comment, buf *strings.Builder) {
+	if c == nil || !f.PreserveComments && c.Position().Line > 0 {
+		return
+	}
+	buf.WriteByte(' ')
+	buf.WriteString(c.Content)
 }
 
 // alignedNumber is how bean-format's line pattern spells a number it
