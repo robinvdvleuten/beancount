@@ -1570,12 +1570,15 @@ func (f *Formatter) formatCost(cost *ast.Cost, buf *strings.Builder) {
 
 	if cost.Amount != nil {
 		writeSeparator()
-		buf.WriteString(amountDisplayValue(cost.Amount))
-		if cost.Total != nil {
-			buf.WriteString(" # ")
-			buf.WriteString(amountDisplayValue(cost.Total))
+		// A currency-only cost {USD} has no number to write.
+		if cost.HasNumber() {
+			buf.WriteString(amountDisplayValue(cost.Amount))
+			if cost.Total != nil {
+				buf.WriteString(" # ")
+				buf.WriteString(amountDisplayValue(cost.Total))
+			}
+			buf.WriteByte(' ')
 		}
-		buf.WriteByte(' ')
 		buf.WriteString(cost.Amount.Currency)
 	}
 

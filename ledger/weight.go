@@ -32,11 +32,11 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 
 	currency := posting.Amount.Currency
 
-	// Check for cost specification. A cost spec without an amount (empty {},
-	// or date/label-only like {2020-02-01}) has its cost resolved from booked
-	// lots or inferred, so it contributes no weight here.
-	hasExplicitCost := posting.Cost != nil && posting.Cost.Amount != nil
-	hasEmptyCost := posting.Cost != nil && posting.Cost.Amount == nil
+	// Check for cost specification. A cost spec without a number (empty {},
+	// currency-only {USD}, or date/label-only like {2020-02-01}) has its cost
+	// resolved from booked lots or inferred, so it contributes no weight here.
+	hasExplicitCost := posting.Cost.HasNumber()
+	hasEmptyCost := posting.Cost != nil && !hasExplicitCost
 	hasPrice := posting.Price != nil
 
 	var weights weightSet

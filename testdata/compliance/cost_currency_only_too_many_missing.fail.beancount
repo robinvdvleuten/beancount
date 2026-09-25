@@ -1,0 +1,8 @@
+; A currency-only cost's number counts as missing, so the group cannot also
+; complete an amount-less posting.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Two missing numbers"
+  Assets:Stock  2 HOOL {USD}
+  Assets:Cash

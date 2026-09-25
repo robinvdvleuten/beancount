@@ -19,7 +19,7 @@ type lotSpec struct {
 
 // IsEmpty returns true if this is an empty cost specification {}
 func (ls *lotSpec) IsEmpty() bool {
-	return ls.Cost == nil && ls.Date == nil && ls.Label == ""
+	return ls.Cost == nil && ls.CostCurrency == "" && ls.Date == nil && ls.Label == ""
 }
 
 // Equal checks if two lot specs are equal
@@ -137,14 +137,16 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 		Label: cost.Label,
 	}
 
-	// Parse cost amount
+	// Parse cost amount; a currency-only cost {USD} leaves Cost nil.
 	if cost.Amount != nil {
+		spec.CostCurrency = cost.Amount.Currency
+	}
+	if cost.HasNumber() {
 		amount, err := ParseAmount(cost.Amount)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cost amount: %w", err)
 		}
 		spec.Cost = &amount
-		spec.CostCurrency = cost.Amount.Currency
 	}
 
 	return spec, nil

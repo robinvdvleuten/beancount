@@ -220,6 +220,14 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 				cost.Amount = p.amountFromValueToken(valueTok, currTok, isExpression, value)
 			}
 
+		case p.check(IDENT):
+			// A currency without a number leaves the number to Booking
+			// (official grammar: maybe_number CURRENCY).
+			if cost.Amount != nil || cost.Total != nil {
+				return nil, p.error("duplicate cost amount in cost spec")
+			}
+			cost.Amount = ast.NewAmount("", p.internCurrency(p.advance()))
+
 		case p.check(DATE):
 			if cost.Date != nil {
 				return nil, p.error("duplicate date in cost spec")
@@ -243,7 +251,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 			hasLabel = true
 
 		default:
-			return nil, p.error("expected cost amount, date, or label")
+			return nil, p.error("expected cost amount, currency, date, or label")
 		}
 
 		if !p.match(COMMA) {

@@ -216,7 +216,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			inv.Add(currency, amount)
 		} else {
 			// An augmentation whose cost could not be inferred holds no lot.
-			if posting.Cost.Amount == nil && !inv.isReducedBy(currency, amount) {
+			if !posting.Cost.HasNumber() && !inv.isReducedBy(currency, amount) {
 				continue
 			}
 			spec, err := ParseLotSpec(posting.Cost)
@@ -293,7 +293,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup) (*T
 		}
 
 		// Check if this is a cost spec without an amount (returns empty weights)
-		if len(weights) == 0 && posting.Cost != nil && posting.Cost.Amount == nil {
+		if len(weights) == 0 && posting.Cost != nil && !posting.Cost.HasNumber() {
 			// Reductions resolve their weight from the booked lots' cost basis,
 			// matching beancount, which books lots before interpolation. The
 			// spec's date/label (if any) narrows which lots are booked.
@@ -533,21 +533,27 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup) (*T
 				continue
 			}
 
-			if len(balance) == 1 {
-				for currency, residual := range balance {
-					costPerUnit := pydecimal.Quo(residual.Neg(), amount)
-					delta.InferredCosts[posting] = &ast.Amount{
-						Value:    costPerUnit.String(),
-						Currency: currency,
-					}
-
-					totalCost := amount.Mul(costPerUnit)
-					balance[currency] = balance[currency].Add(totalCost)
-				}
-			} else if len(balance) > 1 {
+			if len(balance) > 1 {
 				// Multiple currencies - ambiguous
 				return nil, unbalancedValidation(balance), nil, nil
 			}
+			// The group's residual, zero when nothing else in the group
+			// weighs, as for {USD} next to postings in other currencies.
+			currency := group.currency
+			residual := balance[currency]
+			// A total cost {{USD}} completes its total, like beancount's
+			// number_total; the lot's per-unit cost follows from it.
+			number := residual.Neg()
+			weight := perUnitWeight(amount, number)
+			if !posting.Cost.IsTotal {
+				number = pydecimal.Quo(number, amount)
+				weight = amount.Mul(number)
+			}
+			delta.InferredCosts[posting] = &ast.Amount{
+				Value:    number.String(),
+				Currency: currency,
+			}
+			balance[currency] = residual.Add(weight)
 		}
 	}
 
@@ -600,7 +606,7 @@ func tooManyMissing(group currencyGroup, reducingEmptyCosts, unresolvedEmptyCost
 		if posting.Amount == nil || posting.Amount.Value == "" {
 			n++
 		}
-		if posting.Cost != nil && posting.Cost.Amount == nil && (!reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting]) {
+		if posting.Cost != nil && !posting.Cost.HasNumber() && (!reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting]) {
 			n++
 		}
 		if posting.Price != nil && posting.Price.Value == "" {

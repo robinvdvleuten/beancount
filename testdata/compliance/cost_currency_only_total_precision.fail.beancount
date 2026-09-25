@@ -1,0 +1,11 @@
+; A total cost {{USD}} completes its total; the per-unit cost divides it at
+; 28 digits, so the transaction misses by 1e-26, and a short sale's total
+; keeps its sign.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-02-01 * "buy"
+  Assets:Stock   3 HOOL {{USD}}
+  Assets:Cash   -100 USD
+2020-02-02 * "short"
+  Assets:Stock   -2 HOOL {{USD}}
+  Assets:Cash   100 USD

@@ -214,6 +214,35 @@ func TestParseCost(t *testing.T) {
 			hasError: true,
 		},
 		{
+			name:     "CurrencyOnlyCost",
+			input:    "{USD}",
+			expected: &ast.Cost{Amount: &ast.Amount{Currency: "USD"}},
+		},
+		{
+			name:     "CurrencyOnlyTotalCost",
+			input:    "{{USD}}",
+			expected: &ast.Cost{IsTotal: true, Amount: &ast.Amount{Currency: "USD"}},
+		},
+		{
+			name:  "CurrencyOnlyCostWithDateAndLabel",
+			input: `{2020-01-01, USD, "lot"}`,
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Currency: "USD"},
+				Date:   &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+				Label:  "lot",
+			},
+		},
+		{
+			name:     "CurrencyOnlyCostDuplicatesAmount",
+			input:    "{USD, 100 USD}",
+			hasError: true,
+		},
+		{
+			name:     "HashWithoutCurrency",
+			input:    "{#}",
+			hasError: true,
+		},
+		{
 			name:     "CompoundInsideTotalCost",
 			input:    "{{502.12 # 9.95 USD}}",
 			hasError: true,
