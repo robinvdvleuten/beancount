@@ -2,6 +2,8 @@ package ledger
 
 import (
 	"context"
+	"fmt"
+	"maps"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
@@ -11,11 +13,11 @@ import (
 )
 
 // Booking completes each transaction's postings before Plugins and
-// validation run: it interpolates missing numbers, matches reductions to the
-// lots they reduce, and splits an amount-less posting per currency. Like
-// beancount's booking_full, it keeps its own inventory per account,
-// independent of open directives, and leaves out a transaction whose
-// reductions cannot be matched to lots.
+// validation run, one Currency group at a time: it interpolates missing
+// numbers, matches reductions to the lots they reduce, and splits an
+// amount-less posting per group. Like beancount's booking_full, it keeps its
+// own inventory per account, independent of open directives, and drops a
+// group it cannot book while booking the transaction's other groups.
 
 // booker books transactions in date order. Its embedded validator carries
 // only the configuration, for the tolerance and well-formedness checks.
@@ -74,8 +76,8 @@ func (b *booker) method(account ast.Account) BookingMethod {
 	return defaultBookingMethod(b.fallback)
 }
 
-// book runs Booking over the sorted directives, leaving out transactions
-// whose reductions cannot be matched to lots.
+// book runs Booking over the sorted directives, leaving out Dropped
+// transactions.
 func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 	timer := telemetry.FromContext(ctx).Start("ledger.booking")
 	defer timer.End()
@@ -109,25 +111,25 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 		}
 	}
 	booked, errs := l.booker.book(txn)
-	if len(errs) > 0 {
-		l.errors = append(l.errors, errs...)
+	l.errors = append(l.errors, errs...)
+	if booked == nil {
 		return false
 	}
-	if booked != nil {
-		l.booked[txn] = booked
-		for _, bp := range booked.postings {
-			if len(bp.lots) > 0 {
-				l.bookedLots[bp.posting] = bp.lots
-			}
+	l.booked[txn] = booked
+	for _, bp := range booked.postings {
+		if len(bp.lots) > 0 {
+			l.bookedLots[bp.posting] = bp.lots
 		}
 	}
 	return true
 }
 
-// book books txn. It returns the errors that make txn a Dropped
-// transaction: a date out of range, a malformed number, cost or price,
-// missing numbers that cannot be interpolated, or a reduction that matches no
-// lot or several.
+// book books txn one Currency group at a time. A nil result with errors is a
+// Dropped transaction: a date out of range, a malformed number, cost or
+// price, or postings that cannot be sorted into groups. Otherwise the errors
+// are the Dropped groups (missing numbers that cannot be interpolated, a
+// reduction that matches no lot or several), whose postings leave txn while
+// the other groups are booked.
 func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	if err := validateDateRange(txn.Date()); err != nil {
 		return nil, []error{err}
@@ -139,20 +141,64 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		return nil, malformed
 	}
 
-	delta, balance, errs := b.calculateBalance(txn)
+	groups, errs := b.categorize(txn)
 	if len(errs) > 0 {
 		return nil, errs
 	}
-	if delta == nil {
-		// Missing numbers could not be interpolated.
-		return nil, []error{newNotBalancedError(txn, balance.residuals)}
+
+	delta := &TransactionDelta{
+		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
+		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
+		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
+		Postings:        make([]*ast.Posting, 0, len(txn.Postings)),
+	}
+	residuals := make(map[string]decimal.Decimal)
+	autoBooked := false
+	for _, group := range groups {
+		groupDelta, balance, autoAmounts, groupErrs := b.calculateBalance(txn, group)
+		if len(groupErrs) == 0 && groupDelta == nil {
+			// Missing numbers could not be interpolated.
+			groupErrs = []error{newNotBalancedError(txn, balance.residuals)}
+		}
+		if len(groupErrs) == 0 {
+			groupErrs = b.checkLots(txn, group.postings, groupDelta)
+		}
+		if len(groupErrs) > 0 {
+			errs = append(errs, groupErrs...)
+			continue
+		}
+
+		// The amount-less posting belongs to every group: it is booked once
+		// per amount, as itself the first time and as a copy after that.
+		for _, posting := range group.postings {
+			if posting.Amount != nil || posting.Price != nil {
+				delta.Postings = append(delta.Postings, posting)
+				continue
+			}
+			for _, amount := range autoAmounts {
+				if !autoBooked {
+					autoBooked = true
+					delta.InferredAmounts[posting] = amount
+					delta.Postings = append(delta.Postings, posting)
+					continue
+				}
+				copied := *posting
+				copied.Amount = amount
+				copied.Inferred = true
+				delta.Postings = append(delta.Postings, &copied)
+			}
+			delete(groupDelta.InferredAmounts, posting)
+		}
+		maps.Copy(delta.InferredAmounts, groupDelta.InferredAmounts)
+		maps.Copy(delta.InferredCosts, groupDelta.InferredCosts)
+		maps.Copy(delta.InferredPrices, groupDelta.InferredPrices)
+		for currency, residual := range balance.residuals {
+			residuals[currency] = residuals[currency].Add(residual)
+		}
 	}
 	commitDelta(txn, delta)
-	if errs := b.checkLots(txn); len(errs) > 0 {
-		return nil, errs
-	}
 
-	booked := &bookedTransaction{residuals: balance.residuals}
+	booked := &bookedTransaction{residuals: residuals}
 	for _, posting := range txn.Postings {
 		if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
 			continue
@@ -187,23 +233,21 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			if err != nil {
 				// Two reductions of the same lots in one transaction can
 				// each pass checkLots and still fail together.
-				return nil, []error{newBookingError(txn, posting.Account, err)}
+				return nil, append(errs, newBookingError(txn, posting.Account, err))
 			}
 			bp.changes = changes
 			bp.lots = lots
 		}
 		booked.postings = append(booked.postings, bp)
 	}
-	return booked, nil
+	return booked, errs
 }
 
 // commitDelta writes Booking's results onto the transaction. The processed
 // AST carries booked postings, like beancount's booked entries; the source
 // layout (BodyItems) is left as written.
 func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
-	if delta.Postings != nil {
-		txn.Postings = delta.Postings
-	}
+	txn.Postings = delta.Postings
 	for posting, amount := range delta.InferredAmounts {
 		posting.Amount = amount
 		posting.Inferred = true
@@ -217,12 +261,14 @@ func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
 	}
 }
 
-// calculateBalance computes weights, infers amounts/costs, and checks if transaction balances.
-// Returns delta (mutations), validation (balance state), and errors.
-// This is the core transaction validation logic.
-func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *balanceValidation, []error) {
+// calculateBalance computes a Currency group's weights, infers its missing
+// numbers, and checks whether it balances. It returns the delta (mutations),
+// the balance state, and the amounts the group books its amount-less posting
+// at, which the caller records; a nil delta without errors means the missing
+// numbers could not be interpolated.
+func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
 	var errs []error
-	pc := classifyPostings(txn.Postings)
+	pc := classifyPostings(group.postings)
 
 	// Calculate weights for postings with amounts
 	var allWeights []weightSet
@@ -282,7 +328,11 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 	}
 
 	if len(errs) > 0 {
-		return nil, nil, errs
+		return nil, nil, nil, errs
+	}
+	if first := tooManyMissing(group, reducingEmptyCosts, unresolvedEmptyCosts); first != nil {
+		return nil, nil, nil, []error{NewCurrencyGroupError(txn, first,
+			fmt.Sprintf("Too many missing numbers for currency group '%s'", group.currency))}
 	}
 
 	// Balance the weights
@@ -305,12 +355,12 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 			continue
 		}
 		if len(balance) != 1 {
-			return nil, unbalancedValidation(balance), nil
+			return nil, unbalancedValidation(balance), nil, nil
 		}
 		number, nerr := decimal.NewFromString(posting.Amount.Value)
 		if nerr != nil {
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, nerr))
-			return nil, nil, errs
+			return nil, nil, nil, errs
 		}
 		for currency := range balance {
 			delta.InferredAmounts[posting] = &ast.Amount{
@@ -330,17 +380,17 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		units, uerr := ParseAmount(posting.Amount)
 		if uerr != nil {
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr))
-			return nil, nil, errs
+			return nil, nil, nil, errs
 		}
 		priceNumber, perr := decimal.NewFromString(posting.Price.Value)
 		if perr != nil {
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Price.Value, perr))
-			return nil, nil, errs
+			return nil, nil, nil, errs
 		}
 		currency := posting.Price.Currency
 		if currency == "" {
 			if len(balance) != 1 {
-				return nil, unbalancedValidation(balance), nil
+				return nil, unbalancedValidation(balance), nil, nil
 			}
 			for c := range balance {
 				currency = c
@@ -359,18 +409,20 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 	// prices, or an unresolved cost) are "too many missing numbers".
 	unknowns := len(pc.withoutAmounts) + len(currencyOnlyAmounts) + len(valuelessPrices)
 	if unknowns > 0 && len(unresolvedEmptyCosts) > 0 {
-		return nil, unbalancedValidation(balance), nil
+		return nil, unbalancedValidation(balance), nil, nil
 	}
 	if unknowns > 1 {
-		return nil, unbalancedValidation(balance), nil
+		return nil, unbalancedValidation(balance), nil, nil
 	}
 
 	// Beancount allows at most one posting without an amount per
 	// transaction. It absorbs the residual of every weight currency, so it
 	// is booked once per currency with a non-zero residual, in the order the
 	// currencies first appear.
-	stated := statedUnits(pc.withAmounts)
-	specCostTolerances := b.costTolerances(specToleranceShares(pc.withAmounts))
+	// Like beancount, tolerances come from the whole transaction.
+	withAmounts := classifyPostings(txn.Postings).withAmounts
+	stated := statedUnits(withAmounts)
+	specCostTolerances := b.costTolerances(specToleranceShares(withAmounts))
 	var autoPosting *ast.Posting
 	var autoAmounts []*ast.Amount
 	if len(pc.withoutAmounts) == 1 {
@@ -399,7 +451,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		currency := posting.Amount.Currency
 		weightCurrency, perUnit, total, ok := unitsWeightTerms(posting)
 		if !ok {
-			return nil, unbalancedValidation(balance), nil
+			return nil, unbalancedValidation(balance), nil, nil
 		}
 
 		weight := balance[weightCurrency].Neg()
@@ -427,13 +479,13 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		units, err := ParseAmount(posting.Amount)
 		if err != nil {
 			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
-			return nil, nil, errs
+			return nil, nil, nil, errs
 		}
 
 		currency := posting.Price.Currency
 		if currency == "" {
 			if len(balance) != 1 {
-				return nil, unbalancedValidation(balance), nil
+				return nil, unbalancedValidation(balance), nil, nil
 			}
 			for c := range balance {
 				currency = c
@@ -466,7 +518,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		// Beancount compliance: Cannot infer costs when multiple postings have empty cost specs
 		// This is ambiguous - which posting gets which portion of the residual?
 		if inferableEmptyCosts > 1 {
-			return nil, unbalancedValidation(balance), nil
+			return nil, unbalancedValidation(balance), nil, nil
 		}
 
 		for _, posting := range pc.withEmptyCosts {
@@ -494,7 +546,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 				}
 			} else if len(balance) > 1 {
 				// Multiple currencies - ambiguous
-				return nil, unbalancedValidation(balance), nil
+				return nil, unbalancedValidation(balance), nil, nil
 			}
 		}
 	}
@@ -532,11 +584,37 @@ func (b *booker) calculateBalance(txn *ast.Transaction) (*TransactionDelta, *bal
 		residuals:  residuals,
 	}
 
-	delta.Postings = bookedPostings(txn.Postings, autoPosting, autoAmounts, func(p *ast.Posting) string {
-		return balanceCurrency(p, delta, bookedLots)
-	})
+	return delta, validation, autoAmounts, nil
+}
 
-	return delta, validation, nil
+// tooManyMissing returns the first posting of a Currency group with a missing
+// number when the group has more than one, which beancount cannot
+// interpolate: a missing units number (or no amount at all), a missing cost
+// number other than on a reduction booked against lots, or a missing price
+// number.
+func tooManyMissing(group currencyGroup, reducingEmptyCosts, unresolvedEmptyCosts map[*ast.Posting]bool) *ast.Posting {
+	var first *ast.Posting
+	missing := 0
+	for _, posting := range group.postings {
+		n := 0
+		if posting.Amount == nil || posting.Amount.Value == "" {
+			n++
+		}
+		if posting.Cost != nil && posting.Cost.Amount == nil && (!reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting]) {
+			n++
+		}
+		if posting.Price != nil && posting.Price.Value == "" {
+			n++
+		}
+		if n > 0 && first == nil {
+			first = posting
+		}
+		missing += n
+	}
+	if missing > 1 {
+		return first
+	}
+	return nil
 }
 
 func unbalancedValidation(balance map[string]decimal.Decimal) *balanceValidation {
@@ -595,23 +673,25 @@ func (b *booker) bookedReductions(account ast.Account, cost *ast.Cost, commodity
 	return plan.reductions, true, nil
 }
 
-// checkLots reports cost postings whose reduction the account's lots cannot
-// cover: no matching lot, several, or too few units.
-func (b *booker) checkLots(txn *ast.Transaction) []error {
+// checkLots reports a group's cost postings, completed by delta, whose
+// reduction the account's lots cannot cover: no matching lot, several, or
+// too few units.
+func (b *booker) checkLots(txn *ast.Transaction, postings []*ast.Posting, delta *TransactionDelta) []error {
 	var errs []error
-	for _, posting := range txn.Postings {
-		if posting.Amount == nil || posting.Cost == nil || isIncompleteAmount(posting.Amount) {
+	for _, posting := range postings {
+		units := delta.amountFor(posting)
+		if units == nil || posting.Cost == nil || isIncompleteAmount(units) {
 			continue
 		}
-		amount, err := ParseAmount(posting.Amount)
+		amount, err := ParseAmount(units)
 		if err != nil {
 			continue
 		}
-		lotSpec, err := ParseLotSpec(posting.Cost)
+		lotSpec, err := ParseLotSpec(delta.costFor(posting))
 		if err != nil {
 			continue
 		}
-		if err := b.inventory(posting.Account).CanBook(posting.Amount.Currency, amount, lotSpec, b.method(posting.Account)); err != nil {
+		if err := b.inventory(posting.Account).CanBook(units.Currency, amount, lotSpec, b.method(posting.Account)); err != nil {
 			errs = append(errs, newBookingError(txn, posting.Account, err))
 		}
 	}

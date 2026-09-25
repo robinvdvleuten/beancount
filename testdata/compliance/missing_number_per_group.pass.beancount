@@ -1,0 +1,13 @@
+; Each currency group may leave out one number of its own.
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+2020-01-01 open Expenses:D
+
+2020-01-02 * "One missing number per currency group"
+  Assets:A   -10.00 USD
+  Expenses:B        USD
+  Assets:A    -5.00 EUR
+  Expenses:D        EUR
+
+2020-01-03 balance Expenses:B 10.00 USD
+2020-01-03 balance Expenses:D  5.00 EUR

@@ -46,7 +46,7 @@ func TestBookingKeepsTransactionsThatFailValidation(t *testing.T) {
 	assert.True(t, errors.As(errs[1], &notOpen), "got %v", errs[1])
 }
 
-func TestBookingDropsTransactionsThatFailBooking(t *testing.T) {
+func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 	source := `
 2020-01-01 open Assets:Cash
 2020-01-01 open Assets:Stock
@@ -68,11 +68,12 @@ func TestBookingDropsTransactionsThatFailBooking(t *testing.T) {
 	var insufficient *InsufficientInventoryError
 	assert.True(t, errors.As(errs[0], &insufficient), "got %v", errs[0])
 
-	var narrations []string
+	// Like beancount, the transaction stays without its only group's postings.
+	postings := map[string]int{}
 	for _, d := range tree.Directives {
 		if txn, ok := d.(*ast.Transaction); ok {
-			narrations = append(narrations, txn.Narration.String())
+			postings[txn.Narration.String()] = len(txn.Postings)
 		}
 	}
-	assert.Equal(t, []string{"buy"}, narrations)
+	assert.Equal(t, map[string]int{"buy": 2, "sell too many": 0}, postings)
 }

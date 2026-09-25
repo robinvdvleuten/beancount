@@ -264,6 +264,21 @@ func (inv *Inventory) Currencies() []string {
 	return currencies
 }
 
+// costCurrencies returns the distinct cost currencies of the lots held at
+// cost, sorted.
+func (inv *Inventory) costCurrencies() []string {
+	var currencies []string
+	for _, lots := range inv.lots {
+		for _, lot := range lots {
+			if lot.Spec != nil && lot.Spec.CostCurrency != "" && !slices.Contains(currencies, lot.Spec.CostCurrency) {
+				currencies = append(currencies, lot.Spec.CostCurrency)
+			}
+		}
+	}
+	slices.Sort(currencies)
+	return currencies
+}
+
 // String returns a string representation of the inventory
 func (inv *Inventory) String() string {
 	if inv.IsEmpty() {
