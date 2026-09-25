@@ -587,7 +587,10 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 	return Token{IDENT, start, l.pos, line, col}
 }
 
-// scanKeywordOrIdent scans a keyword or identifier starting with lowercase letter.
+// scanKeywordOrIdent scans a word starting with a lowercase letter. Like
+// beancount's lexer, which has no lowercase identifier, it is a keyword or a
+// metadata key (a word followed directly by a colon); any other lowercase
+// word, such as a lowercase currency, is ILLEGAL.
 func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 	// First character already consumed
 
@@ -595,10 +598,10 @@ func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 		l.advance()
 	}
 
-	// Check if it's a keyword
-	word := l.source[start:l.pos]
-	tokType := l.keywordType(word)
-
+	tokType := l.keywordType(l.source[start:l.pos])
+	if tokType == IDENT && (l.pos >= len(l.source) || l.source[l.pos] != ':') {
+		tokType = ILLEGAL
+	}
 	return Token{tokType, start, l.pos, line, col}
 }
 

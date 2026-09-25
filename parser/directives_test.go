@@ -492,7 +492,7 @@ func TestParseRejectsUnknownTopLevelLine(t *testing.T) {
 
 	_, err := ParseString(context.Background(), input)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unexpected token")
+	assert.Contains(t, err.Error(), `1:1: invalid token "junk"`)
 }
 
 func TestParseRejectsTrailingJunkAfterDirective(t *testing.T) {
@@ -500,7 +500,7 @@ func TestParseRejectsTrailingJunkAfterDirective(t *testing.T) {
 
 	_, err := ParseString(context.Background(), input)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unexpected token")
+	assert.Contains(t, err.Error(), `invalid token "garbage"`)
 }
 
 func TestParseRejectsSplitDateDirectiveSyntax(t *testing.T) {
@@ -512,11 +512,12 @@ func TestParseRejectsSplitDateDirectiveSyntax(t *testing.T) {
 }
 
 func TestParsePushmetaRequiresColon(t *testing.T) {
+	// Without its colon, a lowercase word is not a key but an invalid token.
 	input := "pushmeta location \"NY\"\n2024-01-01 open Assets:Checking USD\n"
 
 	_, err := ParseString(context.Background(), input)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "expected ':'")
+	assert.Contains(t, err.Error(), `1:10: invalid token "location"`)
 }
 
 // Error cases

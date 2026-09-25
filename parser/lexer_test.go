@@ -774,3 +774,26 @@ func TestNonDirectiveLinesAreComments(t *testing.T) {
 	assert.Equal(t, ":PROPERTIES:\n", tokens[0].String(source))
 	assert.Equal(t, "S generated heading\n", tokens[3].String(source))
 }
+
+func TestLexerLowercaseWords(t *testing.T) {
+	// Like beancount's lexer, a lowercase word is a keyword or a metadata
+	// key; any other, such as a lowercase currency, is an invalid token.
+	tests := []struct {
+		input string
+		want  []TokenType
+	}{
+		{"usd", []TokenType{ILLEGAL, EOF}},
+		{"uSD", []TokenType{ILLEGAL, EOF}},
+		{"mk: 1", []TokenType{IDENT, COLON, NUMBER, EOF}},
+		{"open: 1", []TokenType{OPEN, COLON, NUMBER, EOF}},
+		{"balance", []TokenType{BALANCE, EOF}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			tokens, err := NewLexer([]byte(tt.input), "test").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, tokenTypes(tokens))
+		})
+	}
+}

@@ -431,12 +431,12 @@ func TestParseMetadataRejectsUnsupportedUnquotedValues(t *testing.T) {
 		{
 			name:   "LowercaseWord",
 			source: "2024-01-01 commodity USD\n  name: foo\n",
-			want:   `unsupported metadata value "foo"`,
+			want:   `invalid token "foo"`,
 		},
 		{
 			name:   "MultiwordUnquoted",
 			source: "2024-01-01 commodity USD\n  name: some value\n",
-			want:   `unsupported metadata value "some"`,
+			want:   `invalid token "some"`,
 		},
 		{
 			name:   "UnterminatedString",

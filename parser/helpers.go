@@ -882,6 +882,10 @@ func (p *Parser) positionAtEndOfPrevious() ast.Position {
 // to where the token was expected (after the last valid token) rather than at the
 // next token's position (which might be on a different line).
 func (p *Parser) errorAtEndOfPrevious(format string, args ...any) error {
+	// An invalid token where something else was expected is the cause.
+	if next := p.peek(); next.Type == ILLEGAL && next.Line == p.previous().Line {
+		return p.errorAtToken(next, format, args...)
+	}
 	pos := p.positionAtEndOfPrevious()
 	sourceRange := p.calculateSourceRange(pos)
 	return newErrorfWithSource(pos, sourceRange, format, args...)
