@@ -20,10 +20,12 @@ that states only its currency (`{USD}`, `{{USD}}`) matches v2
 (`cost_currency_only*` fixtures).
 
 For BQL, `query/gap_print_*.bql` diverge from `bean-query` in whitespace
-only: PRINT renders through our formatter, whose layout differs from the
-official printer (metadata indented by 4 spaces instead of 2, prices not
-padded to the printer's fixed column). The content is equivalent beancount
-text that round-trips through `bean-check`.
+only: bean-query prints price and balance directives in fixed columns
+(`price` pads the commodity to 22 characters and right-aligns the amount in
+22; `balance` pads the account to 47), with numbers at its display
+context's precision. Our PRINT renders them through the formatter's
+layout, like any other directive. The content is equivalent beancount text
+that round-trips through `bean-check`.
 
 `query/gap_integer_division.bql` diverges on integer division: bean-query
 divides two integer literals with Python's true division, so `SELECT 1 / 3`

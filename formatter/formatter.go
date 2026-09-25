@@ -255,9 +255,9 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 				}
 				// bean-format quirk: width maxima come from the original,
 				// un-normalized prefixes, even though emission uses the
-				// normalized indent.
+				// normalized indent. Without source text there are none.
 				indent := f.postingIndent()
-				if column := posting.Position().Column; column > 1 {
+				if column := posting.Position().Column; column > 1 && f.getOriginalLine(posting.Position().Line) != "" {
 					indent = column - 1
 				}
 				record(indent+runewidth.StringWidth(string(posting.Account)), f.amountDisplayValue(posting.Amount))

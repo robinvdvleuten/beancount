@@ -109,15 +109,18 @@ func CompilePrint(ctx *Context, p *bql.Print) (*CompiledPrint, error) {
 }
 
 // ExecutePrint renders the directives passing the FROM filter as beancount
-// text. Transactions are preceded by a blank line, matching the official
-// printer's spacing.
+// text. Like beancount's print_entries, a blank line precedes every
+// transaction and commodity, and every directive of another kind than the
+// one printed before it; postings are indented by two spaces.
 func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *CompiledPrint, w io.Writer) error {
 	entries := []ast.Directive(tree.Directives)
 	if compiled.From != nil {
 		entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
 
-	f := formatter.New(formatter.WithParsedNumbers())
+	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithIndentation(2))
+	var previous ast.DirectiveKind
+	first := true
 	for _, entry := range entries {
 		if compiled.From != nil && compiled.From.Expr != nil {
 			row := &Row{Ctx: qctx, Entry: entry}
@@ -125,10 +128,14 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 				continue
 			}
 		}
-		if txn, ok := entry.(*ast.Transaction); ok {
+		kind := entry.Kind()
+		if kind == ast.KindTransaction || kind == ast.KindCommodity || !first && kind != previous {
 			if _, err := io.WriteString(w, "\n"); err != nil {
 				return err
 			}
+		}
+		previous, first = kind, false
+		if txn, ok := entry.(*ast.Transaction); ok {
 			entry = printedTransaction(qctx, txn)
 		}
 		single := &ast.AST{Directives: ast.Directives{entry}}
