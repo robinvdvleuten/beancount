@@ -175,14 +175,15 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 				continue
 			}
 
-			_, err = decimal.NewFromString(posting.Cost.Amount.Value)
-			if err != nil {
-				errs = append(errs, &TotalCostError{
-					directiveError: newDirectiveError(txn),
-					Posting:        posting,
-					Message:        fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err),
-				})
-				continue
+			if posting.Cost.HasNumber() {
+				if _, err := decimal.NewFromString(posting.Cost.Amount.Value); err != nil {
+					errs = append(errs, &TotalCostError{
+						directiveError: newDirectiveError(txn),
+						Posting:        posting,
+						Message:        fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err),
+					})
+					continue
+				}
 			}
 
 			if quantity.IsZero() {
@@ -196,7 +197,7 @@ func (v *validator) validateCosts(txn *ast.Transaction) []error {
 		}
 
 		// Validate cost amount if present
-		if posting.Cost.Amount != nil {
+		if posting.Cost.HasNumber() {
 			if _, err := ParseAmount(posting.Cost.Amount); err != nil {
 				costSpec := fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
 				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
@@ -373,10 +374,11 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 				pc.incompletePrices = append(pc.incompletePrices, posting)
 			}
 
-			// Cost specs without an amount (empty {} or date/label-only)
-			// need their cost resolved from booked lots or inferred.
+			// Cost specs without a number (empty {}, currency-only {USD}
+			// or date/label-only) need their cost resolved from booked
+			// lots or inferred.
 			if posting.Cost != nil {
-				if posting.Cost.Amount == nil {
+				if !posting.Cost.HasNumber() {
 					pc.withEmptyCosts = append(pc.withEmptyCosts, posting)
 				} else {
 					pc.withExplicitCost = append(pc.withExplicitCost, posting)

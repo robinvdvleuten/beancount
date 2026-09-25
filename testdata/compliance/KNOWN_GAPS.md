@@ -11,6 +11,14 @@ them. Closing a gap means making the fixture pass and renaming it to drop the
 None among the `.pass`/`.fail` check fixtures. Every one agrees with
 `bean-check` 2.3.x; the differential suite enforces it.
 
+**Cost numbers without a currency, and compound costs with a missing
+number**: v2 accepts a cost that states a number without its currency
+(`{5}`, `{{5}}`) and takes the currency from the Currency group, and it
+interpolates the missing part of a compound cost (`{# 5 USD}`, `{5 # USD}`;
+`{# USD}` has two missing numbers). We reject these as syntax errors. A cost
+that states only its currency (`{USD}`, `{{USD}}`) matches v2
+(`cost_currency_only*` fixtures).
+
 For BQL, `query/gap_print_*.bql` diverge from `bean-query` in whitespace
 only: PRINT renders through our formatter, whose layout differs from the
 official printer (metadata indented by 4 spaces instead of 2, prices not
@@ -36,7 +44,7 @@ difference is far below any tolerance.
 rewrites whitespace line by line with one regular expression. The
 formatter follows that expression's rules (which lines align, which
 number, which lines pass through as written), so output is byte-identical
-on the `format/` fixtures and on every fixture that parses, with two known
+on the `format/` fixtures and on every fixture that parses, with these known
 limits:
 
 - A file that does not parse cannot be formatted; `bean-format` formats
@@ -46,6 +54,9 @@ limits:
   is re-spelled with single spaces; `bean-format` keeps its spacing.
 - Trailing whitespace on a posting line that gets aligned is dropped;
   `bean-format` keeps it, as it keeps the rest of such a line.
+- A cost's components are written in the order amount, date, label:
+  `{2020-01-01, USD}` becomes `{USD, 2020-01-01}`; `bean-format` keeps the
+  source's order.
 
 ## Empirically pinned option behavior
 

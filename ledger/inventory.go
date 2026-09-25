@@ -638,13 +638,11 @@ func lotMatchesReductionSpec(lot *lot, spec *lotSpec) bool {
 		return false
 	}
 
-	if spec.Cost != nil {
-		if lot.Spec.Cost == nil || !lot.Spec.Cost.Equal(*spec.Cost) {
-			return false
-		}
-		if lot.Spec.CostCurrency != spec.CostCurrency {
-			return false
-		}
+	if spec.Cost != nil && (lot.Spec.Cost == nil || !lot.Spec.Cost.Equal(*spec.Cost)) {
+		return false
+	}
+	if spec.CostCurrency != "" && lot.Spec.CostCurrency != spec.CostCurrency {
+		return false
 	}
 
 	if spec.Date != nil {
