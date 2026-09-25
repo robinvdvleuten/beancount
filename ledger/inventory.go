@@ -39,25 +39,32 @@ type reductionPlan struct {
 	addSpec    *lotSpec
 }
 
+// ambiguousBookingMatchError reports a reduction that matches several lots.
+// The matches are rendered when the error is created, so booking later
+// directives into the same lots does not change its text.
 type ambiguousBookingMatchError struct {
 	commodity string
 	amount    decimal.Decimal
 	spec      *lotSpec
-	matches   []*lot
+	matches   []string
 }
 
 func (e *ambiguousBookingMatchError) Error() string {
-	matchStrings := make([]string, 0, len(e.matches))
-	for _, match := range e.matches {
-		matchStrings = append(matchStrings, match.String())
-	}
-
 	return fmt.Sprintf("ambiguous matches for \"-%s %s %s\": %s",
 		e.amount.String(),
 		e.commodity,
 		e.spec.String(),
-		strings.Join(matchStrings, ", "),
+		strings.Join(e.matches, ", "),
 	)
+}
+
+// lotStrings renders lots as they are now.
+func lotStrings(lots []*lot) []string {
+	rendered := make([]string, len(lots))
+	for i, lot := range lots {
+		rendered[i] = lot.String()
+	}
+	return rendered
 }
 
 // errNotEnoughLots marks a reduction larger than the lots it can book
@@ -69,21 +76,18 @@ var errNotEnoughLots = errors.New("not enough lots")
 var errAverageUnsupported = errors.New("AVERAGE method is not supported")
 
 // notEnoughLotsError reports a reduction larger than the lots it can book
-// against, in beancount's words.
+// against, in beancount's words. Like ambiguousBookingMatchError, it holds
+// the lots as they were when the reduction failed.
 type notEnoughLotsError struct {
 	commodity string
 	amount    decimal.Decimal
 	spec      *lotSpec
-	lots      []*lot
+	lots      []string
 }
 
 func (e *notEnoughLotsError) Error() string {
-	lots := make([]string, len(e.lots))
-	for i, lot := range e.lots {
-		lots[i] = lot.String()
-	}
 	return fmt.Sprintf("not enough lots to reduce \"%s %s %s\": %s",
-		e.amount.String(), e.commodity, e.spec.String(), strings.Join(lots, ", "))
+		e.amount.String(), e.commodity, e.spec.String(), strings.Join(e.lots, ", "))
 }
 
 type BookingMethod string
@@ -372,7 +376,7 @@ func (inv *Inventory) planBooking(
 
 	plan, err := planReduction(commodity, lots, amount.Abs(), spec, bookingMethod)
 	if errors.Is(err, errNotEnoughLots) {
-		return nil, &notEnoughLotsError{commodity: commodity, amount: amount, spec: spec, lots: lots}
+		return nil, &notEnoughLotsError{commodity: commodity, amount: amount, spec: spec, lots: lotStrings(lots)}
 	}
 	if err != nil {
 		return nil, err
@@ -469,7 +473,7 @@ func planStrictReduction(
 		commodity: commodity,
 		amount:    amount,
 		spec:      spec,
-		matches:   matches,
+		matches:   lotStrings(matches),
 	}
 }
 

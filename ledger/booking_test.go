@@ -46,6 +46,34 @@ func TestBookingKeepsTransactionsThatFailValidation(t *testing.T) {
 	assert.True(t, errors.As(errs[1], &notOpen), "got %v", errs[1])
 }
 
+func TestBookingErrorListsLotsAtTheFailedPosting(t *testing.T) {
+	// The later sale reduces the same lot; the error must still show the
+	// 10 HOOL the lot held when the first reduction failed, like bean-check.
+	source := `
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+
+2020-01-02 * "buy"
+  Assets:Stock  10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "sell too many"
+  Assets:Stock  -50 HOOL {}
+  Assets:Cash
+
+2020-01-04 * "sell"
+  Assets:Stock  -4 HOOL {}
+  Assets:Cash
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	assert.Contains(t, errs[0].Error(), `"-50 HOOL {}": 10 HOOL {100 USD, 2020-01-02}`)
+}
+
 func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 	source := `
 2020-01-01 open Assets:Cash
