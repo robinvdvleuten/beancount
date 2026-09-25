@@ -288,3 +288,18 @@ func TestFormatKeepsCommentAndBlankLinesAsWritten(t *testing.T) {
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Equal(t, want, out.String())
 }
+
+func TestFormatKeepsPostingMetadataLinesAsWritten(t *testing.T) {
+	// Like other metadata lines, posting metadata passes through bean-format
+	// untouched, trailing comments included.
+	source := "2020-01-02 * \"x\"\n" +
+		"  Assets:Cash  1 USD\n" +
+		"    note: \"kept\" ; comment\n" +
+		"     spacing:   4.50\n" +
+		"  Assets:Cash  -1 USD\n"
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	var out bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
+	assert.Contains(t, out.String(), "\n    note: \"kept\" ; comment\n     spacing:   4.50\n")
+}

@@ -1,0 +1,7 @@
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "x"
+  Assets:Cash  1 USD
+    note: "kept" ; comment after posting metadata
+     spacing:   4.50 ; odd spacing
+  Assets:Cash  -1 USD

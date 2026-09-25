@@ -1335,19 +1335,8 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 
 	buf.WriteByte('\n')
 
-	// Format block metadata (on separate lines)
-	for _, m := range p.Metadata {
-		if !m.Inline {
-			buf.WriteString(strings.Repeat(" ", f.Indentation))
-			buf.WriteString(m.Key)
-			buf.WriteByte(':')
-			if m.Value != nil {
-				buf.WriteByte(' ')
-			}
-			f.formatMetadataValue(m.Value, buf)
-			buf.WriteByte('\n')
-		}
-	}
+	// Block metadata, on the lines below; kept as written when possible.
+	f.formatMetadata(p.Metadata, buf)
 }
 
 // isValidNumericValue checks if a value looks like a valid numeric amount.
