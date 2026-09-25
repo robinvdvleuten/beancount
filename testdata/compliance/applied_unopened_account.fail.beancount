@@ -1,0 +1,9 @@
+; A posting to an account that is never opened is reported; the rest of the
+; transaction still applies.
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Typo in the account"
+  Assets:Cash    5 USD
+  Assets:Csah  -5 USD
+
+2020-01-03 balance Assets:Cash 5 USD

@@ -2179,7 +2179,8 @@ func TestValidateInventoryOperations(t *testing.T) {
 			}
 
 			v := newTestValidator(accounts)
-			errs := v.validateInventoryOperations(tt.txn, tt.delta)
+			costErrs, bookingErrs := v.validateInventoryOperations(tt.txn, tt.delta)
+			errs := append(costErrs, bookingErrs...)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))
 

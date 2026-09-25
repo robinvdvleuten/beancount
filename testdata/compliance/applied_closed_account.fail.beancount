@@ -1,0 +1,12 @@
+; A posting to a closed account is reported and still applied to both
+; accounts.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Old
+2020-01-05 close Assets:Old
+
+2020-01-10 * "Posted after the close"
+  Assets:Cash   5 USD
+  Assets:Old   -5 USD
+
+2020-02-01 balance Assets:Cash 5 USD
+2020-02-01 balance Assets:Old -5 USD

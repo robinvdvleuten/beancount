@@ -31,13 +31,15 @@ Each phase owns one job and trusts the one before it.
 |-------|------|-------------------------|
 | **Parser** | Parse tokens into AST, report syntax errors | Semantic validation, cross-directive checks, business logic |
 | **Validation** | All semantic checks; compute mutation deltas | Mutating ledger state |
-| **Apply** | Apply validated deltas, compute derived state | Checking correctness |
+| **Apply** | Apply the delta Validate returned, compute derived state | Checking correctness |
+
+Validate returns its errors and, independently, a delta or nil; Apply runs whenever there is a delta, errors or not. Like beancount, a directive is reported and still applied unless it cannot be booked, so later directives see it instead of reporting follow-on errors. A transaction without a delta is a Dropped transaction and leaves the processed AST. See `docs/adr/0002-apply-directives-that-fail-validation.md`.
 
 ## Beancount compliance
 
 Validate every change to semantics, parsing, lexing, formatting, or queries against the matching official tool: `bean-check`, `bean-format`, `bean-doctor`, `bean-query`. Internal refactors and infrastructure changes skip this.
 
-**Ledger semantics**: `cli/compliance_test.go` runs every `testdata/compliance/<name>.pass.beancount` / `.fail.beancount` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`). Record known divergences in `testdata/compliance/KNOWN_GAPS.md`.
+**Ledger semantics**: `cli/compliance_test.go` runs every `testdata/compliance/<name>.pass.beancount` / `.fail.beancount` through both implementations whenever `bean-check` is on PATH (`go test ./cli -run 'Compliance|Official'`). Record known divergences in `testdata/compliance/KNOWN_GAPS.md`. An `applied_` fixture holds one directive that is reported but still applied; `TestNoFollowOnErrors` checks that both implementations report exactly that one error, which exit codes cannot show.
 
 **Queries**: `cli/query_compliance_test.go` runs every `testdata/compliance/query/*.bql` through both implementations and compares stdout **byte-for-byte** in text and csv (`go test ./cli -run 'QueryFixtures|OfficialQueryParity'`). Name prefixes: `err_` expects an `ERROR:` line, `numberify_` adds `-m`, `gap_` skips the parity leg (record it in KNOWN_GAPS.md).
 
