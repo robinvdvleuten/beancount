@@ -27,6 +27,7 @@ import (
 	"cmp"
 	"context"
 	"io"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -236,20 +237,16 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 	// prefix ljust(maxPrefix) + two spaces + number rjust(maxNum) + space +
 	// currency, so the widest prefix and the widest number may come from
 	// different lines. Prefix widths exclude trailing spacing.
-	record := func(prefixWidth int, amount *ast.Amount) {
-		displayValue := amount.Value
-		if amount.HasRaw() {
-			displayValue = amount.Raw
-		}
+	record := func(prefixWidth int, number string) {
 		metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
-		metrics.maxNumWidth = max(metrics.maxNumWidth, runewidth.StringWidth(displayValue))
+		metrics.maxNumWidth = max(metrics.maxNumWidth, runewidth.StringWidth(number))
 	}
 
 	for _, directive := range tree.Directives {
 		switch d := directive.(type) {
 		case *ast.Transaction:
 			for _, posting := range d.Postings {
-				if !isAlignedAmount(posting.Amount) {
+				if posting.Flag != "" || !isAlignedAmount(posting.Amount) {
 					continue
 				}
 				// bean-format quirk: width maxima come from the original,
@@ -259,22 +256,17 @@ func (f *Formatter) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 				if column := posting.Position().Column; column > 1 {
 					indent = column - 1
 				}
-				prefixWidth := indent
-				if posting.Flag != "" {
-					prefixWidth += 2 // flag + space
-				}
-				prefixWidth += runewidth.StringWidth(string(posting.Account))
-				record(prefixWidth, posting.Amount)
+				record(indent+runewidth.StringWidth(string(posting.Account)), amountDisplayValue(posting.Amount))
 			}
 
 		case *ast.Balance:
-			if d.Amount != nil {
-				record(DateWidth+1+directiveKeywordWidth(d)+runewidth.StringWidth(string(d.Account)), d.Amount)
+			if prefix, number, ok := balanceLayout(d); ok {
+				record(runewidth.StringWidth(prefix), number)
 			}
 
 		case *ast.Price:
-			if d.Amount != nil {
-				record(DateWidth+1+directiveKeywordWidth(d)+runewidth.StringWidth(d.Commodity), d.Amount)
+			if prefix, number, ok := priceLayout(d); ok {
+				record(runewidth.StringWidth(prefix), number)
 			}
 		}
 	}
@@ -851,47 +843,76 @@ func (f *Formatter) formatClose(c *ast.Close, buf *strings.Builder) {
 
 // formatBalance formats a balance directive.
 func (f *Formatter) formatBalance(b *ast.Balance, buf *strings.Builder) {
-	buf.WriteString(b.Date().String())
-	buf.WriteString(" balance ")
-	buf.WriteString(string(b.Account))
+	f.formatDatedAmount(b, string(b.Account), balanceAmountText(b), balanceCurrency(b), buf)
+}
 
-	if b.Amount != nil {
-		currentWidth := DateWidth + 1 + directiveKeywordWidth(b) + runewidth.StringWidth(string(b.Account))
-		if b.Tolerance != nil {
-			amountValue := b.Amount.Value
-			if b.Amount.HasRaw() {
-				amountValue = b.Amount.Raw
-			}
-			toleranceValue := b.Tolerance.Value
-			if b.Tolerance.HasRaw() {
-				toleranceValue = b.Tolerance.Raw
-			}
+// balanceLayout splits a balance line into bean-format's aligned prefix
+// and number.
+func balanceLayout(b *ast.Balance) (prefix, number string, ok bool) {
+	if b.Amount == nil || balanceCurrency(b) == "" {
+		return "", "", false
+	}
+	return datedAmountLayout(datedHead(b, string(b.Account)), balanceAmountText(b))
+}
 
-			padding := f.CurrencyColumn - currentWidth - runewidth.StringWidth(amountValue) - runewidth.StringWidth(toleranceValue) - 5
-			if padding < MinimumSpacing {
-				padding = MinimumSpacing
-			}
+// balanceAmountText spells a balance's amount, with its tolerance, without
+// the currency.
+func balanceAmountText(b *ast.Balance) string {
+	if b.Amount == nil {
+		return ""
+	}
+	text := amountDisplayValue(b.Amount)
+	if b.Tolerance != nil {
+		text += " ~ " + amountDisplayValue(b.Tolerance)
+	}
+	return text
+}
 
-			buf.WriteString(strings.Repeat(" ", padding))
-			buf.WriteString(amountValue)
-			buf.WriteString(" ~ ")
-			buf.WriteString(toleranceValue)
-			buf.WriteByte(' ')
-			buf.WriteString(b.Amount.Currency)
-		} else {
-			f.formatAmountAligned(b.Amount, currentWidth, buf)
+func balanceCurrency(b *ast.Balance) string {
+	if b.Amount != nil && b.Amount.Currency != "" {
+		return b.Amount.Currency
+	}
+	if b.Tolerance != nil {
+		return b.Tolerance.Currency
+	}
+	return ""
+}
+
+// datedHead spells the start of a dated directive: date, keyword and
+// subject (account or commodity).
+func datedHead(d ast.Directive, subject string) string {
+	return d.Date().String() + " " + string(d.Kind()) + " " + subject
+}
+
+// formatDatedAmount writes a dated directive that ends in an amount,
+// aligning the number bean-format aligns and keeping any text before it
+// (an expression's leading operands, a balance's amount before its
+// tolerance) in the prefix.
+func (f *Formatter) formatDatedAmount(d ast.Directive, subject, text, currency string, buf *strings.Builder) {
+	head := datedHead(d, subject)
+	if prefix, number, ok := datedAmountLayout(head, text); ok && currency != "" {
+		buf.WriteString(prefix)
+		padding := f.CurrencyColumn - runewidth.StringWidth(prefix) - runewidth.StringWidth(number) - 2
+		buf.WriteString(strings.Repeat(" ", max(padding, MinimumSpacing)))
+		buf.WriteString(number)
+		buf.WriteByte(' ')
+		buf.WriteString(currency)
+	} else {
+		buf.WriteString(head)
+		for _, part := range []string{text, currency} {
+			if part != "" {
+				buf.WriteByte(' ')
+				buf.WriteString(part)
+			}
 		}
 	}
 
-	// Append inline comment if present
-	if b.GetComment() != nil {
+	if d.GetComment() != nil {
 		buf.WriteByte(' ')
-		buf.WriteString(b.GetComment().Content)
+		buf.WriteString(d.GetComment().Content)
 	}
-
-	// Append inline comment if present
 	buf.WriteByte('\n')
-	f.formatMetadata(b.Metadata, buf)
+	f.formatMetadata(d.GetMetadata(), buf)
 }
 
 // formatPad formats a pad directive.
@@ -969,23 +990,23 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 
 // formatPrice formats a price directive.
 func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
-	buf.WriteString(p.Date().String())
-	buf.WriteString(" price ")
-	buf.WriteString(p.Commodity)
+	f.formatDatedAmount(p, p.Commodity, amountDisplayValue(p.Amount), priceCurrency(p), buf)
+}
 
-	if p.Amount != nil {
-		currentWidth := DateWidth + 1 + directiveKeywordWidth(p) + runewidth.StringWidth(p.Commodity)
-		f.formatAmountAligned(p.Amount, currentWidth, buf)
+// priceLayout splits a price line into bean-format's aligned prefix and
+// number.
+func priceLayout(p *ast.Price) (prefix, number string, ok bool) {
+	if priceCurrency(p) == "" {
+		return "", "", false
 	}
+	return datedAmountLayout(datedHead(p, p.Commodity), amountDisplayValue(p.Amount))
+}
 
-	// Append inline comment if present
-	if p.GetComment() != nil {
-		buf.WriteByte(' ')
-		buf.WriteString(p.GetComment().Content)
+func priceCurrency(p *ast.Price) string {
+	if p.Amount == nil {
+		return ""
 	}
-
-	buf.WriteByte('\n')
-	f.formatMetadata(p.Metadata, buf)
+	return p.Amount.Currency
 }
 
 // formatEvent formats an event directive.
@@ -1273,7 +1294,7 @@ func (f *Formatter) formatTransactionBodyItem(item ast.TransactionBodyItem, buf 
 
 // formatPosting formats a single posting with proper alignment.
 func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	if p.Amount != nil && !isAlignedAmount(p.Amount) && f.writePostingLineAsWritten(p, buf) {
+	if (p.Flag != "" || p.Amount != nil && !isAlignedAmount(p.Amount)) && f.writePostingLineAsWritten(p, buf) {
 		f.formatMetadata(p.Metadata, buf)
 		return
 	}
@@ -1344,31 +1365,71 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	f.formatMetadata(p.Metadata, buf)
 }
 
+// alignedNumber is how bean-format's line pattern spells a number it
+// aligns: an optional sign, digits with thousands commas, and an optional
+// fraction. Expressions, repeated signs and parentheses do not match.
+var alignedNumber = regexp.MustCompile(`^[-+]?\s*[\d,]+(?:\.\d*)?$`)
+
 // isAlignedAmount reports whether bean-format aligns an amount: only a
-// number followed by a currency matches its line pattern. An amount
-// missing either part leaves the line as written.
+// plainly spelled number followed by a currency matches its line pattern.
+// Any other amount leaves the line as written.
 func isAlignedAmount(amount *ast.Amount) bool {
-	return amount != nil && amount.Value != "" && amount.Currency != ""
+	return amount != nil && amount.Currency != "" && alignedNumber.MatchString(amountDisplayValue(amount))
 }
 
-// writePostingLineAsWritten copies a posting's source line, re-indented
-// to the posting indent the way bean-format re-indents every line that
-// starts with an account. It reports false, writing nothing, when the
-// source line is unavailable, shared with other items, or does not hold
-// the whole posting.
+// datedAmountLayout splits a dated directive's amount text like
+// bean-format's line pattern, whose prefix is the shortest one followed by
+// a plainly spelled number and the currency: head plus any text before
+// that number is the prefix. In "100.00 ~ 0.05" the tolerance is aligned,
+// in "50 + 50" the "+ 50". It reports false when no suffix is a number.
+func datedAmountLayout(head, text string) (prefix, number string, ok bool) {
+	// Candidate numbers start after a run of spaces; the prefix before
+	// them is right-trimmed, like bean-format's prefix.rstrip().
+	for i := 0; i < len(text); i++ {
+		if i > 0 && text[i-1] != ' ' || text[i] == ' ' {
+			continue
+		}
+		if suffix := text[i:]; alignedNumber.MatchString(suffix) {
+			if before := strings.TrimRight(text[:i], " "); before != "" {
+				return head + " " + before, suffix, true
+			}
+			return head, suffix, true
+		}
+	}
+	return "", "", false
+}
+
+// writePostingLineAsWritten copies a posting's source line, as bean-format
+// leaves every line it does not align. A line starting with an account is
+// re-indented to the posting indent, like bean-format re-indents them; a
+// flagged posting's line is copied untouched. It reports false, writing
+// nothing, when the source line is unavailable, shared with other items,
+// or does not hold the whole posting.
 func (f *Formatter) writePostingLineAsWritten(p *ast.Posting, buf *strings.Builder) bool {
 	line := p.Position().Line
 	original := f.getOriginalLine(line)
 	if original == "" || f.linesWithMultipleItems[line] {
 		return false
 	}
-	// The line must hold the whole posting: its account, then its amount.
-	rest, ok := strings.CutPrefix(strings.TrimLeft(original, " \t"), string(p.Account))
-	if !ok || !strings.Contains(rest, amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency) {
+	text := strings.TrimLeft(original, " \t")
+	body, ok := strings.CutPrefix(text, p.Flag)
+	if !ok {
 		return false
 	}
-	buf.WriteString(strings.Repeat(" ", f.postingIndent()))
-	buf.WriteString(strings.TrimLeft(original, " \t"))
+	// The line must hold the whole posting: its account, then its amount.
+	rest, ok := strings.CutPrefix(strings.TrimLeft(body, " \t"), string(p.Account))
+	if !ok {
+		return false
+	}
+	if p.Amount != nil && (!strings.Contains(rest, amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency)) {
+		return false
+	}
+	if p.Flag == "" {
+		buf.WriteString(strings.Repeat(" ", f.postingIndent()))
+		buf.WriteString(text)
+	} else {
+		buf.WriteString(original)
+	}
 	buf.WriteByte('\n')
 	f.verbatimLines[line] = true
 	return true

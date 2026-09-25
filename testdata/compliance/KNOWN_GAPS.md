@@ -17,6 +17,19 @@ from the official printer (per-entry number alignment, 2-space metadata
 indent). The content is equivalent beancount text that round-trips through
 `bean-check`.
 
+`beancount format` re-renders the parsed AST, while `bean-format` only
+rewrites whitespace line by line with one regular expression. The
+formatter follows that expression's rules (which lines align, which
+number, which lines pass through as written), so output is byte-identical
+on the `format/` fixtures and on every fixture that parses, with two known
+limits:
+
+- A file that does not parse cannot be formatted; `bean-format` formats
+  any text.
+- On a dated line whose aligned number is not the whole amount (a balance
+  tolerance, an expression's last operand), the text before that number
+  is re-spelled with single spaces; `bean-format` keeps its spacing.
+
 ## Empirically pinned option behavior
 
 - **documents** and **operating_currency** are implemented (directory

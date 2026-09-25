@@ -1,0 +1,21 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:LongerName
+
+2020-01-02 * "expressions and signs"
+  Assets:A  2 * 3.50 USD
+  Assets:A  (1 + 2) USD
+  Assets:A  - 5 USD
+  Assets:A  --1 USD
+  Assets:A  1,000.00 USD
+  Assets:A  5. USD
+  Assets:A  +7 USD
+  Expenses:LongerName
+
+2020-01-03 * "flags"
+    ! Assets:A  1.00 USD
+  * Expenses:LongerName  -1 USD
+
+2020-01-04 balance Assets:A 1000 + 19 USD
+2020-01-05 balance Assets:A 1019.00 ~ 0.05 USD
+2020-01-06 price USD 2 * 3 EUR
+2020-01-06 price USD 6 EUR

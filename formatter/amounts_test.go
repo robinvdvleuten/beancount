@@ -39,3 +39,45 @@ func TestFormatIncompleteAmountWithoutSource(t *testing.T) {
 	assert.NoError(t, New().Format(context.Background(), tree, nil, &out))
 	assert.Contains(t, out.String(), "  Assets:A  -1.00\n  Assets:C  USD\n")
 }
+
+func TestFormatAlignsOnlyPlainlySpelledNumbers(t *testing.T) {
+	// bean-format's line pattern aligns a number spelled as an optional
+	// sign, digits and commas; expressions and repeated signs stay as
+	// written, and a flagged posting's line is not even re-indented.
+	source := "2020-01-02 * \"x\"\n" +
+		"  Assets:A  2 * 3.50 USD\n" +
+		"  Assets:A  --1 USD\n" +
+		"    ! Assets:A  1.00 USD\n" +
+		"  Assets:A  - 5 USD\n" +
+		"  Assets:A  1,000.00 USD\n"
+	want := "2020-01-02 * \"x\"\n" +
+		"  Assets:A  2 * 3.50 USD\n" +
+		"  Assets:A  --1 USD\n" +
+		"    ! Assets:A  1.00 USD\n" +
+		"  Assets:A       - 5 USD\n" +
+		"  Assets:A  1,000.00 USD\n"
+
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	var out bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
+	assert.Equal(t, want, out.String())
+}
+
+func TestDatedAmountLayout(t *testing.T) {
+	// The aligned number is the shortest-prefix suffix spelled as a number,
+	// as in bean-format's lazy line pattern.
+	for text, want := range map[string][2]string{
+		"6":             {"H", "6"},
+		"- 5":           {"H", "- 5"},
+		"100.00 ~ 0.05": {"H 100.00 ~", "0.05"},
+		"50 + 50":       {"H 50", "+ 50"},
+		"2 * 3":         {"H 2 *", "3"},
+		"0*  0":         {"H 0*", "0"},
+	} {
+		prefix, number, ok := datedAmountLayout("H", text)
+		assert.True(t, ok, text)
+		assert.Equal(t, want, [2]string{prefix, number}, text)
+	}
+	_, _, ok := datedAmountLayout("H", "(2 * 3)")
+	assert.False(t, ok)
+}
