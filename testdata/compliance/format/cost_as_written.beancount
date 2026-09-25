@@ -1,0 +1,10 @@
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "cost component order"
+  Assets:Stock  1 HOOL {2020-01-01, 1 USD}
+  Assets:Stock  1 HOOL {"lot", 1 USD}
+  Assets:Stock  1 HOOL {2020-01-01, USD}
+  Assets:Stock  1 HOOL {1 USD,2020-01-01,"lot"}
+  Assets:Stock  2 HOOL   {1 USD}   @   1 USD    ; hi   
+  Assets:Cash  -6 USD  

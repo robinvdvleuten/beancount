@@ -1342,6 +1342,17 @@ func (f *Formatter) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	currentWidth += runewidth.StringWidth(string(p.Account))
 
 	if p.Amount != nil {
+		if suffix, ok := f.alignedPostingSuffix(p); ok {
+			displayValue := amountDisplayValue(p.Amount)
+			buf.WriteString(strings.Repeat(" ", f.columns.padding(currentWidth, runewidth.StringWidth(displayValue))))
+			buf.WriteString(displayValue)
+			buf.WriteByte(' ')
+			buf.WriteString(suffix)
+			buf.WriteByte('\n')
+			f.verbatimLines[p.Position().Line] = true
+			f.formatMetadata(p.Metadata, buf)
+			return
+		}
 		f.formatAmountAligned(p.Amount, currentWidth, buf)
 
 		if p.Cost != nil {
@@ -1435,40 +1446,71 @@ func datedAmountLayout(head, text string) (prefix, number string, ok bool) {
 	return "", "", false
 }
 
+// postingSource returns a posting's source line, trimmed of its indent, and
+// the text after its account. It reports false when the source line is
+// unavailable, shared with other items, or does not hold the whole posting.
+func (f *Formatter) postingSource(p *ast.Posting) (text, rest string, ok bool) {
+	line := p.Position().Line
+	original := f.getOriginalLine(line)
+	if original == "" || f.linesWithMultipleItems[line] {
+		return "", "", false
+	}
+	text = strings.TrimLeft(original, " \t")
+	body, ok := strings.CutPrefix(text, p.Flag)
+	if !ok {
+		return "", "", false
+	}
+	// The line must hold the whole posting: its account, then its amount.
+	rest, ok = strings.CutPrefix(strings.TrimLeft(body, " \t"), string(p.Account))
+	if !ok {
+		return "", "", false
+	}
+	if p.Amount != nil && (!strings.Contains(rest, amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency)) {
+		return "", "", false
+	}
+	return text, rest, true
+}
+
 // writePostingLineAsWritten copies a posting's source line, as bean-format
 // leaves every line it does not align. A line starting with an account is
 // re-indented to the posting indent, like bean-format re-indents them; a
 // flagged posting's line is copied untouched. It reports false, writing
-// nothing, when the source line is unavailable, shared with other items,
-// or does not hold the whole posting.
+// nothing, when postingSource finds no line to copy.
 func (f *Formatter) writePostingLineAsWritten(p *ast.Posting, buf *strings.Builder) bool {
+	text, _, ok := f.postingSource(p)
+	if !ok {
+		return false
+	}
 	line := p.Position().Line
-	original := f.getOriginalLine(line)
-	if original == "" || f.linesWithMultipleItems[line] {
-		return false
-	}
-	text := strings.TrimLeft(original, " \t")
-	body, ok := strings.CutPrefix(text, p.Flag)
-	if !ok {
-		return false
-	}
-	// The line must hold the whole posting: its account, then its amount.
-	rest, ok := strings.CutPrefix(strings.TrimLeft(body, " \t"), string(p.Account))
-	if !ok {
-		return false
-	}
-	if p.Amount != nil && (!strings.Contains(rest, amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency)) {
-		return false
-	}
 	if p.Flag == "" {
 		buf.WriteString(strings.Repeat(" ", f.postingIndent()))
 		buf.WriteString(text)
 	} else {
-		buf.WriteString(original)
+		buf.WriteString(f.getOriginalLine(line))
 	}
 	buf.WriteByte('\n')
 	f.verbatimLines[line] = true
 	return true
+}
+
+// alignedPostingSuffix returns the source text of a posting line that
+// bean-format aligns, from its units currency to the end of the line:
+// bean-format re-pads only the account and the number, and copies this part
+// as written, cost, price, comment and trailing whitespace included.
+func (f *Formatter) alignedPostingSuffix(p *ast.Posting) (string, bool) {
+	_, rest, ok := f.postingSource(p)
+	if !ok {
+		return "", false
+	}
+	afterNumber, ok := strings.CutPrefix(strings.TrimLeft(rest, " \t"), amountDisplayValue(p.Amount))
+	if !ok {
+		return "", false
+	}
+	suffix := strings.TrimLeft(afterNumber, " \t")
+	if !isValidNumericValue(p.Amount.Value) || len(suffix) == len(afterNumber) || !strings.HasPrefix(suffix, p.Amount.Currency) {
+		return "", false
+	}
+	return suffix, true
 }
 
 // isValidNumericValue checks if a value looks like a valid numeric amount.

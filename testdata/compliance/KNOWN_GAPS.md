@@ -52,11 +52,6 @@ limits:
 - On a dated line whose aligned number is not the whole amount (a balance
   tolerance, an expression's last operand), the text before that number
   is re-spelled with single spaces; `bean-format` keeps its spacing.
-- Trailing whitespace on a posting line that gets aligned is dropped;
-  `bean-format` keeps it, as it keeps the rest of such a line.
-- A cost's components are written in the order amount, date, label:
-  `{2020-01-01, USD}` becomes `{USD, 2020-01-01}`; `bean-format` keeps the
-  source's order.
 
 ## Empirically pinned option behavior
 
