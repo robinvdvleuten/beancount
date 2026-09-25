@@ -125,10 +125,11 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 				continue
 			}
 		}
-		if _, ok := entry.(*ast.Transaction); ok {
+		if txn, ok := entry.(*ast.Transaction); ok {
 			if _, err := io.WriteString(w, "\n"); err != nil {
 				return err
 			}
+			entry = printedTransaction(qctx, txn)
 		}
 		single := &ast.AST{Directives: ast.Directives{entry}}
 		if err := f.Format(ctx, single, nil, w); err != nil {
@@ -136,4 +137,38 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		}
 	}
 	return nil
+}
+
+// printedTransaction returns a copy of txn holding the postings beancount
+// books it as, which bean-query's print renders: a reduction becomes one
+// posting per lot it was booked against, a cost is its booked lot in full
+// (per-unit number, currency, date and label) and a total price a per-unit
+// one. The copy leaves out the source layout, so the formatter renders these
+// postings, and a transaction whose postings were all dropped prints as its
+// header.
+func printedTransaction(qctx *Context, txn *ast.Transaction) *ast.Transaction {
+	printed := *txn
+	printed.BodyItems = nil
+	printed.Postings = make([]*ast.Posting, 0, len(txn.Postings))
+	for _, posting := range txn.Postings {
+		if posting.Cost == nil && !posting.PriceTotal {
+			printed.Postings = append(printed.Postings, posting)
+			continue
+		}
+		price := postingPrice(posting)
+		for _, position := range postingPositions(qctx, posting, txn.Date()) {
+			booked := *posting
+			booked.Amount = ast.NewAmount(numberString(position.Units.Number), position.Units.Currency)
+			if cost := position.Cost; cost != nil {
+				booked.Cost = ast.NewCostWithDate(ast.NewAmount(numberString(cost.Number), cost.Currency), cost.Date)
+				booked.Cost.Label = cost.Label
+			}
+			if price, ok := price.(*Amount); ok {
+				booked.Price = ast.NewAmount(numberString(price.Number), price.Currency)
+				booked.PriceTotal = false
+			}
+			printed.Postings = append(printed.Postings, &booked)
+		}
+	}
+	return &printed
 }

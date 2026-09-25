@@ -1223,14 +1223,15 @@ func (f *Formatter) formatTransaction(t *ast.Transaction, buf *strings.Builder) 
 		f.formatRawString(t.Narration, buf)
 	}
 
-	for _, link := range t.Links {
-		buf.WriteString(" ^")
-		buf.WriteString(string(link))
-	}
-
+	// Tags before links, like beancount's printer.
 	for _, tag := range t.Tags {
 		buf.WriteString(" #")
 		buf.WriteString(string(tag))
+	}
+
+	for _, link := range t.Links {
+		buf.WriteString(" ^")
+		buf.WriteString(string(link))
 	}
 
 	// Append inline comment if present
