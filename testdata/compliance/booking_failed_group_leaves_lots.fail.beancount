@@ -1,0 +1,20 @@
+; The second reduction cannot be booked once the first has reduced the lot,
+; so the group is dropped and leaves the lot as it was: the later sale of
+; all 10 HOOL books.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "buy"
+  Assets:Stock  10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "double reduce"
+  Assets:Stock  -6 HOOL {}
+  Assets:Stock  -6 HOOL {}
+  Assets:Cash   1200 USD
+
+2020-01-04 * "sell all"
+  Assets:Stock  -10 HOOL {}
+  Assets:Cash   1000 USD
+
+2020-01-05 balance Assets:Stock 0 HOOL

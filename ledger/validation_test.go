@@ -19,23 +19,10 @@ func newTestValidator(accounts map[string]*Account) *validator {
 	return newValidator(accounts, NewConfig())
 }
 
-// newTestBooker returns a booker over the given accounts' inventories and
-// booking methods.
-func newTestBooker(accounts map[string]*Account) *booker {
-	b := newBooker(NewConfig(), nil)
-	for name, account := range accounts {
-		b.inventories[name] = account.Inventory
-		if account.BookingMethod != "" {
-			b.methods[name] = account.BookingMethod
-		}
-	}
-	return b
-}
-
-// bookAndValidate books txn against the accounts' inventories and validates
-// the result, as Process does.
+// bookAndValidate books txn against empty inventories and validates the
+// result against the accounts, as Process does.
 func bookAndValidate(accounts map[string]*Account, txn *ast.Transaction) ([]error, *bookedTransaction) {
-	booked, errs := newTestBooker(accounts).book(txn)
+	booked, errs := newBooker(NewConfig(), nil).book(txn)
 	if len(errs) > 0 {
 		return errs, nil
 	}
@@ -457,8 +444,9 @@ func TestCalculateBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newTestBooker(nil)
-			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings})
+			b := newBooker(NewConfig(), nil)
+			scratch := &scratchInventories{booker: b, own: make(map[string]*Inventory)}
+			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil, scratch)
 
 			assert.Equal(t, 0, len(errs))
 
@@ -2066,149 +2054,81 @@ func TestCalculateBalanceDelta(t *testing.T) {
 	}
 }
 
-// TestCheckLots tests the booker's checkLots() function
-func TestCheckLots(t *testing.T) {
-	date, _ := ast.NewDate("2024-01-15")
-	checking, _ := ast.NewAccount("Assets:Checking")
-	stock, _ := ast.NewAccount("Assets:Investments:Stock")
-
+// TestBookingReductions checks how Booking matches reductions to the lots
+// an account holds.
+func TestBookingReductions(t *testing.T) {
 	tests := []struct {
-		name         string
-		setupInv     func(*Inventory)
-		txn          *ast.Transaction
-		delta        *TransactionDelta
-		wantErrCount int
-		wantErrType  string
+		name     string
+		held     string // Units the stock account holds at 50 or 60 USD
+		posting  string
+		wantErrs int
+		wantType string
 	}{
-		{
-			name: "sufficient inventory",
-			setupInv: func(inv *Inventory) {
-				// Add 100 shares at $50 cost
-				costVal := decimal.NewFromFloat(50.00)
-				cost := &lotSpec{Cost: &costVal, CostCurrency: "USD"}
-				inv.AddLot("HOOL", decimal.NewFromFloat(100), cost)
-			},
-			txn: ast.NewTransaction(date, "Sell stock",
-				ast.WithPostings(
-					ast.NewPosting(stock,
-						ast.WithAmount("-10", "HOOL"),
-						ast.WithCost(ast.NewCost(ast.NewAmount("50.00", "USD"))),
-					),
-					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
-				),
-			),
-			delta:        &TransactionDelta{},
-			wantErrCount: 0,
-		},
-		{
-			name: "insufficient lots",
-			setupInv: func(inv *Inventory) {
-				// Add only 5 shares
-				costVal := decimal.NewFromFloat(50.00)
-				cost := &lotSpec{Cost: &costVal, CostCurrency: "USD"}
-				inv.AddLot("HOOL", decimal.NewFromFloat(5), cost)
-			},
-			txn: ast.NewTransaction(date, "Sell stock",
-				ast.WithPostings(
-					ast.NewPosting(stock,
-						ast.WithAmount("-10", "HOOL"),
-						ast.WithCost(ast.NewCost(ast.NewAmount("50.00", "USD"))),
-					),
-					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
-				),
-			),
-			delta:        &TransactionDelta{},
-			wantErrCount: 1,
-			wantErrType:  "*ledger.InsufficientInventoryError",
-		},
-		{
-			name: "lot not found",
-			setupInv: func(inv *Inventory) {
-				// Add lot with different cost
-				costVal := decimal.NewFromFloat(60.00)
-				cost := &lotSpec{Cost: &costVal, CostCurrency: "USD"}
-				inv.AddLot("HOOL", decimal.NewFromFloat(100), cost)
-			},
-			txn: ast.NewTransaction(date, "Sell stock",
-				ast.WithPostings(
-					ast.NewPosting(stock,
-						ast.WithAmount("-10", "HOOL"),
-						ast.WithCost(ast.NewCost(ast.NewAmount("50.00", "USD"))),
-					),
-					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
-				),
-			),
-			delta:        &TransactionDelta{},
-			wantErrCount: 1,
-		},
-		{
-			name: "validates inferred amounts",
-			setupInv: func(inv *Inventory) {
-				// Inventory is empty
-			},
-			txn: ast.NewTransaction(date, "Sell stock",
-				ast.WithPostings(
-					ast.NewPosting(stock,
-						ast.WithCost(ast.NewCost(ast.NewAmount("50.00", "USD"))),
-					),
-					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
-				),
-			),
-			delta:        &TransactionDelta{},
-			wantErrCount: 0, // No amount, so no reduction check
-		},
-		{
-			name: "empty cost spec uses booking method",
-			setupInv: func(inv *Inventory) {
-				// Add lot with cost
-				costVal := decimal.NewFromFloat(50.00)
-				cost := &lotSpec{Cost: &costVal, CostCurrency: "USD"}
-				inv.AddLot("HOOL", decimal.NewFromFloat(100), cost)
-			},
-			txn: ast.NewTransaction(date, "Sell stock",
-				ast.WithPostings(
-					ast.NewPosting(stock,
-						ast.WithAmount("-10", "HOOL"),
-						ast.WithCost(ast.NewEmptyCost()),
-					),
-					ast.NewPosting(checking, ast.WithAmount("500", "USD")),
-				),
-			),
-			delta:        &TransactionDelta{},
-			wantErrCount: 0,
-		},
+		{"sufficient inventory", "100 HOOL {50.00 USD}", "-10 HOOL {50.00 USD}", 0, ""},
+		{"insufficient lots", "5 HOOL {50.00 USD}", "-10 HOOL {50.00 USD}", 1, "*ledger.InsufficientInventoryError"},
+		{"lot not found", "100 HOOL {60.00 USD}", "-10 HOOL {50.00 USD}", 1, "*ledger.InsufficientInventoryError"},
+		{"empty cost spec uses booking method", "100 HOOL {50.00 USD}", "-10 HOOL {}", 0, ""},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Setup accounts
-			stockAccount := &Account{
-				Name:          stock,
-				OpenDate:      date,
-				Inventory:     NewInventory(),
-				BookingMethod: "FIFO",
-			}
-			tt.setupInv(stockAccount.Inventory)
+			source := fmt.Sprintf(`
+2024-01-01 open Assets:Checking
+2024-01-01 open Assets:Stock "FIFO"
 
-			accounts := map[string]*Account{
-				"Assets:Investments:Stock": stockAccount,
-				"Assets:Checking": {
-					Name:      checking,
-					OpenDate:  date,
-					Inventory: NewInventory(),
-				},
-			}
+2024-01-02 * "buy"
+  Assets:Stock  %s
+  Assets:Checking
 
-			errs := newTestBooker(accounts).checkLots(tt.txn, tt.txn.Postings, &TransactionDelta{})
+2024-01-15 * "sell"
+  Assets:Stock  %s
+  Assets:Checking
+`, tt.held, tt.posting)
+			tree := parser.MustParseString(context.Background(), source)
+			l := New()
+			_ = l.Process(context.Background(), tree)
 
-			assert.Equal(t, tt.wantErrCount, len(errs))
-
-			if tt.wantErrType != "" && len(errs) > 0 {
-				errType := fmt.Sprintf("%T", errs[0])
-				assert.Equal(t, tt.wantErrType, errType)
+			errs := l.Errors()
+			assert.Equal(t, tt.wantErrs, len(errs), "errors: %v", errs)
+			if tt.wantType != "" && len(errs) > 0 {
+				assert.Equal(t, tt.wantType, fmt.Sprintf("%T", errs[0]))
 			}
 		})
 	}
+}
+
+func TestBookingDropsAFailedGroupsReductions(t *testing.T) {
+	// The second -6 cannot be booked once the first has reduced the lot, so
+	// the group is dropped; like bean-check, the sale of all 10 HOOL still
+	// books, because the failed group left the lot untouched.
+	source := `
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "buy"
+  Assets:Stock  10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "double reduce"
+  Assets:Stock  -6 HOOL {}
+  Assets:Stock  -6 HOOL {}
+  Assets:Cash   1200 USD
+
+2020-01-04 * "sell all"
+  Assets:Stock  -10 HOOL {}
+  Assets:Cash   1000 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	assert.Contains(t, errs[0].Error(), `"-6 HOOL {}": 4 HOOL {100 USD, 2020-01-02}`)
+
+	stock, ok := l.GetAccount("Assets:Stock")
+	assert.True(t, ok)
+	assert.True(t, stock.Inventory.IsEmpty(), "inventory: %s", stock.Inventory)
 }
 
 func TestBookingMethodSemantics(t *testing.T) {

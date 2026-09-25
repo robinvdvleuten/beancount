@@ -10,7 +10,7 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-func TestCanBook(t *testing.T) {
+func TestBookPlans(t *testing.T) {
 	date1, _ := ast.NewDate("2024-01-15")
 	date2, _ := ast.NewDate("2024-02-15")
 
@@ -170,7 +170,7 @@ func TestCanBook(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			inv := tt.setup()
-			err := inv.CanBook(tt.commodity, tt.amount, tt.spec, tt.bookingMethod)
+			_, err := inv.Book(tt.commodity, tt.amount, tt.spec, tt.bookingMethod, nil)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -313,7 +313,8 @@ func TestBookSkipsLotsWithoutCost(t *testing.T) {
 
 	inv := NewInventory()
 	inv.Add("HOOL", decimal.NewFromInt(3))
-	assert.Error(t, inv.CanBook("HOOL", decimal.NewFromInt(-1), &lotSpec{}, BookingFIFO))
+	_, err = inv.Book("HOOL", decimal.NewFromInt(-1), &lotSpec{}, BookingFIFO, nil)
+	assert.Error(t, err)
 }
 
 func TestInventoryStringSortsCommodities(t *testing.T) {
@@ -818,7 +819,7 @@ func TestStrictBookingReduction(t *testing.T) {
 		inv.AddLot("STOCK", d("50"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date1})
 		inv.AddLot("STOCK", d("60"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date2})
 
-		err := inv.CanBook("STOCK", d("-40"), &lotSpec{}, BookingSTRICT)
+		_, err := inv.Book("STOCK", d("-40"), &lotSpec{}, BookingSTRICT, nil)
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "ambiguous matches")
 	})
@@ -828,7 +829,7 @@ func TestStrictBookingReduction(t *testing.T) {
 		inv.AddLot("STOCK", d("50"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date1})
 		inv.AddLot("STOCK", d("60"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date2})
 
-		err := inv.CanBook("STOCK", d("-110"), &lotSpec{}, BookingSTRICT)
+		_, err := inv.Book("STOCK", d("-110"), &lotSpec{}, BookingSTRICT, nil)
 		assert.NoError(t, err)
 	})
 }

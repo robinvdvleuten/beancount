@@ -154,19 +154,30 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	}
 	residuals := make(map[string]decimal.Decimal)
 	autoBooked := false
+	// Like beancount, a transaction changes the inventories only through
+	// the groups it books: each group reduces lots in scratch copies, which
+	// are staged once the group is booked.
+	staged := make(map[string]*Inventory)
+	reductions := make(map[*ast.Posting]bookedPosting)
 	for _, group := range groups {
-		groupDelta, balance, autoAmounts, groupErrs := b.calculateBalance(txn, group)
-		if len(groupErrs) == 0 && groupDelta == nil {
-			// Missing numbers could not be interpolated.
-			groupErrs = []error{newNotBalancedError(txn, balance.residuals)}
-		}
+		scratch := &scratchInventories{booker: b, staged: staged, own: make(map[string]*Inventory)}
+		groupReductions, groupErrs := b.bookReductions(txn, group, scratch)
+		var groupDelta *TransactionDelta
+		var balance *balanceValidation
+		var autoAmounts []*ast.Amount
 		if len(groupErrs) == 0 {
-			groupErrs = b.checkLots(txn, group.postings, groupDelta)
+			groupDelta, balance, autoAmounts, groupErrs = b.calculateBalance(txn, group, groupReductions, scratch)
+			if len(groupErrs) == 0 && groupDelta == nil {
+				// Missing numbers could not be interpolated.
+				groupErrs = []error{newNotBalancedError(txn, balance.residuals)}
+			}
 		}
 		if len(groupErrs) > 0 {
 			errs = append(errs, groupErrs...)
 			continue
 		}
+		maps.Copy(staged, scratch.own)
+		maps.Copy(reductions, groupReductions)
 
 		// The amount-less posting belongs to every group: it is booked once
 		// per amount, as itself the first time and as a copy after that.
@@ -197,9 +208,17 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		}
 	}
 	commitDelta(txn, delta)
+	maps.Copy(b.inventories, staged)
 
+	// The booked postings other than the reductions add to their accounts'
+	// inventories, like beancount's add_position once a transaction is
+	// booked.
 	booked := &bookedTransaction{residuals: residuals}
 	for _, posting := range txn.Postings {
+		if bp, ok := reductions[posting]; ok {
+			booked.postings = append(booked.postings, bp)
+			continue
+		}
 		if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
 			continue
 		}
@@ -207,16 +226,10 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		if err != nil {
 			continue
 		}
-		currency := posting.Amount.Currency
-		inv := b.inventory(posting.Account)
-
-		bp := bookedPosting{posting: posting, commodity: currency}
-		if posting.Cost == nil {
-			bp.changes = []lotChange{{amount: amount}}
-			inv.Add(currency, amount)
-		} else {
+		change := lotChange{amount: amount}
+		if posting.Cost != nil {
 			// An augmentation whose cost could not be inferred holds no lot.
-			if !posting.Cost.HasNumber() && !inv.isReducedBy(currency, amount) {
+			if !posting.Cost.HasNumber() {
 				continue
 			}
 			spec, err := ParseLotSpec(posting.Cost)
@@ -229,18 +242,80 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			// Beancount records an acquisition date on every new lot,
 			// defaulting to the transaction date; LIFO/FIFO ordering and
 			// dated lot specs depend on it.
-			lots, changes, err := inv.book(currency, amount, spec, b.method(posting.Account), txn.Date())
-			if err != nil {
-				// Two reductions of the same lots in one transaction can
-				// each pass checkLots and still fail together.
-				return nil, append(errs, newBookingError(txn, posting.Account, err))
+			if spec.Date == nil {
+				spec.Date = txn.Date()
 			}
-			bp.changes = changes
-			bp.lots = lots
+			change.spec = spec
 		}
-		booked.postings = append(booked.postings, bp)
+		currency := posting.Amount.Currency
+		b.inventory(posting.Account).AddLot(currency, change.amount, change.spec)
+		booked.postings = append(booked.postings, bookedPosting{
+			posting:   posting,
+			commodity: currency,
+			changes:   []lotChange{change},
+		})
 	}
 	return booked, errs
+}
+
+// scratchInventories are the inventories one Currency group books against:
+// copies, made on first use, of the inventories staged by the transaction's
+// earlier groups or else of the booker's.
+type scratchInventories struct {
+	booker *booker
+	staged map[string]*Inventory
+	own    map[string]*Inventory
+}
+
+func (s *scratchInventories) get(account ast.Account) *Inventory {
+	if inv, ok := s.own[string(account)]; ok {
+		return inv
+	}
+	base, ok := s.staged[string(account)]
+	if !ok {
+		base = s.booker.inventory(account)
+	}
+	inv := base.clone()
+	s.own[string(account)] = inv
+	return inv
+}
+
+// bookReductions matches a Currency group's reductions with known units to
+// the lots they reduce, in posting order, like beancount's book_reductions:
+// each reduction changes the scratch inventory, so a later posting cannot
+// book the same units again. Augmentations and postings whose units are
+// interpolated are left to the end of the transaction. A booking failure
+// drops the group.
+func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scratch *scratchInventories) (map[*ast.Posting]bookedPosting, []error) {
+	reductions := make(map[*ast.Posting]bookedPosting)
+	for _, posting := range group.postings {
+		if posting.Cost == nil || posting.Amount == nil || posting.Amount.Value == "" {
+			continue
+		}
+		amount, err := ParseAmount(posting.Amount)
+		if err != nil {
+			continue // Reported by validateAmounts
+		}
+		method := b.method(posting.Account)
+		inv := scratch.get(posting.Account)
+		currency := posting.Amount.Currency
+		if method == BookingNONE || !inv.isReducedBy(currency, amount) {
+			continue
+		}
+		spec, err := ParseLotSpec(posting.Cost)
+		if err != nil {
+			continue // Reported by validateCosts
+		}
+		if err := normalizeLotSpecForPosting(spec, posting); err != nil {
+			continue
+		}
+		lots, changes, err := inv.book(currency, amount, spec, method, nil)
+		if err != nil {
+			return nil, []error{newBookingError(txn, posting.Account, err)}
+		}
+		reductions[posting] = bookedPosting{posting: posting, commodity: currency, changes: changes, lots: lots}
+	}
+	return reductions, nil
 }
 
 // commitDelta writes Booking's results onto the transaction. The processed
@@ -266,7 +341,7 @@ func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
 // the balance state, and the amounts the group books its amount-less posting
 // at, which the caller records; a nil delta without errors means the missing
 // numbers could not be interpolated.
-func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
+func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, reductions map[*ast.Posting]bookedPosting, scratch *scratchInventories) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
 	var errs []error
 	pc := classifyPostings(group.postings)
 
@@ -278,7 +353,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup) (*T
 	reducingEmptyCosts := make(map[*ast.Posting]bool)
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
 	// Lots that reductions with an amount-less cost spec are booked against.
-	bookedLots := make(map[*ast.Posting][]lotReduction)
+	bookedLots := make(map[*ast.Posting][]BookedLot)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
 		// it is resolved from the residual during interpolation below.
@@ -297,30 +372,24 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup) (*T
 			// Reductions resolve their weight from the booked lots' cost basis,
 			// matching beancount, which books lots before interpolation. The
 			// spec's date/label (if any) narrows which lots are booked.
-			// Augmentations are handled in cost inference below.
-			amount, aerr := ParseAmount(posting.Amount)
-			if aerr == nil && b.reducesInventory(posting.Account, posting.Amount.Currency, amount) {
+			// Augmentations are handled in cost inference below; so is a
+			// reduction under NONE, whose cost comes from the residual.
+			if booked, ok := reductions[posting]; ok {
 				reducingEmptyCosts[posting] = true
-				lots, ok, berr := b.bookedReductions(posting.Account, posting.Cost, posting.Amount.Currency, amount)
-				if berr != nil {
-					// Beancount stops at the booking error; the posting's
-					// weight is unknown, so the balance is not checked.
-					errs = append(errs, newBookingError(txn, posting.Account, berr))
-					continue
+				var weights weightSet
+				for _, lot := range booked.lots {
+					weights = append(weights, weight{
+						Amount:   lot.Units.Mul(*lot.Cost),
+						Currency: lot.CostCurrency,
+					})
 				}
-				if ok {
-					var booked weightSet
-					for _, lot := range lots {
-						booked = append(booked, weight{
-							Amount:   lot.amount.Mul(*lot.lot.Spec.Cost),
-							Currency: lot.lot.Spec.CostCurrency,
-						})
-					}
-					allWeights = append(allWeights, booked)
-					bookedLots[posting] = lots
-				} else {
-					unresolvedEmptyCosts[posting] = true
-				}
+				allWeights = append(allWeights, weights)
+				bookedLots[posting] = booked.lots
+			} else if amount, aerr := ParseAmount(posting.Amount); aerr == nil &&
+				b.method(posting.Account) == BookingNONE &&
+				scratch.get(posting.Account).isReducedBy(posting.Amount.Currency, amount) {
+				reducingEmptyCosts[posting] = true
+				unresolvedEmptyCosts[posting] = true
 			}
 		} else {
 			allWeights = append(allWeights, weights)
@@ -632,74 +701,4 @@ func unbalancedValidation(balance map[string]decimal.Decimal) *balanceValidation
 		isBalanced: false,
 		residuals:  residuals,
 	}
-}
-
-// reducesInventory reports whether a posting of amount commodity reduces the
-// account's inventory rather than augmenting it (see Inventory.isReducedBy).
-func (b *booker) reducesInventory(account ast.Account, commodity string, amount decimal.Decimal) bool {
-	return b.inventory(account).isReducedBy(commodity, amount)
-}
-
-// bookedReductions resolves the lots an amount-less cost spec reduction
-// (empty {} or date/label-only) is booked against, selected by the account's
-// booking method; their costs give the posting's balancing weights, matching
-// beancount, which books lots before interpolation.
-//
-// The second return value reports whether the posting's cost is considered
-// resolved. It is false only when the cost must instead be inferred from the
-// transaction residual (NONE booking, or booked lots without a cost basis).
-// A booking failure (ambiguous match, not enough lots) is returned as the
-// error; the caller reports it instead of checking the balance, as beancount
-// stops at booking errors.
-func (b *booker) bookedReductions(account ast.Account, cost *ast.Cost, commodity string, amount decimal.Decimal) ([]lotReduction, bool, error) {
-	bookingMethod := b.method(account)
-	if bookingMethod == BookingNONE {
-		return nil, false, nil
-	}
-
-	spec, err := ParseLotSpec(cost)
-	if err != nil {
-		return nil, true, nil // Invalid cost spec; reported by validateCosts
-	}
-
-	plan, err := b.inventory(account).planBooking(commodity, amount, spec, bookingMethod, nil)
-	if err != nil {
-		return nil, true, err
-	}
-	if plan == nil || len(plan.reductions) == 0 {
-		return nil, false, nil
-	}
-
-	for _, reduction := range plan.reductions {
-		if spec := reduction.lot.Spec; spec == nil || spec.Cost == nil {
-			return nil, false, nil // Lot held without cost basis; infer from residual
-		}
-	}
-
-	return plan.reductions, true, nil
-}
-
-// checkLots reports a group's cost postings, completed by delta, whose
-// reduction the account's lots cannot cover: no matching lot, several, or
-// too few units.
-func (b *booker) checkLots(txn *ast.Transaction, postings []*ast.Posting, delta *TransactionDelta) []error {
-	var errs []error
-	for _, posting := range postings {
-		units := delta.amountFor(posting)
-		if units == nil || posting.Cost == nil || isIncompleteAmount(units) {
-			continue
-		}
-		amount, err := ParseAmount(units)
-		if err != nil {
-			continue
-		}
-		lotSpec, err := ParseLotSpec(delta.costFor(posting))
-		if err != nil {
-			continue
-		}
-		if err := b.inventory(posting.Account).CanBook(units.Currency, amount, lotSpec, b.method(posting.Account)); err != nil {
-			errs = append(errs, newBookingError(txn, posting.Account, err))
-		}
-	}
-	return errs
 }

@@ -115,6 +115,21 @@ func NewInventory() *Inventory {
 	}
 }
 
+// clone returns a copy of the inventory whose lots can change without
+// changing the original's.
+func (inv *Inventory) clone() *Inventory {
+	cloned := &Inventory{lots: make(map[string][]*lot, len(inv.lots))}
+	for commodity, lots := range inv.lots {
+		copied := make([]*lot, len(lots))
+		for i, l := range lots {
+			c := *l
+			copied[i] = &c
+		}
+		cloned.lots[commodity] = copied
+	}
+	return cloned
+}
+
 // Add adds an amount without cost basis
 func (inv *Inventory) Add(commodity string, amount decimal.Decimal) {
 	// Add as a lot without cost spec
@@ -317,18 +332,6 @@ func (inv *Inventory) String() string {
 	}
 	buf.WriteByte('}')
 	return buf.String()
-}
-
-// CanBook checks if a booking is possible without mutating state.
-// This is a read-only version of Book used for validation.
-func (inv *Inventory) CanBook(
-	commodity string,
-	amount decimal.Decimal,
-	spec *lotSpec,
-	bookingMethod BookingMethod,
-) error {
-	_, err := inv.planBooking(commodity, amount, spec, bookingMethod, nil)
-	return err
 }
 
 // planBooking decides whether the posting augments or reduces the inventory
