@@ -107,6 +107,13 @@ limits:
   pins the difference; amounts, positions, inventories, NULL, integers,
   booleans and sets match (`query/str_*.bql`).
 
+- **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
+  Python's `bool` subclasses `int`, sums the values as integers and still
+  types the column as boolean, so `sum(1 = 1)` over four rows renders
+  `TRUE`, `sum(false)` renders `FALS` (cut to the header's width) and
+  `sum(true) + 1` is `23`. We reject it: `ERROR: Invalid function
+  'sum(bool)' in targets/column context.` (#422).
+
 - **Error lines**: the differential suite compares the lines errors are
   reported on, and we keep our line where v2's is less precise
   (`lineGaps` in `cli/compliance_test.go`). A tag or link after the first
