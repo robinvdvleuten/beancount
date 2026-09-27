@@ -145,3 +145,394 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 	}
 	assert.Equal(t, map[string]int{"units missing total price": 1, "negative per unit": 2}, postings)
 }
+
+func TestValidateAmounts(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Groceries")
+
+	tests := []struct {
+		name         string
+		txn          *ast.Transaction
+		wantErrCount int
+	}{
+		{
+			name: "valid amounts",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "missing amount - not an error at this stage",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(checking), // Missing amount
+				),
+			),
+			wantErrCount: 0, // Missing amounts are inferred, not validation errors
+		},
+		{
+			name: "valid decimal amounts",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("123.456789", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-123.456789", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "valid negative amount",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("-1000.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validateAmounts(tt.txn)
+
+			assert.Equal(t, tt.wantErrCount, len(errs))
+		})
+	}
+}
+
+func TestCalculateBalance(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Groceries")
+	income, _ := ast.NewAccount("Income:Salary")
+
+	tests := []struct {
+		name          string
+		txn           *ast.Transaction
+		wantBalanced  bool
+		wantResiduals map[string]string
+		wantInferred  int // Number of inferred amounts
+	}{
+		{
+			name: "simple balanced transaction",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+				),
+			),
+			wantBalanced:  true,
+			wantResiduals: map[string]string{},
+			wantInferred:  0,
+		},
+		{
+			name: "unbalanced transaction",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-40.00", "USD")),
+				),
+			),
+			wantBalanced:  false,
+			wantResiduals: map[string]string{}, // Will have residual but checking exact value is tricky
+			wantInferred:  0,
+		},
+		{
+			name: "inferred amount - one posting missing",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(checking), // Amount will be inferred
+				),
+			),
+			wantBalanced: true,
+			wantInferred: 1,
+		},
+		{
+			name: "inferred amount counted once in tolerance calculation",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("33.33", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("33.33", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("33.34", "USD")),
+					ast.NewPosting(checking), // Will be inferred as -100.00
+				),
+			),
+			wantBalanced: true,
+			wantInferred: 1,
+		},
+		{
+			name: "multi-currency balanced",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
+					ast.NewPosting(expenses, ast.WithAmount("30.00", "EUR")),
+					ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-30.00", "EUR")),
+				),
+			),
+			wantBalanced: true,
+		},
+		{
+			name: "three-way split",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("30.00", "USD")),
+					ast.NewPosting(income, ast.WithAmount("20.00", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
+				),
+			),
+			wantBalanced: true,
+		},
+		{
+			name: "within inferred tolerance balanced",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.001", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.0005", "USD")),
+				),
+			),
+			// amounts at -3 and -4 decimals, coarsest is -3
+			// tolerance = 10^-3 * 0.5 = 0.0005
+			// diff = 0.0005, which is not greater than the tolerance
+			// (verified against bean-check 2.3.6)
+			wantBalanced: true,
+		},
+		{
+			name: "exactly within inferred tolerance",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("50.0001", "USD")),
+					ast.NewPosting(checking, ast.WithAmount("-50.0000", "USD")),
+				),
+			),
+			// amounts at -4 decimals, tolerance = 10^-4 * 0.5 = 0.00005
+			// diff = 0.0001, which is > 0.00005, so NOT balanced
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"USD": "0.0001",
+			},
+		},
+		{
+			name: "high precision - balanced",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("10.22626", "RGAGX")),
+					ast.NewPosting(checking, ast.WithAmount("-10.22626", "RGAGX")),
+				),
+			),
+			wantBalanced: true, // Exact match
+		},
+		{
+			name: "high precision - outside inferred tolerance",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("10.22626", "RGAGX")),
+					ast.NewPosting(checking, ast.WithAmount("-10.22625", "RGAGX")),
+				),
+			),
+			// Diff = 0.00001, tolerance = 10^-5 * 0.5 = 0.000005
+			// 0.00001 > 0.000005, so this should NOT balance
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"RGAGX": "0.00001",
+			},
+		},
+		{
+			name: "high precision - also outside inferred tolerance",
+			txn: ast.NewTransaction(date, "Test",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("10.226260", "RGAGX")),
+					ast.NewPosting(checking, ast.WithAmount("-10.226256", "RGAGX")),
+				),
+			),
+			// amounts at -6 exponent, tolerance = 10^-6 * 0.5 = 0.0000005
+			// Diff = 0.000004, which is > 0.0000005
+			wantBalanced: false,
+			wantResiduals: map[string]string{
+				"RGAGX": "0.000004",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := newBooker(NewConfig(), nil)
+			scratch := &scratchInventories{booker: b, own: make(map[string]*Inventory)}
+			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil, scratch)
+
+			assert.Equal(t, 0, len(errs))
+
+			assert.Equal(t, tt.wantBalanced, validation.isBalanced)
+
+			inferredCount := len(delta.InferredAmounts)
+			assert.Equal(t, tt.wantInferred, inferredCount)
+			for posting := range delta.InferredAmounts {
+				assert.False(t, posting.Inferred, "validation must not mutate postings")
+				assert.True(t, posting.Amount == nil, "validation must leave inferred amount unapplied")
+			}
+
+			// Check residuals if specified
+			for currency, expected := range tt.wantResiduals {
+				// Convert decimal.Decimal to string for comparison
+				expectedStr := expected
+				got, exists := validation.residuals[currency]
+				assert.True(t, exists)
+				assert.Equal(t, expectedStr, got.String())
+			}
+		})
+	}
+}
+
+func TestValidateCosts(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	stock, _ := ast.NewAccount("Assets:Investments:Stock")
+
+	tests := []struct {
+		name         string
+		txn          *ast.Transaction
+		wantErrCount int
+		wantErrType  string
+	}{
+		{
+			name: "valid explicit cost",
+			txn: ast.NewTransaction(date, "Buy stock",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCost(ast.NewAmount("500.00", "USD")))),
+					ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "valid empty cost",
+			txn: ast.NewTransaction(date, "Sell stock",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("-10", "HOOL"), ast.WithCost(ast.NewEmptyCost())),
+					ast.NewPosting(checking, ast.WithAmount("5500.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "no cost specs - valid",
+			txn: ast.NewTransaction(date, "Regular transaction",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("100", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "valid cost label",
+			txn: ast.NewTransaction(date, "Buy stock with label",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("500.00", "USD"), nil, "lot-1"))),
+					ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "whitespace-only cost label rejected",
+			txn: ast.NewTransaction(date, "Buy stock with bad label",
+				ast.WithPostings(
+					ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCostWithLabel(ast.NewAmount("500.00", "USD"), nil, "   "))),
+					ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+				),
+			),
+			wantErrCount: 1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validateCosts(tt.txn)
+
+			assert.Equal(t, tt.wantErrCount, len(errs))
+		})
+	}
+}
+
+func TestValidatePrices(t *testing.T) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Foreign")
+
+	tests := []struct {
+		name         string
+		txn          *ast.Transaction
+		wantErrCount int
+	}{
+		{
+			name: "valid per-unit price",
+			txn: ast.NewTransaction(date, "Foreign expense",
+				ast.WithPostings(
+					ast.NewPosting(expenses, ast.WithAmount("100", "EUR"), ast.WithPrice(ast.NewAmount("1.20", "USD"))),
+					ast.NewPosting(checking, ast.WithAmount("-120", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+		{
+			name: "no price specs - valid",
+			txn: ast.NewTransaction(date, "Regular transaction",
+				ast.WithPostings(
+					ast.NewPosting(checking, ast.WithAmount("100", "USD")),
+				),
+			),
+			wantErrCount: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			errs := validatePrices(tt.txn)
+
+			assert.Equal(t, tt.wantErrCount, len(errs))
+		})
+	}
+}
+
+func BenchmarkValidateCosts(b *testing.B) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	stock, _ := ast.NewAccount("Assets:Investments:Stock")
+
+	txn := ast.NewTransaction(date, "Buy stock",
+		ast.WithPostings(
+			ast.NewPosting(stock, ast.WithAmount("10", "HOOL"), ast.WithCost(ast.NewCost(ast.NewAmount("500.00", "USD")))),
+			ast.NewPosting(checking, ast.WithAmount("-5000.00", "USD")),
+		),
+	)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		validateCosts(txn)
+	}
+}
+
+func BenchmarkValidatePrices(b *testing.B) {
+	date, _ := ast.NewDate("2024-01-15")
+	checking, _ := ast.NewAccount("Assets:Checking")
+	expenses, _ := ast.NewAccount("Expenses:Foreign")
+
+	txn := ast.NewTransaction(date, "Foreign expense",
+		ast.WithPostings(
+			ast.NewPosting(expenses, ast.WithAmount("100", "EUR"), ast.WithPrice(ast.NewAmount("1.20", "USD"))),
+			ast.NewPosting(checking, ast.WithAmount("-120", "USD")),
+		),
+	)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		validatePrices(txn)
+	}
+}

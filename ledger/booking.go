@@ -2,8 +2,10 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"maps"
+	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
@@ -19,10 +21,10 @@ import (
 // own inventory per account, independent of open directives, and drops a
 // group it cannot book while booking the transaction's other groups.
 
-// booker books transactions in date order. Its embedded validator carries
-// only the configuration, for the tolerance and well-formedness checks.
+// booker books transactions in date order. Its configuration sets the
+// tolerances balancing checks against.
 type booker struct {
-	*validator
+	config      *Config
 	inventories map[string]*Inventory
 	methods     map[string]BookingMethod
 	fallback    BookingMethod
@@ -47,7 +49,7 @@ type bookedPosting struct {
 // does.
 func newBooker(cfg *Config, directives []ast.Directive) *booker {
 	b := &booker{
-		validator:   newValidator(nil, cfg),
+		config:      cfg,
 		inventories: make(map[string]*Inventory),
 		methods:     make(map[string]BookingMethod),
 		fallback:    BookingMethod(cfg.BookingMethod),
@@ -160,9 +162,9 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	if err := validateDateRange(txn.Date()); err != nil {
 		return nil, []error{err}
 	}
-	malformed := b.validateAmounts(txn)
-	malformed = append(malformed, b.validateCosts(txn)...)
-	malformed = append(malformed, b.validatePrices(txn)...)
+	malformed := validateAmounts(txn)
+	malformed = append(malformed, validateCosts(txn)...)
+	malformed = append(malformed, validatePrices(txn)...)
 	if len(malformed) > 0 {
 		return nil, malformed
 	}
@@ -288,6 +290,191 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	return booked, errs
 }
 
+// validateAmounts checks all amounts can be parsed
+func validateAmounts(txn *ast.Transaction) []error {
+	var errs []error
+	for _, posting := range txn.Postings {
+		if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
+			continue // Will be inferred, checked later
+		}
+		if _, err := ParseAmount(posting.Amount); err != nil {
+			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
+		}
+	}
+	return errs
+}
+
+// validateCosts checks all cost specifications are valid.
+//
+// It validates that:
+//   - Cost amounts are parseable as decimal numbers
+//   - Cost dates are valid (not zero dates)
+//   - Cost labels are non-empty if present
+//   - Empty costs {} are accepted (for automatic lot selection)
+//   - ParseLotSpec can parse the cost specification
+//
+// Returns a slice of InvalidCostError for any invalid cost specifications.
+// Includes posting index and cost spec string for clear error messages.
+//
+// Example:
+//
+//	// Valid cost: 10 HOOL {500.00 USD}
+//	errs := validateCosts(txn)
+//	if len(errs) > 0 {
+//	    // Found invalid cost specifications
+//	    for _, err := range errs {
+//	        fmt.Printf("Cost error: %v\n", err)
+//	        // Example: "2024-01-15: Invalid cost specification (Posting #1: Assets:Stock): {abc USD}: invalid decimal"
+//	    }
+//	}
+func validateCosts(txn *ast.Transaction) []error {
+	var errs []error
+	for i, posting := range txn.Postings {
+		if posting.Cost == nil {
+			continue // No cost specification
+		}
+
+		// Empty cost {} is valid
+		if posting.Cost.IsEmpty() {
+			continue
+		}
+
+		// Validate total cost {{}} requirements
+		if posting.Cost.IsTotal {
+			if posting.Amount == nil {
+				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires a quantity"))
+				continue
+			}
+
+			if posting.Cost.Amount == nil {
+				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires an amount"))
+				continue
+			}
+
+			quantity, err := decimal.NewFromString(posting.Amount.Value)
+			if err != nil {
+				errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err)))
+				continue
+			}
+
+			if posting.Cost.HasNumber() {
+				if _, err := decimal.NewFromString(posting.Cost.Amount.Value); err != nil {
+					errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err)))
+					continue
+				}
+			}
+
+			if quantity.IsZero() {
+				errs = append(errs, NewTotalCostError(txn, posting, "cannot use total cost with zero quantity"))
+				continue
+			}
+		}
+
+		// Validate cost amount if present
+		if posting.Cost.HasNumber() {
+			if _, err := ParseAmount(posting.Cost.Amount); err != nil {
+				costSpec := fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
+			}
+		}
+		if posting.Cost.Total != nil {
+			if posting.Cost.IsTotal {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{{... # ...}}", fmt.Errorf("compound cost cannot use total cost syntax")))
+			} else if posting.Cost.Amount == nil {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{# ...}", fmt.Errorf("compound cost requires a per-unit amount")))
+			} else if posting.Cost.Total.Currency != posting.Cost.Amount.Currency {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", fmt.Errorf("compound cost currencies must match")))
+			} else if _, err := ParseAmount(posting.Cost.Total); err != nil {
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", err))
+			}
+		}
+
+		// Validate ParseLotSpec can parse the cost
+		if _, err := ParseLotSpec(posting.Cost); err != nil {
+			costSpec := "{...}"
+			if posting.Cost.Amount != nil {
+				costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+			}
+			errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
+		}
+
+		// Validate cost date if present
+		if posting.Cost.Date != nil {
+			if posting.Cost.Date.IsZero() {
+				costSpec := "{...}"
+				if posting.Cost.Amount != nil {
+					costSpec = fmt.Sprintf("{%s %s, ...}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+				}
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
+					fmt.Errorf("cost date cannot be zero")))
+			}
+		}
+
+		// Validate cost label if present
+		if posting.Cost.Label != "" {
+			if strings.TrimSpace(posting.Cost.Label) == "" {
+				costSpec := "{...}"
+				if posting.Cost.Amount != nil {
+					costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+				}
+				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
+					fmt.Errorf("cost label cannot be empty")))
+			}
+		}
+	}
+	return errs
+}
+
+// validatePrices checks all price specifications are valid.
+//
+// It validates that:
+//   - Price amounts are parseable as decimal numbers
+//   - Per-unit prices (@) and total prices (@@) are correctly formatted
+//
+// Returns a slice of InvalidPriceError for any invalid price specifications.
+// Includes posting index and price spec string for clear error messages.
+//
+// Example:
+//
+//	// Valid price: 100 EUR @ 1.20 USD
+//	errs := validatePrices(txn)
+//	if len(errs) > 0 {
+//	    // Found invalid price specifications
+//	    for _, err := range errs {
+//	        fmt.Printf("Price error: %v\n", err)
+//	        // Example: "2024-01-15: Invalid price specification (Posting #2: Expenses:Foreign): @ abc USD: invalid decimal"
+//	    }
+//	}
+func validatePrices(txn *ast.Transaction) []error {
+	var errs []error
+	for i, posting := range txn.Postings {
+		if posting.Price == nil || isIncompleteAmount(posting.Price) {
+			continue // Absent or interpolated price specification
+		}
+
+		// Validate price amount
+		if _, err := ParseAmount(posting.Price); err != nil {
+			priceSpec := fmt.Sprintf("@ %s %s", posting.Price.Value, posting.Price.Currency)
+			if posting.PriceTotal {
+				priceSpec = fmt.Sprintf("@@ %s %s", posting.Price.Value, posting.Price.Currency)
+			}
+			errs = append(errs, NewInvalidPriceError(txn, posting.Account, i, priceSpec, err))
+			continue
+		}
+
+		// Validate that price currency differs from posting currency
+		// (It's valid but unusual to have the same currency)
+		// For now, we'll allow it but could add a warning system later
+	}
+	return errs
+}
+
+// isIncompleteAmount reports whether an amount omits its number or currency
+// (official grammar: incomplete_amount); interpolation completes it.
+func isIncompleteAmount(a *ast.Amount) bool {
+	return a != nil && (a.Value == "" || a.Currency == "")
+}
+
 // scratchInventories are the inventories one Currency group books against:
 // copies, made on first use, of the inventories staged by the transaction's
 // earlier groups or else of the booker's.
@@ -346,6 +533,17 @@ func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scrat
 		reductions[posting] = bookedPosting{posting: posting, commodity: currency, changes: changes, lots: lots}
 	}
 	return reductions, nil
+}
+
+// newBookingError classifies a failed booking: an ambiguous match (or a
+// reduction under AVERAGE, which beancount counts as one), or inventory that
+// cannot cover the reduction.
+func newBookingError(txn *ast.Transaction, account ast.Account, err error) error {
+	var ambiguousErr *ambiguousBookingMatchError
+	if errors.As(err, &ambiguousErr) || errors.Is(err, errAverageUnsupported) {
+		return NewAmbiguousBookingError(txn, account, err)
+	}
+	return NewInsufficientInventoryError(txn, account, err)
 }
 
 // commitDelta writes Booking's results onto the transaction. The processed

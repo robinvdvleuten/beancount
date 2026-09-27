@@ -153,9 +153,7 @@ func TestValidateTotalCost(t *testing.T) {
 				ast.WithPostings(test.posting),
 			)
 
-			cfg := &Config{Tolerance: NewToleranceConfig()}
-			v := newValidator(make(map[string]*Account), cfg)
-			errs := v.validateCosts(txn)
+			errs := validateCosts(txn)
 
 			if test.expectError {
 				assert.True(t, len(errs) > 0, "Expected error for test: %s", test.name)
