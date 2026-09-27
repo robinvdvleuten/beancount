@@ -1,0 +1,7 @@
+; Every account used is opened: nothing is printed.
+2024-01-01 open Assets:Bank EUR
+2024-01-01 open Expenses:Food
+
+2024-01-05 * "Coffee"
+  Assets:Bank     -3.50 EUR
+  Expenses:Food

@@ -1,0 +1,13 @@
+; A transaction that does not balance is reported but still applied, so it
+; uses its accounts. The Dropped transaction, whose two amount-less postings
+; cannot be booked, does not.
+2024-01-01 open Assets:Bank EUR
+
+2024-01-04 * "Broken"
+  Assets:Bank     -1 EUR
+  Expenses:Zed     2 EUR
+
+2024-01-05 * "Dropped"
+  Assets:Bank     -1 EUR
+  Expenses:Dropped
+  Expenses:AlsoDropped

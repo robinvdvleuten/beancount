@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"cmp"
 	"context"
 	"slices"
 	"strings"
@@ -92,30 +93,15 @@ func autoAccounts(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 		}
 	}
 
-	firstUse := make(map[ast.Account]*ast.Date)
-	for _, directive := range tree.Directives {
-		used, ok := directive.(ast.WithAccounts)
-		if !ok {
-			continue
-		}
-		for _, account := range used.Accounts() {
-			if _, seen := firstUse[account]; !seen && !opened[account] {
-				firstUse[account] = directive.Date()
-			}
-		}
-	}
-	if len(firstUse) == 0 {
+	uses := firstUses(tree.Directives, opened)
+	if len(uses) == 0 {
 		return nil
 	}
 
 	// Like beancount, the inserted opens are numbered in account order.
-	accounts := make([]ast.Account, 0, len(firstUse))
-	for account := range firstUse {
-		accounts = append(accounts, account)
-	}
-	slices.Sort(accounts)
-	for i, account := range accounts {
-		open := ast.NewOpen(firstUse[account], account, nil, "")
+	slices.SortFunc(uses, func(a, b accountUse) int { return cmp.Compare(a.account, b.account) })
+	for i, use := range uses {
+		open := ast.NewOpen(use.date, use.account, nil, "")
 		open.SetPosition(ast.Position{Filename: "<auto_accounts>", Line: i})
 		tree.Directives = append(tree.Directives, open)
 	}

@@ -1,0 +1,11 @@
+; auto_accounts has opened every account, so nothing is printed, not even
+; for the close-only account.
+plugin "beancount.plugins.auto_accounts"
+
+2024-01-02 close Assets:Closed
+
+2024-01-05 * "Coffee"
+  Expenses:Food    1 EUR
+  Assets:Bank     -1 EUR
+
+2024-01-06 balance Liabilities:Card 0 EUR

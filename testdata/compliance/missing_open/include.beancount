@@ -1,0 +1,12 @@
+; Accounts first used in an included file. On equal dates the directives
+; sort by line number, whichever file they are in: the included
+; transaction on line 1 comes before this file's on line 10.
+include "include/transactions.beancount"
+
+2024-01-01 open Assets:Bank
+
+
+
+2024-01-05 * "Main file"
+  Expenses:Main    1 EUR
+  Assets:Bank     -1 EUR

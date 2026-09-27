@@ -1,0 +1,19 @@
+; Accounts first used on the same date print in order of first use: by
+; posting, in booked order (by Currency group), then by directive.
+2024-01-01 open Assets:Bank
+
+2024-01-05 note Assets:Noted "a note sorts with transactions, by line"
+
+2024-01-05 * "Two currencies"
+  Expenses:Usd     1 USD
+  Expenses:Eur     1 EUR
+  Assets:Cash     -1 EUR
+  Assets:Wallet   -1 USD
+
+2024-01-05 * "Same date, later line"
+  Expenses:Zeta    2 EUR
+  Expenses:Alpha   1 EUR
+  Assets:Bank     -3 EUR
+
+2024-01-05 pad Assets:Bank Equity:Opening
+2024-01-06 balance Assets:Bank 10 EUR

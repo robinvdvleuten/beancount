@@ -237,6 +237,14 @@ This starts a local server on `127.0.0.1:8080`. It has a source editor and balan
 beancount doctor lex ledger.beancount
 ```
 
+### `doctor missing_open`: print the missing `open` directives
+
+```sh
+beancount doctor missing_open ledger.beancount
+```
+
+This prints an `open` for every account the ledger uses without an `open` or `close`, dated at its first use, like `bean-doctor missing_open`. Pasting the lines into your ledger stops `check` reporting those accounts as unknown; like `bean-doctor`, it skips an account only a `balance` uses, which `check` still reports. It prints nothing when no account is missing.
+
 ### `--telemetry`: see where the time goes
 
 ```sh

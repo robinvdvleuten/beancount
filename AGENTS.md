@@ -45,6 +45,8 @@ Validate every change to semantics, parsing, lexing, formatting, or queries agai
 
 **Queries**: `cli/query_compliance_test.go` runs every `testdata/compliance/query/*.bql` through both implementations and compares stdout **byte-for-byte** in text and csv (`go test ./cli -run 'QueryFixtures|OfficialQueryParity'`). Name prefixes: `err_` expects an `ERROR:` line, `numberify_` adds `-m`, `gap_` skips the parity leg (record it in KNOWN_GAPS.md).
 
+**Doctor**: `cli/doctor_test.go` runs every `testdata/compliance/missing_open/*.beancount` through `beancount doctor missing_open` and, whenever `bean-doctor` is on PATH, compares stdout **byte-for-byte** with `bean-doctor missing_open` (`go test ./cli -run MissingOpen`). An include target goes in a subdirectory, so it is not a fixture itself.
+
 **Pin first, implement second**: bean-query is full of undocumented quirks (column names like `sum_position`/`c42`, header truncation, padded CSV cells, implicit GROUP BY, per-currency precision). Probe the official tool with a small ledger and match the observed bytes:
 
 ```bash

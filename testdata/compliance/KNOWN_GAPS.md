@@ -122,6 +122,12 @@ limits:
   above a line of invalid tokens when no blank line separates them, which
   hides that directive's own errors; we keep it.
 
+- **`doctor missing_open` under raw plugin processing**: with
+  `option "plugin_processing_mode" "raw"`, v2 skips `ops.balance`, so a
+  balance on an unknown account stays loaded and `bean-doctor missing_open`
+  counts it as a use. `beancount doctor missing_open` always skips
+  balances. Raw mode is unsupported generally; `check` diverges there too.
+
 ## Declared non-goals
 
 - **Other Built-in Plugins**: of the plugins official v2 ships, only

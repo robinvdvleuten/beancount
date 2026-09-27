@@ -1,0 +1,12 @@
+; The example from #481. Loading removes the balance on an unknown account,
+; so it is no use; the note is one.
+2024-01-01 open Assets:Bank EUR
+2024-01-05 * "Coffee"
+  Assets:Bank  -3.50 EUR
+  Expenses:Food
+2024-01-02 balance Liabilities:Card 0 EUR
+2024-01-03 note Assets:Other "hi"
+2024-02-01 close Assets:Closed
+2024-01-04 * "Broken"
+  Assets:Bank  -1 EUR
+  Expenses:Zed  2 EUR

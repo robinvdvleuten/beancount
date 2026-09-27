@@ -1,0 +1,14 @@
+; An account with only a close directive is not reported, even where it is
+; used; an account used before its open is not reported either.
+2024-01-01 close Assets:Closed
+2024-01-03 open Expenses:Late
+
+2024-01-02 * "Uses the closed account"
+  Assets:Closed   -1 EUR
+  Expenses:Other   1 EUR
+
+2024-01-02 * "Uses an account before its open"
+  Expenses:Late    1 EUR
+  Equity:Opening  -1 EUR
+
+2024-01-03 balance Assets:Closed -1 EUR
