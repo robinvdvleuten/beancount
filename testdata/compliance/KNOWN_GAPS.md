@@ -110,9 +110,9 @@ limits:
   posting is blamed on its own line and column, where v2 blames the
   transaction (`body_tags_after_posting`). An unbalanced `pushtag` or
   `pushmeta`, a missing documents root, a duplicate include, an include
-  glob with no match and a Built-in Plugin given a configuration are blamed
-  on the directive that caused them, where v2 prints line `0` or
-  `<load>:0`. A syntax error at the end of a line (`option "title"` without
+  glob with no match, a missing included file and a Built-in Plugin given
+  a configuration are blamed on the directive that caused them, where v2
+  prints line `0` or `<load>:0`. A syntax error at the end of a line (`option "title"` without
   its value) is blamed on that line; v2's lexer counts the line break as
   part of the next line and blames that one.
 

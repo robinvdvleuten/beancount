@@ -145,6 +145,7 @@ var lineGaps = map[string]string{
 	"documents_missing_root":        "we blame the option's line, v2 line 0",
 	"duplicate_include":             "we blame the include's line, v2 <load>:0",
 	"include_glob_no_match":         "we blame the include's line, v2 <load>:0",
+	"include_missing_file":          "we blame the include's line, v2 <load>:0",
 	"plugin_auto_accounts_config":   "we blame the plugin's line, v2 <load>:0",
 	"plugin_implicit_prices_config": "we blame the plugin's line, v2 <load>:0",
 	"plugin_unknown_module":         "we blame the plugin's line, v2 <load>:0",

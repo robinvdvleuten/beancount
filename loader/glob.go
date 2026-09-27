@@ -7,9 +7,9 @@ import (
 	"strings"
 )
 
-// hasGlobMeta reports whether an include path is a glob pattern.
-func hasGlobMeta(path string) bool {
-	return strings.ContainsAny(path, "*?[")
+// hasGlobMeta reports whether a path segment is a glob pattern.
+func hasGlobMeta(segment string) bool {
+	return strings.ContainsAny(segment, "*?[")
 }
 
 // globInclude expands an include pattern the way beancount's loader does with
@@ -31,8 +31,10 @@ func globInclude(baseDir, pattern string) ([]string, error) {
 			continue
 		}
 		// Surface a malformed segment up front; Match only reports it while matching.
-		if _, err := filepath.Match(segment, ""); err != nil {
-			return nil, err
+		if hasGlobMeta(segment) {
+			if _, err := filepath.Match(segment, ""); err != nil {
+				return nil, err
+			}
 		}
 		segments = append(segments, segment)
 	}

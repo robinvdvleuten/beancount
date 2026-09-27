@@ -609,22 +609,25 @@ include "`+pattern+`"
 	assert.Equal(t, 0, len(result.Diagnostics))
 }
 
-func TestLoadNonExistentFile(t *testing.T) {
+func TestLoadWithMissingInclude(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create main file with non-existent include
 	mainFile := filepath.Join(tmpDir, "main.beancount")
-	err := os.WriteFile(mainFile, []byte(`
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
 include "does-not-exist.beancount"
 
 2024-01-01 open Assets:Checking USD
-`), 0644)
+`), 0644))
+
+	ldr := New(WithFollowIncludes())
+	result, err := ldr.Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
-	// Load should fail
-	ldr := New(WithFollowIncludes())
-	_, err = ldr.Load(context.Background(), mainFile)
-	assert.Error(t, err)
+	// Like bean-check, a missing plain include is an unmatched glob: a load
+	// error that doesn't abort loading.
+	assert.Equal(t, 1, len(result.AST.Directives))
+	assert.Equal(t, 1, len(result.Diagnostics))
+	assert.Contains(t, result.Diagnostics[0].Error(), `main.beancount:2: File glob "does-not-exist.beancount" does not match any files`)
 }
 
 func TestLoadOptionsPrecedence(t *testing.T) {

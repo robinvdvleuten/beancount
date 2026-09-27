@@ -66,7 +66,9 @@ func (w *IncludedOptionWarning) Severity() diagnostic.Severity {
 
 func (w *IncludedOptionWarning) GetPosition() ast.Position { return w.Option.Position() }
 
-// IncludeGlobNoMatchError reports an include pattern that matched no files.
+// IncludeGlobNoMatchError reports an include that matched no files: an
+// unmatched glob or, since beancount expands every include as a glob, a
+// missing file.
 type IncludeGlobNoMatchError struct {
 	Include *ast.Include
 }
@@ -545,21 +547,17 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		default:
 		}
 
-		// Resolve path relative to the including file's directory
+		// Like beancount, expand every include as a glob relative to the
+		// including file's directory, so a missing plain path is a no-match
+		// load error too.
 		includePath := inc.Filename.Value
-		resolvedPaths := []string{includePath}
-		if hasGlobMeta(includePath) {
-			matches, err := globInclude(baseDir, includePath)
-			if err != nil {
-				mergeTimer.End()
-				return nil, fmt.Errorf("invalid include pattern %q: %w", includePath, err)
-			}
-			if len(matches) == 0 {
-				l.diagnostics = append(l.diagnostics, &IncludeGlobNoMatchError{Include: inc})
-			}
-			resolvedPaths = matches
-		} else if !filepath.IsAbs(includePath) {
-			resolvedPaths[0] = filepath.Join(baseDir, includePath)
+		resolvedPaths, err := globInclude(baseDir, includePath)
+		if err != nil {
+			mergeTimer.End()
+			return nil, fmt.Errorf("invalid include pattern %q: %w", includePath, err)
+		}
+		if len(resolvedPaths) == 0 {
+			l.diagnostics = append(l.diagnostics, &IncludeGlobNoMatchError{Include: inc})
 		}
 
 		for _, path := range resolvedPaths {

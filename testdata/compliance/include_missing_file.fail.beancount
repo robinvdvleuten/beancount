@@ -1,0 +1,6 @@
+include "does-not-exist.beancount"
+
+2024-01-01 open Assets:Bank EUR
+2024-01-02 * "Coffee"
+  Assets:Bank  -3.50 EUR
+  Expenses:Food
