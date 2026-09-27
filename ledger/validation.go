@@ -336,7 +336,8 @@ func (v *validator) validatePad(pad *ast.Pad) []error {
 //
 // It validates that:
 //   - The account exists and is open at the note date
-//   - The description is non-empty (enforced by parser, checked for safety)
+//
+// Like bean-check, any description is accepted, including an empty string.
 //
 // Note directives attach dated comments to accounts for documentation purposes.
 //
@@ -367,12 +368,6 @@ func (v *validator) validateNote(note *ast.Note) []error {
 		errs = append(errs, NewAccountNotOpenError(note, note.Account))
 	}
 
-	// 2. Validate description is non-empty
-	if note.Description.IsEmpty() {
-		// This is already enforced by the parser, but check anyway
-		errs = append(errs, fmt.Errorf("note description cannot be empty"))
-	}
-
 	return errs
 }
 
@@ -394,16 +389,10 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 		errs = append(errs, NewAccountNotOpenError(doc, doc.Account))
 	}
 
-	// 2. Validate path is non-empty
-	if doc.PathToDocument.IsEmpty() {
-		// This is already enforced by the parser, but check anyway
-		errs = append(errs, fmt.Errorf("document path cannot be empty"))
-		return errs
-	}
-
-	// 3. Validate the referenced file exists, matching beancount's
+	// 2. Validate the referenced file exists, matching beancount's
 	// verify_document_files_exist plugin. Relative paths resolve against
-	// the directory of the file declaring the directive.
+	// the directory of the file declaring the directive, so an empty path
+	// names that directory and passes, as in bean-check.
 	docPath := doc.PathToDocument.Value
 	if !filepath.IsAbs(docPath) {
 		docPath = filepath.Join(filepath.Dir(doc.Position().Filename), docPath)
