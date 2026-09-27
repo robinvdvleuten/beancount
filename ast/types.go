@@ -423,6 +423,10 @@ func (m *MetadataValue) String() string {
 	}
 }
 
+// ImportIDKey is the metadata key that holds a transaction's Import ID, the
+// bank's own identifier for it.
+const ImportIDKey = "import-id"
+
 // Metadata represents a key-value pair that can be attached to any directive or posting.
 // Metadata entries are indented on lines immediately following the directive or posting
 // they annotate. They provide a flexible way to attach arbitrary structured information

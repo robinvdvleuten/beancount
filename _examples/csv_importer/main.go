@@ -111,7 +111,7 @@ func (i *csvImporter) rowToTransaction(row []string) (*ast.Transaction, error) {
 	return ast.NewTransaction(date, payee,
 		ast.WithFlag("*"),
 		// The SDK sends import-id as the transaction's Import ID.
-		ast.WithTransactionMetadata(ast.NewMetadata("import-id", id)),
+		ast.WithTransactionMetadata(ast.NewMetadata(ast.ImportIDKey, id)),
 		ast.WithPostings(
 			ast.NewPosting(i.account, ast.WithAmount(amount.StringFixed(2), "USD")),
 			ast.NewPosting(categoryAccount),

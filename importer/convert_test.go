@@ -66,7 +66,7 @@ func TestImportIDTravelsAsItsOwnField(t *testing.T) {
 	txn := msgs[0].GetTransaction()
 	assert.Equal(t, "TX-001", txn.GetImportId())
 	for _, m := range txn.GetMetadata() {
-		assert.NotEqual(t, importIDKey, m.GetKey())
+		assert.NotEqual(t, ast.ImportIDKey, m.GetKey())
 	}
 }
 
@@ -87,7 +87,7 @@ func TestEncodeRejects(t *testing.T) {
 		{
 			name: "import-id that is not a string",
 			directive: ast.NewTransaction(date, "x", ast.WithTransactionMetadata(&ast.Metadata{
-				Key: importIDKey, Value: &ast.MetadataValue{Account: &account},
+				Key: ast.ImportIDKey, Value: &ast.MetadataValue{Account: &account},
 			})),
 			want: "directive 1: import-id metadata must be a string",
 		},
@@ -144,7 +144,7 @@ func TestDecodeRejects(t *testing.T) {
 			name: "import-id both as field and metadata",
 			msgs: txn(func(m *pb.Transaction) {
 				m.ImportId = "a"
-				m.Metadata = []*pb.Metadata{{Key: importIDKey, Value: &pb.MetadataValue{Kind: &pb.MetadataValue_StringValue{StringValue: "b"}}}}
+				m.Metadata = []*pb.Metadata{{Key: ast.ImportIDKey, Value: &pb.MetadataValue{Kind: &pb.MetadataValue_StringValue{StringValue: "b"}}}}
 			}),
 			want: "directive 1: import-id is set both as the Import ID and as metadata",
 		},

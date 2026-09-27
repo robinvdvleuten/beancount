@@ -65,15 +65,21 @@ type Ledger struct {
 	config   *Config
 	errors   []error
 	pads     *pads
+	// Every balance assertion, passing or not, by account, currency and
+	// date, in directive order
+	balances map[balanceKey][]*ast.Balance
 	// Balance assertions repeating an earlier one with a different amount
 	duplicateBalances map[*ast.Balance]bool
-	bookedLots        map[*ast.Posting][]BookedLot
-	booker            *booker
-	booked            map[*ast.Transaction]*bookedTransaction
-	unopened          map[string]*Account // Accounts posted to before any open
-	display           *DisplayContext
-	priceGraphMu      sync.RWMutex
-	priceGraphs       map[string]*Graph
+	// The first applied transaction per Import ID; a Dropped transaction
+	// is not in it
+	importIDs    map[string]*ast.Transaction
+	bookedLots   map[*ast.Posting][]BookedLot
+	booker       *booker
+	booked       map[*ast.Transaction]*bookedTransaction
+	unopened     map[string]*Account // Accounts posted to before any open
+	display      *DisplayContext
+	priceGraphMu sync.RWMutex
+	priceGraphs  map[string]*Graph
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -115,6 +121,7 @@ func New() *Ledger {
 		bookedLots:  make(map[*ast.Posting][]BookedLot),
 		booked:      make(map[*ast.Transaction]*bookedTransaction),
 		unopened:    make(map[string]*Account),
+		importIDs:   make(map[string]*ast.Transaction),
 		display:     newDisplayContext(),
 	}
 }
@@ -181,7 +188,8 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		return err
 	}
 	l.runPlugins(ctx, tree)
-	l.duplicateBalances = duplicateBalances(tree.Directives)
+	l.balances = balancesByKey(tree.Directives)
+	l.duplicateBalances = duplicateBalances(l.balances)
 
 	var validationTimer telemetry.Timer
 	if transactionCount > 0 {
@@ -751,9 +759,14 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 }
 
 // applyTransaction replays a booked transaction's lot changes onto its
-// accounts' inventories and records the posting history. A posting to an
-// account that is not open yet is kept for the account's open.
+// accounts' inventories and records the posting history and Import ID. A
+// posting to an account that is not open yet is kept for the account's open.
 func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransaction) {
+	if id, ok := importID(txn); ok && id != "" {
+		if _, seen := l.importIDs[id]; !seen {
+			l.importIDs[id] = txn
+		}
+	}
 	for _, bp := range booked.postings {
 		accountName := string(bp.posting.Account)
 		account, ok := l.accounts[accountName]

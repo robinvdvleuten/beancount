@@ -240,32 +240,42 @@ func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
 	return NewBalanceCurrencyError(balance)
 }
 
+// balanceKey is what makes two balance assertions assert the same thing.
+type balanceKey struct {
+	account  ast.Account
+	currency string
+	date     string
+}
+
+func balanceKeyOf(balance *ast.Balance) balanceKey {
+	return balanceKey{balance.Account, balance.Amount.Currency, balance.Date().String()}
+}
+
+// balancesByKey groups the balance assertions by account, currency and
+// date, each group in directive order.
+func balancesByKey(directives []ast.Directive) map[balanceKey][]*ast.Balance {
+	balances := make(map[balanceKey][]*ast.Balance)
+	for _, directive := range directives {
+		if balance, ok := directive.(*ast.Balance); ok {
+			k := balanceKeyOf(balance)
+			balances[k] = append(balances[k], balance)
+		}
+	}
+	return balances
+}
+
 // duplicateBalances returns the balance assertions whose account, currency
 // and date repeat an earlier one's with a different number, like beancount's
 // validate_duplicate_balances: each is compared with the first assertion
 // for its key, in directive order, whatever else is reported about either.
 // The tolerance is not compared.
-func duplicateBalances(directives []ast.Directive) map[*ast.Balance]bool {
-	type key struct {
-		account  ast.Account
-		currency string
-		date     string
-	}
-	first := make(map[key]*ast.Balance)
+func duplicateBalances(balances map[balanceKey][]*ast.Balance) map[*ast.Balance]bool {
 	duplicates := make(map[*ast.Balance]bool)
-	for _, directive := range directives {
-		balance, ok := directive.(*ast.Balance)
-		if !ok {
-			continue
-		}
-		k := key{balance.Account, balance.Amount.Currency, balance.Date().String()}
-		reference, ok := first[k]
-		if !ok {
-			first[k] = balance
-			continue
-		}
-		if !sameNumber(reference.Amount, balance.Amount) {
-			duplicates[balance] = true
+	for _, group := range balances {
+		for _, balance := range group[1:] {
+			if !sameNumber(group[0].Amount, balance.Amount) {
+				duplicates[balance] = true
+			}
 		}
 	}
 	return duplicates

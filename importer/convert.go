@@ -10,9 +10,6 @@ import (
 	"github.com/robinvdvleuten/beancount/importer/internal/pb"
 )
 
-// importIDKey is the metadata key the host writes an Import ID to.
-const importIDKey = "import-id"
-
 // encoders turn each directive kind protocol v1 carries into its message.
 var encoders = map[ast.DirectiveKind]func(ast.Directive) (*pb.Directive, error){
 	ast.KindTransaction: func(d ast.Directive) (*pb.Directive, error) {
@@ -88,12 +85,12 @@ func encodeTransaction(txn *ast.Transaction) (*pb.Transaction, error) {
 		msg.Links = append(msg.Links, string(link))
 	}
 	for _, m := range txn.Metadata {
-		if m.Key != importIDKey {
+		if m.Key != ast.ImportIDKey {
 			msg.Metadata = append(msg.Metadata, encodeMetadata(m))
 			continue
 		}
 		if m.Value == nil || m.Value.StringValue == nil {
-			return nil, fmt.Errorf("%s metadata must be a string", importIDKey)
+			return nil, fmt.Errorf("%s metadata must be a string", ast.ImportIDKey)
 		}
 		msg.ImportId = m.Value.StringValue.Value
 	}
@@ -121,11 +118,11 @@ func decodeTransaction(msg *pb.Transaction) (*ast.Transaction, error) {
 	}
 	if id := msg.GetImportId(); id != "" {
 		for _, m := range metadata {
-			if m.Key == importIDKey {
-				return nil, fmt.Errorf("%s is set both as the Import ID and as metadata", importIDKey)
+			if m.Key == ast.ImportIDKey {
+				return nil, fmt.Errorf("%s is set both as the Import ID and as metadata", ast.ImportIDKey)
 			}
 		}
-		metadata = append([]*ast.Metadata{ast.NewMetadata(importIDKey, id)}, metadata...)
+		metadata = append([]*ast.Metadata{ast.NewMetadata(ast.ImportIDKey, id)}, metadata...)
 	}
 	txn.AddMetadata(metadata...)
 	for i, p := range msg.GetPostings() {

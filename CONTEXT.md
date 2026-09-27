@@ -23,11 +23,11 @@ The bank's own identifier for a transaction, which an Importer supplies and whic
 _Avoid_: transaction ID, external ID, bank ID
 
 **Duplicate**:
-An imported directive that the ledger already records. A transaction is a Duplicate when the Import IDs match. Without an Import ID on the ledger's side, it is a Duplicate when the account and amount match and the dates are at most 2 days apart. A Balance assertion is a Duplicate when its account, date, and amount all match.
+An Extracted directive that the ledger already records, left out of the import. A transaction is a Duplicate when the Import IDs match. Without an Import ID on the ledger's side, it is a Duplicate when the ledger transaction has a posting with the same account and amount, the dates are at most 2 days apart, and the accounts one transaction posts to are all among the other's. A Balance assertion is a Duplicate when its account, date, and amount all match. Extracted directives are never Duplicates of each other. A transaction a `pad` inserts counts as a ledger transaction.
 _Avoid_: double, repeat
 
 **Unknown account**:
-The account an import posts to when the Importer cannot say where the money went, `Expenses:Unknown` unless the user names another.
+The account an import posts to when the Importer cannot say where the money went, `Expenses:Unknown` unless the user names another. It balances an Extracted transaction that has a single posting.
 _Avoid_: suspense account, uncategorized account, placeholder
 
 **Plugin**:

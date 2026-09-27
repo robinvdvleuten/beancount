@@ -205,6 +205,22 @@ statement.csv (extracted):1: Transaction does not balance: (0.5 USD)
 ✗ 1 validation error(s) found
 ```
 
+Transactions and balance assertions the ledger already records are Duplicates. They are left out of stdout, and each is reported on stderr at the full path and line of the ledger directive it matched, so importing the same statement twice adds nothing:
+
+```
+/home/me/books/ledger.beancount:42: Duplicate left out: 2024-01-15 * "Coffee Shop" "Latte"
+```
+
+A transaction is a Duplicate when a ledger transaction has the same `import-id`. It is also a Duplicate when a ledger transaction without an `import-id`, including one a `pad` inserted, has a posting on the same account with the same amount, is dated at most 2 days before or after, and posts to the same accounts, to more of them, or to fewer. So an Importer's lone `Assets:Checking` posting matches your hand-written coffee on `Assets:Checking` and `Expenses:Food`, but two coffees paid from different accounts do not match. A balance assertion is a Duplicate when a ledger one has the same account, date, and amount. The Importer's own directives are never compared with each other, so two identical coffees on one statement are both kept.
+
+When the Importer returns a transaction with a single posting, the command balances it with a posting to the unknown account, `Expenses:Unknown`, or the one you name with `--unknown-account`:
+
+```sh
+beancount import --with ./my-importer --unknown-account Expenses:Uncategorized ledger.beancount statement.csv
+```
+
+The ledger must open that account; the command does not add the `open` for you.
+
 The command also exits with `1` when the Importer does not recognize the statement or reports an error. Anything the Importer logs goes to stderr.
 
 ### `web`: edit in the browser

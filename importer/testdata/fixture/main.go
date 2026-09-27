@@ -46,6 +46,22 @@ func (fixture) Extract(_ context.Context, path string) ([]ast.Directive, error) 
 				ast.NewPosting(checking),
 			),
 		)}, nil
+	case "single-posting":
+		return []ast.Directive{ast.NewTransaction(date, "Latte",
+			ast.WithFlag("*"),
+			ast.WithPostings(ast.NewPosting(checking, ast.WithAmount("-4.50", "USD"))),
+		)}, nil
+	case "twice":
+		latte := func() ast.Directive {
+			return ast.NewTransaction(date, "Latte",
+				ast.WithFlag("*"),
+				ast.WithPostings(
+					ast.NewPosting(food, ast.WithAmount("4.50", "USD")),
+					ast.NewPosting(checking),
+				),
+			)
+		}
+		return []ast.Directive{latte(), latte()}, nil
 	case "unbalanced":
 		return []ast.Directive{ast.NewTransaction(date, "Latte",
 			ast.WithFlag("*"),
@@ -60,7 +76,7 @@ func (fixture) Extract(_ context.Context, path string) ([]ast.Directive, error) 
 		ast.NewTransaction(date, "Latte",
 			ast.WithFlag("*"),
 			ast.WithPayee("Coffee Shop"),
-			ast.WithTransactionMetadata(ast.NewMetadata("import-id", "TX-001")),
+			ast.WithTransactionMetadata(ast.NewMetadata(ast.ImportIDKey, "TX-001")),
 			ast.WithPostings(
 				ast.NewPosting(food, ast.WithAmount("4.50", "USD")),
 				ast.NewPosting(checking),
