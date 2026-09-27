@@ -72,7 +72,7 @@ func TestErrorKinds(t *testing.T) {
 		{NewInvalidCostError(txn, account, 0, "{x USD}", details), "InvalidCostError", 10, txn},
 		{NewTotalCostError(txn, posting, "cannot use total cost with zero quantity"), "TotalCostError", 10, txn},
 		{NewInvalidPriceError(txn, account, 0, "@ x USD", details), "InvalidPriceError", 10, txn},
-		{NewInvalidMetadataError(txn, account, "k", nil, "empty value"), "InvalidMetadataError", 10, txn},
+		{NewInvalidMetadataError(txn, account, "k", nil, "duplicate key"), "InvalidMetadataError", 10, txn},
 		{NewInsufficientInventoryError(txn, account, details), "InsufficientInventoryError", 10, txn},
 		{NewAmbiguousBookingError(txn, account, details), "AmbiguousBookingError", 10, txn},
 		{NewCurrencyConstraintError(txn, account, "EUR", []string{"USD"}), "CurrencyConstraintError", 10, txn},

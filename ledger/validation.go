@@ -87,7 +87,8 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 // It validates that:
 //   - Metadata keys are not duplicated within a directive
 //   - Metadata keys are not duplicated within a posting
-//   - Metadata values are non-empty
+//
+// Like bean-check, any value is accepted, including an empty string.
 //
 // Checks both transaction-level and posting-level metadata.
 //
@@ -98,10 +99,10 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 //	v := newValidator(ledger.accounts)
 //	errs := v.validateMetadata(txn)
 //	if len(errs) > 0 {
-//	    // Found invalid or duplicate metadata
+//	    // Found duplicate metadata
 //	    for _, err := range errs {
 //	        fmt.Printf("Metadata error: %v\n", err)
-//	        // Example: "2024-01-15: Invalid metadata: key="invoice", value="": empty value"
+//	        // Example: "2024-01-15: Invalid metadata: key="invoice", value="xyz": duplicate key"
 //	        // Example: "2024-01-15: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
 //	    }
 //	}
@@ -128,12 +129,6 @@ func validateMetadataEntries(
 			continue
 		}
 		seen[meta.Key] = true
-
-		if meta.Value != nil && meta.Value.StringValue != nil && meta.Value.StringValue.IsEmpty() {
-			errs = append(errs, NewInvalidMetadataError(
-				txn, account, meta.Key, meta.Value, "empty value",
-			))
-		}
 	}
 	return errs
 }

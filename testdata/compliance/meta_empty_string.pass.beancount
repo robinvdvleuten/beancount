@@ -1,0 +1,14 @@
+2024-01-01 open Assets:A
+  note: ""
+2024-01-01 open Equity:O
+2024-01-01 commodity USD
+  name: ""
+2024-01-14 * "x"
+  note: ""
+  Assets:A 8 USD
+    pnote: ""
+  Equity:O
+2024-01-15 balance Assets:A 8 USD
+  note: ""
+2024-01-15 event "e" "v"
+  note: ""

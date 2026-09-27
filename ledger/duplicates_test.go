@@ -17,8 +17,7 @@ func TestLedgerDuplicate(t *testing.T) {
 		name      string
 		ledger    string
 		extracted string
-		line      int  // Line of the matched ledger directive, 0 when kept
-		invalid   bool // The ledger reports an error and is still applied
+		line      int // Line of the matched ledger directive, 0 when kept
 	}{
 		{
 			name: "same Import ID",
@@ -233,9 +232,8 @@ func TestLedgerDuplicate(t *testing.T) {
 		},
 		{
 			// An empty Import ID still keeps its transaction out of the
-			// date window. The empty value is reported as invalid metadata.
-			name:    "empty Import ID in the ledger",
-			invalid: true,
+			// date window.
+			name: "empty Import ID in the ledger",
 			ledger: `2024-01-15 * "Latte"
   import-id: ""
   Expenses:Food 4.50 USD
@@ -269,11 +267,7 @@ func TestLedgerDuplicate(t *testing.T) {
 			ctx := context.Background()
 			l := New()
 			err := l.Process(ctx, parser.MustParseBytes(ctx, []byte(opens+tt.ledger)))
-			if tt.invalid {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			assert.NoError(t, err)
 			extracted := parser.MustParseBytes(ctx, []byte(tt.extracted))
 
 			match, ok := l.Duplicate(extracted.Directives[0])
