@@ -240,6 +240,13 @@ func TestInventoryKeepsInsertionOrder(t *testing.T) {
 	assert.Equal(t, "2 ZZZ, 1 AAPL", valueString(inv))
 }
 
+func TestSumSkipsNullPosition(t *testing.T) {
+	acc := &sumInventoryAcc{inv: NewInventory()}
+	acc.update((*Position)(nil))
+	acc.update(&Position{Units: Amount{Number: decimal.NewFromInt(1), Currency: "USD"}})
+	assert.Equal(t, "1 USD", valueString(acc.finalize()))
+}
+
 func TestHasAccountMatchesEveryEntryAccount(t *testing.T) {
 	// Like bean-query, has_account searches every account an entry
 	// references, case-insensitively, so it also selects open and pad

@@ -149,7 +149,11 @@ func (a *sumInventoryAcc) update(v any) {
 	case *Amount:
 		a.inv.AddAmount(val)
 	case *Position:
-		a.inv.AddPosition(val)
+		// A posting without a position yields a NULL (typed nil) position,
+		// which adds nothing.
+		if val != nil {
+			a.inv.AddPosition(val)
+		}
 	case *Inventory:
 		a.inv.AddInventory(val)
 	}
