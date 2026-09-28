@@ -73,7 +73,7 @@ func (ls *lotSpec) String() string {
 	parts := make([]string, 0, 3)
 
 	if ls.Cost != nil {
-		parts = append(parts, fmt.Sprintf("%s %s", ls.Cost.String(), ls.CostCurrency))
+		parts = append(parts, fmt.Sprintf("%s %s", formatInferredNumber(*ls.Cost), ls.CostCurrency))
 	}
 
 	if ls.Date != nil {
@@ -115,9 +115,9 @@ func newLot(commodity string, amount decimal.Decimal, spec *lotSpec) *lot {
 // String returns a string representation of the lot
 func (l *lot) String() string {
 	if l.Spec == nil || l.Spec.IsEmpty() {
-		return fmt.Sprintf("%s %s", l.Amount.String(), l.Commodity)
+		return fmt.Sprintf("%s %s", formatInferredNumber(l.Amount), l.Commodity)
 	}
-	return fmt.Sprintf("%s %s %s", l.Amount.String(), l.Commodity, l.Spec.String())
+	return fmt.Sprintf("%s %s %s", formatInferredNumber(l.Amount), l.Commodity, l.Spec.String())
 }
 
 // ParseLotSpec creates a LotSpec from ast.Cost

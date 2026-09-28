@@ -1,0 +1,8 @@
+option "booking_method" "FIFO"
+2020-01-01 open Assets:Invest
+2020-01-01 open Equity:Opening
+2020-01-01 * "buy"
+  Assets:Invest  5 HOOL {10 USD}
+  Equity:Opening
+2020-01-02 pad Assets:Invest Equity:Opening
+2020-01-03 balance Assets:Invest 10 HOOL

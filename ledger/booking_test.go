@@ -222,7 +222,7 @@ func TestBookingStagesTheGroupsItBooks(t *testing.T) {
 	assert.Equal(t, "CurrencyGroupError", kindOf(errs[1]), "got %v", errs[1])
 	assert.Equal(t, []string{"-4 AA {5 USD, 2024-01-02}", "20 USD {}"}, postings["the EUR group fails booking"])
 	assert.Zero(t, postings["the GBP group fails interpolation"])
-	assert.Equal(t, "{}", b.inventory("Assets:Stock").String())
+	assert.Equal(t, "()", b.inventory("Assets:Stock").String())
 }
 
 func TestBookingAddsAugmentationsOnceTheTransactionIsBooked(t *testing.T) {
@@ -250,7 +250,7 @@ func TestBookingAddsAugmentationsOnceTheTransactionIsBooked(t *testing.T) {
 	assert.Zero(t, errs)
 	assert.Equal(t, []string{"20 AA {2.5 USD, 2024-01-04}", "-10 AA {5 USD, 2024-01-03}"},
 		postings["split: buy the new lot first, then sell the old one"])
-	assert.Equal(t, "{20 AA {2.5 USD, 2024-01-04}, 10 HOOL {5 USD, 2024-01-02}, -10 HOOL {6 USD, 2024-01-02}}",
+	assert.Equal(t, "(20 AA {2.5 USD, 2024-01-04}, 10 HOOL {5 USD, 2024-01-02}, -10 HOOL {6 USD, 2024-01-02})",
 		b.inventory("Assets:Stock").String())
 }
 

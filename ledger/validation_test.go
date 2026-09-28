@@ -1001,12 +1001,8 @@ func TestBalanceTolerance(t *testing.T) {
 			}
 
 			v := newTestValidator(map[string]*Account{string(account.Name): account})
-			_, err := v.calculateBalanceDelta(balance, nil, newTolerances(nil))
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
+			_, errs := v.calculateBalanceDelta(balance, nil, newTolerances(nil))
+			assert.Equal(t, tt.wantErr, len(errs) > 0, "errors: %v", errs)
 		})
 	}
 

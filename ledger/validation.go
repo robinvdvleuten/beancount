@@ -578,22 +578,30 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 //
 // A failed assertion returns both the delta and the error, since its
 // padding still applies, as in beancount, whose pad plugin inserts padding
-// before any assertion is checked.
-func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad, tolerances tolerances) (*BalanceDelta, error) {
+// before any assertion is checked. Padding a currency the account holds at
+// cost is an error for each such lot, and the padding, without cost, still
+// applies, as in beancount's ops/pad.py.
+func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad, tolerances tolerances) (*BalanceDelta, []error) {
 	expectedAmount, _ := ParseAmount(balance.Amount)
 	currency := balance.Amount.Currency
 	accountName := string(balance.Account)
-	actualAmount := v.accounts[accountName].Inventory.Get(currency)
+	inventory := v.accounts[accountName].Inventory
+	actualAmount := inventory.Get(currency)
 
 	tolerance, err := tolerances.balance(balance)
 	if err != nil {
-		return nil, err
+		return nil, []error{err}
 	}
 
 	delta := &BalanceDelta{AccountName: accountName, Currency: currency}
+	var errs []error
 	if padEntry != nil {
 		difference := pydecimal.Sub(expectedAmount, actualAmount)
 		if difference.Abs().GreaterThan(tolerance) {
+			for range inventory.countAtCost(currency) {
+				errs = append(errs, NewPadCostError(balance, padEntry, inventory))
+			}
+
 			// Like beancount, the padding is the difference as the
 			// subtraction leaves it, with its own exponent.
 			delta.Padding = createPaddingTransaction(padEntry, balance, formatInferredNumber(difference))
@@ -607,9 +615,9 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 	}
 
 	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
-		return delta, NewBalanceMismatchError(balance, expectedAmount, actualAmount)
+		errs = append(errs, NewBalanceMismatchError(balance, expectedAmount, actualAmount))
 	}
-	return delta, nil
+	return delta, errs
 }
 
 // validateBookedCosts reports booked cost postings with zero units or a

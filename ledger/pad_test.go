@@ -329,3 +329,60 @@ func TestPaddingKeepsTheDifferencesPrecision(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "5", cash.Inventory.Get("USD").String())
 }
+
+func TestPadOnACurrencyHeldAtCost(t *testing.T) {
+	// Like beancount's ops/pad.py: each lot of the asserted currency held at
+	// cost is a PadError on the balance line, listing the whole inventory,
+	// and the padding, without cost, still applies.
+	source := `
+option "booking_method" "FIFO"
+2020-01-01 open Assets:Invest
+2020-01-01 open Equity:Opening
+2020-01-01 * "buy"
+  Assets:Invest  5 HOOL {10 USD}
+  Equity:Opening
+2020-01-01 * "buy2"
+  Assets:Invest  3 HOOL {12.50 USD, 2019-12-01, "lot"}
+  Assets:Invest  2 GOOG {1 EUR}
+  Assets:Invest  7 USD
+  Equity:Opening
+2020-01-02 pad Assets:Invest Equity:Opening
+2020-01-03 balance Assets:Invest 10 HOOL
+2020-01-03 balance Assets:Invest 10 USD
+2020-01-04 balance Assets:Invest 10 HOOL
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 2, len(errs), "errors: %v", errs)
+	for _, err := range errs {
+		var diag *Diagnostic
+		assert.True(t, errors.As(err, &diag))
+		assert.Equal(t, "PadError", diag.Kind())
+		assert.Equal(t, "Attempt to pad an entry with cost for balance: "+
+			`(7 USD, 2 GOOG {1 EUR, 2020-01-01}, 5 HOOL {10 USD, 2020-01-01}, 3 HOOL {12.50 USD, 2019-12-01, "lot"})`,
+			diag.Message())
+		assert.Equal(t, 14, diag.GetPosition().Line)
+		_, isPad := diag.GetDirective().(*ast.Pad)
+		assert.True(t, isPad)
+	}
+}
+
+func TestPadOnACurrencyHeldWithoutCostReportsNothing(t *testing.T) {
+	source := `
+2020-01-01 open Assets:Invest
+2020-01-01 open Equity:Opening
+2020-01-01 * "buy"
+  Assets:Invest  5 HOOL {10 USD}
+  Assets:Invest  5 USD
+  Equity:Opening
+2020-01-02 pad Assets:Invest Equity:Opening
+2020-01-03 balance Assets:Invest 10 USD
+`
+	l := New()
+	_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
+
+	assert.Equal(t, 0, len(l.Errors()), "errors: %v", l.Errors())
+}

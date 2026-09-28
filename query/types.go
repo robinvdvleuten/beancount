@@ -11,6 +11,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
 
@@ -150,22 +151,10 @@ func (inv *inventoryValue) Positions() []*positionValue {
 	return append([]*positionValue(nil), inv.positions...)
 }
 
-// currencyOrder puts the major currencies first when sorting positions, like
-// beancount's CURRENCY_ORDER; any other currency ranks after them by length.
-var currencyOrder = map[string]int{
-	"USD": 0, "EUR": 1, "JPY": 2, "CAD": 3, "GBP": 4, "AUD": 5, "NZD": 6, "CHF": 7,
-}
-
 // sortedPositions returns the positions in the order Python's sorted()
 // gives a beancount inventory (Position.sortkey): by currency rank, cost
 // number, cost currency, then units, ties keeping their insertion order.
 func (inv *inventoryValue) sortedPositions() []*positionValue {
-	rank := func(currency string) int {
-		if r, ok := currencyOrder[currency]; ok {
-			return r
-		}
-		return len(currencyOrder) + len(currency)
-	}
 	costOf := func(p *positionValue) (decimal.Decimal, string) {
 		if p.Cost == nil {
 			return decimal.Zero, ""
@@ -176,7 +165,7 @@ func (inv *inventoryValue) sortedPositions() []*positionValue {
 	positions := inv.Positions()
 	sort.SliceStable(positions, func(i, j int) bool {
 		a, b := positions[i], positions[j]
-		if ra, rb := rank(a.Units.Currency), rank(b.Units.Currency); ra != rb {
+		if ra, rb := ledger.CurrencyRank(a.Units.Currency), ledger.CurrencyRank(b.Units.Currency); ra != rb {
 			return ra < rb
 		}
 		an, ac := costOf(a)

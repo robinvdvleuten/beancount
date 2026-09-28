@@ -357,40 +357,80 @@ func (inv *Inventory) costCurrencies() []string {
 	return currencies
 }
 
-// String returns a string representation of the inventory
-func (inv *Inventory) String() string {
-	if inv.IsEmpty() {
-		return "{}"
-	}
+// currencyOrder ranks the major currencies first, like beancount's
+// CURRENCY_ORDER.
+var currencyOrder = map[string]int{
+	"USD": 0, "EUR": 1, "JPY": 2, "CAD": 3, "GBP": 4, "AUD": 5, "NZD": 6, "CHF": 7,
+}
 
+// CurrencyRank is a currency's first sort key in beancount's
+// Position.sortkey: the major currencies first, any other ranked after them
+// by the length of its name.
+func CurrencyRank(currency string) int {
+	if r, ok := currencyOrder[currency]; ok {
+		return r
+	}
+	return len(currencyOrder) + len(currency)
+}
+
+// String renders the inventory like beancount's str(Inventory): its
+// positions in parentheses, sorted by Position.sortkey (currency rank, cost
+// number, cost currency, then units). Ties fall back to commodity name and
+// lot order, where beancount keeps insertion order.
+func (inv *Inventory) String() string {
 	commodities := make([]string, 0, len(inv.lots))
 	for commodity := range inv.lots {
 		commodities = append(commodities, commodity)
 	}
 	slices.Sort(commodities)
 
-	var buf strings.Builder
-	buf.WriteByte('{')
-
-	first := true
+	var lots []*lot
 	for _, commodity := range commodities {
-		lots := inv.lots[commodity]
-		for _, lot := range lots {
-			if !first {
-				buf.WriteString(", ")
-			}
-			if lot.Spec == nil || lot.Spec.IsEmpty() {
-				buf.WriteString(lot.Amount.String())
-				buf.WriteByte(' ')
-				buf.WriteString(commodity)
-			} else {
-				buf.WriteString(lot.String())
-			}
-			first = false
+		lots = append(lots, inv.lots[commodity]...)
+	}
+	costOf := func(l *lot) (decimal.Decimal, string) {
+		if l.Spec == nil || l.Spec.Cost == nil {
+			return decimal.Zero, ""
+		}
+		return *l.Spec.Cost, l.Spec.CostCurrency
+	}
+	slices.SortStableFunc(lots, func(a, b *lot) int {
+		if c := CurrencyRank(a.Commodity) - CurrencyRank(b.Commodity); c != 0 {
+			return c
+		}
+		an, ac := costOf(a)
+		bn, bc := costOf(b)
+		if c := an.Cmp(bn); c != 0 {
+			return c
+		}
+		if c := strings.Compare(ac, bc); c != 0 {
+			return c
+		}
+		return a.Amount.Cmp(b.Amount)
+	})
+
+	var buf strings.Builder
+	buf.WriteByte('(')
+	for i, lot := range lots {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(lot.String())
+	}
+	buf.WriteByte(')')
+	return buf.String()
+}
+
+// countAtCost returns how many lots of commodity the inventory holds at
+// cost.
+func (inv *Inventory) countAtCost(commodity string) int {
+	n := 0
+	for _, lot := range inv.lots[commodity] {
+		if lot.Spec != nil {
+			n++
 		}
 	}
-	buf.WriteByte('}')
-	return buf.String()
+	return n
 }
 
 // planReduction plans reducing amount (a magnitude) from the given lots.

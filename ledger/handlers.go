@@ -106,11 +106,9 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 		padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
 
 		// A failed assertion is reported and its padding still applies.
-		var err error
-		delta, err = v.calculateBalanceDelta(balance, padEntry, l.tolerances)
-		if err != nil {
-			errs = append(errs, err)
-		}
+		var balanceErrs []error
+		delta, balanceErrs = v.calculateBalanceDelta(balance, padEntry, l.tolerances)
+		errs = append(errs, balanceErrs...)
 	}
 	if l.duplicateBalances[balance] {
 		errs = append(errs, NewDuplicateBalanceError(balance))

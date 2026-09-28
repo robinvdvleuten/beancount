@@ -344,6 +344,17 @@ func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account, curre
 		"Currency %s not allowed for account %s (allowed: %v)", currency, account, allowedCurrencies)
 }
 
+// NewPadCostError creates an error for a pad that fills a currency its
+// account holds at cost. Like beancount's, it is reported on the balance
+// assertion's line, shows the pad, and lists the account's inventory as it is
+// before the padding.
+func NewPadCostError(balance *ast.Balance, pad *ast.Pad, inventory *Inventory) *Diagnostic {
+	e := newError("PadError", pad, pad.Account, "Attempt to pad an entry with cost for balance: %s", inventory.String())
+	e.pos = balance.Position()
+	e.date = balance.Date()
+	return e
+}
+
 // NewUnusedPadWarning creates an error for a pad that inserted no padding.
 // It is fatal, as official bean-check rejects unused pad entries.
 func NewUnusedPadWarning(pad *ast.Pad) *Diagnostic {

@@ -257,12 +257,12 @@ func TestBookShortPositionAtCost(t *testing.T) {
 			assert.False(t, reduced)
 			assert.Zero(t, positions)
 			inv.augment(short, newTestDate("2024-01-15"))
-			assert.Equal(t, "{-3 HOOL {10 USD, 2024-01-15}}", inv.String())
+			assert.Equal(t, "(-3 HOOL {10 USD, 2024-01-15})", inv.String())
 
 			// A positive posting now reduces the short lot instead of adding a lot.
 			_, _, err = inv.book(testPosting(t, "2 HOOL {10 USD}"), method)
 			assert.NoError(t, err)
-			assert.Equal(t, "{-1 HOOL {10 USD, 2024-01-15}}", inv.String())
+			assert.Equal(t, "(-1 HOOL {10 USD, 2024-01-15})", inv.String())
 
 			_, _, err = inv.book(testPosting(t, "1 HOOL {}"), method)
 			assert.NoError(t, err)
@@ -340,10 +340,14 @@ func TestAugmentAddsTheLotItsSpecNames(t *testing.T) {
 	}
 }
 
-func TestInventoryStringSortsCommodities(t *testing.T) {
-	inv := holding(t, "2024-01-01", "10 USD", "20 EUR")
+func TestInventoryStringIsBeancounts(t *testing.T) {
+	// Like str(Inventory): positions sorted by Position.sortkey (major
+	// currencies first, then by currency length, cost number, cost currency
+	// and units), numbers with their own exponent.
+	inv := holding(t, "2024-01-01", "20 EUR", "3.0 HOOL {12.50 USD}", "10 USD", "5 GOOG {1 EUR}", "5 HOOL {10 USD}")
 
-	assert.Equal(t, "{20 EUR, 10 USD}", inv.String())
+	assert.Equal(t, "(10 USD, 20 EUR, 5 GOOG {1 EUR, 2024-01-01}, 5 HOOL {10 USD, 2024-01-01}, 3.0 HOOL {12.50 USD, 2024-01-01})", inv.String())
+	assert.Equal(t, "()", NewInventory().String())
 }
 
 // TestFIFOLIFOBooking tests FIFO and LIFO booking method semantics.
