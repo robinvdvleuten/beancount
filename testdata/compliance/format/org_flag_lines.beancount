@@ -1,0 +1,23 @@
+# Options
+option "operating_currency" "EUR"
+
+# Accounts
+2022-01-01 open Assets:Cash  EUR
+2022-01-01 open Expenses:Food  EUR
+#	Tabbed heading
+#!
+#"quoted"
+
+# Transactions
+2022-01-02 * "Lunch"
+  Expenses:Food  10.00 EUR
+  Assets:Cash
+#; ends the transaction
+
+!x
+*x
+%%
+Price list
+Mx
+T:
+2022-01-03 open Assets:Bank  EUR

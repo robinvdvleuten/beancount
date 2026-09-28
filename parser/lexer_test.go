@@ -63,7 +63,7 @@ func TestLexerBasicTokens(t *testing.T) {
 		},
 		{
 			name:  "transaction symbols",
-			input: "* !",
+			input: " * !",
 			want:  []TokenType{ASTERISK, EXCLAIM, EOF},
 		},
 	}
@@ -759,7 +759,7 @@ func TestBeancountV2CharacterClasses(t *testing.T) {
 }
 
 func TestTransactionFlagTokens(t *testing.T) {
-	lexer := NewLexer([]byte("# & ? % P S T C U R M"), "test.beancount")
+	lexer := NewLexer([]byte(" # & ? % P S T C U R M"), "test.beancount")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
 	assert.Equal(t, []TokenType{FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, EOF}, tokenTypes(tokens))
@@ -773,6 +773,44 @@ func TestNonDirectiveLinesAreComments(t *testing.T) {
 	assert.Equal(t, []TokenType{COMMENT, COMMENT, COMMENT, COMMENT, DATE, OPEN, ACCOUNT, IDENT, EOF}, tokenTypes(tokens))
 	assert.Equal(t, ":PROPERTIES:\n", tokens[0].String(source))
 	assert.Equal(t, "S generated heading\n", tokens[3].String(source))
+}
+
+func TestColumnOneFlagLines(t *testing.T) {
+	// Like beancount's lexer rule ^[*:#!&?%PSTCURM]. with flex's longest
+	// match: a column-1 line starting with a flag character and holding a
+	// second one is skipped, unless a TAG, CURRENCY or ACCOUNT token of two
+	// or more characters starts there (a token rule also wins the tie).
+	skipped := []string{
+		"# x", "#\tx", "#  ", "#!", `#"x"`, "#\u00e9", "#;", "!x", "&x", "*x", "%%", "**", "::",
+		"Price list", "Cash", "Mx", "Mxyz foo", "Tx:y", "T:", "C: x", "#+TITLE", "* x", "! x", "& x",
+		"? x", "P x", "S\tx", ":x", "#\r",
+	}
+	for _, line := range skipped {
+		t.Run(line, func(t *testing.T) {
+			tokens, err := NewLexer([]byte(line+"\n"), "test").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, []TokenType{COMMENT, EOF}, tokenTypes(tokens))
+		})
+	}
+
+	tokensFor := map[string]TokenType{
+		"#tag": TAG, "#1": TAG, "#-x": TAG, "#a b": TAG, "#tag rest": TAG,
+		"USD": IDENT, "STOCK x": IDENT, "PX foo": IDENT, "P1 x": IDENT,
+		"Tx:Y z": ACCOUNT, "Pa:B": ACCOUNT,
+		"#": FLAG, "!": EXCLAIM, "M": FLAG, ":": COLON, "*": ASTERISK,
+	}
+	for line, first := range tokensFor {
+		t.Run(line, func(t *testing.T) {
+			tokens, err := NewLexer([]byte(line+"\n"), "test").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, first, tokens[0].Type)
+		})
+	}
+
+	// Only column 1 counts.
+	tokens, err := NewLexer([]byte("  # x\n"), "test").ScanAll()
+	assert.NoError(t, err)
+	assert.Equal(t, FLAG, tokens[0].Type)
 }
 
 func TestLexerLowercaseWords(t *testing.T) {

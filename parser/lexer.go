@@ -782,22 +782,62 @@ func isValidCurrencyLiteral(value []byte) bool {
 	return true
 }
 
+// isNonDirectiveLine reports whether the column-1 line at the lexer's
+// position is one beancount's lexer skips with its rule
+// ^[*:#!&?%PSTCURM]. (org-mode headings and properties, flagged lines):
+// its first character is one of those and a second one follows on the line.
+// The rule matches those two characters only, so under flex's longest match
+// a TAG, CURRENCY or ACCOUNT token of two or more characters starting there
+// wins, a tie included, since the token rules come first (#1, PX, Pa:B).
 func (l *Lexer) isNonDirectiveLine() bool {
-	remaining := l.source[l.pos:]
-	if len(remaining) == 0 {
+	rest := l.source[l.pos:]
+	if len(rest) < 2 || !isNonDirectiveLineFlag(rest[0]) || rest[1] == '\n' {
 		return false
 	}
-	if remaining[0] == ':' {
-		return len(remaining) > 1
-	}
-	if len(remaining) >= 2 && remaining[0] == '#' && remaining[1] == '+' {
+	return !startsTagCurrencyOrAccount(rest)
+}
+
+// isNonDirectiveLineFlag reports whether ch is one of the characters
+// beancount's skipped-line rule starts with: an org-mode or flag character.
+func isNonDirectiveLineFlag(ch byte) bool {
+	switch ch {
+	case '*', ':', '#', '!', '&', '?', '%':
 		return true
 	}
-	if remaining[0] == '!' || remaining[0] == '&' || remaining[0] == '?' || remaining[0] == '%' {
-		return len(remaining) > 1 && (remaining[1] == ' ' || remaining[1] == '\t')
+	return isLetterTransactionFlag(ch)
+}
+
+// startsTagCurrencyOrAccount reports whether a TAG, CURRENCY or ACCOUNT
+// token of at least two characters, as beancount's lexer matches them,
+// starts at s[0].
+func startsTagCurrencyOrAccount(s []byte) bool {
+	if s[0] == '#' {
+		return isValidInTag(s[1])
 	}
-	if isLetterTransactionFlag(remaining[0]) {
-		return len(remaining) > 1 && (remaining[1] == ' ' || remaining[1] == '\t')
+	if !isUppercaseLetter(s[0]) {
+		return false
 	}
-	return false
+
+	// CURRENCY: some prefix of the run of currency characters is a
+	// currency literal.
+	for end := 2; end <= min(len(s), 24); end++ {
+		ch := s[end-1]
+		if !isUppercaseLetter(ch) && !isDigit(ch) && ch != '\'' && ch != '.' && ch != '_' && ch != '-' {
+			break
+		}
+		if isValidCurrencyLiteral(s[:end]) {
+			return true
+		}
+	}
+
+	// ACCOUNT: an account type ([A-Za-z0-9-] or non-ASCII after its first
+	// letter), a colon and the first character of a component, which is an
+	// uppercase letter, a digit or non-ASCII. Our ACCOUNT token is looser
+	// and the parser checks the components, so this follows beancount's
+	// regular expression instead.
+	i := 1
+	for i < len(s) && (isLetter(s[i]) || isDigit(s[i]) || s[i] == '-' || isUTF8Byte(s[i])) {
+		i++
+	}
+	return i+1 < len(s) && s[i] == ':' && (isUppercaseLetter(s[i+1]) || isDigit(s[i+1]) || isUTF8Byte(s[i+1]))
 }
