@@ -28,7 +28,7 @@ func TestLedger_ProcessOpen(t *testing.T) {
 				assert.True(t, ok, "account should exist")
 				assert.Equal(t, "Assets:Checking", string(acc.Name))
 				assert.Equal(t, "Assets", acc.Type) // Account.Type is now the root name string
-				assert.Equal(t, BookingSTRICT, acc.BookingMethod)
+				assert.Equal(t, BookingSTRICT, l.booker.method(acc.Name))
 				assert.False(t, acc.IsClosed())
 			},
 		},
@@ -42,7 +42,7 @@ option "booking_method" "LIFO"
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				assert.Equal(t, BookingLIFO, acc.BookingMethod)
+				assert.Equal(t, BookingLIFO, l.booker.method(acc.Name))
 			},
 		},
 		{
@@ -60,13 +60,14 @@ option "booking_method" "LIFO"
 		{
 			name: "open account with booking method",
 			input: `
+option "booking_method" "LIFO"
 2020-01-01 open Assets:Brokerage USD "STRICT"
 `,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				assert.Equal(t, BookingSTRICT, acc.BookingMethod)
+				assert.Equal(t, BookingSTRICT, l.booker.method(acc.Name))
 			},
 		},
 		{

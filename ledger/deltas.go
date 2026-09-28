@@ -63,7 +63,6 @@ type OpenDelta struct {
 	Account              ast.Account
 	OpenDate             *ast.Date
 	ConstraintCurrencies []string
-	BookingMethod        BookingMethod
 	Metadata             []*ast.Metadata
 }
 

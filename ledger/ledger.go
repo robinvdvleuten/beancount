@@ -697,7 +697,6 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 		Type:                 accountTypeRoot,
 		OpenDate:             delta.OpenDate,
 		ConstraintCurrencies: delta.ConstraintCurrencies,
-		BookingMethod:        delta.BookingMethod,
 		Metadata:             delta.Metadata,
 		Inventory:            NewInventory(),
 	}

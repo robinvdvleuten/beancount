@@ -27,7 +27,6 @@ type Account struct {
 	OpenDate             *ast.Date
 	CloseDate            *ast.Date
 	ConstraintCurrencies []string
-	BookingMethod        BookingMethod
 	Metadata             []*ast.Metadata
 	Inventory            *Inventory        // Inventory with lot tracking
 	Postings             []*AccountPosting // Transaction history in chronological order

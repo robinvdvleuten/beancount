@@ -471,11 +471,9 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 
 	// A per-account booking method must name one of beancount's methods,
 	// matched case-sensitively. Like beancount, an invalid one is reported
-	// and the account still opens, with the default method.
-	bookingMethod := BookingMethod(open.BookingMethod)
+	// and the account still opens; the booker books it with the default.
 	if open.BookingMethod != "" && !sharedconfig.IsBookingMethod(open.BookingMethod) {
 		errs = append(errs, NewInvalidBookingMethodError(open))
-		bookingMethod = ""
 	}
 
 	// Copy metadata and constraint currencies to avoid shared references with AST
@@ -485,16 +483,11 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	constraintCurrenciesCopy := make([]string, len(open.ConstraintCurrencies))
 	copy(constraintCurrenciesCopy, open.ConstraintCurrencies)
 
-	if bookingMethod == "" {
-		bookingMethod = BookingMethod(v.config.BookingMethod)
-	}
-
 	// Build delta with account properties (avoid allocating Inventory during validation)
 	delta := &OpenDelta{
 		Account:              open.Account,
 		OpenDate:             open.Date(),
 		ConstraintCurrencies: constraintCurrenciesCopy,
-		BookingMethod:        bookingMethod,
 		Metadata:             metadataCopy,
 	}
 
