@@ -1,0 +1,30 @@
+; The Equity:Earnings:Previous opening transaction posts one leg pair per
+; currency, in beancount's order: CAD (Expenses:Travel), EUR (Income:Bonus),
+; then USD (Income:Dividends at cost, Income:Salary).
+2019-01-01 open Assets:Bank:USD USD
+2019-01-01 open Assets:Bank:CAD CAD
+2019-01-01 open Assets:Bank:EUR EUR
+2019-01-01 open Expenses:Travel CAD
+2019-01-01 open Income:Bonus EUR
+2019-01-01 open Income:Dividends
+2019-01-01 open Income:Salary USD
+
+2019-02-01 * "Salary"
+  Assets:Bank:USD   1000.00 USD
+  Income:Salary    -1000.00 USD
+
+2019-03-01 * "Trip"
+  Expenses:Travel    100.00 CAD
+  Assets:Bank:CAD   -100.00 CAD
+
+2019-04-01 * "Bonus"
+  Assets:Bank:EUR    200.00 EUR
+  Income:Bonus      -200.00 EUR
+
+2019-05-01 * "Dividend in kind"
+  Assets:Bank:USD     30.00 USD
+  Income:Dividends      -3 HOOL {10.00 USD}
+
+2020-02-01 * "After the open date"
+  Assets:Bank:USD      1.00 USD
+  Income:Salary       -1.00 USD

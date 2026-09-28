@@ -49,19 +49,24 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 		kept = append(kept, entry)
 	}
 
-	// Collapse income and expenses into the previous-earnings account.
+	// Collapse income and expenses into the previous-earnings account, like
+	// beancount's transfer entries: accounts in sorted order, each position
+	// adding its cost value, so the earnings positions keep beancount's order.
 	earnings := equityAccount(qctx, "Earnings:Previous")
-	for account, inventory := range accounts {
-		if typ, ok := accountType(qctx, account); ok &&
-			(typ == ast.AccountTypeIncome || typ == ast.AccountTypeExpenses) {
-			target, ok := accounts[earnings]
-			if !ok {
-				target = NewInventory()
-				accounts[earnings] = target
-			}
-			target.AddInventory(inventory)
-			delete(accounts, account)
+	for _, account := range sortedAccounts(accounts) {
+		typ, ok := accountType(qctx, account)
+		if !ok || (typ != ast.AccountTypeIncome && typ != ast.AccountTypeExpenses) {
+			continue
 		}
+		target, ok := accounts[earnings]
+		if !ok {
+			target = NewInventory()
+			accounts[earnings] = target
+		}
+		for _, p := range accounts[account].Positions() {
+			target.AddAmount(positionCost(p))
+		}
+		delete(accounts, account)
 	}
 
 	openingDate := &ast.Date{Time: openDate.AddDate(0, 0, -1)}

@@ -1,0 +1,1 @@
+SELECT narration, account, position FROM OPEN ON 2020-01-01 WHERE flag = 'S'
