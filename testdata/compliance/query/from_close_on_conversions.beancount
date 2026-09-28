@@ -1,0 +1,29 @@
+; CLOSE ON appends a C-flagged conversion entry at the day before the close
+; date, moving the cost balance left by the price conversion to
+; Equity:Conversions:Current at a zero NOTHING price. Its narration renders
+; the whole balance like Python's str() of an inventory.
+2019-01-01 open Assets:Bank USD
+2019-01-01 open Assets:CAD CAD
+2019-01-01 open Assets:Stock
+2019-01-01 open Income:Salary USD
+2019-01-01 open Expenses:Travel CAD
+
+2019-02-01 * "salary"
+  Assets:Bank     1000.00 USD
+  Income:Salary  -1000.00 USD
+
+2019-02-15 * "buy"
+  Assets:Stock   3 HOOL {10.00 USD}
+  Assets:Bank
+
+2019-03-01 * "trip"
+  Expenses:Travel  100.00 CAD @ 0.75 USD
+  Assets:Bank      -75.00 USD
+
+2019-04-01 * "refund"
+  Assets:CAD       10.00 CAD
+  Expenses:Travel -10.00 CAD
+
+2020-02-01 * "after"
+  Assets:Bank      1.00 USD
+  Income:Salary   -1.00 USD

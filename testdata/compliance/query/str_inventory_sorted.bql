@@ -1,0 +1,1 @@
+SELECT str(sum(position)) WHERE date < 2020-01-01

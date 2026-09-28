@@ -12,15 +12,13 @@ import (
 // applyFromTransforms applies the FROM clause's summarization transforms to
 // the directive stream, in grammar order: OPEN ON, CLOSE [ON], CLEAR. The
 // FROM filter expression runs after the transforms (official behavior).
-// A bare CLOSE truncates nothing here: its conversion entries only exist for
-// multi-currency conversion tracking, which the official tool also skips for
-// ledgers without a conversion imbalance.
+// A bare CLOSE truncates nothing, but still adds the conversion entry.
 func applyFromTransforms(qctx *Context, entries []ast.Directive, from *CompiledFrom) []ast.Directive {
 	if from.OpenOn != nil {
 		entries = openTransform(qctx, entries, from.OpenOn)
 	}
-	if from.CloseOn != nil {
-		entries = closeTransform(entries, from.CloseOn)
+	if from.CloseOn != nil || from.Close {
+		entries = closeTransform(qctx, entries, from.CloseOn)
 	}
 	if from.Clear {
 		entries = clearTransform(qctx, entries)
@@ -28,12 +26,14 @@ func applyFromTransforms(qctx *Context, entries []ast.Directive, from *CompiledF
 	return entries
 }
 
-// openTransform summarizes all transactions before the open date: income and
+// openTransform summarizes all transactions before the open date: their
+// conversion entry books into Equity:Conversions:Previous, income and
 // expenses balances collapse into Equity:Earnings:Previous, and every
 // balance-sheet account's inventory becomes an S-flagged opening transaction
 // at the day before the open date, posted against Equity:Opening-Balances.
 func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) []ast.Directive {
 	var kept []ast.Directive
+	var before []ast.Directive
 	accounts := make(map[string]*Inventory)
 
 	for _, entry := range entries {
@@ -44,9 +44,15 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 				continue
 			}
 			bookTransaction(qctx, accounts, txn)
+			before = append(before, txn)
 			continue
 		}
 		kept = append(kept, entry)
+	}
+
+	openingDate := &ast.Date{Time: openDate.AddDate(0, 0, -1)}
+	if conversion := conversionTransaction(qctx, before, openingDate, equityAccount(qctx, "Conversions:Previous")); conversion != nil {
+		bookTransaction(qctx, accounts, conversion)
 	}
 
 	// Collapse income and expenses into the previous-earnings account, like
@@ -69,7 +75,6 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 		delete(accounts, account)
 	}
 
-	openingDate := &ast.Date{Time: openDate.AddDate(0, 0, -1)}
 	opening := equityAccount(qctx, "Opening-Balances")
 	var txns []ast.Directive
 	for _, account := range sortedAccounts(accounts) {
@@ -88,15 +93,70 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 }
 
 // closeTransform truncates the stream at the close date, keeping entries
-// strictly before it.
-func closeTransform(entries []ast.Directive, closeDate *ast.Date) []ast.Directive {
-	var kept []ast.Directive
-	for _, entry := range entries {
-		if entry.Date().Before(closeDate.Time) {
-			kept = append(kept, entry)
+// strictly before it, and appends the conversion entry for what is left:
+// at the day before the close date, or at the last entry's date for a bare
+// CLOSE (nil closeDate).
+func closeTransform(qctx *Context, entries []ast.Directive, closeDate *ast.Date) []ast.Directive {
+	kept := entries
+	if closeDate != nil {
+		kept = nil
+		for _, entry := range entries {
+			if entry.Date().Before(closeDate.Time) {
+				kept = append(kept, entry)
+			}
 		}
 	}
+	if len(kept) == 0 {
+		return kept
+	}
+
+	date := kept[len(kept)-1].Date()
+	if closeDate != nil {
+		date = &ast.Date{Time: closeDate.AddDate(0, 0, -1)}
+	}
+	if conversion := conversionTransaction(qctx, kept, date, equityAccount(qctx, "Conversions:Current")); conversion != nil {
+		kept = append(kept[:len(kept):len(kept)], conversion)
+	}
 	return kept
+}
+
+// conversionTransaction builds beancount's conversion entry for entries: a
+// C-flagged transaction at date posting the negated cost balance of their
+// transactions to the conversions account. Entries only leave a cost balance
+// when a price converts between currencies; each leg is priced at zero in
+// the conversion currency so the entry still balances. It returns nil when
+// the cost balance is empty.
+func conversionTransaction(qctx *Context, entries []ast.Directive, date *ast.Date, account string) *ast.Transaction {
+	balance := NewInventory()
+	for _, entry := range entries {
+		txn, ok := entry.(*ast.Transaction)
+		if !ok {
+			continue
+		}
+		for _, posting := range txn.Postings {
+			for _, position := range postingPositions(qctx, posting, txn.Date()) {
+				balance.AddPosition(position)
+			}
+		}
+	}
+
+	costs := NewInventory()
+	for _, p := range balance.Positions() {
+		costs.AddAmount(positionCost(p))
+	}
+	if costs.IsEmpty() {
+		return nil
+	}
+
+	price := ast.NewAmount("0", conversionCurrency)
+	var postings []*ast.Posting
+	for _, p := range costs.Positions() {
+		postings = append(postings, ast.NewPosting(ast.Account(account),
+			ast.WithAmount(numberString(p.Units.Number.Neg()), p.Units.Currency),
+			ast.WithPrice(price)))
+	}
+	narration := "Conversion for " + objectString(balance)
+	return ast.NewTransaction(date, narration, ast.WithFlag("C"), ast.WithPostings(postings...))
 }
 
 // clearTransform appends T-flagged transactions at the last entry date that
@@ -194,6 +254,10 @@ func sortedAccounts(accounts map[string]*Inventory) []string {
 	sort.Strings(names)
 	return names
 }
+
+// conversionCurrency is beancount's default conversion_currency option, the
+// imaginary currency pricing conversion entries at zero.
+const conversionCurrency = "NOTHING"
 
 // equityAccount joins the configured equity root with a sub-account name.
 func equityAccount(qctx *Context, sub string) string {

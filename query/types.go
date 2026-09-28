@@ -149,6 +149,48 @@ func (inv *Inventory) Positions() []*Position {
 	return append([]*Position(nil), inv.positions...)
 }
 
+// currencyOrder puts the major currencies first when sorting positions, like
+// beancount's CURRENCY_ORDER; any other currency ranks after them by length.
+var currencyOrder = map[string]int{
+	"USD": 0, "EUR": 1, "JPY": 2, "CAD": 3, "GBP": 4, "AUD": 5, "NZD": 6, "CHF": 7,
+}
+
+// sortedPositions returns the positions in the order Python's sorted()
+// gives a beancount inventory (Position.sortkey): by currency rank, cost
+// number, cost currency, then units, ties keeping their insertion order.
+func (inv *Inventory) sortedPositions() []*Position {
+	rank := func(currency string) int {
+		if r, ok := currencyOrder[currency]; ok {
+			return r
+		}
+		return len(currencyOrder) + len(currency)
+	}
+	costOf := func(p *Position) (decimal.Decimal, string) {
+		if p.Cost == nil {
+			return decimal.Zero, ""
+		}
+		return p.Cost.Number, p.Cost.Currency
+	}
+
+	positions := inv.Positions()
+	sort.SliceStable(positions, func(i, j int) bool {
+		a, b := positions[i], positions[j]
+		if ra, rb := rank(a.Units.Currency), rank(b.Units.Currency); ra != rb {
+			return ra < rb
+		}
+		an, ac := costOf(a)
+		bn, bc := costOf(b)
+		if c := an.Cmp(bn); c != 0 {
+			return c < 0
+		}
+		if ac != bc {
+			return ac < bc
+		}
+		return a.Units.Number.LessThan(b.Units.Number)
+	})
+	return positions
+}
+
 // Copy returns a deep copy of the inventory.
 func (inv *Inventory) Copy() *Inventory {
 	copied := NewInventory()
@@ -349,9 +391,10 @@ func positionString(p *Position, number func(decimal.Decimal) string) string {
 	return fmt.Sprintf("%s {%s}", units, cost)
 }
 
-// inventoryString joins an inventory's positions with ", ".
+// inventoryString joins an inventory's positions with ", ", sorted like
+// beancount's str() of an inventory.
 func inventoryString(inv *Inventory, number func(decimal.Decimal) string) string {
-	positions := inv.Positions()
+	positions := inv.sortedPositions()
 	parts := make([]string, len(positions))
 	for i, p := range positions {
 		parts[i] = positionString(p, number)

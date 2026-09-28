@@ -233,11 +233,30 @@ func TestInventoryKeepsInsertionOrder(t *testing.T) {
 	zzz := &Amount{Number: decimal.NewFromInt(2), Currency: "ZZZ"}
 	inv.AddAmount(aapl)
 	inv.AddAmount(zzz)
-	assert.Equal(t, "1 AAPL, 2 ZZZ", valueString(inv))
+	assert.Equal(t, []string{"AAPL", "ZZZ"}, positionCurrencies(inv.Positions()))
 
 	inv.AddAmount(&Amount{Number: decimal.NewFromInt(-1), Currency: "AAPL"})
 	inv.AddAmount(aapl)
-	assert.Equal(t, "2 ZZZ, 1 AAPL", valueString(inv))
+	assert.Equal(t, []string{"ZZZ", "AAPL"}, positionCurrencies(inv.Positions()))
+}
+
+func TestInventoryStringSortsPositions(t *testing.T) {
+	// Like beancount's str() of an inventory: major currencies first, then
+	// the others by length, whatever order they were added in.
+	inv := NewInventory()
+	for _, currency := range []string{"HOOL", "CAD", "ZZZ", "USD"} {
+		inv.AddAmount(&Amount{Number: decimal.NewFromInt(1), Currency: currency})
+	}
+	assert.Equal(t, "1 USD, 1 CAD, 1 ZZZ, 1 HOOL", valueString(inv))
+	assert.Equal(t, []string{"HOOL", "CAD", "ZZZ", "USD"}, positionCurrencies(inv.Positions()))
+}
+
+func positionCurrencies(positions []*Position) []string {
+	currencies := make([]string, len(positions))
+	for i, p := range positions {
+		currencies[i] = p.Units.Currency
+	}
+	return currencies
 }
 
 func TestSumSkipsNullPosition(t *testing.T) {
