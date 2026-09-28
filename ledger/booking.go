@@ -825,9 +825,15 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				continue
 			}
 
+			// Like beancount's interpolate_group, zero units leave the cost
+			// undefined, so the posting is left out of the booked transaction.
+			if amount.IsZero() {
+				delta.Dropped[posting] = true
+				continue
+			}
 			// Infer cost for augmentations, and for reductions whose cost was
 			// not resolved from booked lots (e.g. NONE booking)
-			if amount.IsZero() || (reducingEmptyCosts[posting] && !unresolvedEmptyCosts[posting]) {
+			if reducingEmptyCosts[posting] && !unresolvedEmptyCosts[posting] {
 				continue
 			}
 

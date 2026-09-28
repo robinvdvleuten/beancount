@@ -28,7 +28,8 @@ type TransactionDelta struct {
 	// drops it when every residual is zero.
 	Postings []*ast.Posting
 	// Dropped holds the postings whose missing units interpolate to a zero
-	// weight, which beancount leaves out of the booked transaction.
+	// weight, or whose missing cost is on zero units, which beancount leaves
+	// out of the booked transaction.
 	Dropped map[*ast.Posting]bool
 }
 
