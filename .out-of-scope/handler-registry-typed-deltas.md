@@ -2,7 +2,8 @@
 
 The ledger's handler registry keeps its current shape: each `Handler` returns
 its delta as `any` from `Validate` and type-asserts it in `Apply`, and each
-`Validate` builds its own `validator` with `newValidator(l.accounts, l.config)`.
+`Validate` builds its own `validator` with
+`newValidator(l.accounts, l.opened, l.config)`.
 We don't plan to type the deltas through a generic adapter, and we don't plan
 to hold one shared validator on the `Ledger`.
 
