@@ -1199,3 +1199,32 @@ func TestLedger_UnknownVersusInactiveAccount(t *testing.T) {
 		"2020-03-04: Invalid reference to unknown account 'Assets:Never'",
 	}, messages)
 }
+
+func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {
+	// Like beancount, an interpolated cost is the weight divided by the
+	// units with Python's decimal, which keeps the weight's exponent.
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:Invest
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "per unit"
+  Assets:Invest  10 HOOL {USD}
+  Assets:Cash   -50.00 USD
+
+2020-01-03 * "total"
+  Assets:Invest  4 GOOG {{USD}}
+  Assets:Cash   -30.00 USD
+`)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+
+	var costs []string
+	for _, directive := range tree.Directives {
+		if txn, ok := directive.(*ast.Transaction); ok {
+			positions := l.BookedPositions(txn.Postings[0])
+			assert.Equal(t, 1, len(positions))
+			costs = append(costs, formatInferredNumber(positions[0].Cost.Number))
+		}
+	}
+	assert.Equal(t, []string{"5.00", "7.50"}, costs)
+}

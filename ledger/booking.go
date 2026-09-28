@@ -819,7 +819,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				weight = pydecimal.Mul(amount, number)
 			}
 			delta.InferredCosts[posting] = &ast.Amount{
-				Value:    number.String(),
+				Value:    formatInferredNumber(number),
 				Currency: currency,
 			}
 			balance[currency] = pydecimal.Add(residual, weight)

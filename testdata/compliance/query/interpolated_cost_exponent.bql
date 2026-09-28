@@ -1,0 +1,1 @@
+SELECT cost_number, cost(position), position WHERE account = 'Assets:Invest'

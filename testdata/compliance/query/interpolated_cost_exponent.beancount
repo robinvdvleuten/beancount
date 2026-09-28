@@ -1,0 +1,11 @@
+2020-01-01 open Assets:Invest
+2020-01-01 open Assets:Cash
+2020-01-02 * "buy"
+  Assets:Invest  10 HOOL {USD}
+  Assets:Cash   -50.00 USD
+2020-01-03 * "buy total"
+  Assets:Invest  4 GOOG {{USD}}
+  Assets:Cash   -30.00 USD
+2020-01-04 * "buy odd"
+  Assets:Invest  3 AAPL {USD}
+  Assets:Cash   -10.00 USD
