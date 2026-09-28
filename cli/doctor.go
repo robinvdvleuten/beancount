@@ -8,10 +8,10 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/printer"
 )
 
 // DoctorCmd provides doctor utilities for debugging beancount files.
@@ -110,5 +110,5 @@ func (cmd *MissingOpenCmd) Run(ctx *kong.Context) error {
 	for i, open := range opens {
 		directives[i] = open
 	}
-	return formatter.New().Format(runCtx, &ast.AST{Directives: directives}, nil, ctx.Stdout)
+	return printer.Print(runCtx, ctx.Stdout, directives)
 }

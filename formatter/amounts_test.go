@@ -3,7 +3,6 @@ package formatter
 import (
 	"bytes"
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -29,16 +28,6 @@ func TestFormatLeavesIncompleteAmountsAsWritten(t *testing.T) {
 	var out bytes.Buffer
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Equal(t, want, out.String())
-}
-
-func TestFormatIncompleteAmountWithoutSource(t *testing.T) {
-	// Without source text the parts present are joined by single spaces,
-	// with no trailing space for a missing currency.
-	source := "2020-01-02 * \"x\"\n  Expenses:B  1.00 USD\n  Assets:A  -1.00\n  Assets:C  USD\n"
-	tree := parser.MustParseBytes(context.Background(), []byte(source))
-	var out bytes.Buffer
-	assert.NoError(t, New().Format(context.Background(), tree, nil, &out))
-	assert.Contains(t, out.String(), "  Assets:A  -1.00\n  Assets:C  USD\n")
 }
 
 func TestFormatAlignsOnlyPlainlySpelledNumbers(t *testing.T) {
@@ -97,39 +86,4 @@ func TestFormatLeavesNumbersGluedToCurrenciesAsWritten(t *testing.T) {
 	var out bytes.Buffer
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Equal(t, source, out.String())
-}
-
-func TestFormatWithParsedNumbers(t *testing.T) {
-	// Like beancount's printer, parsed numbers drop the source's thousands
-	// separators and plus sign; by default they are kept as written.
-	source := "2020-01-02 * \"x\"\n" +
-		"  Assets:A  +1,000.50 USD @ 1,100 EUR\n" +
-		"  Assets:B\n" +
-		"2020-01-03 balance Assets:A  1,000.50 USD\n"
-	tree := parser.MustParseBytes(context.Background(), []byte(source))
-
-	var parsed bytes.Buffer
-	assert.NoError(t, New(WithParsedNumbers()).Format(context.Background(), tree, nil, &parsed))
-	assert.Contains(t, parsed.String(), "1000.50 USD @ 1100 EUR")
-	assert.Contains(t, parsed.String(), "balance Assets:A  1000.50 USD")
-	assert.NotContains(t, parsed.String(), ",")
-
-	var spelled bytes.Buffer
-	assert.NoError(t, New().Format(context.Background(), tree, nil, &spelled))
-	assert.Contains(t, spelled.String(), "+1,000.50 USD @ 1,100 EUR")
-}
-
-func TestFormatWithPrinterLayout(t *testing.T) {
-	// Like beancount's printer: an open pads its account to 47 characters,
-	// a price pads its commodity to 22 and right-aligns its amount in 22.
-	source := "2020-01-01 open Assets:Bank USD,CAD \"FIFO\"\n" +
-		"2020-01-01 open Assets:Plain\n" +
-		"2020-01-02 price HOOL 13.00 USD\n"
-	tree := parser.MustParseBytes(context.Background(), []byte(source))
-
-	var out bytes.Buffer
-	assert.NoError(t, New(WithPrinterLayout()).Format(context.Background(), tree, nil, &out))
-	assert.Equal(t, "2020-01-01 open Assets:Bank"+strings.Repeat(" ", 36)+" USD,CAD \"FIFO\"\n"+
-		"2020-01-01 open Assets:Plain\n"+
-		"2020-01-02 price HOOL"+strings.Repeat(" ", 18)+" "+strings.Repeat(" ", 13)+"13.00 USD\n", out.String())
 }

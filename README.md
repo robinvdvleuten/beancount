@@ -5,7 +5,7 @@
 A [Beancount](https://beancount.github.io/) toolkit written in Go, for bookkeeping with AI agents and for extending in your own code. An agent edits your plain-text ledger, and one command checks each change. It rejects wrong entries with a line number and a reason, so the agent can fix them before they reach your books. When the built-in checks are not enough, you write your own in Go, using the same parser and ledger that the command line uses, and build it into one binary. Every check, format, and query result is tested against the official Beancount tools.
 
 - **Built for agents.** The ledger is a text file, so the agent edits it like code, and you review each change as a `git diff`. Errors give the file, the line, and a reason, plus exit code `1`.
-- **Extend in plain Go.** Write importers, house rules, and reports with the `loader`, `ast`, `ledger`, `formatter`, and `query` packages. You get typed directives, typed errors, and a source position on each one.
+- **Extend in plain Go.** Write importers, house rules, and reports with the `loader`, `ast`, `ledger`, `formatter`, `printer`, and `query` packages. You get typed directives, typed errors, and a source position on each one.
 - **Same answers as the official tools.** 155 ledger fixtures run through both `bean-check` and this tool. 93 BQL queries must match `bean-query` output byte for byte, in both text and CSV. The rare differences are listed in [`KNOWN_GAPS.md`](testdata/compliance/KNOWN_GAPS.md).
 - **Quick enough to run after every edit.** On a 59,000-line ledger, `beancount check` takes 0.16 s, against 0.69 s for `bean-check` 2.3.6 (Apple M1 Pro).
 - **Clean diffs.** `beancount format` aligns amounts with the same rules as `bean-format`, so agent edits and hand edits look the same.
@@ -315,10 +315,10 @@ txn := ast.NewTransaction(date, "Grocery shopping",
     ),
 )
 
-formatter.New().FormatTransaction(txn, os.Stdout)
+fmt.Print(printer.Sprint(txn))
 // 2024-01-15 * "Whole Foods" "Grocery shopping"
-//     Expenses:Groceries  125.43 USD
-//     Assets:Checking
+//   Expenses:Groceries  125.43 USD
+//   Assets:Checking
 ```
 
 ### Write an Importer

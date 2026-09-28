@@ -170,6 +170,30 @@ func TestErrorRenderer_RenderWithContext_AllDirectiveTypes(t *testing.T) {
 	}
 }
 
+func TestDirectiveContextIsValidBeancount(t *testing.T) {
+	// The context is the directive as beancount prints it, indented: an
+	// open's booking method stays quoted, so the lines parse again.
+	source := "2020-01-01 open Assets:Stock HOOL, USD \"FIFO\"\n"
+	open := parser.MustParseString(t.Context(), source).Directives[0]
+
+	output := directiveContext(open)
+	assert.Equal(t, "   2020-01-01 open Assets:Stock                                    HOOL,USD \"FIFO\"\n", output)
+
+	reparsed, err := parser.ParseString(t.Context(), strings.TrimPrefix(output, "   "))
+	assert.NoError(t, err)
+	assert.Equal(t, "FIFO", reparsed.Directives[0].(*ast.Open).BookingMethod)
+}
+
+func TestCheckShowsADroppedGroupUnderItsBookingError(t *testing.T) {
+	// Like bean-check, a booking error shows the transaction as written,
+	// with the postings of the group it drops from the ledger.
+	output := runOurCheck(t, filepath.Join(complianceDir, "average_account.fail.beancount"))
+	assert.Contains(t, output, "   2020-04-01 * \"ambiguous sell under AVERAGE\"\n"+
+		"     Assets:Brokerage      -5 HOOL {}\n"+
+		"     Assets:Cash       600.00 USD\n"+
+		"     Income:Gains      -75.00 USD\n")
+}
+
 func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {
 	// Test with error at the beginning of file
 	sourceContent := `2024-01-15 * "Test" "Description"

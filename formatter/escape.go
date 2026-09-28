@@ -23,7 +23,7 @@ const (
 
 // escapeString escapes special characters in strings for Beancount format.
 // Uses the formatter's configured escape style.
-func (f *Formatter) escapeString(s string) string {
+func (f *run) escapeString(s string) string {
 	switch f.StringEscapeStyle {
 	case EscapeStyleNone:
 		return s
@@ -41,7 +41,7 @@ func (f *Formatter) escapeString(s string) string {
 // However, skips raw tokens that contain literal line breaks, as these break idempotency
 // (raw tokens can't be round-tripped through parsing).
 // Otherwise, quotes and escapes the logical value.
-func (f *Formatter) formatRawString(s ast.RawString, buf *strings.Builder) {
+func (f *run) formatRawString(s ast.RawString, buf *strings.Builder) {
 	// EscapeStyleOriginal: use the raw token if available, literal line
 	// breaks included, as bean-format leaves them.
 	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() {

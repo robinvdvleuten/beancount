@@ -1,5 +1,4 @@
-; The balance line leaves out bean-query's fixed account column; see
-; KNOWN_GAPS.md.
+; Like beancount's printer, a balance pads its account to 47 characters.
 2020-01-01 commodity USD
 2020-01-01 commodity EUR
 2020-01-01 open Assets:Cash

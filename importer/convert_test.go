@@ -8,9 +8,9 @@ import (
 	"github.com/alecthomas/assert/v2"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/importer/internal/pb"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/printer"
 )
 
 const roundTripLedger = `2024-01-15 * "Coffee Shop" "Latte" #food ^receipt-1
@@ -53,7 +53,8 @@ func TestRoundTripFormatsIdentically(t *testing.T) {
 	decoded, err := decodeDirectives(msgs)
 	assert.NoError(t, err)
 
-	assert.Equal(t, format(t, tree.Directives), format(t, decoded))
+	assert.Equal(t, printed(t, tree.Directives), printed(t, decoded))
+	assert.Equal(t, metadataTypes(tree.Directives), metadataTypes(decoded))
 }
 
 func TestImportIDTravelsAsItsOwnField(t *testing.T) {
@@ -168,10 +169,30 @@ func TestDecodeRejects(t *testing.T) {
 	}
 }
 
-func format(t *testing.T, directives []ast.Directive) string {
+// printed renders directives as beancount prints them.
+func printed(t *testing.T, directives []ast.Directive) string {
 	t.Helper()
 	var sb strings.Builder
-	err := formatter.New(formatter.WithIndentation(2)).Format(context.Background(), &ast.AST{Directives: directives}, nil, &sb)
-	assert.NoError(t, err)
+	assert.NoError(t, printer.Print(context.Background(), &sb, directives))
 	return sb.String()
+}
+
+// metadataTypes lists the type of each metadata value, which the printed
+// text does not tell apart (an account and a string both print quoted).
+func metadataTypes(directives []ast.Directive) []string {
+	var types []string
+	add := func(metadata []*ast.Metadata) {
+		for _, m := range metadata {
+			types = append(types, m.Key+": "+m.Value.Type())
+		}
+	}
+	for _, directive := range directives {
+		add(directive.GetMetadata())
+		if txn, ok := directive.(*ast.Transaction); ok {
+			for _, posting := range txn.Postings {
+				add(posting.Metadata)
+			}
+		}
+	}
+	return types
 }

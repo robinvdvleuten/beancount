@@ -119,7 +119,7 @@ func TestFormatCost(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			f := New()
+			f := newRun(New(), &ast.AST{}, nil)
 			var buf strings.Builder
 			f.formatCost(test.cost, &buf)
 			result := buf.String()

@@ -237,6 +237,11 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			residuals[currency] = pydecimal.Add(residuals[currency], residual)
 		}
 	}
+	if len(errs) > 0 {
+		// Like beancount's, the errors carry the transaction as written:
+		// commitDelta takes the Dropped groups' postings out of txn.
+		withUnbooked(errs, txn)
+	}
 	commitDelta(txn, delta)
 	maps.Copy(b.inventories, staged)
 
@@ -496,6 +501,27 @@ func newBookingError(txn *ast.Transaction, account ast.Account, err error) error
 		return NewAmbiguousBookingError(txn, account, err)
 	}
 	return NewInsufficientInventoryError(txn, account, err)
+}
+
+// withUnbooked points the errors reported on txn at a copy of it as
+// written, before commitDelta rewrites its postings and fills in their
+// numbers, so an error shows the postings of the group it dropped.
+func withUnbooked(errs []error, txn *ast.Transaction) {
+	unbooked := *txn
+	unbooked.Postings = make([]*ast.Posting, len(txn.Postings))
+	for i, posting := range txn.Postings {
+		copied := *posting
+		if posting.Cost != nil {
+			cost := *posting.Cost
+			copied.Cost = &cost
+		}
+		unbooked.Postings[i] = &copied
+	}
+	for _, err := range errs {
+		if diagnostic, ok := err.(*Diagnostic); ok && diagnostic.directive == txn {
+			diagnostic.directive = &unbooked
+		}
+	}
 }
 
 // commitDelta writes Booking's results onto the transaction. The processed

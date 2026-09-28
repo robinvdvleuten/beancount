@@ -46,7 +46,7 @@ func TestEscapeString(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			f := New(WithStringEscapeStyle(EscapeStyleCStyle))
+			f := newRun(New(WithStringEscapeStyle(EscapeStyleCStyle)), &ast.AST{}, nil)
 			result := f.escapeString(test.input)
 			assert.Equal(t, test.expected, result)
 		})
@@ -202,12 +202,13 @@ func TestResolveColumns(t *testing.T) {
 		"Tolerance": {"2021-01-02 balance Assets:A  1.00 ~ 0.005 USD\n", columns{prefix: 34, number: 5}},
 	} {
 		tree := parser.MustParseString(context.Background(), tc.source)
-		assert.Equal(t, tc.want, New().resolveColumns(tree), name)
+		assert.Equal(t, tc.want, newRun(New(), tree, []byte(tc.source)).resolveColumns(tree), name)
 	}
 
-	tree := parser.MustParseString(context.Background(), "2021-01-01 price VBMPX  170.30 USD\n")
-	assert.Equal(t, columns{prefix: 40, number: 6}, New(WithPrefixWidth(40)).resolveColumns(tree))
-	assert.Equal(t, columns{currency: 60}, New(WithCurrencyColumn(60), WithPrefixWidth(40)).resolveColumns(tree))
+	source := "2021-01-01 price VBMPX  170.30 USD\n"
+	tree := parser.MustParseString(context.Background(), source)
+	assert.Equal(t, columns{prefix: 40, number: 6}, newRun(New(WithPrefixWidth(40)), tree, []byte(source)).resolveColumns(tree))
+	assert.Equal(t, columns{currency: 60}, newRun(New(WithCurrencyColumn(60), WithPrefixWidth(40)), tree, []byte(source)).resolveColumns(tree))
 }
 
 func TestColumnsPadding(t *testing.T) {
@@ -230,7 +231,7 @@ func TestFormatUsesRawParserSourceOrder(t *testing.T) {
 
 	f := New()
 	var buf bytes.Buffer
-	err := f.Format(context.Background(), tree, nil, &buf)
+	err := f.Format(context.Background(), tree, []byte(source), &buf)
 	assert.NoError(t, err)
 	assert.Equal(t, source, buf.String())
 }

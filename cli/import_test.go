@@ -68,11 +68,11 @@ func TestImportCmd(t *testing.T) {
 		stdout, stderr, code := runImport(t, importerPath, importLedger, "statement.csv")
 		assert.Equal(t, 0, code, stderr)
 		assert.Equal(t, `2024-01-15 * "Coffee Shop" "Latte"
-    import-id: "TX-001"
-    Expenses:Food                    4.50 USD
-    Assets:Checking
+  import-id: "TX-001"
+  Expenses:Food    4.50 USD
+  Assets:Checking
 
-2024-01-16 balance Assets:Checking  -4.50 USD
+2024-01-16 balance Assets:Checking                                 -4.50 USD
 `, stdout)
 		assert.Contains(t, stderr, "stderr line")
 	})
@@ -128,7 +128,7 @@ func TestImportCmd(t *testing.T) {
 func TestImportCmdDuplicates(t *testing.T) {
 	importerPath := buildImporter(t, "../importer/testdata/fixture")
 	const latte = `2024-01-15 * "Coffee Shop" "Latte"`
-	const balance = `2024-01-16 balance Assets:Checking  -4.50 USD`
+	const balance = `2024-01-16 balance Assets:Checking                                 -4.50 USD`
 	ledger := func(entries string) string {
 		return "2024-01-01 open Assets:Checking\n2024-01-01 open Expenses:Food\n2024-01-01 open Equity:Opening\n\n" + entries
 	}
@@ -140,7 +140,7 @@ func TestImportCmdDuplicates(t *testing.T) {
   Assets:Checking
 `), "statement.csv")
 		assert.Equal(t, 0, code, stderr)
-		assert.Equal(t, "2024-01-16 balance Assets:Checking  -4.50 USD\n", stdout)
+		assert.Equal(t, balance+"\n", stdout)
 		assert.Contains(t, stderr, "ledger.beancount:5: Duplicate left out: "+latte+"\n")
 	})
 
@@ -151,7 +151,7 @@ func TestImportCmdDuplicates(t *testing.T) {
   Assets:Checking
 `), "statement.csv")
 		assert.Equal(t, 0, code, stderr)
-		assert.Equal(t, "2024-01-16 balance Assets:Checking  -4.50 USD\n", stdout)
+		assert.Equal(t, balance+"\n", stdout)
 		assert.Contains(t, stderr, "ledger.beancount:5: Duplicate left out: "+latte+"\n")
 	})
 
@@ -181,12 +181,12 @@ func TestImportCmdDuplicates(t *testing.T) {
 		stdout, stderr, code := runImport(t, importerPath, ledger(""), "statement.csv")
 		assert.Equal(t, 0, code, stderr)
 		assert.Equal(t, `2024-01-15 * "Latte"
-    Expenses:Food  4.50 USD
-    Assets:Checking
+  Expenses:Food    4.50 USD
+  Assets:Checking
 
 2024-01-15 * "Latte"
-    Expenses:Food  4.50 USD
-    Assets:Checking
+  Expenses:Food    4.50 USD
+  Assets:Checking
 `, stdout)
 		assert.NotContains(t, stderr, "Duplicate")
 	})
@@ -216,8 +216,8 @@ func TestImportCmdUnknownAccount(t *testing.T) {
 		stdout, stderr, code := runImport(t, importerPath, importLedger+"2024-01-01 open Expenses:Unknown\n", "statement.csv")
 		assert.Equal(t, 0, code, stderr)
 		assert.Equal(t, `2024-01-15 * "Latte"
-    Assets:Checking  -4.50 USD
-    Expenses:Unknown
+  Assets:Checking   -4.50 USD
+  Expenses:Unknown
 `, stdout)
 	})
 
@@ -225,8 +225,8 @@ func TestImportCmdUnknownAccount(t *testing.T) {
 		stdout, stderr, code := runImport(t, importerPath, importLedger+"2024-01-01 open Expenses:Uncategorized\n", "statement.csv", "--unknown-account", "Expenses:Uncategorized")
 		assert.Equal(t, 0, code, stderr)
 		assert.Equal(t, `2024-01-15 * "Latte"
-    Assets:Checking  -4.50 USD
-    Expenses:Uncategorized
+  Assets:Checking         -4.50 USD
+  Expenses:Uncategorized
 `, stdout)
 	})
 

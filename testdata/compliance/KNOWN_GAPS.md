@@ -41,21 +41,30 @@ the same date, we return 20 and bean-query 21.
 price currencies must match: EUR != USD` for `10 BOND {95 EUR} @@ 1100 USD`;
 we report nothing.
 
-For BQL, `query/gap_print_balance*.bql` diverge from `bean-query` in
-whitespace only: bean-query prints balance directives in fixed columns
-(the account padded to 47 characters). Our PRINT renders them through the
-formatter's layout, like bean-format. The content is equivalent beancount
-text that round-trips through `bean-check`. Open and price lines already
-use the printer's columns (`formatter.WithPrinterLayout`,
-`query/print_open_price_columns.bql`).
-
-`query/gap_integer_division.bql` diverges on integer division: bean-query
-divides two integer literals with Python's true division, so `SELECT 1 / 3`
-is a float and prints its exact binary value
+For BQL, `query/gap_integer_division.bql` diverges on integer division:
+bean-query divides two integer literals with Python's true division, so
+`SELECT 1 / 3` is a float and prints its exact binary value
 (`0.333333333333333314829616256247390992939472198486328125`), and the float
 carries through later arithmetic (`7 / 2 * 2` is `7.0`). We give a decimal
 rounded to 28 significant digits. Division with a decimal operand, which
 covers every column, matches (`query/division*.bql`).
+
+The printer (BQL `PRINT`, `import`, error context) follows beancount's
+`printer.py`, with these known differences:
+
+- `PRINT` ignores `option "render_commas" "TRUE"`: bean-query prints
+  `-1,000.50 USD`, we print `-1000.50 USD`.
+- A `custom` directive's account value prints quoted
+  (`custom "c" "Assets:Cash"`), because `ast.CustomValue` has no account
+  kind.
+- A number in metadata prints in fixed notation (`0.0000001`), where
+  Python's `str` gives `1E-7`.
+- `PRINT FROM OPEN ON <date>` prints the `S` summarization transactions
+  first, followed by every directive before the date. bean-query prints
+  only the `open` directives and earlier prices, then the `S` transactions.
+- Like `printer.py`, the printer does not escape `note`, `event`, `query`,
+  `document` and `custom` strings or cost labels. So `import` output with a
+  `"` in one of them fails its re-parse.
 
 `beancount format` re-renders the parsed AST, while `bean-format` only
 rewrites whitespace line by line with one regular expression. The

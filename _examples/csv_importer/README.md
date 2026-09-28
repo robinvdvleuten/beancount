@@ -36,14 +36,14 @@ beancount import --with ./csv-importer ledger.beancount transactions.csv
 
 ```beancount
 2024-01-01 * "Acme Corp Payroll"
-    import-id: "TX-1001"
-    Assets:Checking   3500.00 USD
-    Income:Salary
+  import-id: "TX-1001"
+  Assets:Checking  3500.00 USD
+  Income:Salary
 
 2024-01-02 * "Whole Foods Market"
-    import-id: "TX-1002"
-    Assets:Checking   -125.43 USD
-    Expenses:Groceries
+  import-id: "TX-1002"
+  Assets:Checking     -125.43 USD
+  Expenses:Groceries
 ```
 
 Append it to the ledger:

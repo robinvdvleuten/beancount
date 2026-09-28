@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
 )
@@ -111,49 +112,22 @@ func CompilePrint(ctx *Context, p *bql.Print) (*CompiledPrint, error) {
 	return compiled, nil
 }
 
-// ExecutePrint renders the directives passing the FROM filter as beancount
-// text. Like beancount's print_entries, a blank line precedes every
-// transaction and commodity, and every directive of another kind than the
-// one printed before it; postings are indented by two spaces. The source's
-// comments are left out, as beancount's parser discards them.
+// ExecutePrint prints the directives passing the FROM filter as beancount
+// text, like bean-query's print: a transaction's postings as booked, and a
+// failed balance assertion with its difference.
 func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *CompiledPrint, w io.Writer) error {
 	entries := []ast.Directive(tree.Directives)
 	if compiled.From != nil {
 		qctx, entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
-
-	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithPrinterLayout(), formatter.WithIndentation(2), formatter.WithPreserveComments(false))
-	differences := balanceDifferences(qctx)
-	var previous ast.DirectiveKind
-	first := true
-	for _, entry := range entries {
-		if compiled.From != nil && compiled.From.Expr != nil {
-			row := &Row{Ctx: qctx, Entry: entry}
-			if !truthy(compiled.From.Expr.eval(row)) {
-				continue
-			}
-		}
-		kind := entry.Kind()
-		if kind == ast.KindTransaction || kind == ast.KindCommodity || !first && kind != previous {
-			if _, err := io.WriteString(w, "\n"); err != nil {
-				return err
-			}
-		}
-		previous, first = kind, false
-		switch d := entry.(type) {
-		case *ast.Transaction:
-			entry = printedTransaction(qctx, d)
-		case *ast.Balance:
-			if difference, ok := differences[d]; ok {
-				entry = printedFailedBalance(d, difference)
-			}
-		}
-		single := &ast.AST{Directives: ast.Directives{entry}}
-		if err := f.Format(ctx, single, nil, w); err != nil {
-			return err
-		}
+	if compiled.From != nil && compiled.From.Expr != nil {
+		entries = slices.DeleteFunc(slices.Clone(entries), func(entry ast.Directive) bool {
+			return !truthy(compiled.From.Expr.eval(&Row{Ctx: qctx, Entry: entry}))
+		})
 	}
-	return nil
+	return printer.Print(ctx, w, entries,
+		printer.WithBookedPositions(qctx.Ledger.BookedPositions),
+		printer.WithBalanceDiffs(balanceDifferences(qctx)))
 }
 
 // balanceDifferences maps each balance assertion that failed to its
@@ -169,48 +143,4 @@ func balanceDifferences(qctx *Context) map[*ast.Balance]decimal.Decimal {
 		}
 	}
 	return differences
-}
-
-// printedFailedBalance returns a copy of a failed balance assertion that
-// carries its difference as a comment, like beancount's printer. The
-// formatter writes one space before a comment; bean-query writes three.
-func printedFailedBalance(balance *ast.Balance, difference decimal.Decimal) *ast.Balance {
-	printed := *balance
-	printed.SetComment(&ast.Comment{Content: "  ; Diff: " + numberString(difference) + " " + balance.Amount.Currency})
-	return &printed
-}
-
-// printedTransaction returns a copy of txn holding the postings beancount
-// books it as, which bean-query's print renders: a reduction becomes one
-// posting per lot it was booked against, a cost is its booked lot in full
-// (per-unit number, currency, date and label) and a total price a per-unit
-// one. The units and costs are the ledger's booked positions, written out
-// once; a per-unit price is kept as the posting has it. The copy leaves out
-// the source layout, so the formatter renders these postings, and a
-// transaction whose postings were all dropped prints as its header.
-func printedTransaction(qctx *Context, txn *ast.Transaction) *ast.Transaction {
-	printed := *txn
-	printed.BodyItems = nil
-	printed.Postings = make([]*ast.Posting, 0, len(txn.Postings))
-	for _, posting := range txn.Postings {
-		if posting.Cost == nil && !posting.PriceTotal {
-			printed.Postings = append(printed.Postings, posting)
-			continue
-		}
-		price, total := posting.Price, posting.PriceTotal
-		if perUnit, ok := postingPrice(posting).(*Amount); ok && total {
-			price, total = ast.NewAmount(numberString(perUnit.Number), perUnit.Currency), false
-		}
-		for _, position := range postingPositions(qctx, posting) {
-			booked := *posting
-			booked.Amount = ast.NewAmount(numberString(position.Units.Number), position.Units.Currency)
-			if cost := position.Cost; cost != nil {
-				booked.Cost = ast.NewCostWithDate(ast.NewAmount(numberString(cost.Number), cost.Currency), cost.Date)
-				booked.Cost.Label = cost.Label
-			}
-			booked.Price, booked.PriceTotal = price, total
-			printed.Postings = append(printed.Postings, &booked)
-		}
-	}
-	return &printed
 }

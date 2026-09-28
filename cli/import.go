@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	stdErrors "errors"
 	"fmt"
@@ -12,11 +13,11 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/importer"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/printer"
 )
 
 type ImportCmd struct {
@@ -181,21 +182,13 @@ func addUnknownPostings(directives []ast.Directive, unknown ast.Account) {
 	}
 }
 
-// formatExtracted formats the Extracted directives in the Importer's order,
-// one blank line apart.
+// formatExtracted prints the Extracted directives in the Importer's order,
+// as bean-query prints directives, but starting at the first directive, so
+// Error lines count from its header.
 func formatExtracted(ctx context.Context, directives []ast.Directive) ([]byte, error) {
-	var formatted strings.Builder
-	if err := formatter.New().Format(ctx, &ast.AST{Directives: directives}, nil, &formatted); err != nil {
+	var printed bytes.Buffer
+	if err := printer.Print(ctx, &printed, directives); err != nil {
 		return nil, err
 	}
-
-	// Every line that is not indented starts a directive.
-	var out strings.Builder
-	for line := range strings.Lines(formatted.String()) {
-		if out.Len() > 0 && line[0] != ' ' {
-			out.WriteByte('\n')
-		}
-		out.WriteString(line)
-	}
-	return []byte(out.String()), nil
+	return bytes.TrimPrefix(printed.Bytes(), []byte("\n")), nil
 }

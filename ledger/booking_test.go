@@ -101,6 +101,13 @@ func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 		}
 	}
 	assert.Equal(t, map[string]int{"buy": 2, "sell too many": 0}, postings)
+
+	// The error carries the transaction as written, the dropped postings
+	// and their missing number included, like beancount's.
+	unbooked, ok := errs[0].(*Diagnostic).GetDirective().(*ast.Transaction)
+	assert.True(t, ok)
+	assert.Equal(t, 2, len(unbooked.Postings))
+	assert.Equal(t, (*ast.Amount)(nil), unbooked.Postings[1].Amount)
 }
 
 func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {

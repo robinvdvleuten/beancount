@@ -188,7 +188,7 @@ func BenchmarkCurrencyColumnCalculation(b *testing.B) {
 		b.Fatal(err)
 	}
 
-	f := New()
+	f := newRun(New(), ast, []byte(source))
 	b.ResetTimer()
 	b.ReportAllocs()
 

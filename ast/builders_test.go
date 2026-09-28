@@ -508,7 +508,7 @@ func Example_csvImporter() {
 	)
 
 	// Now you can format and output the transaction
-	_ = txn // Use formatter.FormatTransaction(txn, os.Stdout)
+	_ = txn // Use printer.Sprint(txn)
 }
 
 // Example_investmentTransaction demonstrates building a transaction
@@ -535,7 +535,7 @@ func Example_investmentTransaction() {
 		),
 	)
 
-	_ = txn // Use formatter.FormatTransaction(txn, os.Stdout)
+	_ = txn // Use printer.Sprint(txn)
 }
 
 func TestAccountTypeStringPanicsOnInvalid(t *testing.T) {
