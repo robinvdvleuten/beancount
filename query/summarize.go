@@ -31,23 +31,21 @@ func applyFromTransforms(qctx *Context, entries []ast.Directive, from *CompiledF
 // expenses balances collapse into Equity:Earnings:Previous, and every
 // balance-sheet account's inventory becomes an S-flagged opening transaction
 // at the day before the open date, posted against Equity:Opening-Balances.
+// Of the other directives before the open date only the active opens and
+// the last prices stay, sorted in among the opening transactions.
 func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) []ast.Directive {
-	var kept []ast.Directive
-	var before []ast.Directive
+	var before, after []ast.Directive
 	accounts := make(map[string]*Inventory)
 
 	for _, entry := range entries {
-		txn, isTxn := entry.(*ast.Transaction)
-		if entry.Date().Before(openDate.Time) {
-			if !isTxn {
-				kept = append(kept, entry)
-				continue
-			}
-			bookTransaction(qctx, accounts, txn)
-			before = append(before, txn)
+		if !entry.Date().Before(openDate.Time) {
+			after = append(after, entry)
 			continue
 		}
-		kept = append(kept, entry)
+		before = append(before, entry)
+		if txn, ok := entry.(*ast.Transaction); ok {
+			bookTransaction(qctx, accounts, txn)
+		}
 	}
 
 	openingDate := &ast.Date{Time: openDate.AddDate(0, 0, -1)}
@@ -76,20 +74,76 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 	}
 
 	opening := equityAccount(qctx, "Opening-Balances")
-	var txns []ast.Directive
+	summary := append(activeOpens(before), lastPrices(before)...)
 	for _, account := range sortedAccounts(accounts) {
 		inventory := accounts[account]
 		if inventory.IsEmpty() {
 			continue
 		}
 		narration := fmt.Sprintf("Opening balance for '%s' (Summarization)", account)
-		txns = append(txns, balanceTransaction(openingDate, narration, "S", account, opening, inventory, false))
+		summary = append(summary, balanceTransaction(openingDate, narration, "S", account, opening, inventory, false))
+	}
+	// Like beancount's entry_sortkey: the opening transactions have no
+	// source line, so they sort before a price on the same date.
+	sort.Stable(ast.Directives(summary))
+
+	return append(summary, after...)
+}
+
+// activeOpens returns the open directives of the accounts still open after
+// entries, in stream order, like beancount's get_open_entries: an account's
+// earliest open counts, and a close drops it.
+func activeOpens(entries []ast.Directive) []ast.Directive {
+	type indexedOpen struct {
+		index int
+		open  *ast.Open
+	}
+	opens := make(map[ast.Account]indexedOpen)
+	for i, entry := range entries {
+		switch d := entry.(type) {
+		case *ast.Open:
+			if existing, ok := opens[d.Account]; !ok || d.Date().Before(existing.open.Date().Time) {
+				opens[d.Account] = indexedOpen{i, d}
+			}
+		case *ast.Close:
+			delete(opens, d.Account)
+		}
 	}
 
-	result := make([]ast.Directive, 0, len(txns)+len(kept))
-	result = append(result, txns...)
-	result = append(result, kept...)
+	active := make([]indexedOpen, 0, len(opens))
+	for _, open := range opens {
+		active = append(active, open)
+	}
+	sort.Slice(active, func(i, j int) bool { return active[i].index < active[j].index })
+	result := make([]ast.Directive, len(active))
+	for i, open := range active {
+		result[i] = open.open
+	}
 	return result
+}
+
+// lastPrices returns the last price directive per (commodity, quote
+// currency) pair in entries, like beancount's get_last_price_entries: in the
+// order each pair first appeared, which a stable sort keeps among prices on
+// the same date and line.
+func lastPrices(entries []ast.Directive) []ast.Directive {
+	type pair struct{ commodity, currency string }
+	index := make(map[pair]int)
+	var prices []ast.Directive
+	for _, entry := range entries {
+		price, ok := entry.(*ast.Price)
+		if !ok || price.Amount == nil {
+			continue
+		}
+		key := pair{price.Commodity, price.Amount.Currency}
+		if i, ok := index[key]; ok {
+			prices[i] = price
+			continue
+		}
+		index[key] = len(prices)
+		prices = append(prices, price)
+	}
+	return prices
 }
 
 // closeTransform truncates the stream at the close date, keeping entries

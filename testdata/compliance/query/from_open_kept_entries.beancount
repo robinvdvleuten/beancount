@@ -1,0 +1,54 @@
+; OPEN ON keeps, of the directives before the open date, only the opens of
+; accounts still open and the last price per (commodity, quote currency)
+; pair, and sorts them in among the opening transactions by date, type and
+; line: an open before them on the same day, a price after them. Commodity,
+; balance, pad, note, event, custom, query and close directives before the
+; open date are dropped; those on or after it stay.
+plugin "beancount.plugins.implicit_prices"
+
+2019-01-01 commodity HOOL
+2019-01-01 open Assets:Bank USD
+2019-01-01 open Assets:Old
+2019-01-01 open Assets:Stock HOOL "FIFO"
+2019-01-01 open Equity:Opening
+2019-01-01 open Income:Salary USD
+2019-01-01 open Expenses:Travel EUR
+
+2019-02-01 * "Salary"
+  Assets:Bank     1000.00 USD
+  Income:Salary  -1000.00 USD
+
+2019-02-10 pad Assets:Old Equity:Opening
+2019-02-11 balance Assets:Old 5.00 USD
+
+2019-03-01 price HOOL 10.00 USD
+2019-03-01 price HOOL 9.00 EUR
+2019-04-01 price HOOL 12.00 USD
+
+2019-04-15 * "Buy"
+  Assets:Stock      2 HOOL {11.00 USD}
+  Assets:Bank
+
+2019-05-01 * "Trip"
+  Expenses:Travel   50.00 EUR @ 1.10 USD
+  Assets:Bank
+
+2019-05-01 balance Assets:Bank 978.00 USD
+2019-06-01 note Assets:Bank "A note"
+2019-06-02 event "location" "Home"
+2019-06-03 custom "budget" Expenses:Travel "monthly" 100.00 EUR
+2019-06-04 query "cash" "SELECT account"
+2019-07-01 * "Empty Old"
+  Assets:Old      -5.00 USD
+  Assets:Bank
+2019-07-01 close Assets:Old
+
+2019-12-31 price HOOL 13.00 USD
+2019-12-31 open Assets:Late
+
+2020-02-01 * "After the open date"
+  Assets:Bank      1.00 USD
+  Income:Salary   -1.00 USD
+
+2020-02-02 price HOOL 14.00 USD
+2020-03-01 close Assets:Late
