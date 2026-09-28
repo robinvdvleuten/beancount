@@ -20,14 +20,14 @@ import (
 // This is a separate type from Ledger to ensure validation cannot mutate state.
 type validator struct {
 	accounts map[string]*Account
-	// Every account an open directive names anywhere in the ledger, which
-	// tells an inactive account from an unknown one
-	opened map[string]bool
+	// Every account an open directive names anywhere in the ledger, with
+	// that open, which tells an inactive account from an unknown one
+	opened map[string]*ast.Open
 	config *Config
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account, opened map[string]bool, config *Config) *validator {
+func newValidator(accounts map[string]*Account, opened map[string]*ast.Open, config *Config) *validator {
 	return &validator{
 		accounts: accounts,
 		opened:   opened,
@@ -40,7 +40,7 @@ func newValidator(accounts map[string]*Account, opened map[string]bool, config *
 // the ledger opens it anywhere, before or after the directive, and unknown
 // otherwise.
 func (v *validator) accountNotOpenError(d ast.Directive, account ast.Account) error {
-	if v.opened[string(account)] {
+	if v.opened[string(account)] != nil {
 		return NewInactiveAccountError(d, account)
 	}
 	return NewAccountNotOpenError(d, account)
@@ -214,7 +214,7 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 // against the postings made before the open too (assertions are allowed
 // after close).
 func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.Decimal) []error {
-	if !v.opened[string(balance.Account)] {
+	if v.opened[string(balance.Account)] == nil {
 		return []error{NewAccountDoesNotExistError(balance)}
 	}
 
@@ -233,11 +233,11 @@ func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.D
 }
 
 // validateBalanceCurrency reports a balance assertion in a currency its
-// account's constraint list does not allow. Like beancount, the assertion is
-// still checked.
+// account's open does not allow. Like beancount, the constraints are the
+// open's wherever it is dated, and the assertion is still checked.
 func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
-	account, ok := v.accounts[string(balance.Account)]
-	if !ok || len(account.ConstraintCurrencies) == 0 || slices.Contains(account.ConstraintCurrencies, balance.Amount.Currency) {
+	open := v.opened[string(balance.Account)]
+	if open == nil || len(open.ConstraintCurrencies) == 0 || slices.Contains(open.ConstraintCurrencies, balance.Amount.Currency) {
 		return nil
 	}
 	return NewBalanceCurrencyError(balance)
@@ -254,12 +254,18 @@ func balanceKeyOf(balance *ast.Balance) balanceKey {
 	return balanceKey{balance.Account, balance.Amount.Currency, balance.Date().String()}
 }
 
-// openedAccounts returns every account an open directive names.
-func openedAccounts(directives []ast.Directive) map[string]bool {
-	opened := make(map[string]bool)
+// openedAccounts returns every account an open directive names, with its
+// open: like beancount's get_account_open_close, the earliest one when an
+// account is opened more than once.
+func openedAccounts(directives []ast.Directive) map[string]*ast.Open {
+	opened := make(map[string]*ast.Open)
 	for _, directive := range directives {
-		if open, ok := directive.(*ast.Open); ok {
-			opened[string(open.Account)] = true
+		open, ok := directive.(*ast.Open)
+		if !ok {
+			continue
+		}
+		if first := opened[string(open.Account)]; first == nil || open.Date().Before(first.Date().Time) {
+			opened[string(open.Account)] = open
 		}
 	}
 	return opened

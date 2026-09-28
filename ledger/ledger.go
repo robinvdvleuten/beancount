@@ -76,8 +76,8 @@ type Ledger struct {
 	bookedPositions map[*ast.Posting][]BookedPosition
 	booker          *booker
 	booked          map[*ast.Transaction]*bookedTransaction
-	unopened        map[string]*Account // Accounts posted to before any open
-	opened          map[string]bool     // Accounts an open directive names, at any date
+	unopened        map[string]*Account  // Accounts posted to before any open
+	opened          map[string]*ast.Open // Accounts an open directive names, at any date, with that open
 	display         *DisplayContext
 }
 

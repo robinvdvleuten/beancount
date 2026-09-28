@@ -1001,7 +1001,7 @@ func TestBalanceTolerance(t *testing.T) {
 				balance.Tolerance = ast.NewAmount(tt.tolerance, "USD")
 			}
 
-			v := newValidator(map[string]*Account{string(account.Name): account}, map[string]bool{string(account.Name): true}, NewConfig())
+			v := newValidator(map[string]*Account{string(account.Name): account}, map[string]*ast.Open{string(account.Name): ast.NewOpen(date, account.Name, nil, "")}, NewConfig())
 			tolerance, err := newTolerances(nil).balance(balance)
 			assert.NoError(t, err)
 			errs := v.checkBalance(balance, account.Inventory.Get("USD"), tolerance)

@@ -64,7 +64,7 @@ beancount format f.beancount | bean-check /dev/stdin  # round-trip
 
 ## Key patterns
 
-**Registry dispatch**: dispatch by kind through registry maps, never switch statements. Ledger directives go through `handlerRegistry` in `ledger/handlers.go` (`DirectiveKind` → `Handler` with `Validate`/`Apply`); handlers call the functions in `validation.go` directly, so there is exactly one registry. Build validators with `newValidator(l.accounts, l.opened, l.config)`, the stable read-only map and the accounts opened anywhere in the ledger, rather than a copy from `Accounts()`. Query columns, functions and aggregates follow the same rule (`query/env.go`, `functions.go`, `aggregates.go`).
+**Registry dispatch**: dispatch by kind through registry maps, never switch statements. Ledger directives go through `handlerRegistry` in `ledger/handlers.go` (`DirectiveKind` → `Handler` with `Validate`/`Apply`); handlers call the functions in `validation.go` directly, so there is exactly one registry. Build validators with `newValidator(l.accounts, l.opened, l.config)`, the stable read-only map and each account's open wherever the ledger dates it, rather than a copy from `Accounts()`. Query columns, functions and aggregates follow the same rule (`query/env.go`, `functions.go`, `aggregates.go`).
 
 **Owner computes**: the type that owns the data computes on it; coordinators call owner methods and aggregate. `Ledger.GetBalanceTree` calls `Account.GetBalanceInPeriod` instead of walking postings itself.
 

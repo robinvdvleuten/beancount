@@ -143,7 +143,6 @@ func TestBalanceHandler(t *testing.T) {
 `
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
-	ledger.opened = map[string]bool{"Assets:Checking": true, "Equity:Opening-Balances": true}
 
 	// Open account
 	openHandler := &OpenHandler{}
@@ -152,6 +151,7 @@ func TestBalanceHandler(t *testing.T) {
 
 	// Also need to open equity account for padding
 	tree2 := parser.MustParseString(ctx, "2020-01-01 open Equity:Opening-Balances")
+	ledger.opened = openedAccounts(append(tree.Directives, tree2.Directives...))
 	_, delta = openHandler.Validate(ctx, ledger, tree2.Directives[0])
 	openHandler.Apply(ctx, ledger, tree2.Directives[0], delta)
 
