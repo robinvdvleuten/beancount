@@ -185,6 +185,12 @@ limits:
   its value) is blamed on that line; v2's lexer counts the line break as
   part of the next line and blames that one.
 
+- **Failed balance assertion wording** (#524): a balance assertion that
+  fails reads `Balance mismatch for <account>:` with `Expected:` and
+  `Actual:` lines, where v2 prints `Balance failed for '<account>':
+  expected <amount> != accumulated <amount> (<difference> too much)` (or
+  `too little`). The line is the same; we keep our wording.
+
 - **Posting in `No position matches`**: a reduction whose cost spec
   matches no lot is reported in v2's words, `No position matches "<posting>"
   against balance <inventory>`, but `<posting>` is the posting's units and
