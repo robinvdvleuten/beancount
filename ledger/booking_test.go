@@ -8,7 +8,6 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
-	"github.com/shopspring/decimal"
 )
 
 func TestBookingKeepsTransactionsThatFailValidation(t *testing.T) {
@@ -147,61 +146,104 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 	assert.Equal(t, map[string]int{"units missing total price": 1, "negative per unit": 2}, postings)
 }
 
-func TestBookingRecordsBookedPositions(t *testing.T) {
-	// Each booked posting records the positions it holds: its own for an
-	// augmentation, per unit and dated, one per lot for a reduction, the
-	// position of its own spec under NONE, and its units alone without cost.
-	source := `
-2024-01-01 open Assets:Invest
-2024-01-01 open Assets:Strict "STRICT"
-2024-01-01 open Assets:None "NONE"
-2024-01-01 open Assets:Cash
-
-2024-03-01 * "one of each"
-  Assets:Invest  10 AA {5.0 USD, 2024-01-01}
-  Assets:Invest  4 BB {{20 USD}}
-  Assets:Invest  2 CC {3 # 4 USD}
-  Assets:Invest  1 DD {7 USD, "lbl"}
-  Assets:Strict  -15 XX {}
-  Assets:None    -4 YY {7 USD, 2024-01-01}
-  Assets:None    -4 YY {7 USD}
-  Assets:Cash    49.00 USD
-`
+// bookAll books the source's transactions with a new booker, and returns
+// it with each transaction's booked postings, rendered, and errors.
+func bookAll(t *testing.T, source string) (*booker, map[string][]string, []error) {
+	t.Helper()
 	tree := parser.MustParseString(context.Background(), source)
 	b := newBooker(NewConfig(), tree.Directives)
-	usd := func(n int64, date string) *lotSpec {
-		cost := decimal.NewFromInt(n)
-		return &lotSpec{Cost: &cost, CostCurrency: "USD", Date: newTestDate(date)}
+	postings := make(map[string][]string)
+	var errs []error
+	for _, directive := range tree.Directives {
+		txn, ok := directive.(*ast.Transaction)
+		if !ok {
+			continue
+		}
+		booked, bookErrs := b.book(txn)
+		errs = append(errs, bookErrs...)
+		if booked == nil {
+			continue // A Dropped transaction
+		}
+		for _, bp := range booked.postings {
+			for _, position := range bp.positions {
+				postings[txn.Narration.String()] = append(postings[txn.Narration.String()],
+					fmt.Sprintf("%s %s %s", position.Units, bp.commodity, position.lotSpec()))
+			}
+		}
 	}
-	b.inventory("Assets:Strict").AddLot("XX", decimal.NewFromInt(10), usd(5, "2024-01-01"))
-	b.inventory("Assets:Strict").AddLot("XX", decimal.NewFromInt(5), usd(6, "2024-01-02"))
-	b.inventory("Assets:None").AddLot("YY", decimal.NewFromInt(10), usd(7, "2024-01-01"))
+	return b, postings, errs
+}
 
-	txn := tree.Directives[len(tree.Directives)-1].(*ast.Transaction)
-	booked, errs := b.book(txn)
+func TestBookingStagesTheGroupsItBooks(t *testing.T) {
+	// A Currency group's reductions change the inventories once the group
+	// is booked; a Dropped group's, which failed booking or interpolation
+	// after an earlier posting reduced a lot, change nothing. bean-check
+	// 2.3.6 agrees: the lots left are sold in full at the end.
+	b, postings, errs := bookAll(t, `
+2024-01-01 open Assets:Stock
+2024-01-01 open Assets:Cash
+
+2024-01-02 * "hold"
+  Assets:Stock   10 AA {5 USD}
+  Assets:Stock   10 BB {2 EUR}
+  Assets:Stock   10 CC {1 GBP}
+  Assets:Cash   -50 USD
+  Assets:Cash   -20 EUR
+  Assets:Cash   -10 GBP
+
+2024-01-03 * "the EUR group fails booking"
+  Assets:Stock   -4 AA {5 USD}
+  Assets:Cash    20 USD
+  Assets:Stock   -3 BB {2 EUR}
+  Assets:Stock  -30 BB {2 EUR}
+  Assets:Cash    66 EUR
+
+2024-01-04 * "the GBP group fails interpolation"
+  Assets:Stock   -3 CC {1 GBP}
+  Assets:Stock      CC {}
+  Assets:Cash
+
+2024-01-05 * "sell the rest"
+  Assets:Stock   -6 AA {5 USD}
+  Assets:Stock  -10 BB {2 EUR}
+  Assets:Stock  -10 CC {1 GBP}
+  Assets:Cash
+`)
+	assert.Equal(t, 2, len(errs), "errors: %v", errs)
+	assert.Equal(t, "InsufficientInventoryError", kindOf(errs[0]), "got %v", errs[0])
+	assert.Equal(t, "CurrencyGroupError", kindOf(errs[1]), "got %v", errs[1])
+	assert.Equal(t, []string{"-4 AA {5 USD, 2024-01-02}", "20 USD {}"}, postings["the EUR group fails booking"])
+	assert.Zero(t, postings["the GBP group fails interpolation"])
+	assert.Equal(t, "{}", b.inventory("Assets:Stock").String())
+}
+
+func TestBookingAddsAugmentationsOnceTheTransactionIsBooked(t *testing.T) {
+	// Like beancount, a transaction's postings are booked against the lots
+	// held before it: its augmentations are neither reduced by its later
+	// postings nor matched by them, as bean-check 2.3.6 agrees.
+	b, postings, errs := bookAll(t, `
+2024-01-01 open Assets:Stock
+2024-01-01 open Assets:Cash
+
+2024-01-02 * "buy and sell different lots"
+  Assets:Stock   10 HOOL {5 USD}
+  Assets:Stock  -10 HOOL {6 USD}
+  Assets:Cash    10 USD
+
+2024-01-03 * "hold"
+  Assets:Stock   10 AA {5 USD}
+  Assets:Cash   -50 USD
+
+2024-01-04 * "split: buy the new lot first, then sell the old one"
+  Assets:Stock   20 AA {2.5 USD}
+  Assets:Stock  -10 AA {}
+  Assets:Cash
+`)
 	assert.Zero(t, errs)
-	assert.Zero(t, booked.residuals)
-
-	got := make([][]BookedPosition, 0, len(booked.postings))
-	for _, bp := range booked.postings {
-		got = append(got, bp.positions)
-	}
-	at := func(number, date, label string) *BookedCost {
-		return &BookedCost{Number: mustParseDec(number), Currency: "USD", Date: newTestDate(date), Label: label}
-	}
-	assert.Equal(t, [][]BookedPosition{
-		{{Units: mustParseDec("10"), Cost: at("5.0", "2024-01-01", "")}},
-		{{Units: mustParseDec("4"), Cost: at("5", "2024-03-01", "")}},
-		{{Units: mustParseDec("2"), Cost: at("5", "2024-03-01", "")}},
-		{{Units: mustParseDec("1"), Cost: at("7", "2024-03-01", "lbl")}},
-		{
-			{Units: mustParseDec("-10"), Cost: at("5", "2024-01-01", ""), Reduced: true},
-			{Units: mustParseDec("-5"), Cost: at("6", "2024-01-02", ""), Reduced: true},
-		},
-		{{Units: mustParseDec("-4"), Cost: at("7", "2024-01-01", ""), Reduced: true}},
-		{{Units: mustParseDec("-4"), Cost: at("7", "2024-03-01", "")}},
-		{{Units: mustParseDec("49.00")}},
-	}, got)
+	assert.Equal(t, []string{"20 AA {2.5 USD, 2024-01-04}", "-10 AA {5 USD, 2024-01-03}"},
+		postings["split: buy the new lot first, then sell the old one"])
+	assert.Equal(t, "{20 AA {2.5 USD, 2024-01-04}, 10 HOOL {5 USD, 2024-01-02}, -10 HOOL {6 USD, 2024-01-02}}",
+		b.inventory("Assets:Stock").String())
 }
 
 func TestImplicitPricesSkipPositionsThatReduceALot(t *testing.T) {
@@ -538,8 +580,7 @@ func TestCalculateBalance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newBooker(NewConfig(), nil)
-			scratch := &scratchInventories{booker: b, own: make(map[string]*Inventory)}
-			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil, scratch)
+			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil)
 
 			assert.Equal(t, 0, len(errs))
 

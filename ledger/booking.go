@@ -184,7 +184,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	// the groups it books: each group reduces lots in scratch copies, which
 	// are staged once the group is booked.
 	staged := make(map[string]*Inventory)
-	reductions := make(map[*ast.Posting]bookedPosting)
+	reductions := make(map[*ast.Posting][]BookedPosition)
 	for _, group := range groups {
 		scratch := &scratchInventories{booker: b, staged: staged, own: make(map[string]*Inventory)}
 		groupReductions, groupErrs := b.bookReductions(txn, group, scratch)
@@ -192,7 +192,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		var balance *balanceValidation
 		var autoAmounts []*ast.Amount
 		if len(groupErrs) == 0 {
-			groupDelta, balance, autoAmounts, groupErrs = b.calculateBalance(txn, group, groupReductions, scratch)
+			groupDelta, balance, autoAmounts, groupErrs = b.calculateBalance(txn, group, groupReductions)
 			if len(groupErrs) == 0 && groupDelta == nil {
 				// Missing numbers could not be interpolated.
 				groupErrs = []error{newNotBalancedError(txn, balance.residuals)}
@@ -240,61 +240,20 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	commitDelta(txn, delta)
 	maps.Copy(b.inventories, staged)
 
-	// The booked postings other than the reductions add to their accounts'
-	// inventories, like beancount's add_position once a transaction is
-	// booked.
+	// The booked postings other than the reductions, their numbers now
+	// complete, join their accounts' inventories, like beancount's
+	// add_position once a transaction is booked.
 	booked := &bookedTransaction{residuals: residuals}
 	for _, posting := range txn.Postings {
-		bp, ok := reductions[posting]
-		if !ok {
-			bp, ok = b.augment(txn, posting)
+		positions, reduced := reductions[posting]
+		if !reduced {
+			positions = b.inventory(posting.Account).augment(posting, txn.Date())
 		}
-		if ok {
-			booked.postings = append(booked.postings, bp)
+		if len(positions) > 0 {
+			booked.postings = append(booked.postings, bookedPosting{posting: posting, commodity: posting.Amount.Currency, positions: positions})
 		}
 	}
 	return booked, errs
-}
-
-// augment adds a posting that reduces no lot to its account's inventory: at
-// cost, to the lot of its spec, with a total or compound cost spread over
-// the units and, like beancount, the transaction's date when the spec has
-// none (FIFO/LIFO ordering and dated lot specs depend on it); without cost,
-// its units alone. The position it books is both the change and its record.
-// It reports false for a posting that holds nothing: one without a complete
-// amount, or at a cost whose number could not be inferred.
-func (b *booker) augment(txn *ast.Transaction, posting *ast.Posting) (bookedPosting, bool) {
-	if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
-		return bookedPosting{}, false
-	}
-	units, err := ParseAmount(posting.Amount)
-	if err != nil {
-		return bookedPosting{}, false
-	}
-	position := BookedPosition{Units: units}
-	if posting.Cost != nil {
-		if !posting.Cost.HasNumber() {
-			return bookedPosting{}, false
-		}
-		spec, err := postingLotSpec(posting)
-		if err != nil {
-			return bookedPosting{}, false
-		}
-		// Known gap (KNOWN_GAPS.md): ParseLotSpec reads a merge cost {*}
-		// as {} and drops the number inferred for it, so an augmentation
-		// at {*} books its units without cost, where beancount v2 books
-		// it at the inferred cost.
-		if spec.Cost != nil {
-			date := spec.Date
-			if date == nil {
-				date = txn.Date()
-			}
-			position.Cost = &BookedCost{Number: *spec.Cost, Currency: spec.CostCurrency, Date: date, Label: spec.Label}
-		}
-	}
-	currency := posting.Amount.Currency
-	position.Reduced = b.inventory(posting.Account).AddLot(currency, units, position.lotSpec())
-	return bookedPosting{posting: posting, commodity: currency, positions: []BookedPosition{position}}, true
 }
 
 // validateAmounts checks all amounts can be parsed
@@ -504,37 +463,26 @@ func (s *scratchInventories) get(account ast.Account) *Inventory {
 	return inv
 }
 
-// bookReductions matches a Currency group's reductions with known units to
-// the lots they reduce, in posting order, like beancount's book_reductions:
-// each reduction changes the scratch inventory, so a later posting cannot
-// book the same units again. Augmentations and postings whose units are
-// interpolated are left to the end of the transaction. A booking failure
-// drops the group.
-func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scratch *scratchInventories) (map[*ast.Posting]bookedPosting, []error) {
-	reductions := make(map[*ast.Posting]bookedPosting)
+// bookReductions books a Currency group's postings into its scratch
+// inventories in posting order, like beancount's book_reductions: book books
+// each reduction at once, so a later posting cannot book the same units
+// again, and leaves the augmentations to the end of the transaction. A
+// booking failure drops the group.
+func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scratch *scratchInventories) (map[*ast.Posting][]BookedPosition, []error) {
+	reductions := make(map[*ast.Posting][]BookedPosition)
 	for _, posting := range group.postings {
-		if posting.Cost == nil || posting.Amount == nil || posting.Amount.Value == "" {
+		// Only a posting at cost can reduce. Skipping the rest here spares
+		// cloning their accounts' inventories; book still decides.
+		if posting.Cost == nil {
 			continue
 		}
-		amount, err := ParseAmount(posting.Amount)
-		if err != nil {
-			continue // Reported by validateAmounts
-		}
-		method := b.method(posting.Account)
-		inv := scratch.get(posting.Account)
-		currency := posting.Amount.Currency
-		if method == BookingNONE || !inv.isReducedBy(currency, amount) {
-			continue
-		}
-		spec, err := postingLotSpec(posting)
-		if err != nil {
-			continue // Reported by validateCosts
-		}
-		positions, err := inv.Book(currency, amount, spec, method, nil)
+		positions, reduced, err := scratch.get(posting.Account).book(posting, b.method(posting.Account))
 		if err != nil {
 			return nil, []error{newBookingError(txn, posting.Account, err)}
 		}
-		reductions[posting] = bookedPosting{posting: posting, commodity: currency, positions: positions}
+		if reduced {
+			reductions[posting] = positions
+		}
 	}
 	return reductions, nil
 }
@@ -573,19 +521,15 @@ func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
 // the balance state, and the amounts the group books its amount-less posting
 // at, which the caller records; a nil delta without errors means the missing
 // numbers could not be interpolated.
-func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, reductions map[*ast.Posting]bookedPosting, scratch *scratchInventories) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
+func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, reductions map[*ast.Posting][]BookedPosition) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
 	var errs []error
 	pc := classifyPostings(group.postings)
 
 	// Calculate weights for postings with amounts
 	var allWeights []weightSet
-	// Empty-cost postings that reduce their account's inventory, and the
-	// subset whose lot cost could not be resolved via booking (e.g. NONE
-	// booking); the latter's cost must be inferred from the residual.
-	reducingEmptyCosts := make(map[*ast.Posting]bool)
-	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
 	// Positions that reductions with an amount-less cost spec booked, one
-	// per lot.
+	// per lot. Every other amount-less cost spec is an augmentation's, whose
+	// cost is inferred from the residual.
 	reducedPositions := make(map[*ast.Posting][]BookedPosition)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
@@ -605,24 +549,18 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			// Reductions resolve their weight from the booked lots' cost basis,
 			// matching beancount, which books lots before interpolation. The
 			// spec's date/label (if any) narrows which lots are booked.
-			// Augmentations are handled in cost inference below; so is a
-			// reduction under NONE, whose cost comes from the residual.
-			if booked, ok := reductions[posting]; ok {
-				reducingEmptyCosts[posting] = true
+			// Augmentations, NONE's included, are handled in cost inference
+			// below.
+			if positions, ok := reductions[posting]; ok {
 				var weights weightSet
-				for _, position := range booked.positions {
+				for _, position := range positions {
 					weights = append(weights, weight{
 						Amount:   pydecimal.Mul(position.Units, position.Cost.Number),
 						Currency: position.Cost.Currency,
 					})
 				}
 				allWeights = append(allWeights, weights)
-				reducedPositions[posting] = booked.positions
-			} else if amount, aerr := ParseAmount(posting.Amount); aerr == nil &&
-				b.method(posting.Account) == BookingNONE &&
-				scratch.get(posting.Account).isReducedBy(posting.Amount.Currency, amount) {
-				reducingEmptyCosts[posting] = true
-				unresolvedEmptyCosts[posting] = true
+				reducedPositions[posting] = positions
 			}
 		} else {
 			allWeights = append(allWeights, weights)
@@ -632,7 +570,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 	if len(errs) > 0 {
 		return nil, nil, nil, errs
 	}
-	if first := tooManyMissing(group, reducingEmptyCosts, unresolvedEmptyCosts); first != nil {
+	if first := tooManyMissing(group, reducedPositions); first != nil {
 		return nil, nil, nil, []error{NewCurrencyGroupError(txn, first,
 			fmt.Sprintf("Too many missing numbers for currency group '%s'", group.currency))}
 	}
@@ -705,12 +643,10 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 	}
 
 	// Beancount interpolates at most one missing number per transaction;
-	// more unknowns (missing amounts, currency-only amounts, value-less
-	// prices, or an unresolved cost) are "too many missing numbers".
+	// more unknowns (missing amounts, currency-only amounts or value-less
+	// prices) are "too many missing numbers". A missing cost number next to
+	// one of them is reported by tooManyMissing above.
 	unknowns := len(pc.withoutAmounts) + len(currencyOnlyAmounts) + len(valuelessPrices)
-	if unknowns > 0 && len(unresolvedEmptyCosts) > 0 {
-		return nil, unbalancedValidation(balance), nil, nil
-	}
 	if unknowns > 1 {
 		return nil, unbalancedValidation(balance), nil, nil
 	}
@@ -806,14 +742,14 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 
 	// Infer costs for empty cost specs {}
 	if len(pc.withEmptyCosts) > 0 {
-		// Count empty costs that need inference from the residual: augmentations
-		// plus reductions whose lot cost could not be resolved via booking.
+		// Count empty costs that need inference from the residual: those of
+		// augmentations, whose lots Booking has not resolved.
 		inferableEmptyCosts := 0
 		for _, posting := range pc.withEmptyCosts {
 			if _, err := ParseAmount(posting.Amount); err != nil {
 				continue
 			}
-			if !reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting] {
+			if _, reduced := reducedPositions[posting]; !reduced {
 				inferableEmptyCosts++
 			}
 		}
@@ -836,9 +772,8 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 				delta.Dropped[posting] = true
 				continue
 			}
-			// Infer cost for augmentations, and for reductions whose cost was
-			// not resolved from booked lots (e.g. NONE booking)
-			if reducingEmptyCosts[posting] && !unresolvedEmptyCosts[posting] {
+			// Infer cost for augmentations; a reduction's comes from its lots.
+			if _, reduced := reducedPositions[posting]; reduced {
 				continue
 			}
 
@@ -908,7 +843,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 // interpolate: a missing units number (or no amount at all), a missing cost
 // number other than on a reduction booked against lots, or a missing price
 // number.
-func tooManyMissing(group currencyGroup, reducingEmptyCosts, unresolvedEmptyCosts map[*ast.Posting]bool) *ast.Posting {
+func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]BookedPosition) *ast.Posting {
 	var first *ast.Posting
 	missing := 0
 	for _, posting := range group.postings {
@@ -916,7 +851,7 @@ func tooManyMissing(group currencyGroup, reducingEmptyCosts, unresolvedEmptyCost
 		if posting.Amount == nil || posting.Amount.Value == "" {
 			n++
 		}
-		if posting.Cost != nil && !posting.Cost.HasNumber() && (!reducingEmptyCosts[posting] || unresolvedEmptyCosts[posting]) {
+		if _, reduced := reducedPositions[posting]; posting.Cost != nil && !posting.Cost.HasNumber() && !reduced {
 			n++
 		}
 		if posting.Price != nil && posting.Price.Value == "" {

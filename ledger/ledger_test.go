@@ -1154,3 +1154,47 @@ func TestGetPriceUsesOnlyTheDirectPair(t *testing.T) {
 	_, ok = l.GetPrice(date, "EUR", "HOOL")
 	assert.False(t, ok)
 }
+
+// TestLedger_BookedPositions pins the record Booking publishes: a reduction
+// books one position per lot it was booked against, an augmentation its own
+// at its per-unit cost dated by its transaction, and a posting without cost
+// its units alone, Reduced when it takes from units held with the opposite
+// sign, like beancount's Booking.REDUCED.
+func TestLedger_BookedPositions(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `
+2024-01-01 open Assets:Stock
+2024-01-01 open Assets:Cash
+
+2024-01-10 * "Buy"
+  Assets:Stock  10 HOOL {{50 USD}}
+  Assets:Cash  -50 USD
+
+2024-02-01 * "Sell"
+  Assets:Stock  -4 HOOL {}
+  Assets:Cash
+`)
+	l := New()
+	assert.NoError(t, l.Process(context.Background(), tree))
+
+	posting := func(narration string, account ast.Account) *ast.Posting {
+		t.Helper()
+		for _, directive := range tree.Directives {
+			txn, ok := directive.(*ast.Transaction)
+			if !ok || txn.Narration.Value != narration {
+				continue
+			}
+			for _, posting := range txn.Postings {
+				if posting.Account == account {
+					return posting
+				}
+			}
+		}
+		t.Fatalf("no %s posting in %q", account, narration)
+		return nil
+	}
+	lot := &BookedCost{Number: mustParseDec("5"), Currency: "USD", Date: newTestDate("2024-01-10")}
+
+	assert.Equal(t, []BookedPosition{{Units: mustParseDec("10"), Cost: lot}}, l.BookedPositions(posting("Buy", "Assets:Stock")))
+	assert.Equal(t, []BookedPosition{{Units: mustParseDec("-4"), Cost: lot, Reduced: true}}, l.BookedPositions(posting("Sell", "Assets:Stock")))
+	assert.Equal(t, []BookedPosition{{Units: mustParseDec("20"), Reduced: true}}, l.BookedPositions(posting("Sell", "Assets:Cash")))
+}

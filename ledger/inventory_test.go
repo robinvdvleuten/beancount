@@ -7,852 +7,343 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
-	"github.com/shopspring/decimal"
 )
 
-func TestBookPlans(t *testing.T) {
-	date1, _ := ast.NewDate("2024-01-15")
-	date2, _ := ast.NewDate("2024-02-15")
+// testPosting parses a posting to Assets:A, written without its account.
+func testPosting(t *testing.T, posting string) *ast.Posting {
+	t.Helper()
+	tree, err := parser.ParseString(context.Background(), "2024-01-01 *\n  Assets:A  "+posting+"\n")
+	assert.NoError(t, err)
+	return tree.Directives[0].(*ast.Transaction).Postings[0]
+}
 
-	// Helper to create decimal from string
-	d := func(s string) decimal.Decimal {
-		val, _ := decimal.NewFromString(s)
-		return val
+// holding returns an inventory that augmented the postings in a transaction
+// dated date.
+func holding(t *testing.T, date string, postings ...string) *Inventory {
+	t.Helper()
+	inv := NewInventory()
+	for _, posting := range postings {
+		inv.augment(testPosting(t, posting), newTestDate(date))
 	}
+	return inv
+}
 
+// TestBookDecidesReductionOrAugmentation pins the one place a posting is
+// found to reduce or to augment: like beancount's book_reductions, a
+// posting at cost with known units reduces when its account books with a
+// method other than NONE and the inventory holds its commodity with the
+// opposite sign. book books a reduction at once and leaves an augmentation,
+// and the inventory, untouched.
+func TestBookDecidesReductionOrAugmentation(t *testing.T) {
 	tests := []struct {
-		name          string
-		setup         func() *Inventory
-		commodity     string
-		amount        decimal.Decimal
-		spec          *lotSpec
-		bookingMethod BookingMethod
-		wantErr       bool
-		errContains   string
+		name    string
+		held    []string
+		posting string
+		method  BookingMethod
+		reduces bool
 	}{
-		{
-			name: "reducing with negative amount - valid",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.Add("USD", d("100"))
-				return inv
-			},
-			commodity:     "USD",
-			amount:        d("-50"),
-			spec:          nil,
-			bookingMethod: "",
-			wantErr:       false,
-		},
-		{
-			name: "same-signed amount augments",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("HOOL", d("10"), &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"})
-				return inv
-			},
-			commodity:     "HOOL",
-			amount:        d("5"),
-			spec:          &lotSpec{Cost: ptrDecimal(d("7")), CostCurrency: "USD"},
-			bookingMethod: "",
-			wantErr:       false,
-		},
-		{
-			name: "positive amount reduces short lot beyond its size - error",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("HOOL", d("-10"), &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"})
-				return inv
-			},
-			commodity:     "HOOL",
-			amount:        d("15"),
-			spec:          &lotSpec{Cost: ptrDecimal(d("5")), CostCurrency: "USD"},
-			bookingMethod: "",
-			wantErr:       true,
-			errContains:   "not enough lots to reduce",
-		},
-		{
-			name: "reducing with no spec - simple add",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.Add("USD", d("100"))
-				return inv
-			},
-			commodity:     "USD",
-			amount:        d("-30"),
-			spec:          nil,
-			bookingMethod: "",
-			wantErr:       false,
-		},
-		{
-			name: "reducing with empty spec {} - uses booking method FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("USD", d("50"), &lotSpec{Cost: ptrDecimal(d("1")), CostCurrency: "EUR", Date: date1})
-				inv.AddLot("USD", d("60"), &lotSpec{Cost: ptrDecimal(d("1")), CostCurrency: "EUR", Date: date2})
-				return inv
-			},
-			commodity:     "USD",
-			amount:        d("-40"),
-			spec:          &lotSpec{}, // Empty spec
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "reducing with specific lot spec - cost match",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("10"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("-5"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("100")),
-				CostCurrency: "USD",
-			},
-			bookingMethod: "",
-			wantErr:       false,
-		},
-		{
-			name: "reducing with specific lot spec - insufficient amount",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("10"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("-20"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("100")),
-				CostCurrency: "USD",
-			},
-			bookingMethod: "",
-			wantErr:       true,
-			errContains:   "not enough lots to reduce",
-		},
-		{
-			name: "reducing with specific lot spec - lot not found",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("10"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("-5"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("200")),
-				CostCurrency: "USD",
-			},
-			bookingMethod: "",
-			wantErr:       true,
-			errContains:   "lot not found",
-		},
-		{
-			name: "reducing under AVERAGE fails like beancount v2",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("5"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("-5"),
-			spec:          &lotSpec{},
-			bookingMethod: BookingAVERAGE,
-			wantErr:       true,
-			errContains:   "AVERAGE method is not supported",
-		},
+		{name: "an opposite-signed lot is reduced", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {5 USD}", method: BookingSTRICT, reduces: true},
+		{name: "a short lot is reduced by a positive posting", held: []string{"-10 HOOL {5 USD}"}, posting: "4 HOOL {}", method: BookingFIFO, reduces: true},
+		{name: "the default method books reductions", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {}", reduces: true},
+		{name: "a same-signed posting augments", held: []string{"10 HOOL {5 USD}"}, posting: "4 HOOL {6 USD}", method: BookingSTRICT},
+		{name: "selling what is not held opens a short lot", posting: "-3 HOOL {5 USD}", method: BookingSTRICT},
+		{name: "another commodity is not reduced", held: []string{"10 HOOL {5 USD}"}, posting: "-3 ACME {5 USD}", method: BookingFIFO},
+		{name: "NONE never reduces", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {5 USD}", method: BookingNONE},
+		{name: "units still to be interpolated augment", held: []string{"10 HOOL {5 USD}"}, posting: "HOOL {5 USD}", method: BookingSTRICT},
+		{name: "a posting without cost augments", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL", method: BookingSTRICT},
+		{name: "zero units augment", held: []string{"10 HOOL {5 USD}"}, posting: "0 HOOL {5 USD}", method: BookingSTRICT},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inv := tt.setup()
-			_, err := inv.Book(tt.commodity, tt.amount, tt.spec, tt.bookingMethod, nil)
+			inv := holding(t, "2024-01-01", tt.held...)
+			before := inv.String()
 
-			if tt.wantErr {
-				assert.Error(t, err)
-				if tt.errContains != "" {
-					assert.HasPrefix(t, err.Error(), tt.errContains)
-				}
-			} else {
-				assert.NoError(t, err)
+			positions, reduced, err := inv.book(testPosting(t, tt.posting), tt.method)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.reduces, reduced)
+			if !tt.reduces {
+				assert.Zero(t, positions)
+				assert.Equal(t, before, inv.String(), "an augmentation waits for its transaction to be booked")
+				return
 			}
+			assert.NotZero(t, positions)
+			for _, position := range positions {
+				assert.True(t, position.Reduced)
+			}
+			assert.NotEqual(t, before, inv.String())
 		})
 	}
 }
 
-func TestReduceLotLIFO(t *testing.T) {
-	date1, err := ast.NewDate("2024-01-15")
-	assert.NoError(t, err)
-	date2, err := ast.NewDate("2024-02-15")
-	assert.NoError(t, err)
-	cost100 := decimal.NewFromInt(100)
-	cost200 := decimal.NewFromInt(200)
+func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
+	at := func(units, number, date, label string) BookedPosition {
+		return BookedPosition{
+			Units:   mustParseDec(units),
+			Cost:    &BookedCost{Number: mustParseDec(number), Currency: "USD", Date: newTestDate(date), Label: label},
+			Reduced: true,
+		}
+	}
+	threeLots := []string{"30 STOCK {1 USD, 2024-01-15}", "40 STOCK {1 USD, 2024-02-15}", "50 STOCK {1 USD, 2024-03-15}"}
+	sameDate := []string{"50 STOCK {1 USD, 2024-01-15}", "60 STOCK {2 USD, 2024-01-15}"}
 
-	inv := NewInventory()
-	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{
-		Cost:         &cost100,
-		CostCurrency: "USD",
-		Date:         date1,
-	})
-	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{
-		Cost:         &cost200,
-		CostCurrency: "USD",
-		Date:         date2,
-	})
-
-	_, err = inv.Book("STOCK", decimal.NewFromInt(-5), &lotSpec{}, "LIFO", nil)
-	assert.NoError(t, err)
-
-	lots := inv.GetLots("STOCK")
-	assert.Equal(t, 2, len(lots))
-	assert.True(t, lots[0].Amount.Equal(decimal.NewFromInt(10)))
-	assert.True(t, lots[1].Amount.Equal(decimal.NewFromInt(5)))
+	tests := []struct {
+		name    string
+		held    []string
+		posting string
+		method  BookingMethod
+		want    []BookedPosition
+		wantErr string
+	}{
+		{
+			name: "FIFO reduces the oldest lot first", method: BookingFIFO,
+			held: threeLots, posting: "-20 STOCK {}",
+			want: []BookedPosition{at("-20", "1", "2024-01-15", "")},
+		},
+		{
+			name: "FIFO spans lots", method: BookingFIFO,
+			held: threeLots, posting: "-60 STOCK {}",
+			want: []BookedPosition{at("-30", "1", "2024-01-15", ""), at("-30", "1", "2024-02-15", "")},
+		},
+		{
+			name: "FIFO keeps the order of lots of one date", method: BookingFIFO,
+			held: sameDate, posting: "-80 STOCK {}",
+			want: []BookedPosition{at("-50", "1", "2024-01-15", ""), at("-30", "2", "2024-01-15", "")},
+		},
+		{
+			name: "LIFO reduces the newest lot first", method: BookingLIFO,
+			held: threeLots, posting: "-40 STOCK {}",
+			want: []BookedPosition{at("-40", "1", "2024-03-15", "")},
+		},
+		{
+			name: "LIFO spans lots", method: BookingLIFO,
+			held: threeLots, posting: "-60 STOCK {}",
+			want: []BookedPosition{at("-50", "1", "2024-03-15", ""), at("-10", "1", "2024-02-15", "")},
+		},
+		{
+			name: "LIFO keeps the order of lots of one date", method: BookingLIFO,
+			held: sameDate, posting: "-80 STOCK {}",
+			want: []BookedPosition{at("-50", "1", "2024-01-15", ""), at("-30", "2", "2024-01-15", "")},
+		},
+		{
+			name: "HIFO reduces the costliest lot first", method: BookingHIFO,
+			held:    []string{"10 STOCK {100 USD, 2024-01-15}", "10 STOCK {200 USD, 2024-02-15}", "10 STOCK {150 USD, 2024-03-15}"},
+			posting: "-15 STOCK {}",
+			want:    []BookedPosition{at("-10", "200", "2024-02-15", ""), at("-5", "150", "2024-03-15", "")},
+		},
+		{
+			name: "a spec narrows the lots FIFO books", method: BookingFIFO,
+			held:    []string{"50 STOCK {100 USD, 2024-01-15}", "30 STOCK {100 USD, 2024-02-15}"},
+			posting: "-20 STOCK {100 USD, 2024-02-15}",
+			want:    []BookedPosition{at("-20", "100", "2024-02-15", "")},
+		},
+		{
+			name: "FIFO cannot book more than the lots hold", method: BookingFIFO,
+			held: threeLots, posting: "-200 STOCK {}",
+			wantErr: "not enough lots to reduce",
+		},
+		{
+			name: "FIFO finds no lot the spec names", method: BookingFIFO,
+			held: []string{"50 STOCK {100 USD, 2024-01-15}"}, posting: "-30 STOCK {200 USD}",
+			wantErr: "lot not found",
+		},
+		{
+			name: "STRICT reduces the one lot the spec names", method: BookingSTRICT,
+			held:    []string{"50 STOCK {100 USD, 2024-01-15}", "30 STOCK {200 USD, 2024-01-15}"},
+			posting: "-20 STOCK {100 USD}",
+			want:    []BookedPosition{at("-20", "100", "2024-01-15", "")},
+		},
+		{
+			name: "STRICT matches a label", method: BookingSTRICT,
+			held:    []string{`10 STOCK {100 USD, 2024-01-15, "a"}`, `10 STOCK {100 USD, 2024-01-15, "b"}`},
+			posting: `-5 STOCK {"b"}`,
+			want:    []BookedPosition{at("-5", "100", "2024-01-15", "b")},
+		},
+		{
+			name: "STRICT reduces every matching lot in full", method: BookingSTRICT,
+			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
+			posting: "-110 STOCK {}",
+			want:    []BookedPosition{at("-50", "10", "2024-01-15", ""), at("-60", "10", "2024-02-15", "")},
+		},
+		{
+			name: "STRICT cannot choose among lots it would reduce in part", method: BookingSTRICT,
+			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
+			posting: "-40 STOCK {}",
+			wantErr: "ambiguous matches",
+		},
+		{
+			name: "STRICT cannot book more than the lot holds", method: BookingSTRICT,
+			held: []string{"10 STOCK {100 USD, 2024-01-15}"}, posting: "-20 STOCK {100 USD}",
+			wantErr: "not enough lots to reduce",
+		},
+		{
+			name: "STRICT finds no lot the spec names", method: BookingSTRICT,
+			held: []string{"10 STOCK {100 USD, 2024-01-15}"}, posting: "-5 STOCK {200 USD}",
+			wantErr: "lot not found",
+		},
+		{
+			name: "a total cost names the lot at its per-unit cost", method: BookingSTRICT,
+			held: []string{"10 STOCK {5 USD, 2024-01-15}"}, posting: "-4 STOCK {{20 USD}}",
+			want: []BookedPosition{at("-4", "5", "2024-01-15", "")},
+		},
+		{
+			name: "a compound cost names the lot at its per-unit cost", method: BookingSTRICT,
+			held: []string{"10 STOCK {5 USD, 2024-01-15}"}, posting: "-2 STOCK {3 # 4 USD}",
+			want: []BookedPosition{at("-2", "5", "2024-01-15", "")},
+		},
+		{
+			name: "a short lot is covered", method: BookingFIFO,
+			held: []string{"-10 STOCK {5 USD, 2024-01-15}"}, posting: "4 STOCK {}",
+			want: []BookedPosition{at("4", "5", "2024-01-15", "")},
+		},
+		{
+			name: "AVERAGE fails every reduction, like beancount v2", method: BookingAVERAGE,
+			held: []string{"5 STOCK {100 USD, 2024-01-15}"}, posting: "-5 STOCK {}",
+			wantErr: "AVERAGE method is not supported",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inv := holding(t, "2024-01-01", tt.held...)
+			positions, _, err := inv.book(testPosting(t, tt.posting), tt.method)
+			if tt.wantErr != "" {
+				assert.Error(t, err)
+				assert.HasPrefix(t, err.Error(), tt.wantErr)
+				return
+			}
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, positions)
+		})
+	}
 }
 
-func TestReduceLotDoesNotMutateOnFailure(t *testing.T) {
-	date1, err := ast.NewDate("2024-01-15")
-	assert.NoError(t, err)
-	date2, err := ast.NewDate("2024-02-15")
-	assert.NoError(t, err)
+func TestBookLeavesTheInventoryUnchangedOnFailure(t *testing.T) {
+	inv := holding(t, "2024-01-01", "10 STOCK {1 USD, 2024-01-15}", "20 STOCK {1 USD, 2024-02-15}")
+	before := inv.String()
 
-	inv := NewInventory()
-	inv.AddLot("STOCK", decimal.NewFromInt(10), &lotSpec{Date: date1})
-	inv.AddLot("STOCK", decimal.NewFromInt(20), &lotSpec{Date: date2})
-
-	_, err = inv.Book("STOCK", decimal.NewFromInt(-40), &lotSpec{}, "FIFO", nil)
+	_, _, err := inv.book(testPosting(t, "-40 STOCK {}"), BookingFIFO)
 	assert.Error(t, err)
+	assert.Equal(t, before, inv.String())
+}
 
-	lots := inv.GetLots("STOCK")
-	assert.Equal(t, 2, len(lots))
-	assert.True(t, lots[0].Amount.Equal(decimal.NewFromInt(10)))
-	assert.True(t, lots[1].Amount.Equal(decimal.NewFromInt(20)))
+func TestBookSkipsLotsWithoutCost(t *testing.T) {
+	// Like beancount's book_reductions, a cost spec never books against units
+	// held without cost, although they still make the posting a reduction.
+	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
+		t.Run(string(method), func(t *testing.T) {
+			inv := holding(t, "2024-01-01", "1 HOOL {10 USD, 2024-01-15}", "1 HOOL {12 USD, 2024-02-15}", "1 HOOL")
+
+			positions, _, err := inv.book(testPosting(t, "-2 HOOL {}"), method)
+			assert.NoError(t, err)
+			assert.Equal(t, 2, len(positions))
+			assert.Equal(t, "1", inv.Get("HOOL").String(), "the units without cost remain")
+		})
+	}
+
+	inv := holding(t, "2024-01-01", "3 HOOL")
+	_, _, err := inv.book(testPosting(t, "-1 HOOL {}"), BookingFIFO)
+	assert.Error(t, err)
 }
 
 func TestBookShortPositionAtCost(t *testing.T) {
-	shortDate, err := ast.NewDate("2024-01-15")
-	assert.NoError(t, err)
-	coverDate, err := ast.NewDate("2024-02-15")
-	assert.NoError(t, err)
-	cost := decimal.NewFromInt(10)
-
 	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
 		t.Run(string(method), func(t *testing.T) {
 			inv := NewInventory()
 
-			// Selling without holdings opens a short lot dated like an acquisition.
-			_, err := inv.Book("HOOL", decimal.NewFromInt(-3), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, shortDate)
+			// Selling without holdings augments: it opens a short lot, dated
+			// like an acquisition.
+			short := testPosting(t, "-3 HOOL {10 USD}")
+			positions, reduced, err := inv.book(short, method)
 			assert.NoError(t, err)
-			lots := inv.GetLots("HOOL")
-			assert.Equal(t, 1, len(lots))
-			assert.Equal(t, "-3", lots[0].Amount.String())
-			assert.True(t, lots[0].Spec.Date.Equal(shortDate.Time))
+			assert.False(t, reduced)
+			assert.Zero(t, positions)
+			inv.augment(short, newTestDate("2024-01-15"))
+			assert.Equal(t, "{-3 HOOL {10 USD, 2024-01-15}}", inv.String())
 
 			// A positive posting now reduces the short lot instead of adding a lot.
-			_, err = inv.Book("HOOL", decimal.NewFromInt(2), &lotSpec{Cost: &cost, CostCurrency: "USD"}, method, coverDate)
+			_, _, err = inv.book(testPosting(t, "2 HOOL {10 USD}"), method)
 			assert.NoError(t, err)
-			lots = inv.GetLots("HOOL")
-			assert.Equal(t, 1, len(lots))
-			assert.Equal(t, "-1", lots[0].Amount.String())
+			assert.Equal(t, "{-1 HOOL {10 USD, 2024-01-15}}", inv.String())
 
-			_, err = inv.Book("HOOL", decimal.NewFromInt(1), &lotSpec{}, method, coverDate)
+			_, _, err = inv.book(testPosting(t, "1 HOOL {}"), method)
 			assert.NoError(t, err)
 			assert.True(t, inv.IsEmpty())
 		})
 	}
 }
 
-func TestBookReturnsBookedPositions(t *testing.T) {
-	date1, err := ast.NewDate("2024-01-15")
-	assert.NoError(t, err)
-	date2, err := ast.NewDate("2024-02-15")
-	assert.NoError(t, err)
-	cost100 := decimal.NewFromInt(100)
-	cost120 := decimal.NewFromInt(120)
-
-	inv := NewInventory()
-	booked, err := inv.Book("HOOL", decimal.NewFromInt(10), &lotSpec{Cost: &cost100, CostCurrency: "USD"}, BookingFIFO, date1)
-	assert.NoError(t, err)
-	assert.Zero(t, booked, "augmentations book no existing lots")
-	_, err = inv.Book("HOOL", decimal.NewFromInt(10), &lotSpec{Cost: &cost120, CostCurrency: "USD", Label: "b"}, BookingFIFO, date2)
-	assert.NoError(t, err)
-
-	booked, err = inv.Book("HOOL", decimal.NewFromInt(-15), &lotSpec{}, BookingFIFO, date2)
-	assert.NoError(t, err)
-	assert.Equal(t, []BookedPosition{
-		{Units: decimal.NewFromInt(-10), Cost: &BookedCost{Number: cost100, Currency: "USD", Date: date1}, Reduced: true},
-		{Units: decimal.NewFromInt(-5), Cost: &BookedCost{Number: cost120, Currency: "USD", Date: date2, Label: "b"}, Reduced: true},
-	}, booked)
-}
-
-func TestBookSkipsLotsWithoutCost(t *testing.T) {
-	// Like beancount's book_reductions, a cost spec never books against units
-	// held without cost, although they still make the posting a reduction.
-	date1, err := ast.NewDate("2024-01-15")
-	assert.NoError(t, err)
-	date2, err := ast.NewDate("2024-02-15")
-	assert.NoError(t, err)
-	cost10, cost12 := decimal.NewFromInt(10), decimal.NewFromInt(12)
-
-	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
-		t.Run(string(method), func(t *testing.T) {
-			inv := NewInventory()
-			inv.AddLot("HOOL", decimal.NewFromInt(1), &lotSpec{Cost: &cost10, CostCurrency: "USD", Date: date1})
-			inv.AddLot("HOOL", decimal.NewFromInt(1), &lotSpec{Cost: &cost12, CostCurrency: "USD", Date: date2})
-			inv.Add("HOOL", decimal.NewFromInt(1))
-
-			booked, err := inv.Book("HOOL", decimal.NewFromInt(-2), &lotSpec{}, method, nil)
-			assert.NoError(t, err)
-			assert.Equal(t, 2, len(booked))
-			assert.Equal(t, "1", inv.Get("HOOL").String(), "the units without cost remain")
+func TestAugmentAddsTheLotItsSpecNames(t *testing.T) {
+	at := func(number, date, label string) *BookedCost {
+		return &BookedCost{Number: mustParseDec(number), Currency: "USD", Date: newTestDate(date), Label: label}
+	}
+	tests := []struct {
+		name    string
+		held    []string
+		posting string
+		want    []BookedPosition
+	}{
+		{
+			name:    "a lot without a date is dated by its transaction",
+			posting: "10 AA {5.0 USD}",
+			want:    []BookedPosition{{Units: mustParseDec("10"), Cost: at("5.0", "2024-03-01", "")}},
+		},
+		{
+			name:    "a dated lot keeps its date",
+			posting: "10 AA {5 USD, 2024-01-01}",
+			want:    []BookedPosition{{Units: mustParseDec("10"), Cost: at("5", "2024-01-01", "")}},
+		},
+		{
+			name:    "a labelled lot keeps its label",
+			posting: `1 DD {7 USD, "lbl"}`,
+			want:    []BookedPosition{{Units: mustParseDec("1"), Cost: at("7", "2024-03-01", "lbl")}},
+		},
+		{
+			name:    "a total cost is spread over the units",
+			posting: "4 BB {{20 USD}}",
+			want:    []BookedPosition{{Units: mustParseDec("4"), Cost: at("5", "2024-03-01", "")}},
+		},
+		{
+			name:    "a compound cost adds its total spread over the units",
+			posting: "2 CC {3 # 4 USD}",
+			want:    []BookedPosition{{Units: mustParseDec("2"), Cost: at("5", "2024-03-01", "")}},
+		},
+		{
+			name:    "a short lot opens like any other",
+			posting: "-3 HOOL {10 USD}",
+			want:    []BookedPosition{{Units: mustParseDec("-3"), Cost: at("10", "2024-03-01", "")}},
+		},
+		{
+			name:    "units without cost are held alone",
+			posting: "49.00 USD",
+			want:    []BookedPosition{{Units: mustParseDec("49.00")}},
+		},
+		{
+			name:    "the opposite sign of a held lot reduces it",
+			held:    []string{"-4 YY {7 USD, 2024-02-01}"},
+			posting: "3 YY {7 USD, 2024-02-01}",
+			want:    []BookedPosition{{Units: mustParseDec("3"), Cost: at("7", "2024-02-01", ""), Reduced: true}},
+		},
+		{
+			name:    "a lot of zero units is not held",
+			held:    []string{"0 PP {5 USD, 2024-01-07}"},
+			posting: "-5 PP {5 USD, 2024-01-07}",
+			want:    []BookedPosition{{Units: mustParseDec("-5"), Cost: at("5", "2024-01-07", "")}},
+		},
+		{name: "a cost without a number holds nothing", posting: "5 FF {USD}"},
+		{name: "units without a number hold nothing", posting: "GG {5 USD}"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			inv := holding(t, "2024-01-01", tt.held...)
+			positions := inv.augment(testPosting(t, tt.posting), newTestDate("2024-03-01"))
+			assert.Equal(t, tt.want, positions)
 		})
 	}
-
-	inv := NewInventory()
-	inv.Add("HOOL", decimal.NewFromInt(3))
-	_, err = inv.Book("HOOL", decimal.NewFromInt(-1), &lotSpec{}, BookingFIFO, nil)
-	assert.Error(t, err)
 }
 
 func TestInventoryStringSortsCommodities(t *testing.T) {
-	inv := NewInventory()
-	inv.Add("USD", decimal.NewFromInt(10))
-	inv.Add("EUR", decimal.NewFromInt(20))
+	inv := holding(t, "2024-01-01", "10 USD", "20 EUR")
 
 	assert.Equal(t, "{20 EUR, 10 USD}", inv.String())
-}
-
-func TestPlanSpecificReduction(t *testing.T) {
-	date1, _ := ast.NewDate("2024-01-15")
-
-	// Helper to create decimal from string
-	d := func(s string) decimal.Decimal {
-		val, _ := decimal.NewFromString(s)
-		return val
-	}
-
-	tests := []struct {
-		name        string
-		setup       func() *Inventory
-		commodity   string
-		amount      decimal.Decimal
-		spec        *lotSpec
-		wantErr     bool
-		errContains string
-	}{
-		{
-			name: "lot found with sufficient amount - valid",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("50"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("30"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("100")),
-				CostCurrency: "USD",
-			},
-			wantErr: false,
-		},
-		{
-			name: "lot found with insufficient amount - error",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("20"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("30"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("100")),
-				CostCurrency: "USD",
-			},
-			wantErr:     true,
-			errContains: "not enough lots: insufficient amount",
-		},
-		{
-			name: "lot not found - error",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				inv.AddLot("STOCK", d("50"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("30"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("200")),
-				CostCurrency: "USD",
-			},
-			wantErr:     true,
-			errContains: "lot not found",
-		},
-		{
-			name: "multiple lots, only one matches",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				cost200 := d("200")
-				inv.AddLot("STOCK", d("50"), &lotSpec{Cost: &cost100, CostCurrency: "USD"})
-				inv.AddLot("STOCK", d("30"), &lotSpec{Cost: &cost200, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("20"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("100")),
-				CostCurrency: "USD",
-			},
-			wantErr: false,
-		},
-		{
-			name: "multiple lots with dates, match on date",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost100 := d("100")
-				date2, _ := ast.NewDate("2024-02-15")
-				inv.AddLot("STOCK", d("50"), &lotSpec{Cost: &cost100, CostCurrency: "USD", Date: date1})
-				inv.AddLot("STOCK", d("30"), &lotSpec{Cost: &cost100, CostCurrency: "USD", Date: date2})
-				return inv
-			},
-			commodity: "STOCK",
-			amount:    d("20"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("100")),
-				CostCurrency: "USD",
-				Date:         date1,
-			},
-			wantErr: false,
-		},
-		{
-			name: "exact amount match",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				cost150 := d("150")
-				inv.AddLot("HOOL", d("100"), &lotSpec{Cost: &cost150, CostCurrency: "USD"})
-				return inv
-			},
-			commodity: "HOOL",
-			amount:    d("100"),
-			spec: &lotSpec{
-				Cost:         ptrDecimal(d("150")),
-				CostCurrency: "USD",
-			},
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inv := tt.setup()
-			_, err := planSpecificReduction(tt.commodity, inv.GetLots(tt.commodity), tt.amount, tt.spec, BookingFIFO)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				if tt.errContains != "" {
-					assert.HasPrefix(t, err.Error(), tt.errContains)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestPlanBookingReduction(t *testing.T) {
-	date1, _ := ast.NewDate("2024-01-15")
-	date2, _ := ast.NewDate("2024-02-15")
-	date3, _ := ast.NewDate("2024-03-15")
-
-	// Helper to create decimal from string
-	d := func(s string) decimal.Decimal {
-		val, _ := decimal.NewFromString(s)
-		return val
-	}
-
-	tests := []struct {
-		name          string
-		setup         func() *Inventory
-		commodity     string
-		amount        decimal.Decimal
-		bookingMethod BookingMethod
-		wantErr       bool
-		errContains   string
-	}{
-		{
-			name: "FIFO reduces oldest lots first",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("40"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "FIFO with exact amount from first lot",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("50"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "FIFO spanning multiple lots",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("30"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("40"), &lotSpec{Date: date2})
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date3})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("60"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "LIFO reduces newest lots first",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("40"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "LIFO with exact amount from newest lot",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("60"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "LIFO spanning multiple lots",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("30"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("40"), &lotSpec{Date: date2})
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date3})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("60"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "stable sort for same-date lots FIFO - deterministic ordering",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				// Two lots with same date, stable sort should preserve order
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("80"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "stable sort for same-date lots LIFO - deterministic ordering",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				// Two lots with same date, stable sort should preserve order
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("80"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "lots without dates come first FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), nil) // No date
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("40"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "lots without dates come last LIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), nil) // No date
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("40"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "default booking method empty string treated as FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("40"),
-			bookingMethod: "", // Empty string defaults to FIFO
-			wantErr:       false,
-		},
-		{
-			name: "insufficient total across multiple lots FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("30"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("40"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("100"),
-			bookingMethod: "FIFO",
-			wantErr:       true,
-			errContains:   "not enough lots: insufficient amount",
-		},
-		{
-			name: "insufficient total across multiple lots LIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("30"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("40"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("100"),
-			bookingMethod: "LIFO",
-			wantErr:       true,
-			errContains:   "not enough lots: insufficient amount",
-		},
-		{
-			name: "empty lots array FIFO",
-			setup: func() *Inventory {
-				return NewInventory()
-			},
-			commodity:     "STOCK",
-			amount:        d("50"),
-			bookingMethod: "FIFO",
-			wantErr:       true,
-			errContains:   "no lots available",
-		},
-		{
-			name: "empty lots array LIFO",
-			setup: func() *Inventory {
-				return NewInventory()
-			},
-			commodity:     "STOCK",
-			amount:        d("50"),
-			bookingMethod: "LIFO",
-			wantErr:       true,
-			errContains:   "no lots available",
-		},
-		{
-			name: "single lot exact amount FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("100"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("100"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "single lot exact amount LIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("100"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("100"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "single lot more than needed FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("100"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("50"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "complex: mix of dated and undated lots FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("25"), nil) // No date (should come first in FIFO)
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("30"), nil) // Another undated
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("100"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "complex: mix of dated and undated lots LIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("25"), nil) // No date
-				inv.AddLot("STOCK", d("50"), &lotSpec{Date: date1})
-				inv.AddLot("STOCK", d("30"), nil) // Another undated
-				inv.AddLot("STOCK", d("60"), &lotSpec{Date: date2})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("100"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-		{
-			name: "zero amount needed",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("100"), &lotSpec{Date: date1})
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("0"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "all lots without dates FIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), nil)
-				inv.AddLot("STOCK", d("60"), nil)
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("80"),
-			bookingMethod: "FIFO",
-			wantErr:       false,
-		},
-		{
-			name: "all lots without dates LIFO",
-			setup: func() *Inventory {
-				inv := NewInventory()
-				inv.AddLot("STOCK", d("50"), nil)
-				inv.AddLot("STOCK", d("60"), nil)
-				return inv
-			},
-			commodity:     "STOCK",
-			amount:        d("80"),
-			bookingMethod: "LIFO",
-			wantErr:       false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			inv := tt.setup()
-			_, err := planBookingReduction(tt.commodity, inv.GetLots(tt.commodity), tt.amount, tt.bookingMethod)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-				if tt.errContains != "" {
-					assert.HasPrefix(t, err.Error(), tt.errContains)
-				}
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func TestStrictBookingReduction(t *testing.T) {
-	date1, _ := ast.NewDate("2024-01-15")
-	date2, _ := ast.NewDate("2024-02-15")
-
-	d := func(s string) decimal.Decimal {
-		val, _ := decimal.NewFromString(s)
-		return val
-	}
-
-	t.Run("ambiguous partial reduction errors", func(t *testing.T) {
-		inv := NewInventory()
-		inv.AddLot("STOCK", d("50"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date1})
-		inv.AddLot("STOCK", d("60"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date2})
-
-		_, err := inv.Book("STOCK", d("-40"), &lotSpec{}, BookingSTRICT, nil)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "ambiguous matches")
-	})
-
-	t.Run("full reduction across matching lots passes", func(t *testing.T) {
-		inv := NewInventory()
-		inv.AddLot("STOCK", d("50"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date1})
-		inv.AddLot("STOCK", d("60"), &lotSpec{Cost: ptrDecimal(d("10")), CostCurrency: "USD", Date: date2})
-
-		_, err := inv.Book("STOCK", d("-110"), &lotSpec{}, BookingSTRICT, nil)
-		assert.NoError(t, err)
-	})
-}
-
-func TestNoneBookingReduction(t *testing.T) {
-	date1, _ := ast.NewDate("2024-01-15")
-
-	d := func(s string) decimal.Decimal {
-		val, _ := decimal.NewFromString(s)
-		return val
-	}
-
-	inv := NewInventory()
-	inv.AddLot("STOCK", d("10"), &lotSpec{Date: date1})
-
-	_, err := inv.Book("STOCK", d("-5"), &lotSpec{}, BookingNONE, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, "5", inv.Get("STOCK").String())
-}
-
-// Helper function to create a pointer to a decimal
-func ptrDecimal(d decimal.Decimal) *decimal.Decimal {
-	return &d
 }
 
 // TestFIFOLIFOBooking tests FIFO and LIFO booking method semantics.

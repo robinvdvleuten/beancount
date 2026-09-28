@@ -60,8 +60,6 @@ func (p BookedPosition) lotSpec() *lotSpec {
 type reductionPlan struct {
 	commodity  string
 	reductions []lotReduction
-	addAmount  *decimal.Decimal
-	addSpec    *lotSpec
 }
 
 // ambiguousBookingMatchError reports a reduction that matches several lots.
@@ -93,7 +91,7 @@ func lotStrings(lots []*lot) []string {
 }
 
 // errNotEnoughLots marks a reduction larger than the lots it can book
-// against; planBooking reports it as a notEnoughLotsError.
+// against; book reports it as a notEnoughLotsError.
 var errNotEnoughLots = errors.New("not enough lots")
 
 // errAverageUnsupported fails every reduction under the AVERAGE booking
@@ -155,12 +153,6 @@ func (inv *Inventory) clone() *Inventory {
 	return cloned
 }
 
-// Add adds an amount without cost basis
-func (inv *Inventory) Add(commodity string, amount decimal.Decimal) {
-	// Add as a lot without cost spec
-	inv.AddLot(commodity, amount, nil)
-}
-
 // AddLot adds an amount with a specific cost basis and reports whether it
 // reduced the lot: the inventory held the lot with the opposite sign, like
 // beancount's Inventory.add_amount returning Booking.REDUCED. A lot of zero
@@ -200,31 +192,74 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 	return inv.lots[commodity]
 }
 
-// Book books a posting of amount units held at spec into the inventory.
+// book decides whether a posting reduces the inventory under its account's
+// booking method and, if so, books it; it books nothing for an augmentation.
+// It is the one place a posting is found to reduce or to augment, like
+// beancount's book_reductions. A posting reduces when it is held at cost
+// with known units, its account books with a method other than NONE, and the
+// inventory holds its commodity with the opposite sign; every other posting
+// augments, which is how short positions at cost are opened.
 //
-// Like beancount, the posting reduces existing lots only when the inventory
-// holds an opposite-signed position in the commodity (see isReducedBy);
-// otherwise it augments, which is how short positions at cost are opened.
-// An augmenting lot without an explicit date is acquired on acquisitionDate.
-//
-// For a reduction, Book returns the positions it booked, one per lot it was
-// booked against in booking order. It returns no position for an
-// augmentation, which the booker records itself.
-func (inv *Inventory) Book(
-	commodity string,
-	amount decimal.Decimal,
-	spec *lotSpec,
-	bookingMethod BookingMethod,
-	acquisitionDate *ast.Date,
-) ([]BookedPosition, error) {
-	plan, err := inv.planBooking(commodity, amount, spec, bookingMethod, acquisitionDate)
+// For a reduction, book books the lots it matches at once, so that a later
+// posting of the transaction cannot book the same units again, and returns
+// reduced with one position per lot, in booking order. For an augmentation
+// it returns neither and leaves the inventory as it is: the augmentation's
+// numbers may still be interpolated, from the reductions' weights among
+// others, and like beancount the inventory takes it (augment) only once its
+// transaction is booked, so the transaction's own postings never reduce it.
+func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (positions []BookedPosition, reduced bool, err error) {
+	if posting.Cost == nil || posting.Amount == nil || posting.Amount.Value == "" {
+		return nil, false, nil
+	}
+	units, err := ParseAmount(posting.Amount)
 	if err != nil {
-		return nil, err
+		return nil, false, nil // A malformed number drops its transaction before Booking
+	}
+	method = defaultBookingMethod(method)
+	if method == BookingNONE || units.IsZero() {
+		return nil, false, nil
 	}
 
-	var booked []BookedPosition
-	for _, reduction := range plan.reductions {
-		// planBooking offers only lots held at cost.
+	// Like beancount's is_reduced_by, the posting reduces when the inventory
+	// holds its commodity with the opposite sign. Like its book_reductions,
+	// it is booked only against the lots held at cost: units held without
+	// cost make it a reduction but are never booked against.
+	commodity := posting.Amount.Currency
+	reduces := false
+	var lots []*lot
+	for _, lot := range inv.lots[commodity] {
+		if lot.Amount.Sign() == units.Sign() {
+			continue
+		}
+		reduces = true
+		if lot.Spec != nil && lot.Spec.Cost != nil {
+			lots = append(lots, lot)
+		}
+	}
+	if !reduces {
+		return nil, false, nil
+	}
+	spec, err := postingLotSpec(posting)
+	if err != nil {
+		return nil, false, nil // A malformed cost drops its transaction before Booking
+	}
+
+	// The strategies work on magnitudes; the booked units take the
+	// posting's sign.
+	plan, err := planReduction(commodity, lots, units.Abs(), spec, method)
+	if errors.Is(err, errNotEnoughLots) {
+		return nil, false, &notEnoughLotsError{commodity: commodity, amount: units, spec: spec, lots: lotStrings(lots)}
+	}
+	if err != nil {
+		return nil, false, err
+	}
+
+	booked := make([]BookedPosition, 0, len(plan.reductions))
+	for i := range plan.reductions {
+		reduction := &plan.reductions[i]
+		if units.IsNegative() {
+			reduction.amount = reduction.amount.Neg()
+		}
 		s := reduction.lot.Spec
 		booked = append(booked, BookedPosition{
 			Units:   reduction.amount,
@@ -232,24 +267,49 @@ func (inv *Inventory) Book(
 			Reduced: true,
 		})
 	}
-
 	inv.applyReduction(plan)
-	return booked, nil
+	return booked, true, nil
 }
 
-// isReducedBy reports whether adding amount of commodity would reduce the
-// inventory: some position in the commodity has the opposite sign. This is
-// beancount's Inventory.is_reduced_by.
-func (inv *Inventory) isReducedBy(commodity string, amount decimal.Decimal) bool {
-	if amount.IsZero() {
-		return false
+// augment adds a posting that book did not book as a reduction, once its
+// transaction is booked and its numbers are complete, like beancount's
+// add_position: at cost, to the lot its spec names, per unit (a total or
+// compound cost spread over the units) and, like beancount, dated by its
+// transaction when the spec has none (FIFO/LIFO ordering and dated lot
+// specs depend on it); without cost, its units alone. It returns the
+// position it booked, which is both the change and its record, or none for
+// a posting that holds nothing: one without a complete amount, or at a cost
+// whose number was not interpolated.
+func (inv *Inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosition {
+	if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
+		return nil
 	}
-	for _, lot := range inv.lots[commodity] {
-		if lot.Amount.Sign() != amount.Sign() {
-			return true
+	units, err := ParseAmount(posting.Amount)
+	if err != nil {
+		return nil
+	}
+	position := BookedPosition{Units: units}
+	if posting.Cost != nil {
+		if !posting.Cost.HasNumber() {
+			return nil
+		}
+		spec, err := postingLotSpec(posting)
+		if err != nil {
+			return nil
+		}
+		// Known gap (KNOWN_GAPS.md): ParseLotSpec reads a merge cost {*}
+		// as {} and drops the number inferred for it, so an augmentation
+		// at {*} books its units without cost, where beancount v2 books
+		// it at the inferred cost.
+		if spec.Cost != nil {
+			if spec.Date != nil {
+				date = spec.Date
+			}
+			position.Cost = &BookedCost{Number: *spec.Cost, Currency: spec.CostCurrency, Date: date, Label: spec.Label}
 		}
 	}
-	return false
+	position.Reduced = inv.AddLot(posting.Amount.Currency, units, position.lotSpec())
+	return []BookedPosition{position}
 }
 
 // removeLot removes a lot from the inventory
@@ -331,64 +391,6 @@ func (inv *Inventory) String() string {
 	}
 	buf.WriteByte('}')
 	return buf.String()
-}
-
-// planBooking decides whether the posting augments or reduces the inventory
-// and plans the change. A zero amount plans nothing.
-func (inv *Inventory) planBooking(
-	commodity string,
-	amount decimal.Decimal,
-	spec *lotSpec,
-	bookingMethod BookingMethod,
-	acquisitionDate *ast.Date,
-) (*reductionPlan, error) {
-	if amount.IsZero() {
-		return &reductionPlan{commodity: commodity}, nil
-	}
-
-	bookingMethod = defaultBookingMethod(bookingMethod)
-	if bookingMethod == BookingNONE || spec == nil || !inv.isReducedBy(commodity, amount) {
-		if spec != nil && spec.Date == nil && acquisitionDate != nil {
-			dated := *spec
-			dated.Date = acquisitionDate
-			spec = &dated
-		}
-		return &reductionPlan{
-			commodity: commodity,
-			addAmount: &amount,
-			addSpec:   spec,
-		}, nil
-	}
-
-	// A reduction consumes only lots of the opposite sign, and a cost spec
-	// only matches lots held at cost: like beancount's book_reductions, units
-	// held without cost are never booked against, although they still make
-	// the posting a reduction. The strategies work on magnitudes; the
-	// resulting deltas take the posting's sign.
-	lots := make([]*lot, 0, len(inv.lots[commodity]))
-	for _, lot := range inv.lots[commodity] {
-		if lot.Amount.Sign() == amount.Sign() {
-			continue
-		}
-		if lot.Spec == nil || lot.Spec.Cost == nil {
-			continue
-		}
-		lots = append(lots, lot)
-	}
-
-	plan, err := planReduction(commodity, lots, amount.Abs(), spec, bookingMethod)
-	if errors.Is(err, errNotEnoughLots) {
-		return nil, &notEnoughLotsError{commodity: commodity, amount: amount, spec: spec, lots: lotStrings(lots)}
-	}
-	if err != nil {
-		return nil, err
-	}
-	if amount.IsNegative() {
-		for i := range plan.reductions {
-			plan.reductions[i].amount = plan.reductions[i].amount.Neg()
-		}
-	}
-	return plan, nil
 }
 
 // planReduction plans reducing amount (a magnitude) from the given lots.
@@ -542,11 +544,6 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 }
 
 func (inv *Inventory) applyReduction(plan *reductionPlan) {
-	if plan.addAmount != nil {
-		inv.AddLot(plan.commodity, *plan.addAmount, plan.addSpec)
-		return
-	}
-
 	for _, reduction := range plan.reductions {
 		reduction.lot.Amount = pydecimal.Add(reduction.lot.Amount, reduction.amount)
 		if reduction.lot.Amount.IsZero() {
