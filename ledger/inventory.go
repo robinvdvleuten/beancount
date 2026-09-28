@@ -3,6 +3,7 @@ package ledger
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -13,8 +14,12 @@ import (
 
 // Inventory tracks lots of commodities with cost basis
 type Inventory struct {
-	// Map: commodity -> list of lots
+	// Map: commodity -> list of lots, in the order they were added, which
+	// booking methods, reductions and rendering depend on
 	lots map[string][]*lot
+	// Map: commodity -> lot key -> the lot's position in lots, so adding to
+	// a lot takes a lookup rather than a scan of every lot
+	index map[string]map[lotKey]int
 }
 
 type lotReduction struct {
@@ -134,21 +139,30 @@ func defaultBookingMethod(method BookingMethod) BookingMethod {
 // NewInventory creates a new inventory
 func NewInventory() *Inventory {
 	return &Inventory{
-		lots: make(map[string][]*lot),
+		lots:  make(map[string][]*lot),
+		index: make(map[string]map[lotKey]int),
 	}
 }
 
 // clone returns a copy of the inventory whose lots can change without
-// changing the original's.
+// changing the original's. The index holds positions, not lots, so the
+// copy's is the original's copied.
 func (inv *Inventory) clone() *Inventory {
-	cloned := &Inventory{lots: make(map[string][]*lot, len(inv.lots))}
+	cloned := &Inventory{
+		lots:  make(map[string][]*lot, len(inv.lots)),
+		index: make(map[string]map[lotKey]int, len(inv.index)),
+	}
 	for commodity, lots := range inv.lots {
+		// One allocation per commodity rather than per lot: a scratch
+		// inventory is cloned per transaction.
+		backing := make([]lot, len(lots))
 		copied := make([]*lot, len(lots))
 		for i, l := range lots {
-			c := *l
-			copied[i] = &c
+			backing[i] = *l
+			copied[i] = &backing[i]
 		}
 		cloned.lots[commodity] = copied
+		cloned.index[commodity] = maps.Clone(inv.index[commodity])
 	}
 	return cloned
 }
@@ -160,20 +174,25 @@ func (inv *Inventory) clone() *Inventory {
 // never creates one.
 func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
 	// Find existing lot with matching spec
-	lots := inv.lots[commodity]
-	for _, lot := range lots {
-		if lotSpecsMatch(lot.Spec, spec) {
-			reduced := !lot.Amount.IsZero() && lot.Amount.IsNegative() != amount.IsNegative()
-			lot.Amount = pydecimal.Add(lot.Amount, amount)
-			if lot.Amount.IsZero() {
-				inv.removeLot(commodity, lot)
-			}
-			return reduced
+	key := spec.key()
+	if i, ok := inv.index[commodity][key]; ok {
+		lot := inv.lots[commodity][i]
+		reduced := !lot.Amount.IsZero() && lot.Amount.IsNegative() != amount.IsNegative()
+		lot.Amount = pydecimal.Add(lot.Amount, amount)
+		if lot.Amount.IsZero() {
+			inv.removeLot(commodity, lot)
 		}
+		return reduced
 	}
 
 	// Create new lot
-	newLot := newLot(commodity, amount, spec)
+	newLot := &lot{Commodity: commodity, Amount: amount, Spec: spec, key: key}
+	positions, ok := inv.index[commodity]
+	if !ok {
+		positions = make(map[lotKey]int)
+		inv.index[commodity] = positions
+	}
+	positions[newLot.key] = len(inv.lots[commodity])
 	inv.lots[commodity] = append(inv.lots[commodity], newLot)
 	return false
 }
@@ -312,19 +331,25 @@ func (inv *Inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosi
 	return []BookedPosition{position}
 }
 
-// removeLot removes a lot from the inventory
+// removeLot removes a lot from the inventory, keeping the others in order.
+// It builds a new slice, since GetLots hands the old one out.
 func (inv *Inventory) removeLot(commodity string, lotToRemove *lot) {
 	lots := inv.lots[commodity]
-	newLots := make([]*lot, 0, len(lots)-1)
-	for _, lot := range lots {
-		if lot != lotToRemove {
-			newLots = append(newLots, lot)
-		}
-	}
-	if len(newLots) == 0 {
+	if len(lots) == 1 {
 		delete(inv.lots, commodity)
-	} else {
-		inv.lots[commodity] = newLots
+		delete(inv.index, commodity)
+		return
+	}
+	positions := inv.index[commodity]
+	i := positions[lotToRemove.key]
+	newLots := make([]*lot, 0, len(lots)-1)
+	newLots = append(newLots, lots[:i]...)
+	newLots = append(newLots, lots[i+1:]...)
+	inv.lots[commodity] = newLots
+
+	delete(positions, lotToRemove.key)
+	for j := i; j < len(newLots); j++ {
+		positions[newLots[j].key] = j
 	}
 }
 
@@ -685,19 +710,4 @@ func lotMatchesReductionSpec(lot *lot, spec *lotSpec) bool {
 	}
 
 	return true
-}
-
-// lotSpecsMatch checks if two lot specs match
-func lotSpecsMatch(a, b *lotSpec) bool {
-	// Both nil
-	if a == nil && b == nil {
-		return true
-	}
-
-	// One nil, one not
-	if a == nil || b == nil {
-		return false
-	}
-
-	return a.Equal(b)
 }

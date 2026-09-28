@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -96,20 +97,41 @@ func (ls *lotSpec) String() string {
 	return buf.String()
 }
 
+// lotKey identifies a lot among its commodity's lots: two specs have the
+// same key exactly when lotSpec.Equal says they are equal. A lot without a
+// spec has the empty key, which no spec has, not even an empty {}. It is one
+// string, built once per lot, so the index a clone copies stays small.
+type lotKey string
+
+// key returns the spec's lot key: its parts length-prefixed, the cost
+// number normalized so 100.0 and 100.00 are one lot, and the date as the
+// instant time.Time.Equal compares.
+func (ls *lotSpec) key() lotKey {
+	if ls == nil {
+		return ""
+	}
+	var cost, date string
+	if ls.Cost != nil {
+		cost = pydecimal.Normalize(*ls.Cost).String()
+	}
+	if ls.Date != nil {
+		date = strconv.FormatInt(ls.Date.Unix(), 10) + "." + strconv.Itoa(ls.Date.Nanosecond())
+	}
+	b := []byte{'{'}
+	for _, part := range [...]string{cost, ls.CostCurrency, date, ls.Label} {
+		b = strconv.AppendInt(b, int64(len(part)), 10)
+		b = append(b, ':')
+		b = append(b, part...)
+	}
+	return lotKey(b)
+}
+
 // Lot represents a specific lot of a commodity with cost basis
 type lot struct {
 	Commodity string
 	Amount    decimal.Decimal
 	Spec      *lotSpec
-}
-
-// newLot creates a new lot
-func newLot(commodity string, amount decimal.Decimal, spec *lotSpec) *lot {
-	return &lot{
-		Commodity: commodity,
-		Amount:    amount,
-		Spec:      spec,
-	}
+	key       lotKey // Spec's key, which the inventory indexes the lot by
 }
 
 // String returns a string representation of the lot

@@ -7,6 +7,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/shopspring/decimal"
 )
 
 // testPosting parses a posting to Assets:A, written without its account.
@@ -672,4 +673,69 @@ func TestLotMatching(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestLotKeyAgreesWithEqual pins the index's lot identity to lotSpec.Equal:
+// two specs share a key exactly when they are the same lot.
+func TestLotKeyAgreesWithEqual(t *testing.T) {
+	dec := func(s string) *decimal.Decimal { d := decimal.RequireFromString(s); return &d }
+	specs := map[string]*lotSpec{
+		"none":        nil,
+		"empty":       {},
+		"100.0 USD":   {Cost: dec("100.0"), CostCurrency: "USD"},
+		"100.00 USD":  {Cost: dec("100.00"), CostCurrency: "USD"},
+		"100 EUR":     {Cost: dec("100"), CostCurrency: "EUR"},
+		"101 USD":     {Cost: dec("101"), CostCurrency: "USD"},
+		"0 USD":       {Cost: dec("0"), CostCurrency: "USD"},
+		"0.00 USD":    {Cost: dec("0.00"), CostCurrency: "USD"},
+		"USD":         {CostCurrency: "USD"},
+		"dated":       {Cost: dec("100"), CostCurrency: "USD", Date: newTestDate("2024-01-01")},
+		"dated again": {Cost: dec("100.000"), CostCurrency: "USD", Date: newTestDate("2024-01-01")},
+		"other date":  {Cost: dec("100"), CostCurrency: "USD", Date: newTestDate("2024-01-02")},
+		"labelled":    {Cost: dec("100"), CostCurrency: "USD", Label: "a"},
+		"other label": {Cost: dec("100"), CostCurrency: "USD", Label: "b"},
+		"label only":  {Label: "a"},
+		"date only":   {Date: newTestDate("2024-01-01")},
+		"all of them": {Cost: dec("100"), CostCurrency: "USD", Date: newTestDate("2024-01-01"), Label: "a"},
+		"all, 100.0 ": {Cost: dec("100.0"), CostCurrency: "USD", Date: newTestDate("2024-01-01"), Label: "a"},
+	}
+	for an, a := range specs {
+		for bn, b := range specs {
+			assert.Equal(t, a.Equal(b), a.key() == b.key(), "%s vs %s", an, bn)
+		}
+	}
+}
+
+// TestCloneHasItsOwnLotIndex checks that a scratch inventory's index points
+// at its own lots: adding to or emptying a lot in the clone leaves the
+// original's lots and lookups as they were.
+func TestCloneHasItsOwnLotIndex(t *testing.T) {
+	inv := holding(t, "2024-01-01", "10 HOOL {5 USD}", "10 HOOL {6 USD}", "10 HOOL {7 USD}")
+	before := inv.String()
+
+	scratch := inv.clone()
+	scratch.augment(testPosting(t, "5 HOOL {6 USD}"), newTestDate("2024-01-01"))
+	scratch.augment(testPosting(t, "-10 HOOL {5 USD, 2024-01-01}"), newTestDate("2024-01-01"))
+	scratch.augment(testPosting(t, "1 HOOL {8 USD}"), newTestDate("2024-01-01"))
+	assert.Equal(t, "(15 HOOL {6 USD, 2024-01-01}, 10 HOOL {7 USD, 2024-01-01}, 1 HOOL {8 USD, 2024-01-01})", scratch.String())
+
+	assert.Equal(t, before, inv.String())
+	inv.augment(testPosting(t, "1 HOOL {7 USD}"), newTestDate("2024-01-01"))
+	assert.Equal(t, "(10 HOOL {5 USD, 2024-01-01}, 10 HOOL {6 USD, 2024-01-01}, 11 HOOL {7 USD, 2024-01-01})", inv.String())
+}
+
+// TestLotOrderSurvivesEmptyingALot checks that emptying a lot keeps the
+// others in the order they were added, and that the index still finds each
+// of them, so a lot added again goes last.
+func TestLotOrderSurvivesEmptyingALot(t *testing.T) {
+	inv := holding(t, "2024-01-01", "1 AA {1 USD}", "1 AA {2 USD}", "1 AA {3 USD}")
+	inv.augment(testPosting(t, "-1 AA {1 USD, 2024-01-01}"), newTestDate("2024-01-01"))
+	inv.augment(testPosting(t, "1 AA {3 USD}"), newTestDate("2024-01-01"))
+	inv.augment(testPosting(t, "1 AA {1 USD}"), newTestDate("2024-01-01"))
+
+	var order []string
+	for _, lot := range inv.GetLots("AA") {
+		order = append(order, lot.String())
+	}
+	assert.Equal(t, []string{"1 AA {2 USD, 2024-01-01}", "2 AA {3 USD, 2024-01-01}", "1 AA {1 USD, 2024-01-01}"}, order)
 }
