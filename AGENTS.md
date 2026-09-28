@@ -21,6 +21,8 @@ Before exploring or planning a feature, establish its value in this project's co
 
 Fuzz with `go test -fuzz=FuzzName -fuzztime=30s ./package`; `make fuzz-promote` copies the `FuzzParser` corpus into `parser/testdata`. Assertions use `github.com/alecthomas/assert/v2`; fuzz targets `defer recover()`.
 
+Before and after performance work, run `go test ./cli -run '^$' -bench CheckScaling`: it checks ledgers of 1k, 4k and 16k transactions, and a scenario whose MB/s falls as the ledger grows has gone quadratic. Micro-benchmarks on a few directives cannot show that.
+
 Library docs: Context7 for third-party dependencies (shopspring/decimal, alecthomas/kong, mattn/go-runewidth); read the source for stdlib and project code.
 
 ## Parse → Book → Plugins → Validate → Apply
