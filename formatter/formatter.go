@@ -1147,25 +1147,12 @@ func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 		}
 	}
 
-	// Append inline metadata (on same line as posting)
-	for _, m := range p.Metadata {
-		if m.Inline {
-			buf.WriteString("  ")
-			buf.WriteString(m.Key)
-			buf.WriteByte(':')
-			if m.Value != nil {
-				buf.WriteByte(' ')
-			}
-			f.formatMetadataValue(m.Value, buf)
-		}
-	}
-
 	// Append inline comment if present
 	f.writeInlineComment(p.GetComment(), buf)
 
 	buf.WriteByte('\n')
 
-	// Block metadata, on the lines below; kept as written when possible.
+	// Metadata, on the lines below; kept as written when possible.
 	f.formatMetadata(p.Metadata, buf)
 }
 
@@ -1318,10 +1305,6 @@ func (f *run) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 
 	lastVerbatimLine := 0
 	for _, m := range metadata {
-		// Skip inline metadata - it's already been formatted on the directive line
-		if m.Inline {
-			continue
-		}
 		// bean-format leaves metadata lines untouched; preserve the original
 		// line (indentation and spacing) whenever the entry owns it. A single
 		// source line may hold several metadata entries; emit it only once.

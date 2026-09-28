@@ -875,36 +875,6 @@ func TestTransactionEdgeCases(t *testing.T) {
 		// Should have posting-level metadata properly indented (with quotes)
 		assert.Contains(t, buf.String(), "receipt: \"RCP-123\"")
 	})
-
-	t.Run("PostingWithInlineMetadata", func(t *testing.T) {
-		source := `
-2021-01-01 * "Inline metadata test"
-  Assets:Checking  -50.00 USD  receipt: "RCP-123"
-    note: "extra info"
-  Expenses:Groceries  50.00 USD
-`
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		var buf bytes.Buffer
-		err := f.Format(context.Background(), ast, []byte(source), &buf)
-		assert.NoError(t, err)
-
-		output := buf.String()
-
-		// Inline metadata should be on same line as posting
-		assert.Contains(t, output, "-50.00 USD  receipt: \"RCP-123\"")
-
-		// Block metadata should be on separate line with indentation
-		lines := strings.Split(output, "\n")
-		foundBlockMeta := false
-		for _, line := range lines {
-			if strings.Contains(line, "note:") && strings.HasPrefix(line, "  ") {
-				foundBlockMeta = true
-			}
-		}
-		assert.True(t, foundBlockMeta, "Block metadata should be on separate indented line")
-	})
 }
 
 // TestFormattingIdempotency tests that formatting is idempotent

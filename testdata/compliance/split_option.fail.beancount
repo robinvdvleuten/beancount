@@ -1,0 +1,4 @@
+; An option ends at its line: a value on the next line is a syntax error.
+option "title"
+  "x"
+2020-01-01 open Assets:A

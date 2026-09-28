@@ -82,7 +82,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
-	if err := p.finishHeader(txn); err != nil {
+	if err := p.finishHeader(txn, txn.Position().Offset); err != nil {
 		return nil, err
 	}
 
@@ -107,7 +107,7 @@ func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
 	for {
 		switch {
 		case p.startsIndentedMetadataLine():
-			metadata, err := p.parseMetadataFromLine(txn.Position().Line)
+			metadata, err := p.parseMetadata()
 			if err != nil {
 				return err
 			}
@@ -291,7 +291,10 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 		posting.Price = price
 	}
 
-	metadata, err := p.finishMetadataLine(posting, postingLine)
+	if err := p.finishHeader(posting, postingTok.Start); err != nil {
+		return nil, err
+	}
+	metadata, err := p.parseMetadata()
 	if err != nil {
 		return nil, err
 	}

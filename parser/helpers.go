@@ -406,9 +406,9 @@ func (p *Parser) parseLink() (ast.Link, error) {
 	return link, nil
 }
 
-// parseMetadataFromLine parses metadata entries with tracking of whether they are inline.
-// If ownerLine > 0, metadata on that same line will be marked as Inline=true.
-func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
+// parseMetadata parses the metadata lines below a directive or posting,
+// one key: value entry per line.
+func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 	var metadata []*ast.Metadata
 
 	// Metadata lines are key: value where key can be IDENT or any keyword
@@ -429,13 +429,9 @@ func (p *Parser) parseMetadataFromLine(ownerLine int) ([]*ast.Metadata, error) {
 			return nil, err
 		}
 
-		// Determine if this metadata is inline (on the same line as owner)
-		inline := ownerLine > 0 && keyTok.Line == ownerLine
-
 		md := &ast.Metadata{
-			Key:    keyTok.String(p.source),
-			Value:  value,
-			Inline: inline,
+			Key:   keyTok.String(p.source),
+			Value: value,
 		}
 		md.SetPosition(tokenPosition(keyTok, p.filename))
 		metadata = append(metadata, md)
@@ -743,19 +739,11 @@ func (p *Parser) internIdent(tok Token) string {
 // finishDirective ends a dated directive's header, capturing its trailing
 // inline comment, and parses its metadata lines. It is the common
 // end-of-directive logic of every directive parser but the transaction's.
-//
-// Like beancount's grammar, the header ends at its line's end: a header
-// whose tokens continue on the next line, or with metadata on its own
-// line, is a syntax error on the first token past the header.
 func (p *Parser) finishDirective(d ast.Directive) error {
-	if tok, ok := p.headerContinuation(d.Position().Offset); ok {
-		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
-	}
-
-	if err := p.finishHeader(d); err != nil {
+	if err := p.finishHeader(d, d.Position().Offset); err != nil {
 		return err
 	}
-	metadata, err := p.parseMetadataFromLine(d.Position().Line)
+	metadata, err := p.parseMetadata()
 	if err != nil {
 		return err
 	}
@@ -782,12 +770,19 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 	return Token{}, false
 }
 
-// finishHeader ends a dated directive's header at the line its last token
-// ends on, which a string spanning lines puts past the line the header
-// starts on: a comment there is the directive's inline comment, and
-// anything else is a syntax error.
-func (p *Parser) finishHeader(target ast.WithComment) error {
-	return p.finishLine(target, p.lineAfterPrevious()-1)
+// finishHeader ends the line of a directive, posting or undated line
+// whose first token is at offset. Like beancount's grammar, the line ends
+// at its line's end: a token continued on the next line is a syntax error
+// there. A string spanning lines ends it on the line the string closes
+// on, where a comment is the target's inline comment and anything else a
+// syntax error.
+func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
+	if tok, ok := p.headerContinuation(offset); ok {
+		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
+	line := p.lineAfterPrevious() - 1
+	p.attachInlineComment(target, line)
+	return p.expectLineEnd(line)
 }
 
 func (p *Parser) consumeInlineComment(line int) *ast.Comment {
@@ -801,27 +796,6 @@ func (p *Parser) attachInlineComment(target ast.WithComment, line int) {
 	if comment := p.consumeInlineComment(line); comment != nil {
 		target.SetComment(comment)
 	}
-}
-
-func (p *Parser) finishLine(target ast.WithComment, line int) error {
-	p.attachInlineComment(target, line)
-	return p.expectLineEnd(line)
-}
-
-func (p *Parser) finishMetadataLine(target ast.WithComment, line int) ([]*ast.Metadata, error) {
-	p.attachInlineComment(target, line)
-
-	metadata, err := p.parseMetadataFromLine(line)
-	if err != nil {
-		return nil, err
-	}
-
-	p.attachInlineComment(target, line)
-	if err := p.expectLineEnd(line); err != nil {
-		return nil, err
-	}
-
-	return metadata, nil
 }
 
 func (p *Parser) expectLineEnd(line int) error {

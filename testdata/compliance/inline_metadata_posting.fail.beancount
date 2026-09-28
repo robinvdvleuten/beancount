@@ -1,0 +1,8 @@
+; v2's grammar has no inline metadata: a key on a posting's own line is a
+; syntax error there, and the transaction is dropped.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  1 USD  kk: 1
+  Assets:B

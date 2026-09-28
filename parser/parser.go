@@ -249,7 +249,7 @@ func (p *Parser) parseOption() (*ast.Option, error) {
 		Value: value,
 	}
 	opt.SetPosition(pos)
-	if err := p.finishLine(opt, pos.Line); err != nil {
+	if err := p.finishHeader(opt, pos.Offset); err != nil {
 		return nil, err
 	}
 	return opt, nil
@@ -271,7 +271,7 @@ func (p *Parser) parseInclude() (*ast.Include, error) {
 		Filename: filename,
 	}
 	inc.SetPosition(pos)
-	if err := p.finishLine(inc, pos.Line); err != nil {
+	if err := p.finishHeader(inc, pos.Offset); err != nil {
 		return nil, err
 	}
 	return inc, nil
@@ -303,7 +303,7 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 		plugin.Config = config
 	}
 
-	if err := p.finishLine(plugin, pos.Line); err != nil {
+	if err := p.finishHeader(plugin, pos.Offset); err != nil {
 		return nil, err
 	}
 	return plugin, nil
@@ -325,7 +325,7 @@ func (p *Parser) parsePushtag() (*ast.Pushtag, error) {
 		Tag: tag,
 	}
 	pt.SetPosition(pos)
-	if err := p.finishLine(pt, pos.Line); err != nil {
+	if err := p.finishHeader(pt, pos.Offset); err != nil {
 		return nil, err
 	}
 	return pt, nil
@@ -347,7 +347,7 @@ func (p *Parser) parsePoptag() (*ast.Poptag, error) {
 		Tag: tag,
 	}
 	pt.SetPosition(pos)
-	if err := p.finishLine(pt, pos.Line); err != nil {
+	if err := p.finishHeader(pt, pos.Offset); err != nil {
 		return nil, err
 	}
 	return pt, nil
@@ -384,7 +384,7 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		MetaValue: value,
 	}
 	pm.SetPosition(pos)
-	if err := p.finishLine(pm, pos.Line); err != nil {
+	if err := p.finishHeader(pm, pos.Offset); err != nil {
 		return nil, err
 	}
 	return pm, nil
@@ -410,7 +410,7 @@ func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 		Key: key,
 	}
 	pm.SetPosition(pos)
-	if err := p.finishLine(pm, pos.Line); err != nil {
+	if err := p.finishHeader(pm, pos.Offset); err != nil {
 		return nil, err
 	}
 	return pm, nil

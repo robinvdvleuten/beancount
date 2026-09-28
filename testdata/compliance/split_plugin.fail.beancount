@@ -1,0 +1,6 @@
+; A plugin line ends at its line: a name on the next line is a syntax error.
+plugin
+  "beancount.plugins.auto_accounts"
+2020-01-02 *
+  Assets:A  1 USD
+  Assets:B

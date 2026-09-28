@@ -78,6 +78,7 @@ func TestDirectiveHeaderEndsAtItsLine(t *testing.T) {
 		"balance metadata":                       {"2020-01-02 balance Assets:A 0 USD  kk: 1", 1},
 		"metadata after a string spanning lines": {"2020-01-02 note Assets:A \"x\ny\"  kk: 1", 2},
 		"posting after a string spanning lines":  {"2020-01-02 * \"x\ny\" Assets:A  1 USD\n  Assets:A", 2},
+		"metadata on a posting's line":           {"2020-01-02 *\n  Assets:A  1 USD  kk: 1\n  Assets:B", 2},
 	} {
 		t.Run(name, func(t *testing.T) {
 			tree, err := ParseString(context.Background(), tt.header+"\n2020-01-05 open Assets:Z\n")
@@ -94,4 +95,33 @@ func TestDirectiveHeaderEndsAtItsLine(t *testing.T) {
 	// lines still parse.
 	_, err := ParseString(context.Background(), "2020-01-02 open Assets:C\n  kk: 1\n2020-01-03 note Assets:C \"two\nlines\"\n  kk: 2\n")
 	assert.NoError(t, err)
+}
+
+// TestUndatedLineEndsAtItsLine pins beancount's grammar, where option,
+// plugin, include, pushtag, poptag, pushmeta and popmeta end at their
+// line's end: arguments continued on the next line are a syntax error there.
+func TestUndatedLineEndsAtItsLine(t *testing.T) {
+	for name, source := range map[string]string{
+		"option":             "option \"title\"\n  \"x\"",
+		"option in column 1": "option \"title\"\n\"x\"",
+		"option name":        "option\n\"title\" \"x\"",
+		"plugin":             "plugin\n  \"beancount.plugins.auto_accounts\"",
+		"plugin config":      "plugin \"beancount.plugins.auto_accounts\"\n  \"cfg\"",
+		"include":            "include\n  \"x.beancount\"",
+		"pushtag":            "pushtag\n  #foo",
+		"poptag":             "poptag\n  #foo",
+		"pushmeta":           "pushmeta\n  kk: 1",
+		"popmeta":            "popmeta\n  kk:",
+	} {
+		t.Run(name, func(t *testing.T) {
+			tree, err := ParseString(context.Background(), source+"\n2020-01-05 open Assets:Z\n")
+
+			var syntaxErrs ParseErrors
+			assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+			assert.Equal(t, 1, len(syntaxErrs), "got %v", syntaxErrs)
+			assert.Equal(t, 2, syntaxErrs[0].Pos.Line)
+			assert.Equal(t, 1, len(tree.Directives))
+			assert.Equal(t, 0, len(tree.Options)+len(tree.Plugins)+len(tree.Includes)+len(tree.Pushtags)+len(tree.Poptags)+len(tree.Pushmetas)+len(tree.Popmetas))
+		})
+	}
 }

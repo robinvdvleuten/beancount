@@ -447,10 +447,6 @@ type Metadata struct {
 	Key   string
 	Value *MetadataValue
 
-	// Inline is true if the metadata appeared on the same line as its owner
-	// (directive or posting), rather than on a separate indented line.
-	Inline bool
-
 	pos Position
 }
 
