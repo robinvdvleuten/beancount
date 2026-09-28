@@ -153,6 +153,17 @@ limits:
   `sum(true) + 1` is `23`. We reject it: `ERROR: Invalid function
   'sum(bool)' in targets/column context.` (#422).
 
+- **BQL ordering of mixed types**: `<`, `<=`, `>` and `>=` between a
+  number or date and a string (`year < '2024'`) raise Python's `TypeError`
+  in bean-query, which prints the traceback to stdout on the first row it
+  evaluates. We compare the two values' string forms instead, so
+  `query/gap_compare_mixed_types_ordering.bql` returns rows. `=` and `!=`
+  between numbers, dates, booleans and strings match: values of different
+  types are never equal, and a boolean equals the integer 1 or 0
+  (`query/compare_*.bql`, #514). An amount, position or inventory compared
+  with another type raises an `AttributeError` traceback in bean-query;
+  we return false.
+
 - **Error lines**: the differential suite compares the lines errors are
   reported on, and we keep our line where v2's is less precise
   (`lineGaps` in `cli/compliance_test.go`). A tag or link after the first

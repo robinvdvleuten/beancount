@@ -749,12 +749,12 @@ func (c *cBinary) eval(row *evalRow) any {
 		if l == nil || r == nil {
 			return l == nil && r == nil
 		}
-		return compareValues(l, r) == 0
+		return valuesEqual(l, r)
 	case bql.NE:
 		if l == nil || r == nil {
 			return l != nil || r != nil
 		}
-		return compareValues(l, r) != 0
+		return !valuesEqual(l, r)
 	case bql.LT, bql.LTE, bql.GT, bql.GTE:
 		if l == nil || r == nil {
 			return false

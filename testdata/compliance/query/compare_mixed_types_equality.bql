@@ -1,0 +1,1 @@
+SELECT year != '2023' AS a, '2023' = year AS b, date = '2023-01-01' AS c, (1 = 1) = 1 AS d, (1 = 2) = 0.0 AS e, 1.0 = 1 AS f, account = 1 AS g LIMIT 1

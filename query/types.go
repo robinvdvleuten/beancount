@@ -6,6 +6,7 @@ package query
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -261,6 +262,33 @@ func asDecimal(v any) (decimal.Decimal, bool) {
 		return val, true
 	}
 	return decimal.Decimal{}, false
+}
+
+// valuesEqual is Python's == on two non-NULL values: numbers equal by value,
+// a boolean counting as the integer 1 or 0 (bool subclasses int), and values
+// of any other differing types never equal, so year = '2023' is false.
+func valuesEqual(l, r any) bool {
+	ln, lok := asNumber(l)
+	rn, rok := asNumber(r)
+	if lok || rok {
+		return lok && rok && ln.Equal(rn)
+	}
+	if reflect.TypeOf(l) != reflect.TypeOf(r) {
+		return false
+	}
+	return compareValues(l, r) == 0
+}
+
+// asNumber coerces a value Python treats as a number to a decimal: an
+// integer, a decimal, or a boolean.
+func asNumber(v any) (decimal.Decimal, bool) {
+	if b, ok := v.(bool); ok {
+		if b {
+			return decimal.NewFromInt(1), true
+		}
+		return decimal.Zero, true
+	}
+	return asDecimal(v)
 }
 
 // compareValues orders two values of compatible types, returning -1, 0, or 1.
