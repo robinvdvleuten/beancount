@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
 
@@ -113,4 +115,25 @@ func TestErrorWithoutFilenameUsesTheDate(t *testing.T) {
 	txn := ast.NewTransaction(date, "x")
 	err := NewInsufficientInventoryError(txn, "Assets:Checking", errors.New("details"))
 	assert.Equal(t, "2024-01-15: details", err.Error())
+}
+
+func TestMergeCostErrorReadsAsBeancounts(t *testing.T) {
+	// A merge cost is reported in bean-check's words, then booked like {}.
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+2020-01-01 open Income:G
+2020-01-01 * "buy"
+  Assets:I  5 HOOL {10.00 EUR}
+  Assets:C
+2020-02-07 * "merge"
+  Assets:I  -5 HOOL {*}
+  Income:G
+`)
+	l := New()
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
+	assert.Equal(t, 1, len(validationErrors.Errors))
+	assert.Equal(t, "MergeCostError", kindOf(validationErrors.Errors[0]))
+	assert.Equal(t, "Cost merging is not supported yet", validationErrors.Errors[0].(*Diagnostic).message)
 }

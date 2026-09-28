@@ -215,10 +215,10 @@ func NewZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic 
 
 // NewMergeCostError creates an error for a posting with a merge cost {*},
 // which beancount v2 rejects and then books like an empty cost {}. Like
-// beancount, it blames the posting's line.
+// beancount, it blames the posting's line and uses its words.
 func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("MergeCostError", txn, posting.Account,
-		"Cost merging is not supported yet (account %s)", posting.Account).atPosting(posting)
+		"Cost merging is not supported yet").atPosting(posting)
 }
 
 // NewNegativePriceError creates an error for a posting with a negative
