@@ -120,9 +120,16 @@ func NewBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Deci
 }
 
 // NewAccountNotOpenError creates an error for a directive that references an
-// account that is not open.
+// account the ledger never opens.
 func NewAccountNotOpenError(d ast.Directive, account ast.Account) *Diagnostic {
 	return newError("AccountNotOpenError", d, account, "Invalid reference to unknown account '%s'", account)
+}
+
+// NewInactiveAccountError creates an error for a directive that references an
+// account the ledger opens, but not over the directive's date: before its
+// open or after its close.
+func NewInactiveAccountError(d ast.Directive, account ast.Account) *Diagnostic {
+	return newError("AccountNotOpenError", d, account, "Invalid reference to inactive account '%s'", account)
 }
 
 // NewAccountAlreadyOpenError creates an error for opening an account that is

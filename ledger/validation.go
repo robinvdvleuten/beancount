@@ -20,15 +20,30 @@ import (
 // This is a separate type from Ledger to ensure validation cannot mutate state.
 type validator struct {
 	accounts map[string]*Account
-	config   *Config
+	// Every account an open directive names anywhere in the ledger, which
+	// tells an inactive account from an unknown one
+	opened map[string]bool
+	config *Config
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account, config *Config) *validator {
+func newValidator(accounts map[string]*Account, opened map[string]bool, config *Config) *validator {
 	return &validator{
 		accounts: accounts,
+		opened:   opened,
 		config:   config,
 	}
+}
+
+// accountNotOpenError reports a reference to an account outside its open
+// interval. Like v2's validate_active_accounts, the account is inactive when
+// the ledger opens it anywhere, before or after the directive, and unknown
+// otherwise.
+func (v *validator) accountNotOpenError(d ast.Directive, account ast.Account) error {
+	if v.opened[string(account)] {
+		return NewInactiveAccountError(d, account)
+	}
+	return NewAccountNotOpenError(d, account)
 }
 
 // validateDateRange checks if a date is within the valid Beancount range (1-9999).
@@ -72,11 +87,11 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 		accountName := string(posting.Account)
 		acc, exists := v.accounts[accountName]
 		if !exists {
-			errs = append(errs, NewAccountNotOpenError(txn, posting.Account))
+			errs = append(errs, v.accountNotOpenError(txn, posting.Account))
 			continue
 		}
 		if !acc.IsOpen(txn.Date()) {
-			errs = append(errs, NewAccountNotOpenError(txn, posting.Account))
+			errs = append(errs, v.accountNotOpenError(txn, posting.Account))
 		}
 	}
 	return errs
@@ -209,7 +224,7 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 
 	// 1. Validate account is active (assertions are allowed after close)
 	if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
-		errs = append(errs, NewAccountNotOpenError(balance, balance.Account))
+		errs = append(errs, v.accountNotOpenError(balance, balance.Account))
 		return errs
 	}
 
@@ -248,6 +263,17 @@ type balanceKey struct {
 
 func balanceKeyOf(balance *ast.Balance) balanceKey {
 	return balanceKey{balance.Account, balance.Amount.Currency, balance.Date().String()}
+}
+
+// openedAccounts returns every account an open directive names.
+func openedAccounts(directives []ast.Directive) map[string]bool {
+	opened := make(map[string]bool)
+	for _, directive := range directives {
+		if open, ok := directive.(*ast.Open); ok {
+			opened[string(open.Account)] = true
+		}
+	}
+	return opened
 }
 
 // balancesByKey groups the balance assertions by account, currency and
@@ -325,12 +351,12 @@ func (v *validator) validatePad(pad *ast.Pad) []error {
 
 	// 1. Validate main account is open
 	if !v.isAccountOpen(pad.Account, pad.Date()) {
-		errs = append(errs, NewAccountNotOpenError(pad, pad.Account))
+		errs = append(errs, v.accountNotOpenError(pad, pad.Account))
 	}
 
 	// 2. Validate pad account is open
 	if !v.isAccountOpen(pad.AccountPad, pad.Date()) {
-		errs = append(errs, NewAccountNotOpenError(pad, pad.AccountPad))
+		errs = append(errs, v.accountNotOpenError(pad, pad.AccountPad))
 	}
 
 	return errs
@@ -369,7 +395,7 @@ func (v *validator) validateNote(note *ast.Note) []error {
 
 	// 1. Validate account is open
 	if !v.isAccountActiveAllowingClose(note.Account, note.Date()) {
-		errs = append(errs, NewAccountNotOpenError(note, note.Account))
+		errs = append(errs, v.accountNotOpenError(note, note.Account))
 	}
 
 	return errs
@@ -390,7 +416,7 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 
 	// 1. Validate account is open
 	if !v.isAccountActiveAllowingClose(doc.Account, doc.Date()) {
-		errs = append(errs, NewAccountNotOpenError(doc, doc.Account))
+		errs = append(errs, v.accountNotOpenError(doc, doc.Account))
 	}
 
 	// 2. Validate the referenced file exists, matching beancount's

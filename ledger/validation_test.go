@@ -16,7 +16,7 @@ import (
 
 // newTestValidator is a helper for tests that need a validator with default config.
 func newTestValidator(accounts map[string]*Account) *validator {
-	return newValidator(accounts, NewConfig())
+	return newValidator(accounts, nil, NewConfig())
 }
 
 // bookAndValidate books txn against empty inventories and validates the
@@ -1216,7 +1216,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 		cfg := NewConfig()
 		cfg.AccountNames.Assets = "Vermoegen"
 
-		v := newValidator(map[string]*Account{}, cfg)
+		v := newValidator(map[string]*Account{}, nil, cfg)
 		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
 
 		assert.Equal(t, 0, len(errs))
@@ -1228,7 +1228,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 		cfg := NewConfig()
 		// Don't set custom Vermoegen - should reject it
 
-		v := newValidator(map[string]*Account{}, cfg)
+		v := newValidator(map[string]*Account{}, nil, cfg)
 		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
 
 		assert.Equal(t, 1, len(errs))

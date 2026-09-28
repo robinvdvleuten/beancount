@@ -77,6 +77,7 @@ type Ledger struct {
 	booker          *booker
 	booked          map[*ast.Transaction]*bookedTransaction
 	unopened        map[string]*Account // Accounts posted to before any open
+	opened          map[string]bool     // Accounts an open directive names, at any date
 	display         *DisplayContext
 }
 
@@ -179,6 +180,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		return err
 	}
 	l.runPlugins(ctx, tree)
+	l.opened = openedAccounts(tree.Directives)
 	l.balances = balancesByKey(tree.Directives)
 	l.duplicateBalances = duplicateBalances(l.balances)
 

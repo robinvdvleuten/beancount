@@ -1156,3 +1156,46 @@ func TestLedger_BookedPositions(t *testing.T) {
 	assert.Equal(t, []BookedPosition{{Units: mustParseDec("-4"), Cost: lot, Reduced: true}}, l.BookedPositions(posting("Sell", "Assets:Stock")))
 	assert.Equal(t, []BookedPosition{{Units: mustParseDec("20"), Reduced: true}}, l.BookedPositions(posting("Sell", "Assets:Cash")))
 }
+
+func TestLedger_UnknownVersusInactiveAccount(t *testing.T) {
+	// Like v2's validate_active_accounts, an account opened anywhere in the
+	// ledger, even later, is inactive outside its open interval; only an
+	// account never opened is unknown.
+	source := `
+2020-02-01 open Assets:Cash
+2020-02-01 open Income:Salary
+
+2020-01-15 * "before open"
+  Assets:Cash    10 USD
+  Income:Salary
+
+2020-01-16 note Assets:Cash "before open"
+
+2020-03-01 close Assets:Cash
+
+2020-03-02 * "after close"
+  Assets:Cash    10 USD
+  Income:Salary
+
+2020-03-03 note Assets:Cash "after close is allowed"
+
+2020-03-04 * "never opened"
+  Assets:Never   10 USD
+  Income:Salary
+`
+	l := New()
+	_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
+
+	var messages []string
+	for _, err := range l.Errors() {
+		assert.Equal(t, "AccountNotOpenError", kindOf(err))
+		messages = append(messages, err.Error())
+	}
+	assert.Equal(t, []string{
+		"2020-01-15: Invalid reference to inactive account 'Assets:Cash'",
+		"2020-01-15: Invalid reference to inactive account 'Income:Salary'",
+		"2020-01-16: Invalid reference to inactive account 'Assets:Cash'",
+		"2020-03-02: Invalid reference to inactive account 'Assets:Cash'",
+		"2020-03-04: Invalid reference to unknown account 'Assets:Never'",
+	}, messages)
+}

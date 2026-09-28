@@ -42,7 +42,7 @@ type OpenHandler struct{}
 func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	open := d.(*ast.Open)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs, delta := v.validateOpen(ctx, open)
 	return errs, deltaOf(delta)
 }
@@ -60,7 +60,7 @@ type CloseHandler struct{}
 func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	close := d.(*ast.Close)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs, delta := v.validateClose(ctx, close)
 	return errs, deltaOf(delta)
 }
@@ -76,7 +76,7 @@ type TransactionHandler struct{}
 func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	txn := d.(*ast.Transaction)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs, booked := v.validateTransaction(ctx, txn, l.booked[txn])
 	return errs, deltaOf(booked)
 }
@@ -92,7 +92,7 @@ type BalanceHandler struct{}
 func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	balance := d.(*ast.Balance)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 
 	var delta *BalanceDelta
 	errs := v.validateBalance(balance)
@@ -132,7 +132,7 @@ type PadHandler struct{}
 func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	pad := d.(*ast.Pad)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs := v.validatePad(pad)
 	if len(errs) > 0 {
 		return errs, nil
@@ -150,7 +150,7 @@ type NoteHandler struct{}
 func (h *NoteHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	note := d.(*ast.Note)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs := v.validateNote(note)
 	return errs, nil
 }
@@ -165,7 +165,7 @@ type DocumentHandler struct{}
 func (h *DocumentHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	doc := d.(*ast.Document)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs := v.validateDocument(doc)
 	return errs, nil
 }
@@ -197,7 +197,7 @@ type CommodityHandler struct{}
 func (h *CommodityHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	commodity := d.(*ast.Commodity)
 	cfg := l.config
-	v := newValidator(l.accounts, cfg)
+	v := newValidator(l.accounts, l.opened, cfg)
 	errs := v.validateCommodity(commodity)
 	// Like beancount, a currency may be declared only once.
 	if l.commodities[commodity.Currency] {
