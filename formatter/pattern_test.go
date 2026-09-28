@@ -129,8 +129,8 @@ func TestSourceViewItemLine(t *testing.T) {
 	source := "2020-01-01 open Assets:A\n" +
 		"  key: \"multi\n" +
 		"line\"\n" +
-		"2020-01-02 commodity\n" +
-		"USD\n" +
+		"2020-01-02 note Assets:A \"two\n" +
+		"lines\"\n" +
 		"; comment\n" +
 		"2020-01-03 * \"x\"\n" +
 		"  Assets:A  10 USD\n" +

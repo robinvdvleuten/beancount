@@ -1197,23 +1197,3 @@ func TestFormatKeepsSourceSpelling(t *testing.T) {
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Equal(t, source, out.String())
 }
-
-func TestFormatKeepsEveryPartOfADirective(t *testing.T) {
-	// Our parser accepts a directive whose tokens run onto the next line,
-	// which beancount rejects; the line is not the directive's own, so the
-	// directive is spelled from the AST rather than half copied. A line
-	// with inline metadata is the directive's own and is copied whole, as
-	// bean-format leaves it.
-	tests := []struct{ source, want string }{
-		{"2020-01-01 commodity\nUSD\n", "2020-01-01 commodity USD\n"},
-		{"2020-01-01 custom \"a\"\n\"b\"\n", "2020-01-01 custom \"a\" \"b\"\n"},
-		{"2020-01-01 open\nAssets:A\n", "2020-01-01 open Assets:A\n"},
-		{"2020-01-01 note Assets:A \"x\"  kk: 1\n", "2020-01-01 note Assets:A \"x\"  kk: 1\n"},
-	}
-	for _, tt := range tests {
-		tree := parser.MustParseBytes(context.Background(), []byte(tt.source))
-		var out bytes.Buffer
-		assert.NoError(t, New().Format(context.Background(), tree, []byte(tt.source), &out))
-		assert.Equal(t, tt.want, out.String())
-	}
-}

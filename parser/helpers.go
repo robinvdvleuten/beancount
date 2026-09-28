@@ -740,15 +740,51 @@ func (p *Parser) internIdent(tok Token) string {
 	return p.interner.InternBytes(tok.Bytes(p.source))
 }
 
-// finishDirective captures trailing inline comment and metadata for any directive.
-// This consolidates the common end-of-directive logic used by all directive parsers.
+// finishDirective ends a dated directive's header, capturing its trailing
+// inline comment, and parses its metadata lines. It is the common
+// end-of-directive logic of every directive parser but the transaction's.
+//
+// Like beancount's grammar, the header ends at its line's end: a header
+// whose tokens continue on the next line, or with metadata on its own
+// line, is a syntax error on the first token past the header.
 func (p *Parser) finishDirective(d ast.Directive) error {
-	metadata, err := p.finishMetadataLine(d, d.Position().Line)
+	if tok, ok := p.headerContinuation(d.Position().Offset); ok {
+		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
+
+	// A string spanning lines ends the header on a later line than it
+	// starts; nothing but a comment may follow there either.
+	line := d.Position().Line
+	p.attachInlineComment(d, line)
+	if end := p.lineAfterPrevious() - 1; !p.isAtEnd() && p.peek().Line == end && p.peek().Type != COMMENT {
+		tok := p.peek()
+		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
+	metadata, err := p.parseMetadataFromLine(line)
 	if err != nil {
 		return err
 	}
 	d.AddMetadata(metadata...)
 	return nil
+}
+
+// headerContinuation returns the first token of the header parsed since the
+// token at offset that starts on a later line than the token before it ends
+// on, and false when the header stays on its line (a string spanning lines
+// included).
+func (p *Parser) headerContinuation(offset int) (Token, bool) {
+	start := p.pos - 1
+	for start > 0 && p.tokens[start].Start > offset {
+		start--
+	}
+	for i := start + 1; i < p.pos; i++ {
+		prev := p.tokens[i-1]
+		text := strings.TrimRight(prev.String(p.source), "\r\n")
+		if p.tokens[i].Line != prev.Line+strings.Count(text, "\n") {
+			return p.tokens[i], true
+		}
+	}
+	return Token{}, false
 }
 
 func (p *Parser) consumeInlineComment(line int) *ast.Comment {
