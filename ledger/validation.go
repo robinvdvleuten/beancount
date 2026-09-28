@@ -142,9 +142,9 @@ func validateMetadataEntries(
 // Like beancount, which books every transaction before it checks it, the
 // booked transaction is returned for Apply even when it is reported for
 // posting to an unopened or inactive account, invalid metadata, not
-// balancing, a negative cost, or a currency its account does not allow;
-// later directives then see its effects instead of reporting follow-on
-// errors.
+// balancing, zero units or a negative cost at cost, or a currency its account
+// does not allow; later directives then see its effects instead of reporting
+// follow-on errors.
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction, booked *bookedTransaction) ([]error, *bookedTransaction) {
 	if booked == nil {
 		return nil, nil
@@ -156,7 +156,7 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	if len(booked.residuals) > 0 {
 		errs = append(errs, newNotBalancedError(txn, booked.residuals))
 	}
-	errs = append(errs, v.validateNegativeCosts(txn)...)
+	errs = append(errs, v.validateBookedCosts(txn)...)
 	errs = append(errs, v.validateConstraintCurrencies(txn)...)
 	return errs, booked
 }
@@ -607,15 +607,19 @@ func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, err
 	return ParseAmount(balance.Tolerance)
 }
 
-// validateNegativeCosts reports booked cost postings with a negative cost.
-// Like beancount, a booked cost may be zero but never negative; the check
-// applies per unit, after a total or compound cost is spread over the units.
-// Beancount books such a posting anyway, so this does not stop Apply.
-func (v *validator) validateNegativeCosts(txn *ast.Transaction) []error {
+// validateBookedCosts reports booked cost postings with zero units or a
+// negative cost, like beancount's interpolate_group. A booked cost may be
+// zero but never negative; the check applies per unit, after a total or
+// compound cost is spread over the units. Beancount books such a posting
+// anyway, so this does not stop Apply.
+func (v *validator) validateBookedCosts(txn *ast.Transaction) []error {
 	var errs []error
 	for _, posting := range txn.Postings {
 		if posting.Amount == nil || posting.Cost == nil {
 			continue
+		}
+		if units, err := ParseAmount(posting.Amount); err == nil && units.IsZero() {
+			errs = append(errs, NewZeroAmountError(txn, posting))
 		}
 		if perUnit, costCurrency, ok := PerUnitCost(posting); ok && perUnit.IsNegative() {
 			errs = append(errs, NewNegativeCostError(txn, posting, perUnit, costCurrency))

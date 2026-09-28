@@ -193,6 +193,13 @@ func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decim
 		"Cost is negative: %s %s (account %s)", cost.String(), currency, posting.Account).atPosting(posting)
 }
 
+// NewZeroAmountError creates an error for a posting booked at cost with zero
+// units. Like beancount, it blames the posting's line.
+func NewZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+	return newError("ZeroAmountError", txn, posting.Account,
+		"Amount is zero: \"%s %s\"", posting.Amount.Value, posting.Amount.Currency).atPosting(posting)
+}
+
 // NewMergeCostError creates an error for a posting with a merge cost {*},
 // which beancount v2 rejects and then books like an empty cost {}. Like
 // beancount, it blames the posting's line.
