@@ -184,7 +184,7 @@ func implicitPrices(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 }
 
 func newImplicitPrice(txn *ast.Transaction, posting *ast.Posting, number decimal.Decimal, currency, source string) *ast.Price {
-	price := ast.NewPrice(txn.Date(), posting.Amount.Currency, ast.NewAmount(number.String(), currency))
+	price := ast.NewPrice(txn.Date(), posting.Amount.Currency, ast.NewAmount(formatInferredNumber(number), currency))
 	price.Metadata = []*ast.Metadata{ast.NewMetadata(implicitPricesMeta, source)}
 	price.SetPosition(txn.Position())
 	return price

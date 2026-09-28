@@ -1,0 +1,15 @@
+; implicit_prices keeps the price's and the cost's written scale, like
+; Python's str() of a Decimal: 1.10 USD and 11.00 USD, not 1.1 and 11.
+plugin "beancount.plugins.implicit_prices"
+
+2019-01-01 open Assets:Bank USD
+2019-01-01 open Assets:Stock HOOL
+2019-01-01 open Expenses:Travel EUR
+
+2019-04-15 * "Buy"
+  Assets:Stock      2 HOOL {11.00 USD}
+  Assets:Bank
+
+2019-05-01 * "Trip"
+  Expenses:Travel   50.00 EUR @ 1.10 USD
+  Assets:Bank
