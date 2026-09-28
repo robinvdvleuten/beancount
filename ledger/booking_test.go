@@ -362,6 +362,70 @@ plugin "beancount.plugins.implicit_prices"
 	}
 }
 
+// Like beancount, an implicit price keeps the number as beancount holds it:
+// a stated cost or price as written, a quotient at the exponent Python's
+// division gives it. bean-query 2.3.6 prints these same numbers (#494).
+func TestImplicitPricesKeepTheNumberAsBeancountHoldsIt(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `
+plugin "beancount.plugins.implicit_prices"
+
+2024-01-01 open Assets:Cash
+2024-01-01 open Assets:Stock
+2024-01-01 open Assets:EUR
+
+2024-04-01 * "cost"
+  Assets:Stock  10 WW {5.0 USD}
+  Assets:Cash
+
+2024-04-02 * "cost with two trailing zeros"
+  Assets:Stock  2 XX {100.00 USD}
+  Assets:Cash
+
+2024-04-03 * "total cost"
+  Assets:Stock  4 YY {{50.0 USD}}
+  Assets:Cash
+
+2024-04-04 * "total cost with two trailing zeros"
+  Assets:Stock  4 YY {{50.00 USD}}
+  Assets:Cash
+
+2024-04-05 * "compound cost"
+  Assets:Stock  4 VV {2.50 # 1.0 USD}
+  Assets:Cash
+
+2024-04-06 * "price"
+  Assets:EUR  -100 EUR @ 1.50 USD
+  Assets:Cash
+
+2024-04-07 * "total price"
+  Assets:EUR  100 EUR @@ 150.0 USD
+  Assets:Cash
+
+2024-04-08 * "the same price twice keeps the first spelling"
+  Assets:Stock  1 WW {5 USD}
+  Assets:Stock  1 WW {5.00 USD}
+  Assets:Cash
+`)
+	_ = New().Process(context.Background(), tree)
+
+	var prices []string
+	for _, d := range tree.Directives {
+		if price, ok := d.(*ast.Price); ok {
+			prices = append(prices, fmt.Sprintf("%s %s %s %s", price.Date(), price.Commodity, price.Amount.Value, price.Amount.Currency))
+		}
+	}
+	assert.Equal(t, []string{
+		"2024-04-01 WW 5.0 USD",
+		"2024-04-02 XX 100.00 USD",
+		"2024-04-03 YY 12.5 USD",
+		"2024-04-04 YY 12.50 USD",
+		"2024-04-05 VV 2.75 USD",
+		"2024-04-06 EUR 1.50 USD",
+		"2024-04-07 EUR 1.5 USD",
+		"2024-04-08 WW 5 USD",
+	}, prices)
+}
+
 func TestValidateAmounts(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-15")
 	checking, _ := ast.NewAccount("Assets:Checking")

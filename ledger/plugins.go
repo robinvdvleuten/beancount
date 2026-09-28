@@ -162,6 +162,9 @@ func implicitPrices(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 	return nil
 }
 
+// newImplicitPrice builds the price implicit_prices inserts for a posting.
+// Like beancount, its number keeps the exponent it has (a stated 5.0 stays
+// 5.0), which the display context and conversions at that price inherit.
 func newImplicitPrice(txn *ast.Transaction, posting *ast.Posting, number decimal.Decimal, currency, source string) *ast.Price {
 	price := ast.NewPrice(txn.Date(), posting.Amount.Currency, ast.NewAmount(formatInferredNumber(number), currency))
 	price.Metadata = []*ast.Metadata{ast.NewMetadata(implicitPricesMeta, source)}

@@ -35,9 +35,10 @@ func MustParseAmount(amount *ast.Amount) decimal.Decimal {
 	return d
 }
 
-// formatInferredNumber renders an interpolated number preserving its decimal
-// scale (decimal.String trims trailing zeros, so a -4.50 residual would
-// otherwise display as -4.5, diverging from official beancount).
+// formatInferredNumber renders a number Processing writes into the AST
+// (an interpolated amount, an implicit price) preserving its decimal scale
+// (decimal.String trims trailing zeros, so a -4.50 residual would otherwise
+// display as -4.5, diverging from official beancount).
 func formatInferredNumber(d decimal.Decimal) string {
 	return d.StringFixed(max(-d.Exponent(), 0))
 }

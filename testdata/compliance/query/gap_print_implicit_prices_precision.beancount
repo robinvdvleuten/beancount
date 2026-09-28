@@ -1,0 +1,38 @@
+plugin "beancount.plugins.implicit_prices"
+
+; Like beancount, an implicit price keeps the number as beancount holds it:
+; a stated cost or price as written (5.0, 100.00, 1.50), a total cost
+; spread over the units at the exponent Python's division gives it.
+
+2024-01-01 open Assets:Cash
+2024-01-01 open Assets:Stock
+2024-01-01 open Assets:EUR
+2024-01-01 open Assets:GBP
+
+2024-04-01 * "Buy at a cost with a trailing zero"
+  Assets:Stock  10 WW {5.0 USD}
+  Assets:Cash
+
+2024-04-02 * "Buy at a cost with two trailing zeros"
+  Assets:Stock  2 XX {100.00 USD}
+  Assets:Cash
+
+2024-04-03 * "Buy at a total cost"
+  Assets:Stock  4 YY {{50.0 USD}}
+  Assets:Cash
+
+2024-04-04 * "Buy at a total cost that keeps two decimals"
+  Assets:Stock  4 ZZ {{50.00 USD}}
+  Assets:Cash
+
+2024-04-05 * "Buy at a compound cost"
+  Assets:Stock  4 VV {2.50 # 1.0 USD}
+  Assets:Cash
+
+2024-04-06 * "Exchange at a price"
+  Assets:EUR  100 EUR @ 1.50 USD
+  Assets:Cash
+
+2024-04-07 * "Exchange at a total price"
+  Assets:GBP  -100 GBP @@ 130.0 USD
+  Assets:Cash
