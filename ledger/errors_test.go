@@ -112,5 +112,5 @@ func TestErrorWithoutFilenameUsesTheDate(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-15")
 	txn := ast.NewTransaction(date, "x")
 	err := NewInsufficientInventoryError(txn, "Assets:Checking", errors.New("details"))
-	assert.Equal(t, "2024-01-15: Insufficient inventory (account Assets:Checking): details", err.Error())
+	assert.Equal(t, "2024-01-15: details", err.Error())
 }

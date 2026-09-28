@@ -140,12 +140,12 @@ func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 		{
 			name: "FIFO cannot book more than the lots hold", method: BookingFIFO,
 			held: threeLots, posting: "-200 STOCK {}",
-			wantErr: "not enough lots to reduce",
+			wantErr: `Not enough lots to reduce "-200 STOCK {}": 30 STOCK {1 USD, 2024-01-15}, 40 STOCK {1 USD, 2024-02-15}, 50 STOCK {1 USD, 2024-03-15}`,
 		},
 		{
 			name: "FIFO finds no lot the spec names", method: BookingFIFO,
 			held: []string{"50 STOCK {100 USD, 2024-01-15}"}, posting: "-30 STOCK {200 USD}",
-			wantErr: "lot not found",
+			wantErr: `No position matches "-30 STOCK {200 USD}" against balance (50 STOCK {100 USD, 2024-01-15})`,
 		},
 		{
 			name: "STRICT reduces the one lot the spec names", method: BookingSTRICT,
@@ -169,17 +169,54 @@ func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 			name: "STRICT cannot choose among lots it would reduce in part", method: BookingSTRICT,
 			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
 			posting: "-40 STOCK {}",
-			wantErr: "ambiguous matches",
+			wantErr: `Ambiguous matches for "-40 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
 		},
 		{
 			name: "STRICT cannot book more than the lot holds", method: BookingSTRICT,
-			held: []string{"10 STOCK {100 USD, 2024-01-15}"}, posting: "-20 STOCK {100 USD}",
-			wantErr: "not enough lots to reduce",
+			held:    []string{"10 STOCK {100 USD, 2024-01-15}", "10 STOCK {200 USD, 2024-01-15}"},
+			posting: "-20 STOCK {100 USD}",
+			wantErr: `Not enough lots to reduce "-20 STOCK {100 USD}": 10 STOCK {100 USD, 2024-01-15}`,
 		},
 		{
 			name: "STRICT finds no lot the spec names", method: BookingSTRICT,
 			held: []string{"10 STOCK {100 USD, 2024-01-15}"}, posting: "-5 STOCK {200 USD}",
-			wantErr: "lot not found",
+			wantErr: `No position matches "-5 STOCK {200 USD}" against balance (10 STOCK {100 USD, 2024-01-15})`,
+		},
+		{
+			name: "STRICT cannot choose among lots too small together", method: BookingSTRICT,
+			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
+			posting: "-200 STOCK {}",
+			wantErr: `Ambiguous matches for "-200 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
+		},
+		{
+			name: "a labelled lot too small", method: BookingSTRICT,
+			held:    []string{`10 STOCK {100 USD, 2024-01-15, "a"}`, `10 STOCK {100 USD, 2024-01-15, "b"}`},
+			posting: `-15 STOCK {"a"}`,
+			wantErr: `Not enough lots to reduce "-15 STOCK {"a"}": 10 STOCK {100 USD, 2024-01-15, "a"}`,
+		},
+		{
+			name: "a short position covered ambiguously", method: BookingSTRICT,
+			held:    []string{"-10 STOCK {5 USD, 2024-01-15}", "-10 STOCK {6 USD, 2024-01-15}"},
+			posting: "4 STOCK {}",
+			wantErr: `Ambiguous matches for "4 STOCK {}": -10 STOCK {5 USD, 2024-01-15}, -10 STOCK {6 USD, 2024-01-15}`,
+		},
+		{
+			name: "no lot matches a dated spec", method: BookingSTRICT,
+			held:    []string{"10 STOCK {100 USD, 2024-01-15}"},
+			posting: "-5.50 STOCK {100.00 USD, 2024-01-16}",
+			wantErr: `No position matches "-5.50 STOCK {100.00 USD, 2024-01-16}" against balance (10 STOCK {100 USD, 2024-01-15})`,
+		},
+		{
+			name: "no lot matches a total cost, among other currencies", method: BookingFIFO,
+			held:    []string{"7 USD", "10 STOCK {100 USD, 2024-01-15}", "2 AAPL {3 USD, 2024-01-15}"},
+			posting: "-5 STOCK {{65 USD}}",
+			wantErr: `No position matches "-5 STOCK {0 # 65 USD}" against balance (7 USD, 2 AAPL {3 USD, 2024-01-15}, 10 STOCK {100 USD, 2024-01-15})`,
+		},
+		{
+			name: "no lot is held at cost", method: BookingFIFO,
+			held:    []string{"10 STOCK"},
+			posting: "-1 STOCK {10 # 5 USD}",
+			wantErr: `No position matches "-1 STOCK {10 # 5 USD}" against balance (10 STOCK)`,
 		},
 		{
 			name: "a total cost names the lot at its per-unit cost", method: BookingSTRICT,
@@ -207,8 +244,7 @@ func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 			inv := holding(t, "2024-01-01", tt.held...)
 			positions, _, err := inv.book(testPosting(t, tt.posting), tt.method)
 			if tt.wantErr != "" {
-				assert.Error(t, err)
-				assert.HasPrefix(t, err.Error(), tt.wantErr)
+				assert.EqualError(t, err, tt.wantErr)
 				return
 			}
 			assert.NoError(t, err)

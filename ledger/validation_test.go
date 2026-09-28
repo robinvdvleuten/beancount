@@ -1604,7 +1604,7 @@ func TestOverReductionReportsNotEnoughLots(t *testing.T) {
 		assert.Equal(t, 1, len(validationErrors.Errors), spec)
 		assert.Equal(t, "InsufficientInventoryError", kindOf(validationErrors.Errors[0]), spec)
 		insufficient := validationErrors.Errors[0]
-		assert.Contains(t, insufficient.Error(), `not enough lots to reduce "-2 HOOL`, spec)
+		assert.Equal(t, `Not enough lots to reduce "-2 HOOL `+spec+`": 1 HOOL {10 USD, 2020-01-02}`, insufficient.(*Diagnostic).message, spec)
 
 		stock, _ := l.GetAccount("Assets:Stock")
 		assert.Equal(t, "1", stock.Inventory.Get("HOOL").String(), "the failed sale changes nothing")

@@ -326,15 +326,17 @@ func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key s
 }
 
 // NewInsufficientInventoryError creates an error for a reduction the
-// account's lots cannot cover.
+// account's lots cannot cover, or that matches none of them, worded by
+// details as beancount words it.
 func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
-	return newError("InsufficientInventoryError", txn, account, "Insufficient inventory (account %s): %v", account, details)
+	return newError("InsufficientInventoryError", txn, account, "%v", details)
 }
 
 // NewAmbiguousBookingError creates an error for a reduction that matches
-// several lots under STRICT booking.
+// several lots under STRICT booking, worded by details as beancount words
+// it.
 func NewAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
-	return newError("AmbiguousBookingError", txn, account, "Ambiguous booking (account %s): %v", account, details)
+	return newError("AmbiguousBookingError", txn, account, "%v", details)
 }
 
 // NewCurrencyConstraintError creates an error for a posting in a currency its

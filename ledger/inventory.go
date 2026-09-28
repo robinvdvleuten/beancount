@@ -67,24 +67,56 @@ type reductionPlan struct {
 	reductions []lotReduction
 }
 
-// ambiguousBookingMatchError reports a reduction that matches several lots.
-// The matches are rendered when the error is created, so booking later
-// directives into the same lots does not change its text.
+// The errors of a reduction Booking cannot book, in beancount's words. Each
+// quotes the reducing posting (reducingPosting) and renders the lots it
+// names when it fails, so booking later directives into the same lots does
+// not change its text.
+
+// ambiguousBookingMatchError reports a STRICT reduction that matches several
+// lots it does not reduce in full, listing them.
 type ambiguousBookingMatchError struct {
-	commodity string
-	amount    decimal.Decimal
-	spec      *lotSpec
-	matches   []string
+	posting string
+	matches []string
 }
 
 func (e *ambiguousBookingMatchError) Error() string {
-	return fmt.Sprintf("ambiguous matches for \"-%s %s %s\": %s",
-		e.amount.String(),
-		e.commodity,
-		e.spec.String(),
-		strings.Join(e.matches, ", "),
-	)
+	return fmt.Sprintf("Ambiguous matches for \"%s\": %s", e.posting, strings.Join(e.matches, ", "))
 }
+
+// notEnoughLotsError reports a reduction larger than the lots it matches,
+// listing them.
+type notEnoughLotsError struct {
+	posting string
+	matches []string
+}
+
+func (e *notEnoughLotsError) Error() string {
+	return fmt.Sprintf("Not enough lots to reduce \"%s\": %s", e.posting, strings.Join(e.matches, ", "))
+}
+
+// noPositionMatchesError reports a reduction whose cost spec matches no lot,
+// with the account's inventory. beancount quotes the posting's Python repr
+// where we quote reducingPosting (KNOWN_GAPS.md).
+type noPositionMatchesError struct {
+	posting string
+	balance string
+}
+
+func (e *noPositionMatchesError) Error() string {
+	return fmt.Sprintf("No position matches \"%s\" against balance %s", e.posting, e.balance)
+}
+
+// errNotEnoughLots and errAmbiguousMatches mark a reduction the matched lots
+// cannot cover, and a STRICT one they cannot settle; book reports them as a
+// notEnoughLotsError and an ambiguousBookingMatchError.
+var (
+	errNotEnoughLots    = errors.New("not enough lots")
+	errAmbiguousMatches = errors.New("ambiguous matches")
+)
+
+// errAverageUnsupported fails every reduction under the AVERAGE booking
+// method, which beancount v2 accepts as an option but never implemented.
+var errAverageUnsupported = errors.New("AVERAGE method is not supported")
 
 // lotStrings renders lots as they are now.
 func lotStrings(lots []*lot) []string {
@@ -95,27 +127,35 @@ func lotStrings(lots []*lot) []string {
 	return rendered
 }
 
-// errNotEnoughLots marks a reduction larger than the lots it can book
-// against; book reports it as a notEnoughLotsError.
-var errNotEnoughLots = errors.New("not enough lots")
-
-// errAverageUnsupported fails every reduction under the AVERAGE booking
-// method, which beancount v2 accepts as an option but never implemented.
-var errAverageUnsupported = errors.New("AVERAGE method is not supported")
-
-// notEnoughLotsError reports a reduction larger than the lots it can book
-// against, in beancount's words. Like ambiguousBookingMatchError, it holds
-// the lots as they were when the reduction failed.
-type notEnoughLotsError struct {
-	commodity string
-	amount    decimal.Decimal
-	spec      *lotSpec
-	lots      []string
-}
-
-func (e *notEnoughLotsError) Error() string {
-	return fmt.Sprintf("not enough lots to reduce \"%s %s %s\": %s",
-		e.amount.String(), e.commodity, e.spec.String(), strings.Join(e.lots, ", "))
+// reducingPosting renders a reducing posting as beancount's
+// position.to_string quotes it: its units, then its cost spec as written
+// (cost_to_str), a total cost {{T C}} as the {0 # T C} v2 parses it into.
+func reducingPosting(posting *ast.Posting, units decimal.Decimal) string {
+	cost := posting.Cost
+	var parts []string
+	if cost.HasNumber() {
+		// A malformed number drops its transaction before Booking.
+		number, _ := ParseAmount(cost.Amount)
+		text := pydecimal.String(number)
+		switch {
+		case cost.IsTotal:
+			text = "0 # " + text
+		case cost.Total != nil:
+			total, _ := ParseAmount(cost.Total)
+			text += " # " + pydecimal.String(total)
+		}
+		parts = append(parts, text+" "+cost.Amount.Currency)
+	}
+	if cost.Date != nil {
+		parts = append(parts, cost.Date.String())
+	}
+	if cost.Label != "" {
+		parts = append(parts, `"`+cost.Label+`"`)
+	}
+	if cost.IsMerge {
+		parts = append(parts, "*")
+	}
+	return fmt.Sprintf("%s %s {%s}", pydecimal.String(units), posting.Amount.Currency, strings.Join(parts, ", "))
 }
 
 type BookingMethod string
@@ -263,13 +303,27 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 		return nil, false, nil // A malformed cost drops its transaction before Booking
 	}
 
+	// Like beancount, the spec narrows the lots before the method picks
+	// among them: date, label and cost match only where the spec has them.
+	var matches []*lot
+	for _, lot := range lots {
+		if lotMatchesReductionSpec(lot, spec) {
+			matches = append(matches, lot)
+		}
+	}
+	if len(matches) == 0 {
+		return nil, false, &noPositionMatchesError{posting: reducingPosting(posting, units), balance: inv.String()}
+	}
+
 	// The strategies work on magnitudes; the booked units take the
 	// posting's sign.
-	plan, err := planReduction(commodity, lots, units.Abs(), spec, method)
-	if errors.Is(err, errNotEnoughLots) {
-		return nil, false, &notEnoughLotsError{commodity: commodity, amount: units, spec: spec, lots: lotStrings(lots)}
-	}
-	if err != nil {
+	plan, err := planReduction(commodity, matches, units.Abs(), method)
+	switch {
+	case errors.Is(err, errNotEnoughLots):
+		return nil, false, &notEnoughLotsError{posting: reducingPosting(posting, units), matches: lotStrings(matches)}
+	case errors.Is(err, errAmbiguousMatches):
+		return nil, false, &ambiguousBookingMatchError{posting: reducingPosting(posting, units), matches: lotStrings(matches)}
+	case err != nil:
 		return nil, false, err
 	}
 
@@ -458,62 +512,31 @@ func (inv *Inventory) countAtCost(commodity string) int {
 	return n
 }
 
-// planReduction plans reducing amount (a magnitude) from the given lots.
-func planReduction(
-	commodity string,
-	lots []*lot,
-	amount decimal.Decimal,
-	spec *lotSpec,
-	bookingMethod BookingMethod,
-) (*reductionPlan, error) {
-	// Beancount v2 never implemented AVERAGE: every reduction under it fails.
-	if bookingMethod == BookingAVERAGE {
+// planReduction plans reducing amount (a magnitude) from the lots the
+// reduction's spec matches, at least one.
+func planReduction(commodity string, matches []*lot, amount decimal.Decimal, bookingMethod BookingMethod) (*reductionPlan, error) {
+	switch bookingMethod {
+	case BookingAVERAGE:
+		// Beancount v2 never implemented AVERAGE: every reduction under it fails.
 		return nil, errAverageUnsupported
+	case BookingSTRICT:
+		return planStrictReduction(commodity, matches, amount)
+	default:
+		return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
 	}
-
-	if bookingMethod == BookingSTRICT {
-		return planStrictReduction(commodity, lots, amount, spec)
-	}
-
-	if spec.IsEmpty() {
-		return planBookingReduction(commodity, lots, amount, bookingMethod)
-	}
-
-	// Non-empty spec: any combination of cost, date, and label narrows
-	// the candidate lots via lotMatchesReductionSpec.
-	return planSpecificReduction(commodity, lots, amount, spec, bookingMethod)
 }
 
-func planStrictReduction(
-	commodity string,
-	lots []*lot,
-	amount decimal.Decimal,
-	spec *lotSpec,
-) (*reductionPlan, error) {
-	if len(lots) == 0 {
-		return nil, fmt.Errorf("no lots available for %s", commodity)
-	}
-
-	matches := make([]*lot, 0, len(lots))
-	for _, lot := range lots {
-		if lotMatchesReductionSpec(lot, spec) {
-			matches = append(matches, lot)
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("lot not found: %s %s", commodity, spec.String())
-	}
-
+// planStrictReduction books the one lot matched, or every lot matched when
+// the reduction takes them all, like beancount's booking_method_STRICT;
+// otherwise it cannot choose.
+func planStrictReduction(commodity string, matches []*lot, amount decimal.Decimal) (*reductionPlan, error) {
 	if len(matches) == 1 {
-		lot := matches[0]
-		if lot.Amount.Abs().LessThan(amount) {
-			return nil, fmt.Errorf("%w: insufficient amount in lot %s: have %s, need %s",
-				errNotEnoughLots, spec.String(), lot.Amount.Abs().String(), amount.String())
+		if matches[0].Amount.Abs().LessThan(amount) {
+			return nil, errNotEnoughLots
 		}
 		return &reductionPlan{
 			commodity:  commodity,
-			reductions: []lotReduction{{lot: lot, amount: amount}},
+			reductions: []lotReduction{{lot: matches[0], amount: amount}},
 		}, nil
 	}
 
@@ -521,65 +544,17 @@ func planStrictReduction(
 	for _, lot := range matches {
 		total = pydecimal.Add(total, lot.Amount.Abs())
 	}
-
-	if total.LessThan(amount) {
-		return nil, fmt.Errorf("%w: insufficient total amount for %s: have %s, need %s",
-			errNotEnoughLots, commodity, total.String(), amount.String())
+	if !total.Equal(amount) {
+		return nil, errAmbiguousMatches
 	}
-
-	if total.Equal(amount) {
-		reductions := make([]lotReduction, 0, len(matches))
-		for _, lot := range matches {
-			reductions = append(reductions, lotReduction{lot: lot, amount: lot.Amount.Abs()})
-		}
-		return &reductionPlan{
-			commodity:  commodity,
-			reductions: reductions,
-		}, nil
+	reductions := make([]lotReduction, 0, len(matches))
+	for _, lot := range matches {
+		reductions = append(reductions, lotReduction{lot: lot, amount: lot.Amount.Abs()})
 	}
-
-	return nil, &ambiguousBookingMatchError{
-		commodity: commodity,
-		amount:    amount,
-		spec:      spec,
-		matches:   lotStrings(matches),
-	}
-}
-
-func planSpecificReduction(
-	commodity string,
-	lots []*lot,
-	amount decimal.Decimal,
-	spec *lotSpec,
-	bookingMethod BookingMethod,
-) (*reductionPlan, error) {
-	// The spec acts as a filter: lots match on the components it provides
-	// (cost, date, label), so a spec without a date still matches dated lots.
-	matches := make([]*lot, 0, len(lots))
-	for _, lot := range lots {
-		if lotMatchesReductionSpec(lot, spec) {
-			matches = append(matches, lot)
-		}
-	}
-
-	if len(matches) == 0 {
-		return nil, fmt.Errorf("lot not found: %s %s", commodity, spec.String())
-	}
-
-	return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
-}
-
-func planBookingReduction(
-	commodity string,
-	lots []*lot,
-	amount decimal.Decimal,
-	bookingMethod BookingMethod,
-) (*reductionPlan, error) {
-	if len(lots) == 0 {
-		return nil, fmt.Errorf("no lots available for %s", commodity)
-	}
-
-	return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(lots, bookingMethod))
+	return &reductionPlan{
+		commodity:  commodity,
+		reductions: reductions,
+	}, nil
 }
 
 // planReductionAcrossLots reduces the given amount across lots in order,
@@ -598,8 +573,7 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 	}
 
 	if !remaining.IsZero() {
-		return nil, fmt.Errorf("%w: insufficient amount for %s: need %s across %d lots",
-			errNotEnoughLots, commodity, amount.String(), len(sortedLots))
+		return nil, errNotEnoughLots
 	}
 
 	return &reductionPlan{

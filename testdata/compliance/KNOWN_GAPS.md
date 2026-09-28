@@ -185,6 +185,13 @@ limits:
   its value) is blamed on that line; v2's lexer counts the line break as
   part of the next line and blames that one.
 
+- **Posting in `No position matches`**: a reduction whose cost spec
+  matches no lot is reported in v2's words, `No position matches "<posting>"
+  against balance <inventory>`, but `<posting>` is the posting's units and
+  cost spec as `Ambiguous matches` and `Not enough lots` quote them
+  (`-5 HOOL {13 USD}`), not Python's `Posting(account=..., meta={...})`
+  repr, which spells out the file name and line (#518).
+
 - **Syntax errors drop only their own directive**: like v2, `check` and
   `query` report every syntax error, drop the directive it is in and check
   or query the rest. v2's generated parser also drops the directive right
