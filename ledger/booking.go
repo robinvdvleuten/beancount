@@ -36,12 +36,12 @@ type bookedTransaction struct {
 	postings  []bookedPosting
 }
 
-// bookedPosting is a posting's change to its account's inventory.
+// bookedPosting is a posting's change to its account's inventory: the
+// positions it booked, which the Ledger publishes and Apply replays.
 type bookedPosting struct {
 	posting   *ast.Posting
 	commodity string
-	changes   []lotChange
-	lots      []BookedLot // The lots a reduction was booked against
+	positions []BookedPosition
 }
 
 // newBooker takes each account's booking method from its open directive,
@@ -122,9 +122,7 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 	}
 	l.booked[txn] = booked
 	for _, bp := range booked.postings {
-		if len(bp.lots) > 0 {
-			l.bookedLots[bp.posting] = bp.lots
-		}
+		l.bookedPositions[bp.posting] = bp.positions
 	}
 	return true
 }
@@ -247,47 +245,56 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	// booked.
 	booked := &bookedTransaction{residuals: residuals}
 	for _, posting := range txn.Postings {
-		if bp, ok := reductions[posting]; ok {
+		bp, ok := reductions[posting]
+		if !ok {
+			bp, ok = b.augment(txn, posting)
+		}
+		if ok {
 			booked.postings = append(booked.postings, bp)
-			continue
 		}
-		if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
-			continue
-		}
-		amount, err := ParseAmount(posting.Amount)
-		if err != nil {
-			continue
-		}
-		change := lotChange{amount: amount}
-		if posting.Cost != nil {
-			// An augmentation whose cost could not be inferred holds no lot.
-			if !posting.Cost.HasNumber() {
-				continue
-			}
-			spec, err := ParseLotSpec(posting.Cost)
-			if err != nil {
-				continue
-			}
-			if err := normalizeLotSpecForPosting(spec, posting); err != nil {
-				continue
-			}
-			// Beancount records an acquisition date on every new lot,
-			// defaulting to the transaction date; LIFO/FIFO ordering and
-			// dated lot specs depend on it.
-			if spec.Date == nil {
-				spec.Date = txn.Date()
-			}
-			change.spec = spec
-		}
-		currency := posting.Amount.Currency
-		b.inventory(posting.Account).AddLot(currency, change.amount, change.spec)
-		booked.postings = append(booked.postings, bookedPosting{
-			posting:   posting,
-			commodity: currency,
-			changes:   []lotChange{change},
-		})
 	}
 	return booked, errs
+}
+
+// augment adds a posting that reduces no lot to its account's inventory: at
+// cost, to the lot of its spec, with a total or compound cost spread over
+// the units and, like beancount, the transaction's date when the spec has
+// none (FIFO/LIFO ordering and dated lot specs depend on it); without cost,
+// its units alone. The position it books is both the change and its record.
+// It reports false for a posting that holds nothing: one without a complete
+// amount, or at a cost whose number could not be inferred.
+func (b *booker) augment(txn *ast.Transaction, posting *ast.Posting) (bookedPosting, bool) {
+	if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
+		return bookedPosting{}, false
+	}
+	units, err := ParseAmount(posting.Amount)
+	if err != nil {
+		return bookedPosting{}, false
+	}
+	position := BookedPosition{Units: units}
+	if posting.Cost != nil {
+		if !posting.Cost.HasNumber() {
+			return bookedPosting{}, false
+		}
+		spec, err := postingLotSpec(posting)
+		if err != nil {
+			return bookedPosting{}, false
+		}
+		// Known gap (KNOWN_GAPS.md): ParseLotSpec reads a merge cost {*}
+		// as {} and drops the number inferred for it, so an augmentation
+		// at {*} books its units without cost, where beancount v2 books
+		// it at the inferred cost.
+		if spec.Cost != nil {
+			date := spec.Date
+			if date == nil {
+				date = txn.Date()
+			}
+			position.Cost = &BookedCost{Number: *spec.Cost, Currency: spec.CostCurrency, Date: date, Label: spec.Label}
+		}
+	}
+	currency := posting.Amount.Currency
+	position.Reduced = b.inventory(posting.Account).AddLot(currency, units, position.lotSpec())
+	return bookedPosting{posting: posting, commodity: currency, positions: []BookedPosition{position}}, true
 }
 
 // validateAmounts checks all amounts can be parsed
@@ -519,18 +526,15 @@ func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scrat
 		if method == BookingNONE || !inv.isReducedBy(currency, amount) {
 			continue
 		}
-		spec, err := ParseLotSpec(posting.Cost)
+		spec, err := postingLotSpec(posting)
 		if err != nil {
 			continue // Reported by validateCosts
 		}
-		if err := normalizeLotSpecForPosting(spec, posting); err != nil {
-			continue
-		}
-		lots, changes, err := inv.book(currency, amount, spec, method, nil)
+		positions, err := inv.Book(currency, amount, spec, method, nil)
 		if err != nil {
 			return nil, []error{newBookingError(txn, posting.Account, err)}
 		}
-		reductions[posting] = bookedPosting{posting: posting, commodity: currency, changes: changes, lots: lots}
+		reductions[posting] = bookedPosting{posting: posting, commodity: currency, positions: positions}
 	}
 	return reductions, nil
 }
@@ -580,8 +584,9 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 	// booking); the latter's cost must be inferred from the residual.
 	reducingEmptyCosts := make(map[*ast.Posting]bool)
 	unresolvedEmptyCosts := make(map[*ast.Posting]bool)
-	// Lots that reductions with an amount-less cost spec are booked against.
-	bookedLots := make(map[*ast.Posting][]BookedLot)
+	// Positions that reductions with an amount-less cost spec booked, one
+	// per lot.
+	reducedPositions := make(map[*ast.Posting][]BookedPosition)
 	for _, posting := range pc.withAmounts {
 		// A partial price annotation leaves the posting's weight unknown;
 		// it is resolved from the residual during interpolation below.
@@ -605,14 +610,14 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			if booked, ok := reductions[posting]; ok {
 				reducingEmptyCosts[posting] = true
 				var weights weightSet
-				for _, lot := range booked.lots {
+				for _, position := range booked.positions {
 					weights = append(weights, weight{
-						Amount:   pydecimal.Mul(lot.Units, *lot.Cost),
-						Currency: lot.CostCurrency,
+						Amount:   pydecimal.Mul(position.Units, position.Cost.Number),
+						Currency: position.Cost.Currency,
 					})
 				}
 				allWeights = append(allWeights, weights)
-				bookedLots[posting] = booked.lots
+				reducedPositions[posting] = booked.positions
 			} else if amount, aerr := ParseAmount(posting.Amount); aerr == nil &&
 				b.method(posting.Account) == BookingNONE &&
 				scratch.get(posting.Account).isReducedBy(posting.Amount.Currency, amount) {
@@ -879,7 +884,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 
 	// Check each currency balance with inferred tolerance. Costs count as
 	// booked: per unit, with inferred cost numbers resolved.
-	bookedCostTolerances := b.costTolerances(bookedToleranceShares(txn.Postings, delta, bookedLots))
+	bookedCostTolerances := b.costTolerances(bookedToleranceShares(txn.Postings, delta, reducedPositions))
 	residuals := make(map[string]decimal.Decimal)
 	for currency, residual := range balance {
 		tolerance := b.transactionTolerance(currency, amountsByCurrency[currency], bookedCostTolerances)

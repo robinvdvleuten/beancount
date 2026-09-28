@@ -200,16 +200,28 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 	return nil
 }
 
-// PerUnitCost returns the per-unit cost a posting is booked at: its cost
-// number, a total cost ({{...}}) spread over the units, or a compound cost's
-// per-unit part plus its total spread over the units. ok is false when the
-// posting states no cost number.
-func PerUnitCost(posting *ast.Posting) (number decimal.Decimal, currency string, ok bool) {
+// postingLotSpec returns the lot spec a posting's cost names, per unit: its
+// cost number, a total cost ({{...}}) spread over the units, or a compound
+// cost's per-unit part plus its total spread over the units. It is nil
+// without a cost.
+func postingLotSpec(posting *ast.Posting) (*lotSpec, error) {
 	spec, err := ParseLotSpec(posting.Cost)
-	if err != nil || spec == nil || spec.Cost == nil {
-		return decimal.Zero, "", false
+	if err != nil {
+		return nil, err
 	}
-	if normalizeLotSpecForPosting(spec, posting) != nil {
+	if err := normalizeLotSpecForPosting(spec, posting); err != nil {
+		return nil, err
+	}
+	return spec, nil
+}
+
+// perUnitCost returns the per-unit cost of a posting's cost spec
+// (postingLotSpec): what Booking weighs the posting at before it books a
+// lot, and what validation checks for a negative cost. ok is false when the
+// posting states no cost number.
+func perUnitCost(posting *ast.Posting) (number decimal.Decimal, currency string, ok bool) {
+	spec, err := postingLotSpec(posting)
+	if err != nil || spec == nil || spec.Cost == nil {
 		return decimal.Zero, "", false
 	}
 	return *spec.Cost, spec.CostCurrency, true

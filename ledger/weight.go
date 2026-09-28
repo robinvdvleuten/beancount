@@ -53,7 +53,7 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 		// price is informational. Like beancount, a total or compound cost
 		// becomes a per-unit cost first, and the weight is the units times
 		// that (possibly rounded) per-unit cost.
-		perUnit, costCurrency, ok := PerUnitCost(posting)
+		perUnit, costCurrency, ok := perUnitCost(posting)
 		if !ok {
 			return nil, fmt.Errorf("invalid cost specification")
 		}

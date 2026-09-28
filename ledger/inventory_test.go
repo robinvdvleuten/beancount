@@ -265,7 +265,7 @@ func TestBookShortPositionAtCost(t *testing.T) {
 	}
 }
 
-func TestBookReturnsBookedLots(t *testing.T) {
+func TestBookReturnsBookedPositions(t *testing.T) {
 	date1, err := ast.NewDate("2024-01-15")
 	assert.NoError(t, err)
 	date2, err := ast.NewDate("2024-02-15")
@@ -282,9 +282,9 @@ func TestBookReturnsBookedLots(t *testing.T) {
 
 	booked, err = inv.Book("HOOL", decimal.NewFromInt(-15), &lotSpec{}, BookingFIFO, date2)
 	assert.NoError(t, err)
-	assert.Equal(t, []BookedLot{
-		{Units: decimal.NewFromInt(-10), Cost: &cost100, CostCurrency: "USD", Date: date1},
-		{Units: decimal.NewFromInt(-5), Cost: &cost120, CostCurrency: "USD", Date: date2, Label: "b"},
+	assert.Equal(t, []BookedPosition{
+		{Units: decimal.NewFromInt(-10), Cost: &BookedCost{Number: cost100, Currency: "USD", Date: date1}, Reduced: true},
+		{Units: decimal.NewFromInt(-5), Cost: &BookedCost{Number: cost120, Currency: "USD", Date: date2, Label: "b"}, Reduced: true},
 	}, booked)
 }
 

@@ -1,0 +1,54 @@
+; implicit_prices emits a price for a posting at cost unless it reduces a
+; lot its account holds with the opposite sign (beancount's REDUCED), which
+; Booking records. Under NONE, a cost without a date names a lot dated by
+; its own transaction, so it opens a new lot rather than reducing one.
+option "operating_currency" "USD"
+plugin "beancount.plugins.implicit_prices"
+
+2024-01-01 open Assets:Strict "STRICT"
+2024-01-01 open Assets:None "NONE"
+2024-01-01 open Assets:Cash
+
+2024-01-02 * "strict buy"
+  Assets:Strict  10 XX {5 USD}
+  Assets:Cash
+
+2024-01-03 * "strict augment same lot"
+  Assets:Strict  5 XX {5 USD}
+  Assets:Cash
+
+2024-02-01 * "none buy"
+  Assets:None  10 YY {7 USD}
+  Assets:Cash
+
+2024-02-02 * "none sell same cost, date defaults to today: new lot, price emitted"
+  Assets:None  -4 YY {7 USD}
+  Assets:Cash
+
+2024-02-03 * "none sell same cost and lot date: reduced, no price"
+  Assets:None  -4 YY {7 USD, 2024-02-01}
+  Assets:Cash
+
+2024-02-04 * "none sell different cost: new lot, price emitted"
+  Assets:None  -4 YY {8 USD, 2024-02-01}
+  Assets:Cash
+
+2024-02-05 * "none oversell same lot: reduced"
+  Assets:None  -20 YY {7 USD, 2024-02-01}
+  Assets:Cash
+
+2024-02-06 * "none buy back into negative lot: reduced"
+  Assets:None  3 YY {7 USD, 2024-02-01}
+  Assets:Cash
+
+2024-03-01 * "none short first: price emitted"
+  Assets:None  -10 ZZ {2 USD}
+  Assets:Cash
+
+2024-03-02 * "none cover with lot date: reduced"
+  Assets:None  4 ZZ {2 USD, 2024-03-01}
+  Assets:Cash
+
+2024-03-03 * "none cover without lot date: new lot, price emitted"
+  Assets:None  4 ZZ {2 USD}
+  Assets:Cash

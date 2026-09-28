@@ -621,7 +621,7 @@ func (v *validator) validateBookedCosts(txn *ast.Transaction) []error {
 		if units, err := ParseAmount(posting.Amount); err == nil && units.IsZero() {
 			errs = append(errs, NewZeroAmountError(txn, posting))
 		}
-		if perUnit, costCurrency, ok := PerUnitCost(posting); ok && perUnit.IsNegative() {
+		if perUnit, costCurrency, ok := perUnitCost(posting); ok && perUnit.IsNegative() {
 			errs = append(errs, NewNegativeCostError(txn, posting, perUnit, costCurrency))
 		}
 	}

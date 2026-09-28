@@ -19,6 +19,28 @@ interpolates the missing part of a compound cost (`{# 5 USD}`, `{5 # USD}`;
 that states only its currency (`{USD}`, `{{USD}}`) matches v2
 (`cost_currency_only*` fixtures).
 
+**Merge cost on an augmentation**: both implementations report a merge
+cost `{*}` ("Cost merging is not supported yet"), and v2 then books it like
+`{}`: an augmentation at `{*}` gets the cost the transaction's residual
+implies, dated by the transaction (`10 HOOL {100.00 USD, 2020-02-01}`), and a
+later `{}` reduction books against it. We drop that inferred cost, so the
+augmentation holds its units without cost: `print` echoes `{*}`, the units
+merge with any HOOL held without cost, and the later reduction finds no lot
+to book against and is reported. For the same reason `implicit_prices`
+emits no `from_cost` price for it, where v2 does (`1 ACME {*}` against
+`-11 USD` on an AVERAGE account holding `2 ACME {10 USD}` and
+`2 ACME {12 USD}` gives `price ACME 11 USD`). A reduction at `{*}` matches
+v2 (`applied_merge_cost`, `merge_cost_avg`).
+
+**Two prices on one date**: `getprice` returns the first price of the day,
+bean-query the last, because v2's `build_price_map` keeps a date's latest
+entry. When `implicit_prices` inserts 20 USD and then 21 USD for ACME on
+the same date, we return 20 and bean-query 21.
+
+**Cost and price in different currencies**: bean-check reports `Cost and
+price currencies must match: EUR != USD` for `10 BOND {95 EUR} @@ 1100 USD`;
+we report nothing.
+
 For BQL, `query/gap_print_balance*.bql` diverge from `bean-query` in
 whitespace only: bean-query prints balance directives in fixed columns
 (the account padded to 47 characters). Our PRINT renders them through the

@@ -72,14 +72,15 @@ type Ledger struct {
 	duplicateBalances map[*ast.Balance]bool
 	// The first applied transaction per Import ID; a Dropped transaction
 	// is not in it
-	importIDs    map[string]*ast.Transaction
-	bookedLots   map[*ast.Posting][]BookedLot
-	booker       *booker
-	booked       map[*ast.Transaction]*bookedTransaction
-	unopened     map[string]*Account // Accounts posted to before any open
-	display      *DisplayContext
-	priceGraphMu sync.RWMutex
-	priceGraphs  map[string]*Graph
+	importIDs map[string]*ast.Transaction
+	// The positions each booked posting holds, Booking's published record
+	bookedPositions map[*ast.Posting][]BookedPosition
+	booker          *booker
+	booked          map[*ast.Transaction]*bookedTransaction
+	unopened        map[string]*Account // Accounts posted to before any open
+	display         *DisplayContext
+	priceGraphMu    sync.RWMutex
+	priceGraphs     map[string]*Graph
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -112,17 +113,17 @@ func (e *ValidationErrors) Unwrap() []error {
 // New creates a new empty ledger
 func New() *Ledger {
 	return &Ledger{
-		graph:       NewGraph(),
-		accounts:    make(map[string]*Account),
-		config:      NewConfig(),
-		errors:      make([]error, 0),
-		pads:        newPads(),
-		priceGraphs: make(map[string]*Graph),
-		bookedLots:  make(map[*ast.Posting][]BookedLot),
-		booked:      make(map[*ast.Transaction]*bookedTransaction),
-		unopened:    make(map[string]*Account),
-		importIDs:   make(map[string]*ast.Transaction),
-		display:     newDisplayContext(),
+		graph:           NewGraph(),
+		accounts:        make(map[string]*Account),
+		config:          NewConfig(),
+		errors:          make([]error, 0),
+		pads:            newPads(),
+		priceGraphs:     make(map[string]*Graph),
+		bookedPositions: make(map[*ast.Posting][]BookedPosition),
+		booked:          make(map[*ast.Transaction]*bookedTransaction),
+		unopened:        make(map[string]*Account),
+		importIDs:       make(map[string]*ast.Transaction),
+		display:         newDisplayContext(),
 	}
 }
 
@@ -268,11 +269,13 @@ func (l *Ledger) Diagnostics() []error {
 	return slices.Clone(l.errors)
 }
 
-// BookedLots returns the lots a reducing posting was booked against, in
-// booking order, or nil when the posting augmented its inventory. Beancount
-// replaces such a posting with one booked posting per lot.
-func (l *Ledger) BookedLots(posting *ast.Posting) []BookedLot {
-	return l.bookedLots[posting]
+// BookedPositions returns the positions a posting of an Applied transaction
+// booked. A reduction booked one per lot it was booked against, in booking
+// order, as beancount replaces it with one booked posting per lot; any
+// other posting booked its own: at its per-unit cost and lot date, or its
+// units alone without cost. A posting of a Dropped group has none.
+func (l *Ledger) BookedPositions(posting *ast.Posting) []BookedPosition {
+	return l.bookedPositions[posting]
 }
 
 // DisplayContext returns the per-currency display precision of the
@@ -758,7 +761,7 @@ func (l *Ledger) applyClose(delta *CloseDelta) {
 	}
 }
 
-// applyTransaction replays a booked transaction's lot changes onto its
+// applyTransaction replays a booked transaction's positions onto its
 // accounts' inventories and records the posting history and Import ID. A
 // posting to an account that is not open yet is kept for the account's open.
 func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransaction) {
@@ -777,8 +780,8 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransactio
 				l.unopened[accountName] = account
 			}
 		}
-		for _, change := range bp.changes {
-			account.Inventory.AddLot(bp.commodity, change.amount, change.spec)
+		for _, position := range bp.positions {
+			account.Inventory.AddLot(bp.commodity, position.Units, position.lotSpec())
 		}
 		account.Postings = append(account.Postings, &AccountPosting{
 			Transaction: txn,

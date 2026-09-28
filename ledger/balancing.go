@@ -173,7 +173,7 @@ func specToleranceShares(postings []*ast.Posting) []toleranceShare {
 // checks the balance: a cost is its per-unit number, with inferred costs
 // resolved, and a reduction against lots becomes one share per lot, like
 // the booked postings beancount replaces it with.
-func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, bookedLots map[*ast.Posting][]BookedLot) []toleranceShare {
+func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, reducedPositions map[*ast.Posting][]BookedPosition) []toleranceShare {
 	var shares []toleranceShare
 	for _, posting := range postings {
 		units, ok := statedUnitsNumber(posting)
@@ -182,13 +182,13 @@ func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, boo
 		}
 		price := perUnitPrice(posting)
 
-		if lots, ok := bookedLots[posting]; ok {
-			for _, lot := range lots {
+		if positions, ok := reducedPositions[posting]; ok {
+			for _, position := range positions {
 				shares = append(shares, toleranceShare{
-					units:        lot.Units,
+					units:        position.Units,
 					hasCost:      true,
-					costNumbers:  []decimal.Decimal{*lot.Cost},
-					costCurrency: lot.CostCurrency,
+					costNumbers:  []decimal.Decimal{position.Cost.Number},
+					costCurrency: position.Cost.Currency,
 					price:        price,
 				})
 			}
@@ -198,7 +198,7 @@ func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, boo
 		share := toleranceShare{units: units, price: price}
 		if cost := delta.costFor(posting); cost != nil {
 			share.hasCost = true
-			if number, currency, ok := PerUnitCost(&ast.Posting{Amount: posting.Amount, Cost: cost}); ok {
+			if number, currency, ok := perUnitCost(&ast.Posting{Amount: posting.Amount, Cost: cost}); ok {
 				share.costNumbers = []decimal.Decimal{number}
 				share.costCurrency = currency
 			}

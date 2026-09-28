@@ -119,7 +119,7 @@ func CompilePrint(ctx *Context, p *bql.Print) (*CompiledPrint, error) {
 func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *CompiledPrint, w io.Writer) error {
 	entries := []ast.Directive(tree.Directives)
 	if compiled.From != nil {
-		entries = applyFromTransforms(qctx, entries, compiled.From)
+		qctx, entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
 
 	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithPrinterLayout(), formatter.WithIndentation(2), formatter.WithPreserveComments(false))
@@ -184,9 +184,10 @@ func printedFailedBalance(balance *ast.Balance, difference decimal.Decimal) *ast
 // books it as, which bean-query's print renders: a reduction becomes one
 // posting per lot it was booked against, a cost is its booked lot in full
 // (per-unit number, currency, date and label) and a total price a per-unit
-// one. The copy leaves out the source layout, so the formatter renders these
-// postings, and a transaction whose postings were all dropped prints as its
-// header.
+// one. The units and costs are the ledger's booked positions, written out
+// once; a per-unit price is kept as the posting has it. The copy leaves out
+// the source layout, so the formatter renders these postings, and a
+// transaction whose postings were all dropped prints as its header.
 func printedTransaction(qctx *Context, txn *ast.Transaction) *ast.Transaction {
 	printed := *txn
 	printed.BodyItems = nil
@@ -196,18 +197,18 @@ func printedTransaction(qctx *Context, txn *ast.Transaction) *ast.Transaction {
 			printed.Postings = append(printed.Postings, posting)
 			continue
 		}
-		price := postingPrice(posting)
-		for _, position := range postingPositions(qctx, posting, txn.Date()) {
+		price, total := posting.Price, posting.PriceTotal
+		if perUnit, ok := postingPrice(posting).(*Amount); ok && total {
+			price, total = ast.NewAmount(numberString(perUnit.Number), perUnit.Currency), false
+		}
+		for _, position := range postingPositions(qctx, posting) {
 			booked := *posting
 			booked.Amount = ast.NewAmount(numberString(position.Units.Number), position.Units.Currency)
 			if cost := position.Cost; cost != nil {
 				booked.Cost = ast.NewCostWithDate(ast.NewAmount(numberString(cost.Number), cost.Currency), cost.Date)
 				booked.Cost.Label = cost.Label
 			}
-			if price, ok := price.(*Amount); ok {
-				booked.Price = ast.NewAmount(numberString(price.Number), price.Currency)
-				booked.PriceTotal = false
-			}
+			booked.Price, booked.PriceTotal = price, total
 			printed.Postings = append(printed.Postings, &booked)
 		}
 	}

@@ -73,7 +73,7 @@ func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compil
 func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compiled) ([]*Row, error) {
 	entries := []ast.Directive(tree.Directives)
 	if compiled.From != nil {
-		entries = applyFromTransforms(qctx, entries, compiled.From)
+		qctx, entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
 
 	var rows []*Row
@@ -101,7 +101,7 @@ func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		}
 
 		for _, posting := range txn.Postings {
-			positions := postingPositions(qctx, posting, entry.Date())
+			positions := postingPositions(qctx, posting)
 			if len(positions) == 0 {
 				positions = []*Position{nil}
 			}

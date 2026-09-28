@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/shopspring/decimal"
 )
 
 func TestBookingKeepsTransactionsThatFailValidation(t *testing.T) {
@@ -144,6 +145,179 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 		}
 	}
 	assert.Equal(t, map[string]int{"units missing total price": 1, "negative per unit": 2}, postings)
+}
+
+func TestBookingRecordsBookedPositions(t *testing.T) {
+	// Each booked posting records the positions it holds: its own for an
+	// augmentation, per unit and dated, one per lot for a reduction, the
+	// position of its own spec under NONE, and its units alone without cost.
+	source := `
+2024-01-01 open Assets:Invest
+2024-01-01 open Assets:Strict "STRICT"
+2024-01-01 open Assets:None "NONE"
+2024-01-01 open Assets:Cash
+
+2024-03-01 * "one of each"
+  Assets:Invest  10 AA {5.0 USD, 2024-01-01}
+  Assets:Invest  4 BB {{20 USD}}
+  Assets:Invest  2 CC {3 # 4 USD}
+  Assets:Invest  1 DD {7 USD, "lbl"}
+  Assets:Strict  -15 XX {}
+  Assets:None    -4 YY {7 USD, 2024-01-01}
+  Assets:None    -4 YY {7 USD}
+  Assets:Cash    49.00 USD
+`
+	tree := parser.MustParseString(context.Background(), source)
+	b := newBooker(NewConfig(), tree.Directives)
+	usd := func(n int64, date string) *lotSpec {
+		cost := decimal.NewFromInt(n)
+		return &lotSpec{Cost: &cost, CostCurrency: "USD", Date: newTestDate(date)}
+	}
+	b.inventory("Assets:Strict").AddLot("XX", decimal.NewFromInt(10), usd(5, "2024-01-01"))
+	b.inventory("Assets:Strict").AddLot("XX", decimal.NewFromInt(5), usd(6, "2024-01-02"))
+	b.inventory("Assets:None").AddLot("YY", decimal.NewFromInt(10), usd(7, "2024-01-01"))
+
+	txn := tree.Directives[len(tree.Directives)-1].(*ast.Transaction)
+	booked, errs := b.book(txn)
+	assert.Zero(t, errs)
+	assert.Zero(t, booked.residuals)
+
+	got := make([][]BookedPosition, 0, len(booked.postings))
+	for _, bp := range booked.postings {
+		got = append(got, bp.positions)
+	}
+	at := func(number, date, label string) *BookedCost {
+		return &BookedCost{Number: mustParseDec(number), Currency: "USD", Date: newTestDate(date), Label: label}
+	}
+	assert.Equal(t, [][]BookedPosition{
+		{{Units: mustParseDec("10"), Cost: at("5.0", "2024-01-01", "")}},
+		{{Units: mustParseDec("4"), Cost: at("5", "2024-03-01", "")}},
+		{{Units: mustParseDec("2"), Cost: at("5", "2024-03-01", "")}},
+		{{Units: mustParseDec("1"), Cost: at("7", "2024-03-01", "lbl")}},
+		{
+			{Units: mustParseDec("-10"), Cost: at("5", "2024-01-01", ""), Reduced: true},
+			{Units: mustParseDec("-5"), Cost: at("6", "2024-01-02", ""), Reduced: true},
+		},
+		{{Units: mustParseDec("-4"), Cost: at("7", "2024-01-01", ""), Reduced: true}},
+		{{Units: mustParseDec("-4"), Cost: at("7", "2024-03-01", "")}},
+		{{Units: mustParseDec("49.00")}},
+	}, got)
+}
+
+func TestImplicitPricesSkipPositionsThatReduceALot(t *testing.T) {
+	tests := []struct {
+		name   string
+		source string
+		want   []string
+	}{
+		{
+			// The probe of #482, which bean-query 2.3.6 agrees with. Under
+			// NONE, a cost without a date names a lot dated by its own
+			// transaction, so it opens a new lot and emits a price, while
+			// naming a held lot, overselling it or buying back into it once
+			// it is short reduces it and emits none. A STRICT augmentation
+			// on a later date is a new lot too.
+			name: "probe",
+			source: `
+option "operating_currency" "USD"
+plugin "beancount.plugins.implicit_prices"
+
+2024-01-01 open Assets:Strict "STRICT"
+2024-01-01 open Assets:None "NONE"
+2024-01-01 open Assets:Cash
+
+2024-01-02 * "strict buy"
+  Assets:Strict  10 XX {5 USD}
+  Assets:Cash
+
+2024-01-03 * "strict augment same lot"
+  Assets:Strict  5 XX {5 USD}
+  Assets:Cash
+
+2024-02-01 * "none buy"
+  Assets:None  10 YY {7 USD}
+  Assets:Cash
+
+2024-02-02 * "none sell same cost, new lot"
+  Assets:None  -4 YY {7 USD}
+  Assets:Cash
+
+2024-02-03 * "none sell the held lot"
+  Assets:None  -4 YY {7 USD, 2024-02-01}
+  Assets:Cash
+
+2024-02-04 * "none sell different cost, new lot"
+  Assets:None  -4 YY {8 USD, 2024-02-01}
+  Assets:Cash
+
+2024-02-05 * "none oversell the held lot"
+  Assets:None  -20 YY {7 USD, 2024-02-01}
+  Assets:Cash
+
+2024-02-06 * "none buy back into the short lot"
+  Assets:None  3 YY {7 USD, 2024-02-01}
+  Assets:Cash
+
+2024-03-01 * "none short first"
+  Assets:None  -10 ZZ {2 USD}
+  Assets:Cash
+
+2024-03-02 * "none cover the short lot"
+  Assets:None  4 ZZ {2 USD, 2024-03-01}
+  Assets:Cash
+
+2024-03-03 * "none cover without lot date, new lot"
+  Assets:None  4 ZZ {2 USD}
+  Assets:Cash
+`,
+			want: []string{
+				"2024-01-02 XX 5 USD",
+				"2024-01-03 XX 5 USD",
+				"2024-02-01 YY 7 USD",
+				"2024-02-02 YY 7 USD",
+				"2024-02-04 YY 8 USD",
+				"2024-03-01 ZZ 2 USD",
+				"2024-03-03 ZZ 2 USD",
+			},
+		},
+		{
+			// A zero-units posting leaves a lot of zero units, which
+			// beancount never holds, so selling into it reduces nothing.
+			name: "zero units lot",
+			source: `
+plugin "beancount.plugins.implicit_prices"
+
+2024-01-01 open Assets:N "NONE"
+2024-01-01 open Assets:Cash
+
+2024-01-07 * "zero units none"
+  Assets:N  0 PP {5 USD}
+  Assets:Cash  0 USD
+
+2024-01-08 * "sell into zero lot none"
+  Assets:N  -5 PP {5 USD, 2024-01-07}
+  Assets:Cash  25 USD
+`,
+			want: []string{
+				"2024-01-07 PP 5 USD",
+				"2024-01-08 PP 5 USD",
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := parser.MustParseString(context.Background(), tt.source)
+			_ = New().Process(context.Background(), tree)
+
+			var prices []string
+			for _, d := range tree.Directives {
+				if price, ok := d.(*ast.Price); ok {
+					prices = append(prices, fmt.Sprintf("%s %s %s %s", price.Date(), price.Commodity, price.Amount.Value, price.Amount.Currency))
+				}
+			}
+			assert.Equal(t, tt.want, prices)
+		})
+	}
 }
 
 func TestValidateAmounts(t *testing.T) {

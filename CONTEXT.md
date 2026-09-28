@@ -60,6 +60,10 @@ _Avoid_: partial transaction, dropped postings
 A transaction that was booked, so later directives see its effects, even when it is reported for another error such as not balancing or posting to an unopened or closed account.
 _Avoid_: valid transaction, accepted transaction
 
+**Booked position**:
+The units a booked posting of an Applied transaction adds to or takes from one lot of its account, with that lot's per-unit cost, cost date and label. A reduction has one per lot it is booked against; any other posting has one of its own. It reduced its lot when the account held that lot with the opposite sign; `implicit_prices` emits no price from the cost of such a position.
+_Avoid_: booked lot, lot change
+
 **Error line**:
 The file and line an error blames, printed as `path:line:` at the start of the message so editors can jump to it.
 _Avoid_: position (a Beancount position is units held at a cost), location

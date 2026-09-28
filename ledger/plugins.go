@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
@@ -115,7 +114,8 @@ const implicitPricesMeta = "__implicit_prices__"
 
 // implicitPrices is beancount.plugins.implicit_prices: it inserts a price
 // directive after each transaction for every posting with a price, and for
-// every posting held at cost that does not reduce a lot. A price repeating
+// every position a posting books at cost without reducing a lot, which
+// Booking's record tells (BookedPosition.Reduced). A price repeating
 // another's date, commodity and amount is inserted once.
 func implicitPrices(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 	type priceKey struct {
@@ -125,11 +125,15 @@ func implicitPrices(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 		currency  string
 	}
 	seen := make(map[priceKey]bool)
-	// Like beancount, a posting at cost reduces when its account holds
-	// the same lot with the opposite sign.
-	held := make(map[string]map[lotKey]decimal.Decimal)
 
 	directives := make(ast.Directives, 0, len(tree.Directives))
+	insert := func(price *ast.Price) {
+		key := priceKey{price.Date().String(), price.Commodity, priceNumber(price), price.Amount.Currency}
+		if !seen[key] {
+			seen[key] = true
+			directives = append(directives, price)
+		}
+	}
 	for _, directive := range tree.Directives {
 		directives = append(directives, directive)
 		txn, ok := directive.(*ast.Transaction)
@@ -138,45 +142,20 @@ func implicitPrices(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 		}
 
 		for _, posting := range txn.Postings {
-			units, err := ParseAmount(posting.Amount)
-			if posting.Amount == nil || err != nil {
+			if posting.Amount == nil {
 				continue
 			}
-
-			reduced := false
-			if posting.Cost != nil {
-				lots := held[string(posting.Account)]
-				if lots == nil {
-					lots = make(map[lotKey]decimal.Decimal)
-					held[string(posting.Account)] = lots
+			if posting.Price != nil {
+				if number, currency, ok := PerUnitPrice(posting); ok {
+					insert(newImplicitPrice(txn, posting, number, currency, "from_price"))
 				}
-				reduced = trackLots(lots, l.BookedLots(posting), posting, units, txn.Date())
-			}
-
-			var price *ast.Price
-			switch {
-			case posting.Price != nil:
-				number, currency, ok := PerUnitPrice(posting)
-				if !ok {
-					continue
-				}
-				price = newImplicitPrice(txn, posting, number, currency, "from_price")
-			case posting.Cost != nil && !reduced:
-				perUnit, currency, ok := PerUnitCost(posting)
-				if !ok {
-					continue
-				}
-				price = newImplicitPrice(txn, posting, perUnit, currency, "from_cost")
-			default:
 				continue
 			}
-
-			key := priceKey{txn.Date().String(), price.Commodity, priceNumber(price), price.Amount.Currency}
-			if seen[key] {
-				continue
+			for _, position := range l.BookedPositions(posting) {
+				if position.Cost != nil && !position.Reduced {
+					insert(newImplicitPrice(txn, posting, position.Cost.Number, position.Cost.Currency, "from_cost"))
+				}
 			}
-			seen[key] = true
-			directives = append(directives, price)
 		}
 	}
 	tree.Directives = directives
@@ -196,58 +175,4 @@ func priceNumber(price *ast.Price) string {
 		return price.Amount.Value
 	}
 	return number.String()
-}
-
-// lotKey identifies a lot the way beancount's Inventory does: by commodity
-// and cost.
-type lotKey struct {
-	commodity    string
-	cost         string
-	costCurrency string
-	date         string
-	label        string
-}
-
-// trackLots adds a posting held at cost to its account's lots and reports
-// whether it reduced one, like beancount's Inventory.add_position. A
-// reduction that Booking matched to lots reduces each of them.
-func trackLots(lots map[lotKey]decimal.Decimal, booked []BookedLot, posting *ast.Posting, units decimal.Decimal, date *ast.Date) bool {
-	if len(booked) > 0 {
-		for _, lot := range booked {
-			key := lotKey{commodity: posting.Amount.Currency, costCurrency: lot.CostCurrency, label: lot.Label}
-			if lot.Cost != nil {
-				key.cost = lot.Cost.String()
-			}
-			if lot.Date != nil {
-				key.date = lot.Date.String()
-			}
-			addToLot(lots, key, lot.Units)
-		}
-		return true
-	}
-
-	perUnit, costCurrency, ok := PerUnitCost(posting)
-	if !ok {
-		return false
-	}
-	key := lotKey{commodity: posting.Amount.Currency, cost: perUnit.String(), costCurrency: costCurrency, date: date.String()}
-	if spec, err := ParseLotSpec(posting.Cost); err == nil {
-		if spec.Date != nil {
-			key.date = spec.Date.String()
-		}
-		key.label = spec.Label
-	}
-	return addToLot(lots, key, units)
-}
-
-// addToLot adds units to a lot and reports whether they reduced it.
-func addToLot(lots map[lotKey]decimal.Decimal, key lotKey, units decimal.Decimal) bool {
-	held, ok := lots[key]
-	sum := pydecimal.Add(held, units)
-	if sum.IsZero() {
-		delete(lots, key)
-	} else {
-		lots[key] = sum
-	}
-	return ok && held.Sign() != units.Sign()
 }

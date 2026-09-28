@@ -24,13 +24,37 @@ type lotReduction struct {
 	amount decimal.Decimal
 }
 
-// BookedLot is the share of a reducing posting booked against one lot.
-type BookedLot struct {
-	Units        decimal.Decimal  // Signed change applied to the lot
-	Cost         *decimal.Decimal // Per-unit cost; nil for a lot held without cost
-	CostCurrency string
-	Date         *ast.Date
-	Label        string
+// BookedPosition is one position a booked posting holds: the signed units it
+// adds to or takes from one lot of its account's inventory, and that lot's
+// cost. A reduction books one per lot it is booked against; any other
+// posting books one of its own. The Ledger publishes them per posting
+// (Ledger.BookedPositions), and Apply replays them.
+type BookedPosition struct {
+	Units decimal.Decimal // Signed change to the lot
+	Cost  *BookedCost     // nil without cost
+	// Reduced reports that the account held the lot with the opposite
+	// sign, like beancount's Booking.REDUCED.
+	Reduced bool
+}
+
+// BookedCost is the cost a booked position's lot is held at.
+type BookedCost struct {
+	// Per unit, at the precision Booking has it: a stated per-unit cost
+	// keeps its source precision (5.0 stays 5.0).
+	Number   decimal.Decimal
+	Currency string
+	Date     *ast.Date // The cost's date, or the transaction's for an augmentation without one
+	Label    string
+}
+
+// lotSpec returns the spec of the lot the position changes, nil without
+// cost.
+func (p BookedPosition) lotSpec() *lotSpec {
+	if p.Cost == nil {
+		return nil
+	}
+	number := p.Cost.Number // A copy, so the lot's spec does not alias the published cost
+	return &lotSpec{Cost: &number, CostCurrency: p.Cost.Currency, Date: p.Cost.Date, Label: p.Cost.Label}
 }
 
 type reductionPlan struct {
@@ -137,24 +161,29 @@ func (inv *Inventory) Add(commodity string, amount decimal.Decimal) {
 	inv.AddLot(commodity, amount, nil)
 }
 
-// AddLot adds an amount with a specific cost basis
-func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lotSpec) {
+// AddLot adds an amount with a specific cost basis and reports whether it
+// reduced the lot: the inventory held the lot with the opposite sign, like
+// beancount's Inventory.add_amount returning Booking.REDUCED. A lot of zero
+// units, which a zero-units posting leaves, counts as not held: beancount
+// never creates one.
+func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
 	// Find existing lot with matching spec
 	lots := inv.lots[commodity]
 	for _, lot := range lots {
 		if lotSpecsMatch(lot.Spec, spec) {
-			// Add to existing lot
+			reduced := !lot.Amount.IsZero() && lot.Amount.IsNegative() != amount.IsNegative()
 			lot.Amount = pydecimal.Add(lot.Amount, amount)
 			if lot.Amount.IsZero() {
 				inv.removeLot(commodity, lot)
 			}
-			return
+			return reduced
 		}
 	}
 
 	// Create new lot
 	newLot := newLot(commodity, amount, spec)
 	inv.lots[commodity] = append(inv.lots[commodity], newLot)
+	return false
 }
 
 // Get returns the total amount of a commodity (summing all lots)
@@ -178,65 +207,34 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 // otherwise it augments, which is how short positions at cost are opened.
 // An augmenting lot without an explicit date is acquired on acquisitionDate.
 //
-// For a reduction, Book returns the lots it was booked against in booking
-// order; an augmentation returns none.
+// For a reduction, Book returns the positions it booked, one per lot it was
+// booked against in booking order. It returns no position for an
+// augmentation, which the booker records itself.
 func (inv *Inventory) Book(
 	commodity string,
 	amount decimal.Decimal,
 	spec *lotSpec,
 	bookingMethod BookingMethod,
 	acquisitionDate *ast.Date,
-) ([]BookedLot, error) {
-	booked, _, err := inv.book(commodity, amount, spec, bookingMethod, acquisitionDate)
-	return booked, err
-}
-
-// lotChange is one signed change to the lot held at spec. Replaying a
-// booking's changes with AddLot reproduces it on another inventory.
-type lotChange struct {
-	spec   *lotSpec
-	amount decimal.Decimal
-}
-
-// book is Book, also returning the lot changes it made.
-func (inv *Inventory) book(
-	commodity string,
-	amount decimal.Decimal,
-	spec *lotSpec,
-	bookingMethod BookingMethod,
-	acquisitionDate *ast.Date,
-) ([]BookedLot, []lotChange, error) {
+) ([]BookedPosition, error) {
 	plan, err := inv.planBooking(commodity, amount, spec, bookingMethod, acquisitionDate)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	var booked []BookedLot
+	var booked []BookedPosition
 	for _, reduction := range plan.reductions {
-		lot := BookedLot{Units: reduction.amount}
-		if s := reduction.lot.Spec; s != nil {
-			lot.Cost, lot.CostCurrency, lot.Date, lot.Label = s.Cost, s.CostCurrency, s.Date, s.Label
-		}
-		booked = append(booked, lot)
+		// planBooking offers only lots held at cost.
+		s := reduction.lot.Spec
+		booked = append(booked, BookedPosition{
+			Units:   reduction.amount,
+			Cost:    &BookedCost{Number: *s.Cost, Currency: s.CostCurrency, Date: s.Date, Label: s.Label},
+			Reduced: true,
+		})
 	}
 
-	changes := inv.planChanges(plan)
 	inv.applyReduction(plan)
-	return booked, changes, nil
-}
-
-// planChanges lists the lot changes applying plan makes.
-func (inv *Inventory) planChanges(plan *reductionPlan) []lotChange {
-	var changes []lotChange
-	switch {
-	case plan.addAmount != nil:
-		changes = append(changes, lotChange{spec: plan.addSpec, amount: *plan.addAmount})
-	default:
-		for _, reduction := range plan.reductions {
-			changes = append(changes, lotChange{spec: reduction.lot.Spec, amount: reduction.amount})
-		}
-	}
-	return changes
+	return booked, nil
 }
 
 // isReducedBy reports whether adding amount of commodity would reduce the

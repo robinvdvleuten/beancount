@@ -16,6 +16,9 @@ import (
 type Context struct {
 	Ledger *ledger.Ledger
 	Config *config.Config
+	// summarized holds the position of each posting that FROM's
+	// summarization creates, which the ledger never booked.
+	summarized map[*ast.Posting]*Position
 }
 
 // Row is the evaluation context for one data row. In the FROM (entry)
@@ -233,57 +236,26 @@ func entryID(entry ast.Directive) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// postingPositions returns the positions a posting books. A reduction becomes
-// one position per lot the ledger booked it against, like the booked
-// postings beancount replaces it with; any other posting books its own
-// position.
-func postingPositions(qctx *Context, posting *ast.Posting, entryDate *ast.Date) []*Position {
-	lots := qctx.Ledger.BookedLots(posting)
-	if len(lots) == 0 {
-		if position := postingPosition(posting, entryDate); position != nil {
-			return []*Position{position}
-		}
-		return nil
+// postingPositions returns the positions a posting books, as the ledger
+// records them (ledger.BookedPositions): a reduction books one per lot it
+// was booked against, like the booked postings beancount replaces it with,
+// and any other posting its own. A posting FROM's summarization created
+// books the position it was made from.
+func postingPositions(qctx *Context, posting *ast.Posting) []*Position {
+	if position, ok := qctx.summarized[posting]; ok {
+		copied := *position
+		return []*Position{&copied}
 	}
-
-	positions := make([]*Position, 0, len(lots))
-	for _, lot := range lots {
-		position := &Position{Units: Amount{Number: lot.Units, Currency: posting.Amount.Currency}}
-		if lot.Cost != nil {
-			position.Cost = &Cost{Number: *lot.Cost, Currency: lot.CostCurrency, Date: lot.Date, Label: lot.Label}
+	booked := qctx.Ledger.BookedPositions(posting)
+	positions := make([]*Position, 0, len(booked))
+	for _, b := range booked {
+		position := &Position{Units: Amount{Number: b.Units, Currency: posting.Amount.Currency}}
+		if c := b.Cost; c != nil {
+			position.Cost = &Cost{Number: c.Number, Currency: c.Currency, Date: c.Date, Label: c.Label}
 		}
 		positions = append(positions, position)
 	}
 	return positions
-}
-
-// postingPosition converts an AST posting into a query Position with the
-// per-unit cost the ledger books it at (ledger.PerUnitCost spreads total and
-// compound costs over the units). Cost bases
-// without an explicit date are stamped with the transaction date, matching
-// official booking (the date shows in cost_date but not in rendered
-// positions).
-func postingPosition(posting *ast.Posting, entryDate *ast.Date) *Position {
-	if posting.Amount == nil {
-		return nil
-	}
-	number, err := ledger.ParseAmount(posting.Amount)
-	if err != nil {
-		return nil
-	}
-	position := &Position{Units: Amount{Number: number, Currency: posting.Amount.Currency}}
-
-	if posting.Cost != nil {
-		cost := &Cost{Date: posting.Cost.Date, Label: posting.Cost.Label}
-		if cost.Date == nil {
-			cost.Date = entryDate
-		}
-		if costNumber, currency, ok := ledger.PerUnitCost(posting); ok {
-			cost.Number, cost.Currency = costNumber, currency
-		}
-		position.Cost = cost
-	}
-	return position
 }
 
 // postingPrice returns the per-unit price attached to a posting
