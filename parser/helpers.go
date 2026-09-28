@@ -752,15 +752,10 @@ func (p *Parser) finishDirective(d ast.Directive) error {
 		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 	}
 
-	// A string spanning lines ends the header on a later line than it
-	// starts; nothing but a comment may follow there either.
-	line := d.Position().Line
-	p.attachInlineComment(d, line)
-	if end := p.lineAfterPrevious() - 1; !p.isAtEnd() && p.peek().Line == end && p.peek().Type != COMMENT {
-		tok := p.peek()
-		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	if err := p.finishHeader(d); err != nil {
+		return err
 	}
-	metadata, err := p.parseMetadataFromLine(line)
+	metadata, err := p.parseMetadataFromLine(d.Position().Line)
 	if err != nil {
 		return err
 	}
@@ -785,6 +780,14 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 		}
 	}
 	return Token{}, false
+}
+
+// finishHeader ends a dated directive's header at the line its last token
+// ends on, which a string spanning lines puts past the line the header
+// starts on: a comment there is the directive's inline comment, and
+// anything else is a syntax error.
+func (p *Parser) finishHeader(target ast.WithComment) error {
+	return p.finishLine(target, p.lineAfterPrevious()-1)
 }
 
 func (p *Parser) consumeInlineComment(line int) *ast.Comment {

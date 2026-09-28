@@ -621,7 +621,7 @@ func (f *run) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 	buf.WriteString(c.Date().String())
 	buf.WriteString(" commodity ")
 	buf.WriteString(c.Currency)
-	// Append inline comment if present
+	f.writeInlineComment(c.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(c.Metadata, buf)
 }
@@ -655,6 +655,7 @@ func (f *run) formatOpen(o *ast.Open, buf *strings.Builder) {
 		buf.WriteByte('"')
 	}
 
+	f.writeInlineComment(o.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(o.Metadata, buf)
 }
@@ -669,7 +670,7 @@ func (f *run) formatClose(c *ast.Close, buf *strings.Builder) {
 	buf.WriteString(c.Date().String())
 	buf.WriteString(" close ")
 	buf.WriteString(string(c.Account))
-	// Append inline comment if present
+	f.writeInlineComment(c.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(c.Metadata, buf)
 }
@@ -767,7 +768,7 @@ func (f *run) formatPad(p *ast.Pad, buf *strings.Builder) {
 	buf.WriteString(string(p.Account))
 	buf.WriteByte(' ')
 	buf.WriteString(string(p.AccountPad))
-	// Append inline comment if present
+	f.writeInlineComment(p.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(p.Metadata, buf)
 }
@@ -784,7 +785,7 @@ func (f *run) formatNote(n *ast.Note, buf *strings.Builder) {
 	buf.WriteString(string(n.Account))
 	buf.WriteByte(' ')
 	f.formatRawString(n.Description, buf)
-	// Append inline comment if present
+	f.writeInlineComment(n.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(n.Metadata, buf)
 }
@@ -809,6 +810,7 @@ func (f *run) formatDocument(d *ast.Document, buf *strings.Builder) {
 		buf.WriteString(" ^")
 		buf.WriteString(string(link))
 	}
+	f.writeInlineComment(d.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(d.Metadata, buf)
 }
@@ -843,7 +845,7 @@ func (f *run) formatEvent(e *ast.Event, buf *strings.Builder) {
 	f.formatRawString(e.Name, buf)
 	buf.WriteByte(' ')
 	f.formatRawString(e.Value, buf)
-	// Append inline comment if present
+	f.writeInlineComment(e.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(e.Metadata, buf)
 }
@@ -894,6 +896,7 @@ func (f *run) formatCustom(c *ast.Custom, buf *strings.Builder) {
 			buf.WriteString(*val.Number)
 		}
 	}
+	f.writeInlineComment(c.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(c.Metadata, buf)
 }

@@ -82,7 +82,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
-	if err := p.finishLine(txn, txn.Position().Line); err != nil {
+	if err := p.finishHeader(txn); err != nil {
 		return nil, err
 	}
 

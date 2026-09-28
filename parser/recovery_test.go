@@ -77,6 +77,7 @@ func TestDirectiveHeaderEndsAtItsLine(t *testing.T) {
 		"note metadata":                          {"2020-01-02 note Assets:A \"x\"  kk: 1", 1},
 		"balance metadata":                       {"2020-01-02 balance Assets:A 0 USD  kk: 1", 1},
 		"metadata after a string spanning lines": {"2020-01-02 note Assets:A \"x\ny\"  kk: 1", 2},
+		"posting after a string spanning lines":  {"2020-01-02 * \"x\ny\" Assets:A  1 USD\n  Assets:A", 2},
 	} {
 		t.Run(name, func(t *testing.T) {
 			tree, err := ParseString(context.Background(), tt.header+"\n2020-01-05 open Assets:Z\n")

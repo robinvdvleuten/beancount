@@ -49,21 +49,23 @@ func (s *sourceView) line(n int) string {
 	return s.lines[n-1]
 }
 
-// itemLine returns the source line of an item starting at line and column,
-// and whether the item owns it: the line holds this item and nothing else.
-// It does when no other top-level item starts on it, the item starts it,
-// and the item ends on it, because the next line starts a node of its own
-// or only whitespace follows. A directive whose tokens or strings run onto
-// the next line owns no line.
+// itemLine returns the source text of an item starting at line and column,
+// and whether the item owns it: the text holds this item and nothing else.
+// It does when no other top-level item starts on the line and the item
+// starts it. The item ends where the next node starts or only whitespace
+// follows; since only a string spanning lines carries an item past its
+// line, the text runs over every line up to there, which bean-format
+// leaves as written.
 func (s *sourceView) itemLine(line, column int) (text string, owned bool) {
 	text = s.line(line)
 	if line < 1 || line > len(s.lines) || s.multiple[line] || firstColumn(text) != column {
 		return text, false
 	}
-	if line < s.lastContent && !s.starts[line+1] {
-		return text, false
+	end := line
+	for end < s.lastContent && !s.starts[end+1] {
+		end++
 	}
-	return text, true
+	return strings.Join(s.lines[line-1:end], "\n"), true
 }
 
 // directiveLine is itemLine for a dated directive, which starts at its

@@ -144,20 +144,22 @@ func TestSourceViewItemLine(t *testing.T) {
 		name         string
 		line, column int
 		owned        bool
+		text         string
 	}{
-		{"directive on its own line", 1, 1, true},
-		{"metadata running onto the next line", 2, 3, false},
-		{"directive running onto the next line", 4, 1, false},
-		{"comment", 6, 1, true},
-		{"posting", 8, 3, true},
-		{"last posting, before trailing whitespace", 9, 3, true},
-		{"column other than the line's start", 8, 5, false},
-		{"past the end", 11, 1, false},
+		{"directive on its own line", 1, 1, true, "2020-01-01 open Assets:A"},
+		{"metadata running onto the next line", 2, 3, true, "  key: \"multi\nline\""},
+		{"directive running onto the next line", 4, 1, true, "2020-01-02 note Assets:A \"two\nlines\""},
+		{"comment", 6, 1, true, "; comment"},
+		{"posting", 8, 3, true, "  Assets:A  10 USD"},
+		{"last posting, before trailing whitespace", 9, 3, true, "  Assets:B"},
+		{"column other than the line's start", 8, 5, false, "  Assets:A  10 USD"},
+		{"past the end", 11, 1, false, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, owned := view.itemLine(tt.line, tt.column)
+			text, owned := view.itemLine(tt.line, tt.column)
 			assert.Equal(t, tt.owned, owned)
+			assert.Equal(t, tt.text, text)
 		})
 	}
 

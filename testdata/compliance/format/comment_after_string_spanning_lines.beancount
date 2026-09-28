@@ -1,0 +1,19 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 note Assets:A "x
+y" ; c
+2020-01-02 event "e" "x
+y" ; c
+2020-01-02 document Assets:A "x
+y" ; c
+2020-01-02 custom "x
+y" "v" ; c
+2020-01-03 * "x
+y" #tag ; c
+  Assets:A  1 USD
+  Assets:B
+2020-01-04 * "p" "x
+y"   ; c
+  kk: 1
+  Assets:A  1 USD
+  Assets:B

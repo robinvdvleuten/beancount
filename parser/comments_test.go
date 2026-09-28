@@ -403,3 +403,28 @@ func TestParseTransactionPreservesBodyComments(t *testing.T) {
 	assert.Equal(t, txn.Postings[1], txn.BodyItems[3].Posting)
 	assert.Equal(t, "; Comment after postings", txn.BodyItems[4].Comment.Content)
 }
+
+// A comment on the line a string spanning lines closes on ends the header
+// there, like beancount's grammar: it is the directive's inline comment.
+func TestParseInlineCommentAfterStringSpanningLines(t *testing.T) {
+	tests := map[string]string{
+		"note":        "2020-01-01 open Assets:A\n2020-01-02 note Assets:A \"x\ny\" ; c\n",
+		"transaction": "2020-01-01 open Assets:A\n2020-01-02 * \"x\ny\" ; c\n  Assets:A  1 USD\n  Assets:A\n",
+		"tags":        "2020-01-01 open Assets:A\n2020-01-02 * \"x\ny\" #tag ; c\n  Assets:A  1 USD\n  Assets:A\n",
+	}
+	for name, source := range tests {
+		t.Run(name, func(t *testing.T) {
+			tree, err := ParseString(context.Background(), source)
+			assert.NoError(t, err)
+			assert.Equal(t, 2, len(tree.Directives))
+
+			d, ok := tree.Directives[1].(ast.WithComment)
+			assert.True(t, ok)
+			assert.NotZero(t, d.GetComment())
+			assert.Equal(t, "; c", d.GetComment().Content)
+			if txn, ok := d.(*ast.Transaction); ok {
+				assert.Equal(t, 0, len(txn.BodyItems)-len(txn.Postings), "the comment is not a body comment")
+			}
+		})
+	}
+}

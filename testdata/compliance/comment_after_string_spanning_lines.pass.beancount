@@ -1,0 +1,5 @@
+; A comment on the line a string spanning lines closes on is the
+; directive's inline comment.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A "x
+y" ; c
