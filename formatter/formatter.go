@@ -30,6 +30,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
@@ -133,6 +134,10 @@ type Formatter struct {
 
 	// parsedNumbers renders numbers as parsed rather than as spelled.
 	parsedNumbers bool
+
+	// printerLayout lays out open and price lines in beancount's printer
+	// columns rather than bean-format's.
+	printerLayout bool
 }
 
 // Option is a functional option for configuring a Formatter.
@@ -196,6 +201,16 @@ func WithStringEscapeStyle(style StringEscapeStyle) Option {
 func WithParsedNumbers() Option {
 	return func(f *Formatter) {
 		f.parsedNumbers = true
+	}
+}
+
+// WithPrinterLayout lays out open and price lines in the fixed columns of
+// beancount's printer (bean-query's PRINT) rather than as bean-format keeps
+// them: an open pads its account to 47 characters, a price pads its
+// commodity to 22 and right-aligns its amount in 22.
+func WithPrinterLayout() Option {
+	return func(f *Formatter) {
+		f.printerLayout = true
 	}
 }
 
@@ -761,6 +776,19 @@ func (f *Formatter) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 
 // formatOpen formats an open directive.
 func (f *Formatter) formatOpen(o *ast.Open, buf *strings.Builder) {
+	if f.printerLayout {
+		booking := ""
+		if o.BookingMethod != "" {
+			booking = `"` + o.BookingMethod + `"`
+		}
+		line := o.Date().String() + " open " + padRight(string(o.Account), 47) + " " +
+			strings.Join(o.ConstraintCurrencies, ",") + " " + booking
+		buf.WriteString(strings.TrimRight(line, " "))
+		buf.WriteByte('\n')
+		f.formatMetadata(o.Metadata, buf)
+		return
+	}
+
 	// Open directives are single-line and carry no number to realign, so
 	// bean-format leaves them untouched; preserve the original line whenever
 	// it contains the whole directive.
@@ -1015,7 +1043,28 @@ func (f *Formatter) formatDocument(d *ast.Document, buf *strings.Builder) {
 
 // formatPrice formats a price directive.
 func (f *Formatter) formatPrice(p *ast.Price, buf *strings.Builder) {
+	if f.printerLayout {
+		amount := f.amountDisplayValue(p.Amount) + " " + priceCurrency(p)
+		buf.WriteString(p.Date().String())
+		buf.WriteString(" price ")
+		buf.WriteString(padRight(p.Commodity, 22))
+		buf.WriteByte(' ')
+		buf.WriteString(padLeft(amount, 22))
+		buf.WriteByte('\n')
+		f.formatMetadata(p.Metadata, buf)
+		return
+	}
 	f.formatDatedLine(p, f.priceLine(p), buf)
+}
+
+// padRight and padLeft pad s with spaces to width characters, counting code
+// points like Python's str.format; a longer s is left as is.
+func padRight(s string, width int) string {
+	return s + strings.Repeat(" ", max(width-utf8.RuneCountInString(s), 0))
+}
+
+func padLeft(s string, width int) string {
+	return strings.Repeat(" ", max(width-utf8.RuneCountInString(s), 0)) + s
 }
 
 // priceLine lays out a price's line.

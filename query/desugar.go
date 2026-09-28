@@ -122,7 +122,7 @@ func ExecutePrint(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		entries = applyFromTransforms(qctx, entries, compiled.From)
 	}
 
-	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithIndentation(2), formatter.WithPreserveComments(false))
+	f := formatter.New(formatter.WithParsedNumbers(), formatter.WithPrinterLayout(), formatter.WithIndentation(2), formatter.WithPreserveComments(false))
 	differences := balanceDifferences(qctx)
 	var previous ast.DirectiveKind
 	first := true

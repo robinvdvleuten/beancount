@@ -3,6 +3,7 @@ package formatter
 import (
 	"bytes"
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -116,4 +117,19 @@ func TestFormatWithParsedNumbers(t *testing.T) {
 	var spelled bytes.Buffer
 	assert.NoError(t, New().Format(context.Background(), tree, nil, &spelled))
 	assert.Contains(t, spelled.String(), "+1,000.50 USD @ 1,100 EUR")
+}
+
+func TestFormatWithPrinterLayout(t *testing.T) {
+	// Like beancount's printer: an open pads its account to 47 characters,
+	// a price pads its commodity to 22 and right-aligns its amount in 22.
+	source := "2020-01-01 open Assets:Bank USD,CAD \"FIFO\"\n" +
+		"2020-01-01 open Assets:Plain\n" +
+		"2020-01-02 price HOOL 13.00 USD\n"
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+
+	var out bytes.Buffer
+	assert.NoError(t, New(WithPrinterLayout()).Format(context.Background(), tree, nil, &out))
+	assert.Equal(t, "2020-01-01 open Assets:Bank"+strings.Repeat(" ", 36)+" USD,CAD \"FIFO\"\n"+
+		"2020-01-01 open Assets:Plain\n"+
+		"2020-01-02 price HOOL"+strings.Repeat(" ", 18)+" "+strings.Repeat(" ", 13)+"13.00 USD\n", out.String())
 }

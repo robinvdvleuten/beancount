@@ -19,13 +19,13 @@ interpolates the missing part of a compound cost (`{# 5 USD}`, `{5 # USD}`;
 that states only its currency (`{USD}`, `{{USD}}`) matches v2
 (`cost_currency_only*` fixtures).
 
-For BQL, `query/gap_print_*.bql` diverge from `bean-query` in whitespace
-only: bean-query prints price and balance directives in fixed columns
-(`price` pads the commodity to 22 characters and right-aligns the amount in
-22; `balance` pads the account to 47), with numbers at its display
-context's precision. Our PRINT renders them through the formatter's
-layout, like any other directive. The content is equivalent beancount text
-that round-trips through `bean-check`.
+For BQL, `query/gap_print_balance*.bql` diverge from `bean-query` in
+whitespace only: bean-query prints balance directives in fixed columns
+(the account padded to 47 characters). Our PRINT renders them through the
+formatter's layout, like bean-format. The content is equivalent beancount
+text that round-trips through `bean-check`. Open and price lines already
+use the printer's columns (`formatter.WithPrinterLayout`,
+`query/print_open_price_columns.bql`).
 
 `query/gap_integer_division.bql` diverges on integer division: bean-query
 divides two integer literals with Python's true division, so `SELECT 1 / 3`

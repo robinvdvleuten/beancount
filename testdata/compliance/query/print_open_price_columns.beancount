@@ -1,0 +1,26 @@
+; bean-query prints open and price lines in its printer's fixed columns:
+; an open pads its account to 47 characters before the comma-joined
+; currencies and booking method (a longer account overflows), and a price
+; pads its commodity to 22 and right-aligns its amount in 22, keeping each
+; number's own precision.
+option "operating_currency" "USD"
+2019-01-01 open Assets:Bank USD
+2019-01-01 open Assets:Multi USD,CAD,EUR
+2019-01-01 open Assets:Stock "FIFO"
+2019-01-01 open Assets:Brokerage HOOL,USD "LIFO"
+2019-01-01 open Assets:A:Very:Long:Account:Name:That:Exceeds:Forty:Seven USD
+2019-01-01 open Assets:Meta USD
+  note: "hello"
+2019-01-01 open Assets:Plain
+2019-01-01 open Equity:Opening
+2019-02-01 * "x"
+  Assets:Bank   1000.00 USD
+  Assets:Multi  1.2345 USD
+  Equity:Opening
+2019-12-31 price HOOL 13.00 USD
+2019-12-31 price HOOL 13 USD
+2019-12-31 price VERYLONGCOMMODITYNAMEXYZ 1.5 EUR
+2019-12-31 price HOOL 123456789012345678901234.00 USD
+2019-12-31 price CAD 0.75 USD
+  source: "boc"
+2019-12-31 price EUR 1.1 CAD
