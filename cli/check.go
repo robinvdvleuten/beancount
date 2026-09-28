@@ -92,12 +92,13 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
 		printInfof(stderr, "%s", warning)
 	}
+	renderer := NewErrorRenderer(sourceContent)
 	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
 	for _, loadErr := range loadErrors {
 		// A syntax error in the main file is shown in its source context,
 		// like a failed load.
 		if syntaxErr, ok := loadErr.(*parser.ParseError); ok && syntaxErr.Pos.Filename == mainFile {
-			_, _ = fmt.Fprintln(stderr, NewErrorRenderer(sourceContent).Render(syntaxErr))
+			_, _ = fmt.Fprintln(stderr, renderer.Render(syntaxErr))
 			continue
 		}
 		// A positioned error already starts with "path:line:", which editors
@@ -114,7 +115,6 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 		if !stdErrors.As(err, &validationErrors) {
 			return 0, err
 		}
-		renderer := NewErrorRenderer(sourceContent)
 		_, _ = fmt.Fprintln(stderr, renderer.RenderAll(validationErrors.Errors))
 
 		_, _ = fmt.Fprintln(stderr)

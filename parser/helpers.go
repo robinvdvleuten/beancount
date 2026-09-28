@@ -894,41 +894,19 @@ func (p *Parser) errorAtEndOfPrevious(format string, args ...any) error {
 // calculateSourceRange determines the byte range in source that contains context lines around the error position.
 // This includes 2 lines before and 1 line after the error line for context display.
 func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
+	if p.lineStarts == nil {
+		p.lineStarts = lineStarts(p.source)
+	}
+
 	// pos.Line is 1-based
-	wantStart := pos.Line - 2 // show 2 lines before (1-based)
-	if wantStart < 1 {
-		wantStart = 1
-	}
-	wantEnd := pos.Line + 1 // show 1 line after (1-based, inclusive)
+	wantStart := min(max(pos.Line-2, 1), len(p.lineStarts)) // show 2 lines before
+	wantEnd := pos.Line + 1                                 // show 1 line after (inclusive)
 
-	// Single pass through source bytes to find line boundaries
-	// This avoids string(p.source) conversion and strings.Split allocation
-	currentLine := 1
-	startOffset := 0
+	startOffset := p.lineStarts[wantStart-1]
 	endOffset := len(p.source)
-	foundStart := wantStart == 1
-
-	for i := 0; i < len(p.source); i++ {
-		b := p.source[i]
-		if b == '\n' || b == '\r' {
-			if b == '\r' && i+1 < len(p.source) && p.source[i+1] == '\n' {
-				i++
-			}
-			currentLine++
-			if !foundStart && currentLine == wantStart {
-				startOffset = i + 1
-				foundStart = true
-			}
-			if currentLine > wantEnd {
-				endOffset = i
-				break
-			}
-		}
-	}
-
-	// Ensure we don't exceed source bounds
-	if endOffset > len(p.source) {
-		endOffset = len(p.source)
+	if wantEnd < len(p.lineStarts) {
+		// The last byte of the line break ending line wantEnd.
+		endOffset = p.lineStarts[wantEnd] - 1
 	}
 
 	return SourceRange{
@@ -936,4 +914,22 @@ func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
 		EndOffset:   endOffset,
 		Source:      p.source[startOffset:endOffset],
 	}
+}
+
+// lineStarts returns the byte offset where each line of source starts,
+// breaking lines on \r\n, \r, or \n like the lexer.
+func lineStarts(source []byte) []int {
+	starts := []int{0}
+	for i := 0; i < len(source); i++ {
+		switch source[i] {
+		case '\r':
+			if i+1 < len(source) && source[i+1] == '\n' {
+				i++
+			}
+			starts = append(starts, i+1)
+		case '\n':
+			starts = append(starts, i+1)
+		}
+	}
+	return starts
 }

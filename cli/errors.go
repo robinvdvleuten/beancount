@@ -21,6 +21,7 @@ var (
 // ErrorRenderer renders errors with terminal styling and source context.
 type ErrorRenderer struct {
 	source []byte
+	lines  []string // source split into lines, on first use
 }
 
 // NewErrorRenderer creates a renderer with source content for context.
@@ -38,12 +39,11 @@ func (r *ErrorRenderer) Render(err error) string {
 	}
 
 	if e, ok := err.(*parser.ParseError); ok {
-		source := r.source
-		if source == nil {
-			source = e.SourceRange.Source
+		if r.source != nil {
+			return r.renderWithSourceContext(e.Pos, e.Error(), r.sourceLines())
 		}
-		if source != nil {
-			return r.renderWithSourceContext(e.Pos, e.Error(), source)
+		if e.SourceRange.Source != nil {
+			return r.renderWithSourceContext(e.Pos, e.Error(), ast.SplitSourceLines(string(e.SourceRange.Source)))
 		}
 	}
 
@@ -52,7 +52,7 @@ func (r *ErrorRenderer) Render(err error) string {
 		Error() string
 	}); ok {
 		if r.source != nil {
-			return r.renderWithSourceContext(e.GetPosition(), e.Error(), r.source)
+			return r.renderWithSourceContext(e.GetPosition(), e.Error(), r.sourceLines())
 		}
 	}
 
@@ -77,13 +77,20 @@ func (r *ErrorRenderer) RenderAll(errs []error) string {
 	return buf.String()
 }
 
-func (r *ErrorRenderer) renderWithSourceContext(pos ast.Position, message string, sourceContent []byte) string {
+// sourceLines splits the source into lines once, so rendering many errors
+// stays linear in the source size.
+func (r *ErrorRenderer) sourceLines() []string {
+	if r.lines == nil {
+		r.lines = ast.SplitSourceLines(string(r.source))
+	}
+	return r.lines
+}
+
+func (r *ErrorRenderer) renderWithSourceContext(pos ast.Position, message string, sourceLines []string) string {
 	var buf strings.Builder
 
 	buf.WriteString(errorStyle.Render(message))
 	buf.WriteString("\n\n")
-
-	sourceLines := ast.SplitSourceLines(string(sourceContent))
 
 	startLine := pos.Line - 3
 	endLine := pos.Line + 1

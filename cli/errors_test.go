@@ -95,7 +95,7 @@ func TestErrorRenderer_RenderWithSourceContext(t *testing.T) {
 	}
 
 	renderer := NewErrorRenderer([]byte(sourceContent))
-	output := renderer.renderWithSourceContext(pos, "test error message", []byte(sourceContent))
+	output := renderer.renderWithSourceContext(pos, "test error message", ast.SplitSourceLines(sourceContent))
 
 	// Verify error message is included
 	assert.Contains(t, output, "test error message")
@@ -182,7 +182,7 @@ func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {
 	}
 
 	renderer := NewErrorRenderer([]byte(sourceContent))
-	output := renderer.renderWithSourceContext(pos, "error", []byte(sourceContent))
+	output := renderer.renderWithSourceContext(pos, "error", ast.SplitSourceLines(sourceContent))
 
 	// Should not panic and should include source lines
 	assert.Contains(t, output, "2024-01-15")

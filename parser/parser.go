@@ -25,6 +25,8 @@ type Parser struct {
 	filename string    // Filename for error reporting
 	interner *Interner // String interning pool
 	errs     ParseErrors
+
+	lineStarts []int // Byte offset of each line's start, built on the first error
 }
 
 // NewParser creates a new parser with the given source and tokens.
