@@ -39,6 +39,9 @@ func (c *compiler) compileFrom(from *bql.From) (*compiledFrom, error) {
 		}
 		compiled.Expr = expr
 	}
+	if from.OpenOn != nil && from.CloseOn != nil && from.OpenOn.After(from.CloseOn.Time) {
+		return nil, compileErrorf(from, "Invalid dates: CLOSE date must follow OPEN date.")
+	}
 	return compiled, nil
 }
 
