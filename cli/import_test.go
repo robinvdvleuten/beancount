@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -45,7 +46,8 @@ func runImport(t *testing.T, importerPath, ledger, statement string, flags ...st
 func runImportFiles(t *testing.T, importerPath, ledgerPath, statementPath string, flags ...string) (string, string, int) {
 	t.Helper()
 	var cmds Commands
-	var stdout, stderr bytes.Buffer
+	var stdout bytes.Buffer
+	var stderr syncBuffer
 	parser, err := kong.New(&cmds, kong.Writers(&stdout, &stderr), kong.Bind(&cmds.Globals))
 	assert.NoError(t, err)
 	args := append([]string{"import", "--with", importerPath}, flags...)
@@ -59,6 +61,25 @@ func runImportFiles(t *testing.T, importerPath, ledgerPath, statementPath string
 		code = cmdErr.ExitCode()
 	}
 	return stdout.String(), stderr.String(), code
+}
+
+// syncBuffer collects import's stderr, which go-plugin writes the
+// Importer's output to from its own goroutines.
+type syncBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *syncBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *syncBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
 }
 
 func TestImportCmd(t *testing.T) {

@@ -62,7 +62,8 @@ type Client struct {
 var _ Importer = (*Client)(nil)
 
 // Open starts the Importer binary at path and completes the handshake. The
-// Importer's own output goes to stderr. Close the Client when done.
+// Importer's own output goes to stderr, written from other goroutines, so
+// stderr must be safe for concurrent use. Close the Client when done.
 func Open(ctx context.Context, path string, stderr io.Writer) (*Client, error) {
 	timer := telemetry.FromContext(ctx).Start("importer.open " + filepath.Base(path))
 	defer timer.End()
