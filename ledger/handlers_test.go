@@ -121,7 +121,7 @@ func TestTransactionHandler(t *testing.T) {
 	// Book, then process the transaction
 	txnHandler := &TransactionHandler{}
 	txnDirective := tree.Directives[2]
-	ledger.booker = newBooker(ledger.config, tree.Directives)
+	ledger.booker = newBooker(ledger.config, ledger.tolerances, tree.Directives)
 	assert.True(t, ledger.bookTransaction(txnDirective.(*ast.Transaction)))
 	errs, delta := txnHandler.Validate(ctx, ledger, txnDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
@@ -167,7 +167,7 @@ func TestBalanceHandler(t *testing.T) {
 	assert.NotZero(t, delta, "delta should not be nil")
 
 	// The padding is booked and applied with the assertion.
-	ledger.booker = newBooker(ledger.config, tree.Directives)
+	ledger.booker = newBooker(ledger.config, ledger.tolerances, tree.Directives)
 	balanceHandler.Apply(ctx, ledger, balanceDirective, delta)
 	checking, _ := ledger.GetAccount("Assets:Checking")
 	assert.Equal(t, "1000", checking.Inventory.Get("USD").String())

@@ -5,7 +5,6 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/shopspring/decimal"
 )
 
 func TestClassifyPostings(t *testing.T) {
@@ -116,56 +115,4 @@ func BenchmarkClassifyPostings(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		classifyPostings(postings)
 	}
-}
-
-func TestRoundInterpolated(t *testing.T) {
-	// Expected values follow beancount's quantize_with_tolerance, computed
-	// with Python decimal for a transaction stating 10.00 USD: the step is
-	// twice the tolerance, and a step of five or more significant digits
-	// leaves the number unrounded.
-	stated := map[string][]decimal.Decimal{"USD": {decimal.RequireFromString("10.00")}}
-	number := decimal.RequireFromString("-6.666666666")
-	for multiplier, want := range map[string]string{
-		"0.5":     "-6.67",
-		"1.1":     "-6.667",
-		"0.3333":  "-6.666667",
-		"0.33333": "-6.666666666",
-	} {
-		b := newBooker(NewConfig(), nil)
-		b.config.Tolerance.Multiplier = decimal.RequireFromString(multiplier)
-		assert.Equal(t, want, formatInferredNumber(roundInterpolated(number, b.transactionTolerance("USD", stated["USD"], nil))), multiplier)
-	}
-
-	// Without a stated amount or default there is nothing to round to; a
-	// configured default gives a step even for whole-number transactions.
-	b := newBooker(NewConfig(), nil)
-	assert.Equal(t, "-6.666666666", formatInferredNumber(roundInterpolated(number, b.transactionTolerance("EUR", stated["EUR"], nil))))
-	b.config.Tolerance.Defaults["EUR"] = decimal.RequireFromString("0.005")
-	assert.Equal(t, "-6.67", formatInferredNumber(roundInterpolated(number, b.transactionTolerance("EUR", stated["EUR"], nil))))
-}
-
-func TestCostTolerances(t *testing.T) {
-	// Beancount's infer_tolerances docstring example: two postings of
-	// 18.572 units at 30.96 USD each add 0.0005 x 30.96 = 0.01548 to USD.
-	d := decimal.RequireFromString
-	shares := []toleranceShare{
-		{units: d("18.572"), hasCost: true, costNumbers: []decimal.Decimal{d("30.96")}, costCurrency: "USD"},
-		{units: d("18.572"), hasCost: true, costNumbers: []decimal.Decimal{d("30.96")}, costCurrency: "USD"},
-		{units: d("1.5"), hasCost: true, costNumbers: []decimal.Decimal{d("1000.00")}, costCurrency: "EUR"},
-		{units: d("2.25"), price: &priceAmount{number: d("4"), currency: "GBP"}},
-		{units: d("10"), hasCost: true, costNumbers: []decimal.Decimal{d("99")}, costCurrency: "CHF"},
-		{units: d("1.5"), hasCost: true, costCurrency: "JPY"},
-	}
-
-	b := newBooker(NewConfig(), nil)
-	assert.Zero(t, b.costTolerances(shares), "off unless infer_tolerance_from_cost is set")
-
-	b.config.Tolerance.InferFromCost = true
-	got := b.costTolerances(shares)
-	assert.Equal(t, "0.03096", got["USD"].String())
-	assert.Equal(t, "0.5", got["EUR"].String(), "one posting adds at most 0.5")
-	assert.Equal(t, "0.02", got["GBP"].String(), "prices widen their price currency")
-	_, ok := got["CHF"]
-	assert.False(t, ok, "whole-number units add nothing")
-	assert.Equal(t, "0.5", got["JPY"].String(), "a cost without numbers adds the cap")
 }

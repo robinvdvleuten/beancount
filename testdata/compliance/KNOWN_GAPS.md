@@ -41,6 +41,22 @@ the same date, we return 20 and bean-query 21.
 price currencies must match: EUR != USD` for `10 BOND {95 EUR} @@ 1100 USD`;
 we report nothing.
 
+**Tolerances of the residual check**: bean-check's balance check
+(`ops/validation.py`) infers tolerances without the postings Booking
+interpolated (`AUTOMATIC_META`), and we count them. So a posting with an
+interpolated price or cost still widens its units currency for us:
+`-10.5 EUR @ USD` beside `1.04 EUR` and `-1 EUR` leaves 0.04 EUR, which
+bean-check reports (tolerance 0.005) and we accept (0.05). Two more
+differences are in `ledger/tolerance.go`:
+- Under `infer_tolerance_from_cost`, v2 lets a currency's cost tolerance
+  replace the `*` default, even a larger one: with `*:0.1`,
+  `1.001 HOOL {1 USD}` and `-1 GOOG {1.011 USD}` leave -0.010 USD, beyond
+  the 0.0005 USD the cost allows. bean-check reports it; we tolerate it up
+  to 0.1.
+- With only integers written, v2 has no tolerance at all, so it reports
+  the 1E-27 USD an interpolated price such as `-3 EUR @ USD` against
+  `10 USD` leaves behind. We report nothing.
+
 For BQL, `query/gap_integer_division.bql` diverges on integer division:
 bean-query divides two integer literals with Python's true division, so
 `SELECT 1 / 3` is a float and prints its exact binary value

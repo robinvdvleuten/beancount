@@ -107,7 +107,7 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 
 		// A failed assertion is reported and its padding still applies.
 		var err error
-		delta, err = v.calculateBalanceDelta(balance, padEntry)
+		delta, err = v.calculateBalanceDelta(balance, padEntry, l.tolerances)
 		if err != nil {
 			errs = append(errs, err)
 		}

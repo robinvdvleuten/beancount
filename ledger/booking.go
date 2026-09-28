@@ -21,10 +21,10 @@ import (
 // own inventory per account, independent of open directives, and drops a
 // group it cannot book while booking the transaction's other groups.
 
-// booker books transactions in date order. Its configuration sets the
-// tolerances balancing checks against.
+// booker books transactions in date order, balancing each within its
+// tolerances.
 type booker struct {
-	config      *Config
+	tolerances  tolerances
 	inventories map[string]*Inventory
 	methods     map[string]BookingMethod
 	fallback    BookingMethod
@@ -47,9 +47,9 @@ type bookedPosting struct {
 // newBooker takes each account's booking method from its open directive,
 // wherever it is dated, and the configured method otherwise, as beancount
 // does.
-func newBooker(cfg *Config, directives []ast.Directive) *booker {
+func newBooker(cfg *Config, tolerances tolerances, directives []ast.Directive) *booker {
 	b := &booker{
-		config:      cfg,
+		tolerances:  tolerances,
 		inventories: make(map[string]*Inventory),
 		methods:     make(map[string]BookingMethod),
 		fallback:    BookingMethod(cfg.BookingMethod),
@@ -84,7 +84,7 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 	timer := telemetry.FromContext(ctx).Start("ledger.booking")
 	defer timer.End()
 
-	l.booker = newBooker(l.config, tree.Directives)
+	l.booker = newBooker(l.config, l.tolerances, tree.Directives)
 	kept := tree.Directives[:0]
 	for _, directive := range tree.Directives {
 		select {
@@ -682,16 +682,14 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 	// is booked once per currency with a non-zero residual, in the order the
 	// currencies first appear.
 	// Like beancount, tolerances come from the whole transaction.
-	withAmounts := classifyPostings(txn.Postings).withAmounts
-	stated := statedUnits(withAmounts)
-	specCostTolerances := b.costTolerances(specToleranceShares(withAmounts))
+	specTolerances := b.tolerances.spec(classifyPostings(txn.Postings).withAmounts)
 	var autoPosting *ast.Posting
 	var autoAmounts []*ast.Amount
 	if len(pc.withoutAmounts) == 1 {
 		autoPosting = pc.withoutAmounts[0]
 
 		for _, currency := range residualCurrencies(allWeights, balance) {
-			needed := roundInterpolated(balance[currency].Neg(), b.transactionTolerance(currency, stated[currency], specCostTolerances))
+			needed := specTolerances.round(currency, balance[currency].Neg())
 			autoAmounts = append(autoAmounts, &ast.Amount{
 				Value:    formatInferredNumber(needed),
 				Currency: currency,
@@ -724,7 +722,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 		if weightCurrency != currency {
 			needed = pydecimal.Quo(pydecimal.Sub(weight, total), perUnit)
 		}
-		needed = roundInterpolated(needed, b.transactionTolerance(currency, stated[currency], specCostTolerances))
+		needed = specTolerances.round(currency, needed)
 		delta.InferredAmounts[posting] = &ast.Amount{
 			Value:    formatInferredNumber(needed),
 			Currency: currency,
@@ -828,30 +826,13 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 		}
 	}
 
-	// Check if balanced (within tolerance) after inference
-	amountsByCurrency := make(map[string][]decimal.Decimal)
-
-	// Collect all amounts (explicit and inferred) for tolerance calculation
-	for _, posting := range txn.Postings {
-		if amountValue := delta.amountFor(posting); amountValue != nil {
-			amount, err := ParseAmount(amountValue)
-			if err != nil {
-				continue
-			}
-			currency := amountValue.Currency
-			amountsByCurrency[currency] = append(amountsByCurrency[currency], amount)
-		}
-	}
-
-	// Check each currency balance with inferred tolerance. Costs count as
-	// booked: per unit, with inferred cost numbers resolved.
-	bookedCostTolerances := b.costTolerances(bookedToleranceShares(txn.Postings, delta, reducedPositions))
+	// Check if balanced after inference, within the tolerances of the
+	// booked postings: interpolated amounts count, and costs count per
+	// unit, with inferred cost numbers resolved.
+	bookedTolerances := b.tolerances.booked(txn.Postings, delta, reducedPositions)
 	residuals := make(map[string]decimal.Decimal)
 	for currency, residual := range balance {
-		tolerance := b.transactionTolerance(currency, amountsByCurrency[currency], bookedCostTolerances)
-
-		// Always check residuals against tolerance (even with inferred amounts)
-		if residual.Abs().GreaterThan(tolerance) {
+		if residual.Abs().GreaterThan(bookedTolerances.of(currency)) {
 			residuals[currency] = residual
 		}
 	}

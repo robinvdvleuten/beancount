@@ -11,6 +11,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/shopspring/decimal"
 )
 
 // newTestValidator is a helper for tests that need a validator with default config.
@@ -21,7 +22,7 @@ func newTestValidator(accounts map[string]*Account) *validator {
 // bookAndValidate books txn against empty inventories and validates the
 // result against the accounts, as Process does.
 func bookAndValidate(accounts map[string]*Account, txn *ast.Transaction) ([]error, *bookedTransaction) {
-	booked, errs := newBooker(NewConfig(), nil).book(txn)
+	booked, errs := newBooker(NewConfig(), newTolerances(nil), nil).book(txn)
 	if len(errs) > 0 {
 		return errs, nil
 	}
@@ -968,101 +969,49 @@ func TestPadTiming(t *testing.T) {
 	}
 }
 
-// TestBalanceTolerance tests balance assertion tolerance handling.
-// Beancount infers balance tolerance from the asserted amount's precision.
+// TestBalanceTolerance checks a balance assertion against its account's
+// balance within the assertion's tolerance: twice the multiplier on the
+// asserted number's last digit, or the tolerance it states after ~.
 func TestBalanceTolerance(t *testing.T) {
 	tests := []struct {
-		name    string
-		input   string
-		wantErr bool
+		name      string
+		asserted  string
+		tolerance string // stated after ~
+		actual    string
+		wantErr   bool
 	}{
-		{
-			name: "balance matches exactly",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
+		{name: "balance matches exactly", asserted: "100.00", actual: "100.00"},
+		{name: "balance within inferred tolerance", asserted: "100.00", actual: "100.004"},
+		{name: "integer precision balance is exact", asserted: "100", actual: "100.4", wantErr: true},
+		{name: "a difference of the doubled tolerance passes", asserted: "100.00", actual: "100.01"},
+		{name: "balance exceeds tolerance", asserted: "100.00", actual: "100.02", wantErr: true},
+		{name: "balance uses local tolerance override", asserted: "100.00", tolerance: "0.02", actual: "100.01"},
+		{name: "local tolerance override can be exceeded", asserted: "100.00", tolerance: "0.002", actual: "100.004", wantErr: true},
+		{name: "balance assertion of exactly 0", asserted: "0", actual: "0"},
+		{name: "negative balance within tolerance", asserted: "-50.00", actual: "-50.003"},
+	}
 
-2020-01-02 * "Deposit"
-  Assets:Checking    100.00 USD
-  Equity:Opening    -100.00 USD
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			account := &Account{Name: "Assets:Checking", Inventory: NewInventory()}
+			account.Inventory.AddLot("USD", decimal.RequireFromString(tt.actual), nil)
+			balance := ast.NewBalance(nil, account.Name, ast.NewAmount(tt.asserted, "USD"))
+			if tt.tolerance != "" {
+				balance.Tolerance = ast.NewAmount(tt.tolerance, "USD")
+			}
 
-2020-01-03 balance Assets:Checking 100.00 USD
-`,
-			wantErr: false,
-		},
-		{
-			name: "balance within inferred tolerance (0.005)",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
+			v := newTestValidator(map[string]*Account{string(account.Name): account})
+			_, err := v.calculateBalanceDelta(balance, nil, newTolerances(nil))
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
 
-2020-01-02 * "Deposit"
-  Assets:Checking    100.004 USD
-  Equity:Opening    -100.004 USD
-
-2020-01-03 balance Assets:Checking 100.00 USD
-`,
-			wantErr: false,
-		},
-		{
-			name: "integer precision balance is exact",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
-
-2020-01-02 * "Deposit"
-  Assets:Checking    100.4 USD
-  Equity:Opening    -100.4 USD
-
-2020-01-03 balance Assets:Checking 100 USD
-`,
-			wantErr: true,
-		},
-		{
-			name: "balance within doubled inferred tolerance - passes",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
-
-2020-01-02 * "Deposit"
-  Assets:Checking    100.01 USD
-  Equity:Opening    -100.01 USD
-
-2020-01-03 balance Assets:Checking 100.00 USD
-`,
-			wantErr: false, // tolerance = 0.01 * 0.5 * 2 = 0.01; diff of 0.01 is not greater
-		},
-		{
-			name: "balance exceeds tolerance - should error",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
-
-2020-01-02 * "Deposit"
-  Assets:Checking    100.02 USD
-  Equity:Opening    -100.02 USD
-
-2020-01-03 balance Assets:Checking 100.00 USD
-`,
-			wantErr: true, // diff of 0.02 exceeds the 0.01 tolerance
-		},
-		{
-			name: "balance uses local tolerance override",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
-
-2020-01-02 * "Deposit"
-  Assets:Checking    100.01 USD
-  Equity:Opening    -100.01 USD
-
-2020-01-03 balance Assets:Checking 100.00 ~ 0.02 USD
-`,
-			wantErr: false,
-		},
-		{
-			name: "tolerance applied after padding",
-			input: `
+	t.Run("tolerance applied after padding", func(t *testing.T) {
+		tree := parser.MustParseString(context.Background(), `
 2020-01-01 open Assets:Checking USD
 2020-01-01 open Equity:Opening
 
@@ -1072,57 +1021,9 @@ func TestBalanceTolerance(t *testing.T) {
 
 2020-01-03 pad Assets:Checking Equity:Opening
 2020-01-04 balance Assets:Checking 100.00 USD
-`,
-			wantErr: false,
-		},
-		{
-			name: "balance assertion of exactly 0 (empty account)",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
-
-2020-01-02 * "Deposit and withdraw"
-  Assets:Checking    100 USD
-  Equity:Opening    -100 USD
-
-2020-01-03 * "Withdraw all"
-  Assets:Checking   -100 USD
-  Equity:Opening     100 USD
-
-2020-01-04 balance Assets:Checking 0 USD
-`,
-			wantErr: false,
-		},
-		{
-			name: "negative balance within tolerance",
-			input: `
-2020-01-01 open Assets:Checking USD
-2020-01-01 open Equity:Opening
-
-2020-01-02 * "Overdraft"
-  Assets:Checking    -50.003 USD
-  Equity:Opening      50.003 USD
-
-2020-01-03 balance Assets:Checking -50.00 USD
-`,
-			wantErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			ast := parser.MustParseString(context.Background(), tt.input)
-
-			l := New()
-			err := l.Process(context.Background(), ast)
-
-			if tt.wantErr {
-				assert.Error(t, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+`)
+		assert.NoError(t, New().Process(context.Background(), tree))
+	})
 }
 
 // TestConstraintCurrencyEnforcement tests that currency constraints are enforced

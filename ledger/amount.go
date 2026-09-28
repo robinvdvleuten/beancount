@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
@@ -41,56 +40,6 @@ func MustParseAmount(amount *ast.Amount) decimal.Decimal {
 // display as -4.5, diverging from official beancount).
 func formatInferredNumber(d decimal.Decimal) string {
 	return d.StringFixed(max(-d.Exponent(), 0))
-}
-
-// ToleranceConfig aliases the shared tolerance configuration.
-type ToleranceConfig = sharedconfig.Tolerance
-
-// NewToleranceConfig creates a default tolerance configuration
-// Default: no configured default tolerances, 0.5 multiplier
-func NewToleranceConfig() *ToleranceConfig {
-	return sharedconfig.NewTolerance()
-}
-
-// InferTolerance calculates tolerance from amount precision.
-// Algorithm (matching beancount's interpolate.infer_tolerances):
-//  1. For each amount with fractional precision (negative exponent, zero
-//     amounts included), compute 10^exp * multiplier.
-//  2. Use the maximum of those tolerances (the coarsest precision wins),
-//     also taking the currency-specific configured default into account.
-//  3. If no amount has fractional precision, fall back to the default
-//     tolerance for the currency.
-func InferTolerance(amounts []decimal.Decimal, currency string, config *ToleranceConfig) decimal.Decimal {
-	if config == nil {
-		config = NewToleranceConfig()
-	}
-
-	inferred := decimal.Zero
-	foundAny := false
-
-	for _, amount := range amounts {
-		exp := amount.Exponent()
-		if exp >= 0 {
-			continue // Integer precision does not contribute
-		}
-
-		tolerance := pydecimal.Mul(decimal.New(1, exp), config.Multiplier)
-		if !foundAny || tolerance.GreaterThan(inferred) {
-			inferred = tolerance
-			foundAny = true
-		}
-	}
-
-	if !foundAny {
-		return config.GetDefault(currency)
-	}
-
-	// The currency-specific configured default participates in the maximum.
-	if def, ok := config.Defaults[currency]; ok && def.GreaterThan(inferred) {
-		return def
-	}
-
-	return inferred
 }
 
 // AmountEqual checks if two amounts are equal within tolerance

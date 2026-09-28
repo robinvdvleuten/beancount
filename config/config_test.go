@@ -8,6 +8,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/shopspring/decimal"
 )
 
 func TestFromASTOptionValidation(t *testing.T) {
@@ -98,4 +99,66 @@ option "bogus_name" "x"
 		lines[i] = err.(interface{ GetPosition() ast.Position }).GetPosition().Line
 	}
 	assert.Equal(t, []int{3, 5, 6}, lines)
+}
+
+func TestToleranceGetDefault(t *testing.T) {
+	tests := []struct {
+		name     string
+		config   *Tolerance
+		currency string
+		want     string
+	}{
+		{
+			name:     "nil config - fallback",
+			config:   nil,
+			currency: "USD",
+			want:     "0",
+		},
+		{
+			name: "currency-specific default",
+			config: &Tolerance{
+				Defaults: map[string]decimal.Decimal{
+					"USD": decimal.NewFromFloat(0.003),
+					"EUR": decimal.NewFromFloat(0.002),
+					"*":   decimal.NewFromFloat(0.005),
+				},
+				Multiplier: decimal.NewFromFloat(0.5),
+			},
+			currency: "USD",
+			want:     "0.003",
+		},
+		{
+			name: "wildcard default",
+			config: &Tolerance{
+				Defaults: map[string]decimal.Decimal{
+					"USD": decimal.NewFromFloat(0.003),
+					"*":   decimal.NewFromFloat(0.005),
+				},
+				Multiplier: decimal.NewFromFloat(0.5),
+			},
+			currency: "CAD",
+			want:     "0.005",
+		},
+		{
+			name: "no wildcard - final fallback",
+			config: &Tolerance{
+				Defaults: map[string]decimal.Decimal{
+					"USD": decimal.NewFromFloat(0.003),
+				},
+				Multiplier: decimal.NewFromFloat(0.5),
+			},
+			currency: "EUR",
+			want:     "0",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tt.config.GetDefault(tt.currency)
+			want, err := decimal.NewFromString(tt.want)
+			assert.NoError(t, err, "failed to parse expected tolerance %q", tt.want)
+
+			assert.True(t, got.Equal(want), "GetDefault() mismatch: got %s, want %s", got, want)
+		})
+	}
 }

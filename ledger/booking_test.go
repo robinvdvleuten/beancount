@@ -159,7 +159,7 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 func bookAll(t *testing.T, source string) (*booker, map[string][]string, []error) {
 	t.Helper()
 	tree := parser.MustParseString(context.Background(), source)
-	b := newBooker(NewConfig(), tree.Directives)
+	b := newBooker(NewConfig(), newTolerances(nil), tree.Directives)
 	postings := make(map[string][]string)
 	var errs []error
 	for _, directive := range tree.Directives {
@@ -651,7 +651,7 @@ func TestCalculateBalance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			b := newBooker(NewConfig(), nil)
+			b := newBooker(NewConfig(), newTolerances(nil), nil)
 			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil)
 
 			assert.Equal(t, 0, len(errs))

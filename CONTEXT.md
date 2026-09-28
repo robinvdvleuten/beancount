@@ -64,6 +64,10 @@ _Avoid_: valid transaction, accepted transaction
 The units a booked posting of an Applied transaction adds to or takes from one lot of its account, with that lot's per-unit cost, cost date and label. A reduction has one per lot it is booked against; any other posting has one of its own. It reduced its lot when the account held that lot with the opposite sign; `implicit_prices` emits no price from the cost of such a position.
 _Avoid_: booked lot, lot change
 
+**Tolerance**:
+How far a transaction's weights in one currency may be from zero, or an account's balance from a Balance assertion, and still pass. It is inferred from the precision of the numbers written, from half the last digit by default, unless the options or the assertion set it.
+_Avoid_: precision, epsilon, rounding error
+
 **Error line**:
 The file and line an error blames, printed as `path:line:` at the start of the message so editors can jump to it.
 _Avoid_: position (a Beancount position is units held at a cost), location

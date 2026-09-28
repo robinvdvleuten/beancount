@@ -63,8 +63,11 @@ type Ledger struct {
 	graph    *Graph // Unified graph of accounts, currencies, and relationships
 	accounts map[string]*Account
 	config   *Config
-	errors   []error
-	pads     *pads
+	// The tolerances Booking and balance assertions check against, from
+	// the config's tolerance options
+	tolerances tolerances
+	errors     []error
+	pads       *pads
 	// Every balance assertion, passing or not, by account, currency and
 	// date, in directive order
 	balances map[balanceKey][]*ast.Balance
@@ -112,10 +115,12 @@ func (e *ValidationErrors) Unwrap() []error {
 
 // New creates a new empty ledger
 func New() *Ledger {
+	cfg := NewConfig()
 	return &Ledger{
 		graph:           NewGraph(),
 		accounts:        make(map[string]*Account),
-		config:          NewConfig(),
+		config:          cfg,
+		tolerances:      newTolerances(cfg.Tolerance),
 		errors:          make([]error, 0),
 		pads:            newPads(),
 		priceGraphs:     make(map[string]*Graph),
@@ -166,6 +171,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	cfg, optionErrs := configFromAST(tree)
 	l.errors = append(l.errors, optionErrs...)
 	l.config = cfg
+	l.tolerances = newTolerances(cfg.Tolerance)
 
 	// Process directives in semantic date order.
 	processTimer := collector.StartStructured(telemetry.TimerConfig{

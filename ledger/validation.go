@@ -553,13 +553,13 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 // A failed assertion returns both the delta and the error, since its
 // padding still applies, as in beancount, whose pad plugin inserts padding
 // before any assertion is checked.
-func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad) (*BalanceDelta, error) {
+func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad, tolerances tolerances) (*BalanceDelta, error) {
 	expectedAmount, _ := ParseAmount(balance.Amount)
 	currency := balance.Amount.Currency
 	accountName := string(balance.Account)
 	actualAmount := v.accounts[accountName].Inventory.Get(currency)
 
-	tolerance, err := v.balanceTolerance(balance)
+	tolerance, err := tolerances.balance(balance)
 	if err != nil {
 		return nil, err
 	}
@@ -584,24 +584,6 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 		return delta, NewBalanceMismatchError(balance, expectedAmount, actualAmount)
 	}
 	return delta, nil
-}
-
-func (v *validator) balanceTolerance(balance *ast.Balance) (decimal.Decimal, error) {
-	if balance.Tolerance == nil {
-		amount, err := ParseAmount(balance.Amount)
-		if err != nil {
-			return decimal.Zero, err
-		}
-		exp := amount.Exponent()
-		if exp >= 0 {
-			return decimal.Zero, nil
-		}
-		// Beancount allows twice the multiplier on balance and pad assertions,
-		// as user-provided balances may be rounded further off than the amounts
-		// within a single transaction (see beancount ops/balance.py).
-		return pydecimal.Mul(pydecimal.Mul(decimal.New(1, exp), v.config.Tolerance.Multiplier), decimal.NewFromInt(2)), nil
-	}
-	return ParseAmount(balance.Tolerance)
 }
 
 // validateBookedCosts reports booked cost postings with zero units or a
