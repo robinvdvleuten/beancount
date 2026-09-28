@@ -749,46 +749,34 @@ option "documents" "no-such-dir"
 	assert.True(t, errors.As(result.Diagnostics[0], &rootErr))
 }
 
-func TestLoadPluginsMerged(t *testing.T) {
+func TestLoadIgnoresIncludedPlugins(t *testing.T) {
 	tmpDir := t.TempDir()
 
-	// Create included file with plugin
-	includedFile := filepath.Join(tmpDir, "included.beancount")
-	err := os.WriteFile(includedFile, []byte(`
+	// Like beancount v2, only the top-level file's plugins run: an include's,
+	// at any depth, are dropped.
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "nested.beancount"), []byte(`
+plugin "beancount.plugins.implicit_prices"
+`), 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "included.beancount"), []byte(`
 plugin "beancount.plugins.auto_accounts"
+include "nested.beancount"
 
 2024-01-01 open Assets:Savings USD
-`), 0644)
-	assert.NoError(t, err)
-
-	// Create main file with different plugin
+`), 0o644))
 	mainFile := filepath.Join(tmpDir, "main.beancount")
-	err = os.WriteFile(mainFile, []byte(`
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`
 plugin "beancount.plugins.check_commodity"
 
 include "included.beancount"
 
 2024-01-02 open Assets:Checking USD
-`), 0644)
+`), 0o644))
+
+	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
 	assert.NoError(t, err)
 
-	// Load with following includes
-	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
-	assert.NoError(t, err)
-
-	// Both plugins should be present
-	assert.Equal(t, 2, len(result.AST.Plugins))
-
-	// Verify plugin names
-	pluginNames := make([]string, 2)
-	for i, plugin := range result.AST.Plugins {
-		pluginNames[i] = plugin.Name.Value
-	}
-
-	// Main file plugins come first
-	assert.Equal(t, "beancount.plugins.check_commodity", pluginNames[0])
-	assert.Equal(t, "beancount.plugins.auto_accounts", pluginNames[1])
+	assert.Equal(t, 1, len(result.AST.Plugins))
+	assert.Equal(t, "beancount.plugins.check_commodity", result.AST.Plugins[0].Name.Value)
 }
 
 func TestLoadBytes(t *testing.T) {

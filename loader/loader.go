@@ -599,14 +599,15 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 }
 
 // mergeASTs combines a main AST with multiple included ASTs.
-// The main AST's options take precedence over included files' options.
-// All directives are combined and sorted for ledger processing.
+// Like beancount v2, only the main AST's options and plugins count: an
+// included file's are dropped. All directives are combined and sorted for
+// ledger processing.
 func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 	result := &ast.AST{
 		Directives: make(ast.Directives, 0, len(main.Directives)),
 		Options:    main.Options,   // Main file options take precedence
 		Includes:   nil,            // All includes resolved, so clear this
-		Plugins:    main.Plugins,   // Start with main file plugins
+		Plugins:    main.Plugins,   // Included files' plugins do not run
 		Pushtags:   main.Pushtags,  // Start with main file pushtags
 		Poptags:    main.Poptags,   // Start with main file poptags
 		Pushmetas:  main.Pushmetas, // Start with main file pushmetas
@@ -619,9 +620,6 @@ func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 	// Add directives from all included files
 	for _, inc := range included {
 		result.Directives = append(result.Directives, inc.Directives...)
-
-		// Merge plugins (append, don't override)
-		result.Plugins = append(result.Plugins, inc.Plugins...)
 	}
 
 	_ = ast.SortDirectives(result)

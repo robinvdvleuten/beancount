@@ -1,0 +1,4 @@
+include "include_plugin/sub.beancount"
+2020-01-01 * "x"
+  Assets:Cash  10 USD
+  Income:Salary

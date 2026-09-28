@@ -250,22 +250,14 @@ func writeLedgerWithInclude(t *testing.T, mainSource, subSource string) (mainPat
 	return mainPath, subPath
 }
 
-func TestCheckShowsAnIncludedPluginErrorInItsOwnFile(t *testing.T) {
-	mainPath, subPath := writeLedgerWithInclude(t,
-		"option \"title\" \"Main\"\n\ninclude \"sub.beancount\"\n\n2020-01-01 open Assets:Cash\n",
-		"; sub\n\nplugin \"beancount.plugins.nope\"\n\n2020-01-01 open Assets:Bank\n")
+func TestCheckIgnoresAnIncludedPluginDirective(t *testing.T) {
+	// Like bean-check, an included file's plugin never runs, so an unknown
+	// one reports nothing.
+	mainPath, _ := writeLedgerWithInclude(t,
+		"include \"sub.beancount\"\n\n2020-01-01 open Assets:Cash\n",
+		"plugin \"beancount.plugins.nope\"\n\n2020-01-01 open Assets:Bank\n")
 
-	output := runOurCheck(t, mainPath)
-	assert.Contains(t, output, subPath+":3: Error importing \"beancount.plugins.nope\"\n\n"+
-		"   ; sub\n"+
-		"   \n"+
-		"   plugin \"beancount.plugins.nope\"\n"+
-		"   ^\n"+
-		"   \n"+
-		"   2020-01-01 open Assets:Bank\n")
-	assert.NotContains(t, output, "include \"sub.beancount\"")
-	assert.NotContains(t, output, "option \"title\"")
-	assert.Equal(t, []int{3}, errorLines(subPath, output))
+	assert.Equal(t, "", runOurCheck(t, mainPath))
 }
 
 func TestCheckShowsAMainFilePluginErrorInTheMainFile(t *testing.T) {
@@ -288,6 +280,23 @@ func TestCheckShowsAnIncludedSyntaxErrorWithoutContext(t *testing.T) {
 
 	output := runOurCheck(t, mainPath)
 	assert.Equal(t, subPath+":4:22: unexpected token IDENT \"USD\"\n", output)
+}
+
+func TestErrorRendererShowsAPositionedErrorInItsOwnFile(t *testing.T) {
+	renderer := NewErrorRenderer(map[string][]byte{
+		"main.beancount": []byte("option \"title\" \"Main\"\n\ninclude \"sub.beancount\"\n"),
+		"sub.beancount":  []byte("; sub\n\nplugin \"a\"\n\n2020-01-01 open Assets:Bank\n"),
+	})
+	err := positionedError{pos: ast.Position{Filename: "sub.beancount", Line: 3}, message: "sub.beancount:3: boom"}
+
+	output := renderer.Render(err)
+	assert.Contains(t, output, "sub.beancount:3: boom\n\n"+
+		"   ; sub\n"+
+		"   \n"+
+		"   plugin \"a\"\n"+
+		"   \n"+
+		"   2020-01-01 open Assets:Bank\n")
+	assert.NotContains(t, output, "option \"title\"")
 }
 
 func TestErrorRendererShowsNoContextForAFileItDoesNotHave(t *testing.T) {
