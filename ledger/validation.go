@@ -190,56 +190,45 @@ func newNotBalancedError(txn *ast.Transaction, residuals map[string]decimal.Deci
 	return NewTransactionNotBalancedError(txn, residualStrings)
 }
 
-// validateBalance checks if a balance directive is valid.
-//
-// It validates that:
-//   - The account exists and is open at the balance date
-//   - The balance amount is parseable as a decimal number
-//
-// Balance directives assert that an account has a specific balance at a given date.
-// This validator only checks the directive syntax and account state, not the actual
-// balance (which is checked during the mutation phase).
-//
-// Returns a slice of errors for validation failures.
-//
-// Example:
-//
-//	// Valid: 2024-01-15 balance Assets:Checking 100.00 USD
-//	v := newValidator(ledger.accounts)
-//	errs := v.validateBalance(balance)
-//	if len(errs) > 0 {
-//	    // Account doesn't exist or amount is invalid
-//	    for _, err := range errs {
-//	        fmt.Printf("Balance validation error: %v\n", err)
-//	    }
-//	}
+// validateBalance checks that a balance directive's date is in range and
+// its amount and tolerance parse; checkBalance checks the assertion itself.
 func (v *validator) validateBalance(balance *ast.Balance) []error {
-	var errs []error
-
-	// 0. Validate balance date is in valid range
 	if err := validateDateRange(balance.Date()); err != nil {
-		errs = append(errs, err)
-		return errs
+		return []error{err}
 	}
-
-	// 1. Validate account is active (assertions are allowed after close)
-	if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
-		errs = append(errs, v.accountNotOpenError(balance, balance.Account))
-		return errs
-	}
-
-	// 2. Validate amount is parseable
 	if _, err := ParseAmount(balance.Amount); err != nil {
-		errs = append(errs, NewInvalidAmountError(balance, balance.Account, balance.Amount.Value, err))
-		return errs
+		return []error{NewInvalidAmountError(balance, balance.Account, balance.Amount.Value, err)}
 	}
 	if balance.Tolerance != nil {
 		if _, err := ParseAmount(balance.Tolerance); err != nil {
-			errs = append(errs, NewInvalidAmountError(balance, balance.Account, balance.Tolerance.Value, err))
-			return errs
+			return []error{NewInvalidAmountError(balance, balance.Account, balance.Tolerance.Value, err)}
 		}
 	}
+	return nil
+}
 
+// checkBalance checks a balance assertion against the amount its account
+// holds, padding included. Like beancount, an assertion on an account the
+// ledger never opens is reported as not existing and not checked; on an
+// account outside its open interval it is reported and still checked,
+// against the postings made before the open too (assertions are allowed
+// after close).
+func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.Decimal) []error {
+	if !v.opened[string(balance.Account)] {
+		return []error{NewAccountDoesNotExistError(balance)}
+	}
+
+	var errs []error
+	if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
+		errs = append(errs, NewInactiveAccountError(balance, balance.Account))
+	}
+	if err := v.validateBalanceCurrency(balance); err != nil {
+		errs = append(errs, err)
+	}
+	expected, _ := ParseAmount(balance.Amount)
+	if !AmountEqual(expected, held, tolerance) {
+		errs = append(errs, NewBalanceMismatchError(balance, expected, held))
+	}
 	return errs
 }
 
@@ -247,8 +236,8 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 // account's constraint list does not allow. Like beancount, the assertion is
 // still checked.
 func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
-	account := v.accounts[string(balance.Account)]
-	if len(account.ConstraintCurrencies) == 0 || slices.Contains(account.ConstraintCurrencies, balance.Amount.Currency) {
+	account, ok := v.accounts[string(balance.Account)]
+	if !ok || len(account.ConstraintCurrencies) == 0 || slices.Contains(account.ConstraintCurrencies, balance.Amount.Currency) {
 		return nil
 	}
 	return NewBalanceCurrencyError(balance)
@@ -570,30 +559,22 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	return errs, delta
 }
 
-// calculateBalanceDelta checks a balance assertion against its account's
-// inventory. With a pad whose currency the assertion is the first to reach,
-// the account is padded to the asserted amount: the delta carries the
-// padding transaction, dated at the pad, and the assertion is checked as if
-// it were applied.
+// padBalance returns a balance assertion's delta and the amount its
+// account holds once padded, from the account's inventory. With a pad whose
+// currency the assertion is the first to reach, the account is padded to
+// the asserted amount: the delta carries the padding transaction, dated at
+// the pad.
 //
-// A failed assertion returns both the delta and the error, since its
-// padding still applies, as in beancount, whose pad plugin inserts padding
-// before any assertion is checked. Padding a currency the account holds at
-// cost is an error for each such lot, and the padding, without cost, still
-// applies, as in beancount's ops/pad.py.
-func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pad, tolerances tolerances) (*BalanceDelta, []error) {
+// The padding applies whatever checkBalance finds, as in beancount, whose
+// pad plugin inserts padding before any assertion is checked. Padding a
+// currency the account holds at cost is an error for each such lot, and
+// the padding, without cost, still applies, as in beancount's ops/pad.py.
+func (v *validator) padBalance(balance *ast.Balance, inventory *Inventory, padEntry *ast.Pad, tolerance decimal.Decimal) (*BalanceDelta, decimal.Decimal, []error) {
 	expectedAmount, _ := ParseAmount(balance.Amount)
 	currency := balance.Amount.Currency
-	accountName := string(balance.Account)
-	inventory := v.accounts[accountName].Inventory
 	actualAmount := inventory.Get(currency)
 
-	tolerance, err := tolerances.balance(balance)
-	if err != nil {
-		return nil, []error{err}
-	}
-
-	delta := &BalanceDelta{AccountName: accountName, Currency: currency}
+	delta := &BalanceDelta{AccountName: string(balance.Account), Currency: currency}
 	var errs []error
 	if padEntry != nil {
 		difference := pydecimal.Sub(expectedAmount, actualAmount)
@@ -613,11 +594,7 @@ func (v *validator) calculateBalanceDelta(balance *ast.Balance, padEntry *ast.Pa
 			}
 		}
 	}
-
-	if !AmountEqual(expectedAmount, actualAmount, tolerance) {
-		errs = append(errs, NewBalanceMismatchError(balance, expectedAmount, actualAmount))
-	}
-	return delta, errs
+	return delta, actualAmount, errs
 }
 
 // validateBookedCosts reports booked cost postings with zero units or a

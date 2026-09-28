@@ -143,6 +143,7 @@ func TestBalanceHandler(t *testing.T) {
 `
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
+	ledger.opened = map[string]bool{"Assets:Checking": true, "Equity:Opening-Balances": true}
 
 	// Open account
 	openHandler := &OpenHandler{}

@@ -91,24 +91,19 @@ type BalanceHandler struct{}
 
 func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	balance := d.(*ast.Balance)
-	cfg := l.config
-	v := newValidator(l.accounts, l.opened, cfg)
+	v := newValidator(l.accounts, l.opened, l.config)
 
 	var delta *BalanceDelta
 	errs := v.validateBalance(balance)
 	if len(errs) == 0 {
-		// A currency the account does not allow is reported next to the
-		// assertion's own result, which still counts.
-		if err := v.validateBalanceCurrency(balance); err != nil {
+		if tolerance, err := l.tolerances.balance(balance); err != nil {
 			errs = append(errs, err)
+		} else {
+			padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
+			padded, held, padErrs := v.padBalance(balance, l.inventory(balance.Account), padEntry, tolerance)
+			delta = padded
+			errs = append(padErrs, v.checkBalance(balance, held, tolerance)...)
 		}
-
-		padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
-
-		// A failed assertion is reported and its padding still applies.
-		var balanceErrs []error
-		delta, balanceErrs = v.calculateBalanceDelta(balance, padEntry, l.tolerances)
-		errs = append(errs, balanceErrs...)
 	}
 	if l.duplicateBalances[balance] {
 		errs = append(errs, NewDuplicateBalanceError(balance))
@@ -131,11 +126,9 @@ func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) (
 	pad := d.(*ast.Pad)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
-	errs := v.validatePad(pad)
-	if len(errs) > 0 {
-		return errs, nil
-	}
-	return nil, pad
+	// Like any directive, a pad on accounts outside their interval is
+	// reported and still pads.
+	return v.validatePad(pad), pad
 }
 
 func (h *PadHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {

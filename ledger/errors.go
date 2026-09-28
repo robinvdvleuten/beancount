@@ -132,6 +132,12 @@ func NewInactiveAccountError(d ast.Directive, account ast.Account) *Diagnostic {
 	return newError("AccountNotOpenError", d, account, "Invalid reference to inactive account '%s'", account)
 }
 
+// NewAccountDoesNotExistError creates an error for a balance assertion on an
+// account the ledger never opens, in beancount's words.
+func NewAccountDoesNotExistError(balance *ast.Balance) *Diagnostic {
+	return newError("AccountNotOpenError", balance, balance.Account, "Account '%s' does not exist: ", balance.Account)
+}
+
 // NewAccountAlreadyOpenError creates an error for opening an account that is
 // already open.
 func NewAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *Diagnostic {

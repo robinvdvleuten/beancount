@@ -1,0 +1,6 @@
+; A pad after its account closes is reported and still pads.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:E
+2020-01-05 close Assets:Cash
+2020-01-07 pad Assets:Cash Equity:E
+2020-01-08 balance Assets:Cash 10 USD

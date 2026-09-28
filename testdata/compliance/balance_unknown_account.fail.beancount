@@ -1,0 +1,3 @@
+; A balance on an account never opened does not exist, and is not checked.
+2020-01-01 open Equity:E
+2020-01-07 balance Assets:Never 0 USD

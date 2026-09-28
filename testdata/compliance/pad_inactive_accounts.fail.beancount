@@ -1,0 +1,7 @@
+; A pad on accounts outside their interval is reported and still pads:
+; its padding reports the same accounts on the pad's line, and the
+; balance passes.
+2020-02-01 open Assets:Cash
+2020-02-01 open Equity:E
+2020-01-19 pad Assets:Cash Equity:E
+2020-03-03 balance Assets:Cash 10 USD

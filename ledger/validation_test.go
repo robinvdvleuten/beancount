@@ -993,15 +993,18 @@ func TestBalanceTolerance(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			account := &Account{Name: "Assets:Checking", Inventory: NewInventory()}
+			date := newTestDate("2020-01-02")
+			account := &Account{Name: "Assets:Checking", OpenDate: date, Inventory: NewInventory()}
 			account.Inventory.AddLot("USD", decimal.RequireFromString(tt.actual), nil)
-			balance := ast.NewBalance(nil, account.Name, ast.NewAmount(tt.asserted, "USD"))
+			balance := ast.NewBalance(date, account.Name, ast.NewAmount(tt.asserted, "USD"))
 			if tt.tolerance != "" {
 				balance.Tolerance = ast.NewAmount(tt.tolerance, "USD")
 			}
 
-			v := newTestValidator(map[string]*Account{string(account.Name): account})
-			_, errs := v.calculateBalanceDelta(balance, nil, newTolerances(nil))
+			v := newValidator(map[string]*Account{string(account.Name): account}, map[string]bool{string(account.Name): true}, NewConfig())
+			tolerance, err := newTolerances(nil).balance(balance)
+			assert.NoError(t, err)
+			errs := v.checkBalance(balance, account.Inventory.Get("USD"), tolerance)
 			assert.Equal(t, tt.wantErr, len(errs) > 0, "errors: %v", errs)
 		})
 	}

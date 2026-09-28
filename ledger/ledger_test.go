@@ -1200,6 +1200,84 @@ func TestLedger_UnknownVersusInactiveAccount(t *testing.T) {
 	}, messages)
 }
 
+func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
+	// Like beancount, a pad or balance assertion on an account outside its
+	// open interval is reported and still applied: the pad still pads, its
+	// padding transaction reporting its own accounts on the pad's line, and
+	// the assertion is still checked. An assertion on an account never
+	// opened is beancount's "does not exist", and is not checked.
+	messages := func(source string) []string {
+		l := New()
+		_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
+		var messages []string
+		for _, err := range l.Errors() {
+			messages = append(messages, err.Error())
+		}
+		return messages
+	}
+
+	t.Run("pad on inactive accounts", func(t *testing.T) {
+		assert.Equal(t, []string{
+			"2020-01-19: Invalid reference to inactive account 'Assets:Cash'",
+			"2020-01-19: Invalid reference to inactive account 'Equity:E'",
+			"2020-01-19: Invalid reference to inactive account 'Assets:Cash'",
+			"2020-01-19: Invalid reference to inactive account 'Equity:E'",
+		}, messages(`
+2020-02-01 open Assets:Cash
+2020-02-01 open Equity:E
+2020-01-19 pad Assets:Cash Equity:E
+2020-03-03 balance Assets:Cash 10 USD
+`))
+	})
+
+	t.Run("balance on an inactive account", func(t *testing.T) {
+		got := messages(`
+2020-02-01 open Assets:Cash
+2020-01-01 open Equity:E
+2020-01-15 * "early"
+  Assets:Cash    10 USD
+  Equity:E
+2020-01-16 balance Assets:Cash 0 USD
+`)
+		assert.Equal(t, 3, len(got), "%v", got)
+		assert.Equal(t, "2020-01-15: Invalid reference to inactive account 'Assets:Cash'", got[0])
+		assert.Equal(t, "2020-01-16: Invalid reference to inactive account 'Assets:Cash'", got[1])
+		assert.HasPrefix(t, got[2], "2020-01-16: Balance mismatch for Assets:Cash:")
+	})
+
+	t.Run("balance on an account never opened", func(t *testing.T) {
+		assert.Equal(t, []string{
+			"2020-01-07: Account 'Assets:Never' does not exist: ",
+		}, messages(`
+2020-01-01 open Equity:E
+2020-01-07 balance Assets:Never 0 USD
+`))
+	})
+
+	t.Run("pad of an account never opened", func(t *testing.T) {
+		assert.Equal(t, []string{
+			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
+			"2020-01-08: Account 'Assets:Never' does not exist: ",
+			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
+		}, messages(`
+2020-01-01 open Equity:E
+2020-01-07 pad Assets:Never Equity:E
+2020-01-08 balance Assets:Never 10 USD
+`))
+	})
+
+	t.Run("pad from an account never opened", func(t *testing.T) {
+		assert.Equal(t, []string{
+			"2020-01-07: Invalid reference to unknown account 'Equity:Never'",
+			"2020-01-07: Invalid reference to unknown account 'Equity:Never'",
+		}, messages(`
+2020-01-01 open Assets:Cash
+2020-01-07 pad Assets:Cash Equity:Never
+2020-01-08 balance Assets:Cash 10 USD
+`))
+	})
+}
+
 func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {
 	// Like beancount, an interpolated cost is the weight divided by the
 	// units with Python's decimal, which keeps the weight's exponent.

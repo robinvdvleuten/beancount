@@ -346,6 +346,18 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 	l.accounts[accountName] = account
 }
 
+// inventory returns what an account holds, posted to before its open too,
+// or an empty inventory for an account nothing was posted to.
+func (l *Ledger) inventory(account ast.Account) *Inventory {
+	if acc, ok := l.accounts[string(account)]; ok {
+		return acc.Inventory
+	}
+	if acc, ok := l.unopened[string(account)]; ok {
+		return acc.Inventory
+	}
+	return NewInventory()
+}
+
 // applyClose applies the close delta to the ledger (mutation only)
 func (l *Ledger) applyClose(delta *CloseDelta) {
 	if account, ok := l.accounts[delta.AccountName]; ok {

@@ -1,0 +1,8 @@
+; A balance on an account before its open is reported and still checked,
+; against the postings made before the open.
+2020-02-01 open Assets:Cash
+2020-01-01 open Equity:E
+2020-01-15 * "early"
+  Assets:Cash    10 USD
+  Equity:E
+2020-01-16 balance Assets:Cash 0 USD

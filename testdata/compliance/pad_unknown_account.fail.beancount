@@ -1,0 +1,5 @@
+; A pad of an account never opened still pads; the balance on it does
+; not exist.
+2020-01-01 open Equity:E
+2020-01-07 pad Assets:Never Equity:E
+2020-01-08 balance Assets:Never 10 USD
