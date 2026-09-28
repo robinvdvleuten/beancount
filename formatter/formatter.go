@@ -30,7 +30,6 @@ import (
 	"cmp"
 	"context"
 	"io"
-	"regexp"
 	"slices"
 	"strings"
 
@@ -116,14 +115,9 @@ type Formatter struct {
 type run struct {
 	*Formatter
 
-	// sourceLines holds the source's lines, which bean-format copies
+	// source is the text being formatted, which bean-format copies
 	// wherever it does not realign.
-	sourceLines []string
-
-	// linesWithMultipleItems tracks which lines have multiple directives/items.
-	// Lines with multiple items should not have their original content preserved
-	// as it may contain content from multiple directives.
-	linesWithMultipleItems map[int]bool
+	source *sourceView
 
 	// verbatimLines tracks source lines already emitted verbatim (metadata
 	// preservation), so trivia parsed from those lines (inline comments) is
@@ -238,37 +232,26 @@ func (f *run) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 	// prefix ljust(maxPrefix) + two spaces + number rjust(maxNum) + space +
 	// currency, so the widest prefix and the widest number may come from
 	// different lines. Prefix widths exclude trailing spacing.
-	record := func(prefixWidth int, number string) {
-		metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, prefixWidth)
-		metrics.maxNumWidth = max(metrics.maxNumWidth, runewidth.StringWidth(number))
+	record := func(line lineLayout) {
+		if line.kind != alignLine {
+			return
+		}
+		metrics.maxPrefixWidth = max(metrics.maxPrefixWidth, line.prefixWidth)
+		metrics.maxNumWidth = max(metrics.maxNumWidth, line.numberWidth)
 	}
 
 	for _, directive := range tree.Directives {
 		switch d := directive.(type) {
 		case *ast.Transaction:
 			for _, posting := range d.Postings {
-				if !f.alignsPosting(posting) {
-					continue
-				}
-				// bean-format quirk: width maxima come from the original,
-				// un-normalized prefixes, even though emission uses the
-				// normalized indent.
-				indent := f.indent
-				if column := posting.Position().Column; column > 1 {
-					indent = column - 1
-				}
-				record(indent+runewidth.StringWidth(string(posting.Account)), f.amountDisplayValue(posting.Amount))
+				record(f.postingLayout(posting))
 			}
 
 		case *ast.Balance:
-			if line := f.balanceLine(d); line.aligned {
-				record(runewidth.StringWidth(line.prefix), line.number)
-			}
+			record(f.balanceLayout(d))
 
 		case *ast.Price:
-			if line := f.priceLine(d); line.aligned {
-				record(runewidth.StringWidth(line.prefix), line.number)
-			}
+			record(f.priceLayout(d))
 		}
 	}
 
@@ -358,112 +341,36 @@ func (f *run) resolveIndent(tree *ast.AST) int {
 	return indent
 }
 
-// getOriginalLine returns the original line from source by line number (1-indexed).
-// Returns empty string if line number is out of bounds.
-func (f *run) getOriginalLine(lineNum int) string {
-	if lineNum < 1 || lineNum > len(f.sourceLines) {
-		return ""
-	}
-	return f.sourceLines[lineNum-1]
-}
-
-// canPreserveDirectiveLine checks if a directive line can be preserved.
-// For date-prefixed directives, only allows preservation if the line contains the date.
-// This prevents preserving incomplete directives that span multiple lines.
-func (f *run) canPreserveDirectiveLine(lineNum int, date *ast.Date) bool {
-	if date == nil {
-		return true // Non-date-prefixed directives can always be preserved
-	}
-
-	originalLine := f.getOriginalLine(lineNum)
-	if originalLine == "" {
+// writeCopied writes a line bean-format leaves as written and reports
+// true, or writes nothing and reports false when the layout is not a copy.
+func (f *run) writeCopied(line lineLayout, buf *strings.Builder) bool {
+	if line.kind != copyLine {
 		return false
 	}
-
-	// Check if the line starts with the date (ignoring leading whitespace),
-	// spelled with dashes or slashes.
-	dateStr := date.String()
-	trimmedLine := strings.TrimSpace(originalLine)
-	return strings.HasPrefix(trimmedLine, dateStr) ||
-		strings.HasPrefix(trimmedLine, strings.ReplaceAll(dateStr, "-", "/"))
+	buf.WriteString(line.text)
+	buf.WriteByte('\n')
+	return true
 }
 
-// tryPreserveOriginalLine attempts to preserve the original source line for a directive.
-// If the original line is available and doesn't contain multiple items, it writes the trimmed line
-// to buf and returns true. If the original line is not available or contains multiple items,
-// it returns false and the caller should reconstruct the directive. This helper reduces
-// duplication across formatting functions.
-func (f *run) tryPreserveOriginalLine(lineNum int, buf *strings.Builder) bool {
-	// Don't preserve lines that have multiple items (directives/options/etc)
-	// as they may contain partial content from multiple directives
-	if f.linesWithMultipleItems != nil && f.linesWithMultipleItems[lineNum] {
-		return false
-	}
-
-	if originalLine := f.getOriginalLine(lineNum); originalLine != "" {
-		// Trailing whitespace stays, as bean-format keeps it.
-		trimmedLine := strings.TrimLeft(originalLine, " \t")
-		if hasOpenStringLiteral(trimmedLine) {
-			return false
-		}
-		buf.WriteString(trimmedLine)
-		buf.WriteByte('\n')
-		return true
-	}
-	return false
+// copyItemLine copies the source line of an item starting at pos, a
+// header, metadata, tags or comment line, when the item owns it.
+func (f *run) copyItemLine(pos ast.Position, buf *strings.Builder) bool {
+	return f.writeCopied(plainLayout(f.source.itemLine(pos.Line, pos.Column)), buf)
 }
 
-func hasOpenStringLiteral(line string) bool {
-	inString := false
-	escaped := false
-
-	for i := 0; i < len(line); i++ {
-		switch line[i] {
-		case ';':
-			if !inString {
-				return false
-			}
-		case '"':
-			if !inString {
-				inString = true
-				continue
-			}
-			if !escaped {
-				inString = false
-			}
-		case '\\':
-			if inString {
-				escaped = !escaped
-				continue
-			}
-		default:
-		}
-		escaped = false
-	}
-
-	return inString
+// copyDirectiveLine copies a dated directive's source line when the
+// directive owns it.
+func (f *run) copyDirectiveLine(d ast.Directive, buf *strings.Builder) bool {
+	return f.writeCopied(plainLayout(f.source.directiveLine(d)), buf)
 }
 
-// hasAnyInlineMetadata returns true if any of the metadata entries are marked as inline.
-// This allows the formatter to detect inline metadata from the AST rather than parsing source text.
-func hasAnyInlineMetadata(metadata []*ast.Metadata) bool {
-	for _, m := range metadata {
-		if m.Inline {
-			return true
-		}
-	}
-	return false
-}
-
-// newRun starts a run formatting tree, parsed from source. The source lines
-// come first: the widths read spellings from them. They are split on \r\n,
-// \r and \n to match the lexer's lineBreakLenAt semantics.
+// newRun starts a run formatting tree, parsed from source. The source
+// comes first: the widths read spellings from it.
 func newRun(f *Formatter, tree *ast.AST, source []byte) *run {
 	return &run{
-		Formatter:              f,
-		sourceLines:            ast.SplitSourceLines(string(source)),
-		linesWithMultipleItems: ast.LinesWithMultipleItems(tree),
-		verbatimLines:          make(map[int]bool),
+		Formatter:     f,
+		source:        newSourceView(source, tree),
+		verbatimLines: make(map[int]bool),
 	}
 }
 
@@ -606,11 +513,11 @@ func (f *run) formatItem(item astItem, buf *strings.Builder) {
 		if f.verbatimLines[item.comment.Position().Line] {
 			return // Already contained in a verbatim-preserved line.
 		}
-		if !f.writeTriviaLine(item.comment.Position().Line, item.comment.Content, buf) {
+		if !f.writeTriviaLine(item.comment.Position(), buf) {
 			f.formatComment(item.comment, buf)
 		}
 	case item.blankLine != nil:
-		f.writeTriviaLine(item.blankLine.Position().Line, "", buf)
+		f.writeTriviaLine(item.blankLine.Position(), buf)
 	case item.option != nil:
 		f.formatOption(item.option, buf)
 	case item.include != nil:
@@ -643,15 +550,9 @@ func (f *run) formatComment(c *ast.Comment, buf *strings.Builder) {
 // writeTriviaLine writes a comment or blank line exactly as the source has
 // it, indentation and whitespace included, like bean-format, which only
 // touches lines holding an amount or starting with an account. It reports
-// false, writing nothing, when the source line holds more than content.
-func (f *run) writeTriviaLine(line int, content string, buf *strings.Builder) bool {
-	original := f.getOriginalLine(line)
-	if strings.TrimSpace(original) != strings.TrimSpace(content) {
-		return false
-	}
-	buf.WriteString(original)
-	buf.WriteByte('\n')
-	return true
+// false, writing nothing, when the source line holds more than the item.
+func (f *run) writeTriviaLine(pos ast.Position, buf *strings.Builder) bool {
+	return f.copyItemLine(pos, buf)
 }
 
 // formatDirective formats a directive based on its type.
@@ -686,7 +587,7 @@ func (f *run) formatDirective(d ast.Directive, buf *strings.Builder) {
 
 // formatOption formats an option directive.
 func (f *run) formatOption(opt *ast.Option, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(opt.Position().Line, buf) {
+	if f.copyItemLine(opt.Position(), buf) {
 		return
 	}
 
@@ -700,7 +601,7 @@ func (f *run) formatOption(opt *ast.Option, buf *strings.Builder) {
 
 // formatInclude formats an include directive.
 func (f *run) formatInclude(inc *ast.Include, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(inc.Position().Line, buf) {
+	if f.copyItemLine(inc.Position(), buf) {
 		return
 	}
 
@@ -712,11 +613,9 @@ func (f *run) formatInclude(inc *ast.Include, buf *strings.Builder) {
 
 // formatCommodity formats a commodity directive.
 func (f *run) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) {
-		if f.tryPreserveOriginalLine(c.Position().Line, buf) {
-			f.formatMetadata(c.Metadata, buf)
-			return
-		}
+	if f.copyDirectiveLine(c, buf) {
+		f.formatMetadata(c.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(c.Date().String())
@@ -729,17 +628,11 @@ func (f *run) formatCommodity(c *ast.Commodity, buf *strings.Builder) {
 
 // formatOpen formats an open directive.
 func (f *run) formatOpen(o *ast.Open, buf *strings.Builder) {
-	// Open directives are single-line and carry no number to realign, so
-	// bean-format leaves them untouched; preserve the original line whenever
-	// it contains the whole directive.
-	if f.canPreserveDirectiveLine(o.Position().Line, o.Date()) {
-		originalLine := f.getOriginalLine(o.Position().Line)
-		if strings.Contains(originalLine, string(o.Account)) && openLineComplete(originalLine, o) {
-			if f.tryPreserveOriginalLine(o.Position().Line, buf) {
-				f.formatMetadata(o.Metadata, buf)
-				return
-			}
-		}
+	// Open directives carry no number to realign, so bean-format leaves
+	// them untouched.
+	if f.copyDirectiveLine(o, buf) {
+		f.formatMetadata(o.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(o.Date().String())
@@ -766,27 +659,11 @@ func (f *run) formatOpen(o *ast.Open, buf *strings.Builder) {
 	f.formatMetadata(o.Metadata, buf)
 }
 
-// openLineComplete reports whether the original source line contains every
-// component of the open directive, so preserving it verbatim loses nothing.
-func openLineComplete(line string, o *ast.Open) bool {
-	for _, currency := range o.ConstraintCurrencies {
-		if !strings.Contains(line, currency) {
-			return false
-		}
-	}
-	return o.BookingMethod == "" || strings.Contains(line, `"`+o.BookingMethod+`"`)
-}
-
 // formatClose formats a close directive.
 func (f *run) formatClose(c *ast.Close, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) {
-		originalLine := f.getOriginalLine(c.Position().Line)
-		if strings.Contains(originalLine, string(c.Account)) {
-			if f.tryPreserveOriginalLine(c.Position().Line, buf) {
-				f.formatMetadata(c.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(c, buf) {
+		f.formatMetadata(c.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(c.Date().String())
@@ -799,17 +676,17 @@ func (f *run) formatClose(c *ast.Close, buf *strings.Builder) {
 
 // formatBalance formats a balance directive.
 func (f *run) formatBalance(b *ast.Balance, buf *strings.Builder) {
-	f.formatDatedLine(b, f.balanceLine(b), buf)
+	f.formatDatedLine(b, f.balanceLayout(b), string(b.Account), f.balanceAmountText(b), balanceCurrency(b), buf)
 }
 
-// balanceLine lays out a balance's line; the number before the currency is
+// balanceLayout reads a balance's line; the number before the currency is
 // the tolerance's when there is one.
-func (f *run) balanceLine(b *ast.Balance) datedLine {
+func (f *run) balanceLayout(b *ast.Balance) lineLayout {
 	last := b.Amount
 	if b.Tolerance != nil {
 		last = b.Tolerance
 	}
-	return f.newDatedLine(b, string(b.Account), f.balanceAmountText(b), f.amountDisplayValue(last), balanceCurrency(b))
+	return f.datedLayout(b, string(b.Account), f.balanceAmountText(b), numberText(last), balanceCurrency(b))
 }
 
 // balanceAmountText spells a balance's amount, with its tolerance, without
@@ -818,9 +695,9 @@ func (f *run) balanceAmountText(b *ast.Balance) string {
 	if b.Amount == nil {
 		return ""
 	}
-	text := f.amountDisplayValue(b.Amount)
+	text := numberText(b.Amount)
 	if b.Tolerance != nil {
-		text += " ~ " + f.amountDisplayValue(b.Tolerance)
+		text += " ~ " + numberText(b.Tolerance)
 	}
 	return text
 }
@@ -841,67 +718,36 @@ func (f *run) datedHead(d ast.Directive, subject string) string {
 	return f.dateText(d) + " " + string(d.Kind()) + " " + subject
 }
 
-// dateText spells a directive's date with slashes when its source line
-// does, otherwise with dashes.
+// dateText spells a directive's date as its source line does.
 func (f *run) dateText(d ast.Directive) string {
-	date := d.Date().String()
-	slashed := strings.ReplaceAll(date, "-", "/")
-	if strings.HasPrefix(f.getOriginalLine(d.Position().Line), slashed) {
-		return slashed
-	}
-	return date
+	return spelledDate(f.source.line(d.Position().Line), d.Date())
 }
 
-// datedLine is a dated directive's line that ends in an amount, split
-// like bean-format's line pattern: when aligned, prefix and number around
-// the padding; otherwise the canonical spelling, used when the source
-// line cannot be copied.
-type datedLine struct {
-	prefix, number string
-	aligned        bool
-	canonical      string
-	currency       string
-}
-
-// newDatedLine lays out a dated line from its spelling. bean-format aligns
-// it only when some suffix of the amount text is a plainly spelled number
-// with whitespace before the currency; a number glued to its currency in
-// the source ("10USD") leaves the line as written.
-func (f *run) newDatedLine(d ast.Directive, subject, text, lastNumber, currency string) datedLine {
-	head := f.datedHead(d, subject)
-	line := datedLine{canonical: strings.TrimSpace(head + " " + text), currency: currency}
-	if currency == "" || f.gluedToCurrency(d.Position().Line, lastNumber, currency) {
-		return line
-	}
-	line.prefix, line.number, line.aligned = datedAmountLayout(head, text)
-	return line
-}
-
-// gluedToCurrency reports whether the source line spells number directly
-// followed by currency, which bean-format's pattern does not align.
-func (f *run) gluedToCurrency(line int, number, currency string) bool {
-	return number != "" && strings.Contains(f.getOriginalLine(line), number+currency)
+// datedLayout reads the line of a dated directive ending in an amount.
+func (f *run) datedLayout(d ast.Directive, subject, text, lastNumber, currency string) lineLayout {
+	line, owned := f.source.directiveLine(d)
+	return datedLayout(line, owned, f.datedHead(d, subject), text, lastNumber, currency)
 }
 
 // formatDatedLine writes a dated directive ending in an amount: aligned as
-// bean-format aligns it, or copied from the source when bean-format leaves
-// it alone.
-func (f *run) formatDatedLine(d ast.Directive, line datedLine, buf *strings.Builder) {
-	if !line.aligned && f.canPreserveDirectiveLine(d.Position().Line, d.Date()) && f.tryPreserveOriginalLine(d.Position().Line, buf) {
+// bean-format aligns it, copied from the source when bean-format leaves it
+// alone, or spelled from its subject, amount text and currency.
+func (f *run) formatDatedLine(d ast.Directive, line lineLayout, subject, text, currency string, buf *strings.Builder) {
+	if f.writeCopied(line, buf) {
 		f.formatMetadata(d.GetMetadata(), buf)
 		return
 	}
 
-	if line.aligned {
+	if line.kind == alignLine {
 		buf.WriteString(line.prefix)
-		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), runewidth.StringWidth(line.number))))
+		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), line.numberWidth)))
 		buf.WriteString(line.number)
 	} else {
-		buf.WriteString(line.canonical)
+		buf.WriteString(strings.TrimSpace(f.datedHead(d, subject) + " " + text))
 	}
-	if line.currency != "" {
+	if currency != "" {
 		buf.WriteByte(' ')
-		buf.WriteString(line.currency)
+		buf.WriteString(currency)
 	}
 
 	f.writeInlineComment(d.GetComment(), buf)
@@ -911,14 +757,9 @@ func (f *run) formatDatedLine(d ast.Directive, line datedLine, buf *strings.Buil
 
 // formatPad formats a pad directive.
 func (f *run) formatPad(p *ast.Pad, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(p.Position().Line, p.Date()) {
-		originalLine := f.getOriginalLine(p.Position().Line)
-		if strings.Contains(originalLine, string(p.Account)) && strings.Contains(originalLine, string(p.AccountPad)) {
-			if f.tryPreserveOriginalLine(p.Position().Line, buf) {
-				f.formatMetadata(p.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(p, buf) {
+		f.formatMetadata(p.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(p.Date().String())
@@ -933,14 +774,9 @@ func (f *run) formatPad(p *ast.Pad, buf *strings.Builder) {
 
 // formatNote formats a note directive.
 func (f *run) formatNote(n *ast.Note, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(n.Position().Line, n.Date()) && !hasAnyInlineMetadata(n.Metadata) {
-		originalLine := f.getOriginalLine(n.Position().Line)
-		if strings.Contains(originalLine, string(n.Account)) && strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(n.Position().Line, buf) {
-				f.formatMetadata(n.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(n, buf) {
+		f.formatMetadata(n.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(n.Date().String())
@@ -955,14 +791,9 @@ func (f *run) formatNote(n *ast.Note, buf *strings.Builder) {
 
 // formatDocument formats a document directive.
 func (f *run) formatDocument(d *ast.Document, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(d.Position().Line, d.Date()) && !hasAnyInlineMetadata(d.Metadata) {
-		originalLine := f.getOriginalLine(d.Position().Line)
-		if strings.Contains(originalLine, string(d.Account)) && strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(d.Position().Line, buf) {
-				f.formatMetadata(d.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(d, buf) {
+		f.formatMetadata(d.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(d.Date().String())
@@ -984,13 +815,13 @@ func (f *run) formatDocument(d *ast.Document, buf *strings.Builder) {
 
 // formatPrice formats a price directive.
 func (f *run) formatPrice(p *ast.Price, buf *strings.Builder) {
-	f.formatDatedLine(p, f.priceLine(p), buf)
+	f.formatDatedLine(p, f.priceLayout(p), p.Commodity, numberText(p.Amount), priceCurrency(p), buf)
 }
 
-// priceLine lays out a price's line.
-func (f *run) priceLine(p *ast.Price) datedLine {
-	number := f.amountDisplayValue(p.Amount)
-	return f.newDatedLine(p, p.Commodity, number, number, priceCurrency(p))
+// priceLayout reads a price's line.
+func (f *run) priceLayout(p *ast.Price) lineLayout {
+	number := numberText(p.Amount)
+	return f.datedLayout(p, p.Commodity, number, number, priceCurrency(p))
 }
 
 func priceCurrency(p *ast.Price) string {
@@ -1002,14 +833,9 @@ func priceCurrency(p *ast.Price) string {
 
 // formatEvent formats an event directive.
 func (f *run) formatEvent(e *ast.Event, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(e.Position().Line, e.Date()) && !hasAnyInlineMetadata(e.Metadata) {
-		originalLine := f.getOriginalLine(e.Position().Line)
-		if strings.Count(originalLine, "\"") >= 4 {
-			if f.tryPreserveOriginalLine(e.Position().Line, buf) {
-				f.formatMetadata(e.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(e, buf) {
+		f.formatMetadata(e.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(e.Date().String())
@@ -1024,14 +850,9 @@ func (f *run) formatEvent(e *ast.Event, buf *strings.Builder) {
 
 // formatQuery formats a query directive.
 func (f *run) formatQuery(q *ast.Query, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(q.Position().Line, q.Date()) && !hasAnyInlineMetadata(q.Metadata) {
-		originalLine := f.getOriginalLine(q.Position().Line)
-		if strings.Count(originalLine, "\"") >= 4 {
-			if f.tryPreserveOriginalLine(q.Position().Line, buf) {
-				f.formatMetadata(q.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(q, buf) {
+		f.formatMetadata(q.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(q.Date().String())
@@ -1046,14 +867,9 @@ func (f *run) formatQuery(q *ast.Query, buf *strings.Builder) {
 
 // formatCustom formats a custom directive.
 func (f *run) formatCustom(c *ast.Custom, buf *strings.Builder) {
-	if f.canPreserveDirectiveLine(c.Position().Line, c.Date()) && !hasAnyInlineMetadata(c.Metadata) {
-		originalLine := f.getOriginalLine(c.Position().Line)
-		if strings.Contains(originalLine, "\"") {
-			if f.tryPreserveOriginalLine(c.Position().Line, buf) {
-				f.formatMetadata(c.Metadata, buf)
-				return
-			}
-		}
+	if f.copyDirectiveLine(c, buf) {
+		f.formatMetadata(c.Metadata, buf)
+		return
 	}
 
 	buf.WriteString(c.Date().String())
@@ -1071,7 +887,7 @@ func (f *run) formatCustom(c *ast.Custom, buf *strings.Builder) {
 		} else if val.BooleanValue != nil {
 			buf.WriteString(*val.BooleanValue)
 		} else if val.Amount != nil {
-			buf.WriteString(f.amountDisplayValue(val.Amount))
+			buf.WriteString(numberText(val.Amount))
 			buf.WriteByte(' ')
 			buf.WriteString(val.Amount.Currency)
 		} else if val.Number != nil {
@@ -1084,7 +900,7 @@ func (f *run) formatCustom(c *ast.Custom, buf *strings.Builder) {
 
 // formatPlugin formats a plugin directive.
 func (f *run) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
+	if f.copyItemLine(p.Position(), buf) {
 		return
 	}
 
@@ -1100,7 +916,7 @@ func (f *run) formatPlugin(p *ast.Plugin, buf *strings.Builder) {
 
 // formatPushtag formats a pushtag directive.
 func (f *run) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
+	if f.copyItemLine(p.Position(), buf) {
 		return
 	}
 
@@ -1112,7 +928,7 @@ func (f *run) formatPushtag(p *ast.Pushtag, buf *strings.Builder) {
 
 // formatPoptag formats a poptag directive.
 func (f *run) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
+	if f.copyItemLine(p.Position(), buf) {
 		return
 	}
 
@@ -1124,7 +940,7 @@ func (f *run) formatPoptag(p *ast.Poptag, buf *strings.Builder) {
 
 // formatPushmeta formats a pushmeta directive.
 func (f *run) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
+	if f.copyItemLine(p.Position(), buf) {
 		return
 	}
 
@@ -1138,7 +954,7 @@ func (f *run) formatPushmeta(p *ast.Pushmeta, buf *strings.Builder) {
 
 // formatPopmeta formats a popmeta directive.
 func (f *run) formatPopmeta(p *ast.Popmeta, buf *strings.Builder) {
-	if f.tryPreserveOriginalLine(p.Position().Line, buf) {
+	if f.copyItemLine(p.Position(), buf) {
 		return
 	}
 
@@ -1154,7 +970,7 @@ func (f *run) formatTransaction(t *ast.Transaction, buf *strings.Builder) {
 	// bean-format never touches a header line (its pattern cannot cross a
 	// quote), so the header keeps its spelling: txn, slash dates, the order
 	// of tags and links.
-	if line := t.Position().Line; f.canPreserveDirectiveLine(line, t.Date()) && f.tryPreserveOriginalLine(line, buf) {
+	if f.copyDirectiveLine(t, buf) {
 		f.formatTransactionBody(t, buf)
 		return
 	}
@@ -1228,13 +1044,9 @@ func (f *run) formatLeadingTransactionBody(t *ast.Transaction, buf *strings.Buil
 }
 
 func (f *run) formatTagsLinks(line *ast.TagsLinks, buf *strings.Builder) {
-	if n := line.Position().Line; n > 0 && !f.linesWithMultipleItems[n] {
-		if original := f.getOriginalLine(n); original != "" {
-			buf.WriteString(original)
-			buf.WriteByte('\n')
-			f.verbatimLines[n] = true
-			return
-		}
+	if pos := line.Position(); f.copyItemLine(pos, buf) {
+		f.verbatimLines[pos.Line] = true
+		return
 	}
 	buf.WriteString(strings.Repeat(" ", f.Indentation))
 	for i, tag := range line.Tags {
@@ -1260,20 +1072,33 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 		f.formatPosting(item.Posting, buf)
 	case item.Comment != nil:
 		if f.PreserveComments && !f.verbatimLines[item.Comment.Position().Line] &&
-			!f.writeTriviaLine(item.Comment.Position().Line, item.Comment.Content, buf) {
+			!f.writeTriviaLine(item.Comment.Position(), buf) {
 			buf.WriteString(strings.Repeat(" ", f.indent))
 			f.formatComment(item.Comment, buf)
 		}
 	case item.BlankLine != nil:
 		if f.PreserveBlanks {
-			f.writeTriviaLine(item.BlankLine.Position().Line, "", buf)
+			f.writeTriviaLine(item.BlankLine.Position(), buf)
 		}
 	}
 }
 
 // formatPosting formats a single posting with proper alignment.
 func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	if (p.Flag != "" || p.Amount != nil && !f.alignsPosting(p)) && f.writePostingLineAsWritten(p, buf) {
+	line := f.postingLayout(p)
+	if f.writeCopied(line, buf) {
+		f.verbatimLines[p.Position().Line] = true
+		f.formatMetadata(p.Metadata, buf)
+		return
+	}
+	if line.kind == alignLine && line.rest != "" {
+		buf.WriteString(line.prefix)
+		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), line.numberWidth)))
+		buf.WriteString(line.number)
+		buf.WriteByte(' ')
+		buf.WriteString(line.rest)
+		buf.WriteByte('\n')
+		f.verbatimLines[p.Position().Line] = true
 		f.formatMetadata(p.Metadata, buf)
 		return
 	}
@@ -1293,17 +1118,6 @@ func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	currentWidth += runewidth.StringWidth(string(p.Account))
 
 	if p.Amount != nil {
-		if suffix, ok := f.alignedPostingSuffix(p); ok {
-			displayValue := f.amountDisplayValue(p.Amount)
-			buf.WriteString(strings.Repeat(" ", f.columns.padding(currentWidth, runewidth.StringWidth(displayValue))))
-			buf.WriteString(displayValue)
-			buf.WriteByte(' ')
-			buf.WriteString(suffix)
-			buf.WriteByte('\n')
-			f.verbatimLines[p.Position().Line] = true
-			f.formatMetadata(p.Metadata, buf)
-			return
-		}
 		f.formatAmountAligned(p.Amount, currentWidth, buf)
 
 		if p.Cost != nil {
@@ -1319,7 +1133,7 @@ func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 			}
 			// Partial annotations (bare @, number-only, currency-only) print
 			// only the components present in the source.
-			if value := f.amountDisplayValue(p.Price); value != "" {
+			if value := numberText(p.Price); value != "" {
 				buf.WriteByte(' ')
 				buf.WriteString(value)
 			}
@@ -1362,144 +1176,10 @@ func (f *run) writeInlineComment(c *ast.Comment, buf *strings.Builder) {
 	buf.WriteString(c.Content)
 }
 
-// alignedNumber is how bean-format's line pattern spells a number it
-// aligns: an optional sign, digits with thousands commas, and an optional
-// fraction. Expressions, repeated signs and parentheses do not match.
-var alignedNumber = regexp.MustCompile(`^[-+]?\s*[\d,]+(?:\.\d*)?$`)
-
-// isAlignedAmount reports whether bean-format aligns an amount: only a
-// plainly spelled number followed by a currency matches its line pattern.
-// Any other amount leaves the line as written.
-func (f *run) isAlignedAmount(amount *ast.Amount) bool {
-	return amount != nil && amount.Currency != "" && alignedNumber.MatchString(f.amountDisplayValue(amount))
-}
-
-// alignsPosting reports whether bean-format aligns a posting's line: not
-// flagged, with a plainly spelled number that the source does not glue to
-// its currency.
-func (f *run) alignsPosting(p *ast.Posting) bool {
-	return p.Flag == "" && f.isAlignedAmount(p.Amount) &&
-		!f.gluedToCurrency(p.Position().Line, f.amountDisplayValue(p.Amount), p.Amount.Currency)
-}
-
-// datedAmountLayout splits a dated directive's amount text like
-// bean-format's line pattern, whose prefix is the shortest one followed by
-// a plainly spelled number and the currency: head plus any text before
-// that number is the prefix. In "100.00 ~ 0.05" the tolerance is aligned,
-// in "50 + 50" the "+ 50". It reports false when no suffix is a number.
-func datedAmountLayout(head, text string) (prefix, number string, ok bool) {
-	// Candidate numbers start after a run of spaces; the prefix before
-	// them is right-trimmed, like bean-format's prefix.rstrip().
-	for i := 0; i < len(text); i++ {
-		if i > 0 && text[i-1] != ' ' || text[i] == ' ' {
-			continue
-		}
-		if suffix := text[i:]; alignedNumber.MatchString(suffix) {
-			if before := strings.TrimRight(text[:i], " "); before != "" {
-				return head + " " + before, suffix, true
-			}
-			return head, suffix, true
-		}
-	}
-	return "", "", false
-}
-
-// postingSource returns a posting's source line, trimmed of its indent, and
-// the text after its account. It reports false when the source line is
-// unavailable, shared with other items, or does not hold the whole posting.
-func (f *run) postingSource(p *ast.Posting) (text, rest string, ok bool) {
-	line := p.Position().Line
-	original := f.getOriginalLine(line)
-	if original == "" || f.linesWithMultipleItems[line] {
-		return "", "", false
-	}
-	text = strings.TrimLeft(original, " \t")
-	body, ok := strings.CutPrefix(text, p.Flag)
-	if !ok {
-		return "", "", false
-	}
-	// The line must hold the whole posting: its account, then its amount.
-	rest, ok = strings.CutPrefix(strings.TrimLeft(body, " \t"), string(p.Account))
-	if !ok {
-		return "", "", false
-	}
-	if p.Amount != nil && (!strings.Contains(rest, f.amountDisplayValue(p.Amount)) || !strings.Contains(rest, p.Amount.Currency)) {
-		return "", "", false
-	}
-	return text, rest, true
-}
-
-// writePostingLineAsWritten copies a posting's source line, as bean-format
-// leaves every line it does not align. A line starting with an account is
-// re-indented to the posting indent, like bean-format re-indents them; a
-// flagged posting's line is copied untouched. It reports false, writing
-// nothing, when postingSource finds no line to copy.
-func (f *run) writePostingLineAsWritten(p *ast.Posting, buf *strings.Builder) bool {
-	text, _, ok := f.postingSource(p)
-	if !ok {
-		return false
-	}
-	line := p.Position().Line
-	if p.Flag == "" {
-		buf.WriteString(strings.Repeat(" ", f.indent))
-		buf.WriteString(text)
-	} else {
-		buf.WriteString(f.getOriginalLine(line))
-	}
-	buf.WriteByte('\n')
-	f.verbatimLines[line] = true
-	return true
-}
-
-// alignedPostingSuffix returns the source text of a posting line that
-// bean-format aligns, from its units currency to the end of the line:
-// bean-format re-pads only the account and the number, and copies this part
-// as written, cost, price, comment and trailing whitespace included.
-func (f *run) alignedPostingSuffix(p *ast.Posting) (string, bool) {
-	_, rest, ok := f.postingSource(p)
-	if !ok {
-		return "", false
-	}
-	afterNumber, ok := strings.CutPrefix(strings.TrimLeft(rest, " \t"), f.amountDisplayValue(p.Amount))
-	if !ok {
-		return "", false
-	}
-	suffix := strings.TrimLeft(afterNumber, " \t")
-	if !isValidNumericValue(p.Amount.Value) || len(suffix) == len(afterNumber) || !strings.HasPrefix(suffix, p.Amount.Currency) {
-		return "", false
-	}
-	return suffix, true
-}
-
-// isValidNumericValue checks if a value looks like a valid numeric amount.
-func isValidNumericValue(value string) bool {
-	if value == "" {
-		return false
-	}
-
-	i := 0
-	if value[0] == '+' || value[0] == '-' {
-		i = 1
-	}
-
-	if i >= len(value) {
-		return false
-	}
-
-	hasDigit := false
-	for i < len(value) {
-		c := value[i]
-		if c >= '0' && c <= '9' {
-			hasDigit = true
-		} else if c == '.' || c == ',' {
-			// Allow decimal separators
-		} else {
-			return false
-		}
-		i++
-	}
-
-	return hasDigit
+// postingLayout reads a posting's line.
+func (f *run) postingLayout(p *ast.Posting) lineLayout {
+	line, owned := f.source.itemLine(p.Position().Line, p.Position().Column)
+	return postingLayout(line, owned, p, f.indent)
 }
 
 // formatAmountAligned formats an amount with proper alignment to the currency column.
@@ -1510,9 +1190,9 @@ func (f *run) formatAmountAligned(amount *ast.Amount, currentWidth int, buf *str
 	}
 
 	// Use raw value if available (preserves formatting like commas), otherwise use canonical value
-	displayValue := f.amountDisplayValue(amount)
+	displayValue := numberText(amount)
 
-	if !f.isAlignedAmount(amount) || !isValidNumericValue(amount.Value) {
+	if !isAlignedAmount(amount) || !isValidNumericValue(amount.Value) {
 		// Joined with single spaces, leaving out the missing part.
 		buf.WriteString(strings.Repeat(" ", MinimumSpacing))
 		buf.WriteString(strings.Join(slices.DeleteFunc([]string{displayValue, amount.Currency}, func(s string) bool { return s == "" }), " "))
@@ -1523,17 +1203,6 @@ func (f *run) formatAmountAligned(amount *ast.Amount, currentWidth int, buf *str
 	buf.WriteString(displayValue)
 	buf.WriteByte(' ')
 	buf.WriteString(amount.Currency)
-}
-
-// amountDisplayValue returns an amount's number as the source spells it.
-func (f *run) amountDisplayValue(amount *ast.Amount) string {
-	if amount == nil {
-		return ""
-	}
-	if amount.HasRaw() {
-		return amount.Raw
-	}
-	return amount.Value
 }
 
 // formatCost formats a cost specification.
@@ -1573,10 +1242,10 @@ func (f *run) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		writeSeparator()
 		// A currency-only cost {USD} has no number to write.
 		if cost.HasNumber() {
-			buf.WriteString(f.amountDisplayValue(cost.Amount))
+			buf.WriteString(numberText(cost.Amount))
 			if cost.Total != nil {
 				buf.WriteString(" # ")
-				buf.WriteString(f.amountDisplayValue(cost.Total))
+				buf.WriteString(numberText(cost.Total))
 			}
 			buf.WriteByte(' ')
 		}
@@ -1651,26 +1320,15 @@ func (f *run) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 			continue
 		}
 		// bean-format leaves metadata lines untouched; preserve the original
-		// line (indentation and spacing) whenever it is available. A single
+		// line (indentation and spacing) whenever the entry owns it. A single
 		// source line may hold several metadata entries; emit it only once.
-		if line := m.Position().Line; line > 0 && !f.linesWithMultipleItems[line] {
-			if line == lastVerbatimLine {
-				continue
-			}
-			original := f.getOriginalLine(line)
-			// Only preserve lines that actually begin with this metadata key;
-			// the line's start may belong to another construct (e.g. the tail
-			// of a multiline string) that is rendered separately.
-			indent := len(original) - len(strings.TrimLeft(original, " \t"))
-			startsAtKey := original != "" && indent == m.Position().Column-1 &&
-				strings.HasPrefix(original[indent:], m.Key)
-			if startsAtKey && !hasOpenStringLiteral(original) {
-				buf.WriteString(original)
-				buf.WriteByte('\n')
-				lastVerbatimLine = line
-				f.verbatimLines[line] = true
-				continue
-			}
+		if line := m.Position().Line; line > 0 && line == lastVerbatimLine {
+			continue
+		}
+		if pos := m.Position(); f.copyItemLine(pos, buf) {
+			lastVerbatimLine = pos.Line
+			f.verbatimLines[pos.Line] = true
+			continue
 		}
 		buf.WriteString(strings.Repeat(" ", f.Indentation))
 		buf.WriteString(m.Key)
