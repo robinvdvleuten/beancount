@@ -12,13 +12,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// funcOverload is one typed signature of a simple function. TAny parameters
+// funcOverload is one typed signature of a simple function. tAny parameters
 // match any argument type; other parameters need that exact type, so like
-// bean-query an object-typed value or NULL only fits a TAny parameter.
+// bean-query an object-typed value or NULL only fits a tAny parameter.
 type funcOverload struct {
-	params []DType
-	result DType
-	call   func(row *Row, args []any) any
+	params []dtype
+	result dtype
+	call   func(row *evalRow, args []any) any
 }
 
 // funcDef is a simple function with one or more overloads, tried in order.
@@ -28,7 +28,7 @@ type funcDef struct {
 
 // matchOverload selects the first overload compatible with the argument
 // types.
-func (d *funcDef) matchOverload(argTypes []DType) *funcOverload {
+func (d *funcDef) matchOverload(argTypes []dtype) *funcOverload {
 	for i := range d.overloads {
 		o := &d.overloads[i]
 		if len(o.params) != len(argTypes) {
@@ -36,7 +36,7 @@ func (d *funcDef) matchOverload(argTypes []DType) *funcOverload {
 		}
 		ok := true
 		for j, param := range o.params {
-			if param != TAny && param != argTypes[j] {
+			if param != tAny && param != argTypes[j] {
 				ok = false
 				break
 			}
@@ -52,94 +52,94 @@ func (d *funcDef) matchOverload(argTypes []DType) *funcOverload {
 // filter environments, matching the official bean-query environment.
 var functions = map[string]*funcDef{
 	"abs": {overloads: []funcOverload{
-		{[]DType{TDecimal}, TDecimal, func(_ *Row, args []any) any {
+		{[]dtype{tDecimal}, tDecimal, func(_ *evalRow, args []any) any {
 			return args[0].(decimal.Decimal).Abs()
 		}},
-		{[]DType{TInt}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tInt}, tInt, func(_ *evalRow, args []any) any {
 			v := args[0].(int64)
 			if v < 0 {
 				return -v
 			}
 			return v
 		}},
-		{[]DType{TPosition}, TPosition, func(_ *Row, args []any) any {
-			p := args[0].(*Position)
-			return &Position{Units: Amount{Number: p.Units.Number.Abs(), Currency: p.Units.Currency}, Cost: p.Cost}
+		{[]dtype{tPosition}, tPosition, func(_ *evalRow, args []any) any {
+			p := args[0].(*positionValue)
+			return &positionValue{Units: amountValue{Number: p.Units.Number.Abs(), Currency: p.Units.Currency}, Cost: p.Cost}
 		}},
-		{[]DType{TInventory}, TInventory, func(_ *Row, args []any) any {
-			inv := args[0].(*Inventory)
-			result := NewInventory()
+		{[]dtype{tInventory}, tInventory, func(_ *evalRow, args []any) any {
+			inv := args[0].(*inventoryValue)
+			result := newInventory()
 			for _, p := range inv.Positions() {
-				result.AddPosition(&Position{Units: Amount{Number: p.Units.Number.Abs(), Currency: p.Units.Currency}, Cost: p.Cost})
+				result.AddPosition(&positionValue{Units: amountValue{Number: p.Units.Number.Abs(), Currency: p.Units.Currency}, Cost: p.Cost})
 			}
 			return result
 		}},
 	}},
 
 	"neg": {overloads: []funcOverload{
-		{[]DType{TDecimal}, TDecimal, func(_ *Row, args []any) any {
+		{[]dtype{tDecimal}, tDecimal, func(_ *evalRow, args []any) any {
 			return args[0].(decimal.Decimal).Neg()
 		}},
-		{[]DType{TInt}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tInt}, tInt, func(_ *evalRow, args []any) any {
 			return -args[0].(int64)
 		}},
-		{[]DType{TAmount}, TAmount, func(_ *Row, args []any) any {
-			a := args[0].(*Amount)
-			return &Amount{Number: a.Number.Neg(), Currency: a.Currency}
+		{[]dtype{tAmount}, tAmount, func(_ *evalRow, args []any) any {
+			a := args[0].(*amountValue)
+			return &amountValue{Number: a.Number.Neg(), Currency: a.Currency}
 		}},
-		{[]DType{TPosition}, TPosition, func(_ *Row, args []any) any {
-			p := args[0].(*Position)
-			return &Position{Units: Amount{Number: p.Units.Number.Neg(), Currency: p.Units.Currency}, Cost: p.Cost}
+		{[]dtype{tPosition}, tPosition, func(_ *evalRow, args []any) any {
+			p := args[0].(*positionValue)
+			return &positionValue{Units: amountValue{Number: p.Units.Number.Neg(), Currency: p.Units.Currency}, Cost: p.Cost}
 		}},
-		{[]DType{TInventory}, TInventory, func(_ *Row, args []any) any {
-			return args[0].(*Inventory).Neg()
+		{[]dtype{tInventory}, tInventory, func(_ *evalRow, args []any) any {
+			return args[0].(*inventoryValue).Neg()
 		}},
 	}},
 
 	// Date functions.
 	"year": {overloads: []funcOverload{
-		{[]DType{TDate}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tDate}, tInt, func(_ *evalRow, args []any) any {
 			return int64(args[0].(*ast.Date).Year())
 		}},
 	}},
 	"month": {overloads: []funcOverload{
-		{[]DType{TDate}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tDate}, tInt, func(_ *evalRow, args []any) any {
 			return int64(args[0].(*ast.Date).Month())
 		}},
 	}},
 	"day": {overloads: []funcOverload{
-		{[]DType{TDate}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tDate}, tInt, func(_ *evalRow, args []any) any {
 			return int64(args[0].(*ast.Date).Day())
 		}},
 	}},
 	"quarter": {overloads: []funcOverload{
-		{[]DType{TDate}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tDate}, tString, func(_ *evalRow, args []any) any {
 			d := args[0].(*ast.Date)
 			return fmt.Sprintf("%04d-Q%d", d.Year(), (int(d.Month())+2)/3)
 		}},
 	}},
 	"weekday": {overloads: []funcOverload{
-		{[]DType{TDate}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tDate}, tString, func(_ *evalRow, args []any) any {
 			return args[0].(*ast.Date).Format("Mon")
 		}},
 	}},
 	"ymonth": {overloads: []funcOverload{
-		{[]DType{TDate}, TDate, func(_ *Row, args []any) any {
+		{[]dtype{tDate}, tDate, func(_ *evalRow, args []any) any {
 			d := args[0].(*ast.Date)
 			return &ast.Date{Time: time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)}
 		}},
 	}},
 	"today": {overloads: []funcOverload{
-		{[]DType{}, TDate, func(_ *Row, _ []any) any {
+		{[]dtype{}, tDate, func(_ *evalRow, _ []any) any {
 			now := time.Now()
 			return &ast.Date{Time: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)}
 		}},
 	}},
 	"date": {overloads: []funcOverload{
-		{[]DType{TInt, TInt, TInt}, TDate, func(_ *Row, args []any) any {
+		{[]dtype{tInt, tInt, tInt}, tDate, func(_ *evalRow, args []any) any {
 			return &ast.Date{Time: time.Date(int(args[0].(int64)), time.Month(args[1].(int64)), int(args[2].(int64)), 0, 0, 0, 0, time.UTC)}
 		}},
-		{[]DType{TString}, TDate, func(_ *Row, args []any) any {
+		{[]dtype{tString}, tDate, func(_ *evalRow, args []any) any {
 			date := &ast.Date{}
 			if err := date.Capture([]string{args[0].(string)}); err != nil {
 				return nil
@@ -148,13 +148,13 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"date_add": {overloads: []funcOverload{
-		{[]DType{TDate, TInt}, TDate, func(_ *Row, args []any) any {
+		{[]dtype{tDate, tInt}, tDate, func(_ *evalRow, args []any) any {
 			d := args[0].(*ast.Date)
 			return &ast.Date{Time: d.AddDate(0, 0, int(args[1].(int64)))}
 		}},
 	}},
 	"date_diff": {overloads: []funcOverload{
-		{[]DType{TDate, TDate}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tDate, tDate}, tInt, func(_ *evalRow, args []any) any {
 			a, b := args[0].(*ast.Date), args[1].(*ast.Date)
 			return int64(a.Sub(b.Time).Hours() / 24)
 		}},
@@ -162,7 +162,7 @@ var functions = map[string]*funcDef{
 
 	// Account functions.
 	"parent": {overloads: []funcOverload{
-		{[]DType{TString}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString}, tString, func(_ *evalRow, args []any) any {
 			account := args[0].(string)
 			if idx := strings.LastIndex(account, ":"); idx >= 0 {
 				return account[:idx]
@@ -171,7 +171,7 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"leaf": {overloads: []funcOverload{
-		{[]DType{TString}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString}, tString, func(_ *evalRow, args []any) any {
 			account := args[0].(string)
 			if idx := strings.LastIndex(account, ":"); idx >= 0 {
 				return account[idx+1:]
@@ -180,19 +180,19 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"root": {overloads: []funcOverload{
-		{[]DType{TString, TInt}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString, tInt}, tString, func(_ *evalRow, args []any) any {
 			parts := strings.Split(args[0].(string), ":")
 			n := min(int(args[1].(int64)), len(parts))
 			return strings.Join(parts[:n], ":")
 		}},
 	}},
 	"account_sortkey": {overloads: []funcOverload{
-		{[]DType{TString}, TString, func(row *Row, args []any) any {
+		{[]dtype{tString}, tString, func(row *evalRow, args []any) any {
 			return accountSortKey(row.Ctx, args[0].(string))
 		}},
 	}},
 	"open_date": {overloads: []funcOverload{
-		{[]DType{TString}, TDate, func(row *Row, args []any) any {
+		{[]dtype{tString}, tDate, func(row *evalRow, args []any) any {
 			if account, ok := row.Ctx.Ledger.GetAccount(args[0].(string)); ok && account.OpenDate != nil {
 				return account.OpenDate
 			}
@@ -200,7 +200,7 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"close_date": {overloads: []funcOverload{
-		{[]DType{TString}, TDate, func(row *Row, args []any) any {
+		{[]dtype{tString}, tDate, func(row *evalRow, args []any) any {
 			if account, ok := row.Ctx.Ledger.GetAccount(args[0].(string)); ok && account.CloseDate != nil {
 				return account.CloseDate
 			}
@@ -210,7 +210,7 @@ var functions = map[string]*funcDef{
 	"has_account": {overloads: []funcOverload{
 		// Like bean-query, a case-insensitive search through every
 		// account the entry references, not only transaction postings.
-		{[]DType{TString}, TBool, func(row *Row, args []any) any {
+		{[]dtype{tString}, tBool, func(row *evalRow, args []any) any {
 			entry, ok := row.Entry.(ast.WithAccounts)
 			if !ok {
 				return false
@@ -230,41 +230,41 @@ var functions = map[string]*funcDef{
 
 	// Amount, position, and inventory functions.
 	"number": {overloads: []funcOverload{
-		{[]DType{TAmount}, TDecimal, func(_ *Row, args []any) any {
-			return args[0].(*Amount).Number
+		{[]dtype{tAmount}, tDecimal, func(_ *evalRow, args []any) any {
+			return args[0].(*amountValue).Number
 		}},
 	}},
 	"currency": {overloads: []funcOverload{
-		{[]DType{TAmount}, TString, func(_ *Row, args []any) any {
-			return args[0].(*Amount).Currency
+		{[]dtype{tAmount}, tString, func(_ *evalRow, args []any) any {
+			return args[0].(*amountValue).Currency
 		}},
 	}},
 	"commodity": {overloads: []funcOverload{
-		{[]DType{TAmount}, TString, func(_ *Row, args []any) any {
-			return args[0].(*Amount).Currency
+		{[]dtype{tAmount}, tString, func(_ *evalRow, args []any) any {
+			return args[0].(*amountValue).Currency
 		}},
 	}},
 	"units": {overloads: []funcOverload{
-		{[]DType{TPosition}, TAmount, func(_ *Row, args []any) any {
-			p := args[0].(*Position)
-			return &Amount{Number: p.Units.Number, Currency: p.Units.Currency}
+		{[]dtype{tPosition}, tAmount, func(_ *evalRow, args []any) any {
+			p := args[0].(*positionValue)
+			return &amountValue{Number: p.Units.Number, Currency: p.Units.Currency}
 		}},
-		{[]DType{TInventory}, TInventory, func(_ *Row, args []any) any {
-			inv := args[0].(*Inventory)
-			result := NewInventory()
+		{[]dtype{tInventory}, tInventory, func(_ *evalRow, args []any) any {
+			inv := args[0].(*inventoryValue)
+			result := newInventory()
 			for _, p := range inv.Positions() {
-				result.AddAmount(&Amount{Number: p.Units.Number, Currency: p.Units.Currency})
+				result.AddAmount(&amountValue{Number: p.Units.Number, Currency: p.Units.Currency})
 			}
 			return result
 		}},
 	}},
 	"cost": {overloads: []funcOverload{
-		{[]DType{TPosition}, TAmount, func(_ *Row, args []any) any {
-			return positionCost(args[0].(*Position))
+		{[]dtype{tPosition}, tAmount, func(_ *evalRow, args []any) any {
+			return positionCost(args[0].(*positionValue))
 		}},
-		{[]DType{TInventory}, TInventory, func(_ *Row, args []any) any {
-			inv := args[0].(*Inventory)
-			result := NewInventory()
+		{[]dtype{tInventory}, tInventory, func(_ *evalRow, args []any) any {
+			inv := args[0].(*inventoryValue)
+			result := newInventory()
 			for _, p := range inv.Positions() {
 				result.AddAmount(positionCost(p))
 			}
@@ -272,29 +272,29 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"only": {overloads: []funcOverload{
-		{[]DType{TString, TInventory}, TAmount, func(_ *Row, args []any) any {
+		{[]dtype{tString, tInventory}, tAmount, func(_ *evalRow, args []any) any {
 			currency := args[0].(string)
 			total := decimal.Decimal{}
-			for _, p := range args[1].(*Inventory).Positions() {
+			for _, p := range args[1].(*inventoryValue).Positions() {
 				if p.Units.Currency == currency {
 					total = pydecimal.Add(total, p.Units.Number)
 				}
 			}
-			return &Amount{Number: total, Currency: currency}
+			return &amountValue{Number: total, Currency: currency}
 		}},
 	}},
 	"filter_currency": {overloads: []funcOverload{
-		{[]DType{TPosition, TString}, TPosition, func(_ *Row, args []any) any {
-			p := args[0].(*Position)
+		{[]dtype{tPosition, tString}, tPosition, func(_ *evalRow, args []any) any {
+			p := args[0].(*positionValue)
 			if p.Units.Currency == args[1].(string) {
 				return p
 			}
 			return nil
 		}},
-		{[]DType{TInventory, TString}, TInventory, func(_ *Row, args []any) any {
+		{[]dtype{tInventory, tString}, tInventory, func(_ *evalRow, args []any) any {
 			currency := args[1].(string)
-			result := NewInventory()
-			for _, p := range args[0].(*Inventory).Positions() {
+			result := newInventory()
+			for _, p := range args[0].(*inventoryValue).Positions() {
 				if p.Units.Currency == currency {
 					result.AddPosition(p)
 				}
@@ -303,117 +303,117 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"getprice": {overloads: []funcOverload{
-		{[]DType{TString, TString}, TDecimal, func(row *Row, args []any) any {
+		{[]dtype{tString, tString}, tDecimal, func(row *evalRow, args []any) any {
 			return getPrice(row, args[0].(string), args[1].(string), nil)
 		}},
-		{[]DType{TString, TString, TDate}, TDecimal, func(row *Row, args []any) any {
+		{[]dtype{tString, tString, tDate}, tDecimal, func(row *evalRow, args []any) any {
 			return getPrice(row, args[0].(string), args[1].(string), args[2].(*ast.Date))
 		}},
 	}},
 	"convert": {overloads: []funcOverload{
-		{[]DType{TAmount, TString}, TAmount, func(row *Row, args []any) any {
-			return convertAmount(row, args[0].(*Amount), args[1].(string), nil)
+		{[]dtype{tAmount, tString}, tAmount, func(row *evalRow, args []any) any {
+			return convertAmount(row, args[0].(*amountValue), args[1].(string), nil)
 		}},
-		{[]DType{TAmount, TString, TDate}, TAmount, func(row *Row, args []any) any {
-			return convertAmount(row, args[0].(*Amount), args[1].(string), args[2].(*ast.Date))
+		{[]dtype{tAmount, tString, tDate}, tAmount, func(row *evalRow, args []any) any {
+			return convertAmount(row, args[0].(*amountValue), args[1].(string), args[2].(*ast.Date))
 		}},
-		{[]DType{TPosition, TString}, TAmount, func(row *Row, args []any) any {
-			p := args[0].(*Position)
+		{[]dtype{tPosition, tString}, tAmount, func(row *evalRow, args []any) any {
+			p := args[0].(*positionValue)
 			return convertPosition(row, p, args[1].(string), nil)
 		}},
-		{[]DType{TPosition, TString, TDate}, TAmount, func(row *Row, args []any) any {
-			p := args[0].(*Position)
+		{[]dtype{tPosition, tString, tDate}, tAmount, func(row *evalRow, args []any) any {
+			p := args[0].(*positionValue)
 			return convertPosition(row, p, args[1].(string), args[2].(*ast.Date))
 		}},
-		{[]DType{TInventory, TString}, TInventory, func(row *Row, args []any) any {
-			return convertInventory(row, args[0].(*Inventory), args[1].(string), nil)
+		{[]dtype{tInventory, tString}, tInventory, func(row *evalRow, args []any) any {
+			return convertInventory(row, args[0].(*inventoryValue), args[1].(string), nil)
 		}},
-		{[]DType{TInventory, TString, TDate}, TInventory, func(row *Row, args []any) any {
-			return convertInventory(row, args[0].(*Inventory), args[1].(string), args[2].(*ast.Date))
+		{[]dtype{tInventory, tString, tDate}, tInventory, func(row *evalRow, args []any) any {
+			return convertInventory(row, args[0].(*inventoryValue), args[1].(string), args[2].(*ast.Date))
 		}},
 	}},
 	"value": {overloads: []funcOverload{
-		{[]DType{TPosition}, TAmount, func(row *Row, args []any) any {
-			return positionValue(row, args[0].(*Position), nil)
+		{[]dtype{tPosition}, tAmount, func(row *evalRow, args []any) any {
+			return marketValue(row, args[0].(*positionValue), nil)
 		}},
-		{[]DType{TPosition, TDate}, TAmount, func(row *Row, args []any) any {
-			return positionValue(row, args[0].(*Position), args[1].(*ast.Date))
+		{[]dtype{tPosition, tDate}, tAmount, func(row *evalRow, args []any) any {
+			return marketValue(row, args[0].(*positionValue), args[1].(*ast.Date))
 		}},
-		{[]DType{TInventory}, TInventory, func(row *Row, args []any) any {
-			return inventoryValue(row, args[0].(*Inventory), nil)
+		{[]dtype{tInventory}, tInventory, func(row *evalRow, args []any) any {
+			return inventoryMarketValue(row, args[0].(*inventoryValue), nil)
 		}},
-		{[]DType{TInventory, TDate}, TInventory, func(row *Row, args []any) any {
-			return inventoryValue(row, args[0].(*Inventory), args[1].(*ast.Date))
+		{[]dtype{tInventory, tDate}, tInventory, func(row *evalRow, args []any) any {
+			return inventoryMarketValue(row, args[0].(*inventoryValue), args[1].(*ast.Date))
 		}},
 	}},
 	"possign": {overloads: []funcOverload{
-		{[]DType{TDecimal, TString}, TDecimal, func(row *Row, args []any) any {
+		{[]dtype{tDecimal, tString}, tDecimal, func(row *evalRow, args []any) any {
 			if accountInvertsSign(row.Ctx, args[1].(string)) {
 				return args[0].(decimal.Decimal).Neg()
 			}
 			return args[0]
 		}},
-		{[]DType{TAmount, TString}, TAmount, func(row *Row, args []any) any {
-			a := args[0].(*Amount)
+		{[]dtype{tAmount, tString}, tAmount, func(row *evalRow, args []any) any {
+			a := args[0].(*amountValue)
 			if accountInvertsSign(row.Ctx, args[1].(string)) {
-				return &Amount{Number: a.Number.Neg(), Currency: a.Currency}
+				return &amountValue{Number: a.Number.Neg(), Currency: a.Currency}
 			}
 			return a
 		}},
-		{[]DType{TPosition, TString}, TPosition, func(row *Row, args []any) any {
-			p := args[0].(*Position)
+		{[]dtype{tPosition, tString}, tPosition, func(row *evalRow, args []any) any {
+			p := args[0].(*positionValue)
 			if accountInvertsSign(row.Ctx, args[1].(string)) {
-				return &Position{Units: Amount{Number: p.Units.Number.Neg(), Currency: p.Units.Currency}, Cost: p.Cost}
+				return &positionValue{Units: amountValue{Number: p.Units.Number.Neg(), Currency: p.Units.Currency}, Cost: p.Cost}
 			}
 			return p
 		}},
-		{[]DType{TInventory, TString}, TInventory, func(row *Row, args []any) any {
+		{[]dtype{tInventory, tString}, tInventory, func(row *evalRow, args []any) any {
 			if accountInvertsSign(row.Ctx, args[1].(string)) {
-				return args[0].(*Inventory).Neg()
+				return args[0].(*inventoryValue).Neg()
 			}
 			return args[0]
 		}},
 	}},
 	"safediv": {overloads: []funcOverload{
-		{[]DType{TDecimal, TDecimal}, TDecimal, func(_ *Row, args []any) any {
+		{[]dtype{tDecimal, tDecimal}, tDecimal, func(_ *evalRow, args []any) any {
 			return safeDiv(args[0].(decimal.Decimal), args[1].(decimal.Decimal))
 		}},
-		{[]DType{TDecimal, TInt}, TDecimal, func(_ *Row, args []any) any {
+		{[]dtype{tDecimal, tInt}, tDecimal, func(_ *evalRow, args []any) any {
 			return safeDiv(args[0].(decimal.Decimal), decimal.NewFromInt(args[1].(int64)))
 		}},
 	}},
 
 	// String functions.
 	"str": {overloads: []funcOverload{
-		{[]DType{TAny}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tAny}, tString, func(_ *evalRow, args []any) any {
 			return objectString(args[0])
 		}},
 	}},
 	"length": {overloads: []funcOverload{
-		{[]DType{TString}, TInt, func(_ *Row, args []any) any {
+		{[]dtype{tString}, tInt, func(_ *evalRow, args []any) any {
 			return int64(len(args[0].(string)))
 		}},
-		{[]DType{TSet}, TInt, func(_ *Row, args []any) any {
-			return int64(len(args[0].(Set)))
+		{[]dtype{tSet}, tInt, func(_ *evalRow, args []any) any {
+			return int64(len(args[0].(setValue)))
 		}},
 	}},
 	"maxwidth": {overloads: []funcOverload{
-		{[]DType{TString, TInt}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString, tInt}, tString, func(_ *evalRow, args []any) any {
 			return shorten(args[0].(string), int(args[1].(int64)))
 		}},
 	}},
 	"upper": {overloads: []funcOverload{
-		{[]DType{TString}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString}, tString, func(_ *evalRow, args []any) any {
 			return strings.ToUpper(args[0].(string))
 		}},
 	}},
 	"lower": {overloads: []funcOverload{
-		{[]DType{TString}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString}, tString, func(_ *evalRow, args []any) any {
 			return strings.ToLower(args[0].(string))
 		}},
 	}},
 	"grep": {overloads: []funcOverload{
-		{[]DType{TString, TString}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString, tString}, tString, func(_ *evalRow, args []any) any {
 			re, err := regexp.Compile(args[0].(string))
 			if err != nil {
 				return nil
@@ -425,7 +425,7 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"grepn": {overloads: []funcOverload{
-		{[]DType{TString, TString, TInt}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString, tString, tInt}, tString, func(_ *evalRow, args []any) any {
 			re, err := regexp.Compile(args[0].(string))
 			if err != nil {
 				return nil
@@ -439,7 +439,7 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"subst": {overloads: []funcOverload{
-		{[]DType{TString, TString, TString}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString, tString, tString}, tString, func(_ *evalRow, args []any) any {
 			re, err := regexp.Compile(args[0].(string))
 			if err != nil {
 				return nil
@@ -448,12 +448,12 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"findfirst": {overloads: []funcOverload{
-		{[]DType{TString, TSet}, TString, func(_ *Row, args []any) any {
+		{[]dtype{tString, tSet}, tString, func(_ *evalRow, args []any) any {
 			re, err := regexp.Compile(args[0].(string))
 			if err != nil {
 				return nil
 			}
-			for _, elem := range args[1].(Set).Sorted() {
+			for _, elem := range args[1].(setValue).Sorted() {
 				if re.MatchString(elem) {
 					return elem
 				}
@@ -462,12 +462,12 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"joinstr": {overloads: []funcOverload{
-		{[]DType{TSet}, TString, func(_ *Row, args []any) any {
-			return strings.Join(args[0].(Set).Sorted(), ",")
+		{[]dtype{tSet}, tString, func(_ *evalRow, args []any) any {
+			return strings.Join(args[0].(setValue).Sorted(), ",")
 		}},
 	}},
 	"coalesce": {overloads: []funcOverload{
-		{[]DType{TAny, TAny}, TAny, func(_ *Row, args []any) any {
+		{[]dtype{tAny, tAny}, tAny, func(_ *evalRow, args []any) any {
 			if args[0] != nil {
 				return args[0]
 			}
@@ -477,7 +477,7 @@ var functions = map[string]*funcDef{
 
 	// Metadata functions.
 	"meta": {overloads: []funcOverload{
-		{[]DType{TString}, TAny, func(row *Row, args []any) any {
+		{[]dtype{tString}, tAny, func(row *evalRow, args []any) any {
 			if row.Posting == nil {
 				return nil
 			}
@@ -485,7 +485,7 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"entry_meta": {overloads: []funcOverload{
-		{[]DType{TString}, TAny, func(row *Row, args []any) any {
+		{[]dtype{tString}, tAny, func(row *evalRow, args []any) any {
 			if row.Txn == nil {
 				return nil
 			}
@@ -493,7 +493,7 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"any_meta": {overloads: []funcOverload{
-		{[]DType{TString}, TAny, func(row *Row, args []any) any {
+		{[]dtype{tString}, tAny, func(row *evalRow, args []any) any {
 			key := args[0].(string)
 			if row.Posting != nil {
 				if v := metaLookup(row.Posting.Metadata, key); v != nil {
@@ -510,11 +510,11 @@ var functions = map[string]*funcDef{
 
 // positionCost returns a position's total cost as an amount, or its units
 // when no cost basis is attached.
-func positionCost(p *Position) *Amount {
+func positionCost(p *positionValue) *amountValue {
 	if p.Cost == nil {
-		return &Amount{Number: p.Units.Number, Currency: p.Units.Currency}
+		return &amountValue{Number: p.Units.Number, Currency: p.Units.Currency}
 	}
-	return &Amount{Number: pydecimal.Mul(p.Units.Number, p.Cost.Number), Currency: p.Cost.Currency}
+	return &amountValue{Number: pydecimal.Mul(p.Units.Number, p.Cost.Number), Currency: p.Cost.Currency}
 }
 
 // priceDate defaults a missing conversion date to today, matching the
@@ -527,7 +527,7 @@ func priceDate(date *ast.Date) *ast.Date {
 	return &ast.Date{Time: time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)}
 }
 
-func getPrice(row *Row, from, to string, date *ast.Date) any {
+func getPrice(row *evalRow, from, to string, date *ast.Date) any {
 	if rate, ok := priceLookup(row.Ctx, priceDate(date), from, to); ok {
 		return rate
 	}
@@ -536,12 +536,12 @@ func getPrice(row *Row, from, to string, date *ast.Date) any {
 
 // convertAmount converts an amount to the given currency, returning it
 // unmodified when no conversion rate is available (official behavior).
-func convertAmount(row *Row, a *Amount, currency string, date *ast.Date) any {
+func convertAmount(row *evalRow, a *amountValue, currency string, date *ast.Date) any {
 	if a.Currency == currency {
 		return a
 	}
 	if rate, ok := priceLookup(row.Ctx, priceDate(date), a.Currency, currency); ok {
-		return &Amount{Number: pydecimal.Mul(a.Number, rate), Currency: currency}
+		return &amountValue{Number: pydecimal.Mul(a.Number, rate), Currency: currency}
 	}
 	return a
 }
@@ -550,47 +550,47 @@ func convertAmount(row *Row, a *Amount, currency string, date *ast.Date) any {
 // at its units' price in the currency, or else through its cost currency,
 // multiplying the units' price in that currency by its price in the target.
 // Without either it is returned as its units.
-func convertPosition(row *Row, p *Position, currency string, date *ast.Date) any {
+func convertPosition(row *evalRow, p *positionValue, currency string, date *ast.Date) any {
 	units := &p.Units
 	if units.Currency == currency {
 		return units
 	}
 	date = priceDate(date)
 	if rate, ok := priceLookup(row.Ctx, date, units.Currency, currency); ok {
-		return &Amount{Number: pydecimal.Mul(units.Number, rate), Currency: currency}
+		return &amountValue{Number: pydecimal.Mul(units.Number, rate), Currency: currency}
 	}
 	if p.Cost != nil && p.Cost.Currency != currency {
 		toCost, ok := priceLookup(row.Ctx, date, units.Currency, p.Cost.Currency)
 		if ok {
 			if toTarget, ok := priceLookup(row.Ctx, date, p.Cost.Currency, currency); ok {
-				return &Amount{Number: pydecimal.Mul(pydecimal.Mul(units.Number, toCost), toTarget), Currency: currency}
+				return &amountValue{Number: pydecimal.Mul(pydecimal.Mul(units.Number, toCost), toTarget), Currency: currency}
 			}
 		}
 	}
 	return units
 }
 
-func convertInventory(row *Row, inv *Inventory, currency string, date *ast.Date) any {
-	result := NewInventory()
+func convertInventory(row *evalRow, inv *inventoryValue, currency string, date *ast.Date) any {
+	result := newInventory()
 	for _, p := range inv.Positions() {
-		result.AddAmount(convertPosition(row, p, currency, date).(*Amount))
+		result.AddAmount(convertPosition(row, p, currency, date).(*amountValue))
 	}
 	return result
 }
 
-// positionValue converts a position to its cost currency at market value.
+// marketValue converts a position to its cost currency at market value.
 // Positions without a cost basis are returned as their units.
-func positionValue(row *Row, p *Position, date *ast.Date) any {
+func marketValue(row *evalRow, p *positionValue, date *ast.Date) any {
 	if p.Cost == nil {
-		return &Amount{Number: p.Units.Number, Currency: p.Units.Currency}
+		return &amountValue{Number: p.Units.Number, Currency: p.Units.Currency}
 	}
 	return convertAmount(row, &p.Units, p.Cost.Currency, date)
 }
 
-func inventoryValue(row *Row, inv *Inventory, date *ast.Date) any {
-	result := NewInventory()
+func inventoryMarketValue(row *evalRow, inv *inventoryValue, date *ast.Date) any {
+	result := newInventory()
 	for _, p := range inv.Positions() {
-		result.AddAmount(positionValue(row, p, date).(*Amount))
+		result.AddAmount(marketValue(row, p, date).(*amountValue))
 	}
 	return result
 }
@@ -718,7 +718,7 @@ func metaValue(v *ast.MetadataValue) any {
 		if err != nil {
 			return nil
 		}
-		return &Amount{Number: number, Currency: v.Amount.Currency}
+		return &amountValue{Number: number, Currency: v.Amount.Currency}
 	case v.Boolean != nil:
 		return *v.Boolean
 	}

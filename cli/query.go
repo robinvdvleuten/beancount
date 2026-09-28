@@ -8,7 +8,6 @@ import (
 	"io"
 	"os"
 	"strings"
-	"unicode/utf8"
 
 	"golang.org/x/term"
 
@@ -17,11 +16,9 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
-	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/query"
-	"github.com/robinvdvleuten/beancount/query/bql"
 )
 
 type QueryCmd struct {
@@ -76,13 +73,14 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// Invalid options were reported by the ledger above.
 	cfg, _ := config.ParseOptions(tree)
 
-	qctx := &query.Context{Ledger: l, Config: cfg}
+	qctx := &query.Context{Ledger: l, Config: cfg, AST: tree}
+	format := query.Format(cmd.Format)
 
 	// Without a query argument, a terminal gets the interactive shell and
 	// piped stdin is read as a single query, like bean-query.
 	if queryText == "" {
 		if cmd.File.Filename != "<stdin>" && term.IsTerminal(int(os.Stdin.Fd())) {
-			return runShell(runCtx, qctx, tree, cmd.Format, cmd.Numberify, os.Stdin, ctx.Stdout, validationErrors, sourceContent)
+			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, validationErrors, sourceContent)
 		}
 		piped, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -101,20 +99,20 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 			return fmt.Errorf("failed to create output file %s: %w", cmd.Output, err)
 		}
 		out = file
-		if runErr := runQuery(runCtx, qctx, tree, queryText, cmd.Format, cmd.Numberify, out); runErr != nil {
+		if runErr := query.Run(runCtx, qctx, queryText, format, cmd.Numberify, out); runErr != nil {
 			_ = file.Close()
 			return runErr
 		}
 		return file.Close()
 	}
 
-	return runQuery(runCtx, qctx, tree, queryText, cmd.Format, cmd.Numberify, out)
+	return query.Run(runCtx, qctx, queryText, format, cmd.Numberify, out)
 }
 
 // runShell is the interactive query REPL: one query per line, with help,
 // errors, and exit commands.
-func runShell(ctx context.Context, qctx *query.Context, tree *ast.AST, format string, numberify bool, in io.Reader, out io.Writer, validationErrors *ledger.ValidationErrors, sourceContent []byte) error {
-	printShellBanner(out, tree)
+func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out io.Writer, validationErrors *ledger.ValidationErrors, sourceContent []byte) error {
+	printShellBanner(out, qctx.AST)
 
 	scanner := bufio.NewScanner(in)
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
@@ -143,7 +141,7 @@ func runShell(ctx context.Context, qctx *query.Context, tree *ast.AST, format st
 			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors.Errors))
 			continue
 		}
-		if err := runQuery(ctx, qctx, tree, line, format, numberify, out); err != nil {
+		if err := query.Run(ctx, qctx, line, format, numberify, out); err != nil {
 			return err
 		}
 	}
@@ -170,74 +168,4 @@ func printShellBanner(out io.Writer, tree *ast.AST) {
 	}
 	_, _ = fmt.Fprintf(out, "Ready with %d directives (%d postings in %d transactions).\n",
 		len(tree.Directives), postings, transactions)
-}
-
-// runQuery parses, compiles, executes, and renders one BQL query. Query
-// errors print as "ERROR: ..." on the output stream with a zero exit status,
-// matching the official bean-query tool.
-func runQuery(ctx context.Context, qctx *query.Context, tree *ast.AST, queryText, format string, numberify bool, out io.Writer) error {
-	stmt, err := bql.Parse(queryText)
-	if err != nil {
-		return printQueryError(out, queryText, err)
-	}
-
-	if print, ok := stmt.(*bql.Print); ok {
-		compiled, err := query.CompilePrint(qctx, print)
-		if err != nil {
-			return printQueryError(out, queryText, err)
-		}
-		if err := query.ExecutePrint(ctx, qctx, tree, compiled, out); err != nil {
-			return printQueryError(out, queryText, err)
-		}
-		return nil
-	}
-
-	compiled, err := query.Compile(qctx, stmt)
-	if err != nil {
-		return printQueryError(out, queryText, err)
-	}
-	result, err := query.Execute(ctx, qctx, tree, compiled)
-	if err != nil {
-		return printQueryError(out, queryText, err)
-	}
-
-	// Like bean-query's shell, an empty result is reported before any
-	// renderer runs, whatever the output format.
-	if len(result.Rows) == 0 {
-		_, err := io.WriteString(out, "(empty)\n")
-		return err
-	}
-
-	switch format {
-	case "csv":
-		return query.RenderCSV(result, out, numberify)
-	default:
-		return query.RenderText(result, out)
-	}
-}
-
-// printQueryError prints a query error like bean-query: parse errors verbatim
-// as its parser raises them, compilation errors behind "ERROR: ".
-func printQueryError(out io.Writer, queryText string, err error) error {
-	var parseErr *bql.ParseError
-	if !stdErrors.As(err, &parseErr) {
-		_, printErr := fmt.Fprintf(out, "ERROR: %s\n", err.Error())
-		return printErr
-	}
-
-	// bean-query's lexer positions are character offsets.
-	offset := utf8.RuneCountInString(queryText[:min(parseErr.Pos.Offset, len(queryText))])
-	var message string
-	switch parseErr.Kind {
-	case bql.ErrUnterminated:
-		message = "ERROR: unterminated statement. Missing a semicolon?"
-	case bql.ErrUnknownToken:
-		message = fmt.Sprintf("Unknown token: LexToken(error,%s,1,%d)", pyrepr.String(queryText[parseErr.Pos.Offset:]), offset)
-	case bql.ErrEmptyFrom:
-		message = "Empty FROM expression is not allowed"
-	default:
-		message = fmt.Sprintf("ERROR: Syntax error near '%s' (at %d)\n  %s\n  %s^", parseErr.Near, offset, queryText, strings.Repeat(" ", offset))
-	}
-	_, printErr := fmt.Fprintln(out, message)
-	return printErr
 }

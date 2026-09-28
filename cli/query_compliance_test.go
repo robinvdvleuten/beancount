@@ -59,8 +59,8 @@ func loadQueryFixtures(t *testing.T) []queryFixture {
 	return fixtures
 }
 
-// runOurQuery executes a fixture through the same pipeline as the query
-// command and returns what would be written to stdout.
+// runOurQuery executes a fixture through the same load, process and run
+// steps as the query command and returns what it writes to stdout.
 func runOurQuery(t *testing.T, fixture queryFixture, format string, numberify bool) string {
 	t.Helper()
 
@@ -79,8 +79,8 @@ func runOurQuery(t *testing.T, fixture queryFixture, format string, numberify bo
 	assert.NoError(t, err)
 
 	var out strings.Builder
-	qctx := &query.Context{Ledger: l, Config: cfg}
-	assert.NoError(t, runQuery(ctx, qctx, result.AST, fixture.query, format, numberify, &out))
+	qctx := &query.Context{Ledger: l, Config: cfg, AST: result.AST}
+	assert.NoError(t, query.Run(ctx, qctx, fixture.query, query.Format(format), numberify, &out))
 	return out.String()
 }
 

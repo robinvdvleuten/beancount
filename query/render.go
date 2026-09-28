@@ -12,10 +12,10 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// RenderText writes a result as bean-query's default text table: headers
+// renderText writes a result as bean-query's default text table: headers
 // centered and truncated to the data width, a dashed rule, and per-type
 // value alignment.
-func RenderText(result *Result, w io.Writer) error {
+func renderText(result *table, w io.Writer) error {
 	renderers := prepareRenderers(result)
 
 	var b strings.Builder
@@ -53,11 +53,11 @@ func RenderText(result *Result, w io.Writer) error {
 	return err
 }
 
-// RenderCSV writes a result as bean-query's CSV output: full column names in
+// renderCSV writes a result as bean-query's CSV output: full column names in
 // the header, width-padded cells (an official quirk), and CRLF line endings.
 // With numberify, amount-bearing columns split into one numeric column per
 // currency.
-func RenderCSV(result *Result, w io.Writer, numberify bool) error {
+func renderCSV(result *table, w io.Writer, numberify bool) error {
 	if numberify {
 		result = numberifyResult(result)
 	}
@@ -101,7 +101,7 @@ func writeCSVRecord(b *strings.Builder, fields []string) {
 	b.WriteString("\r\n")
 }
 
-func prepareRenderers(result *Result) []columnRenderer {
+func prepareRenderers(result *table) []columnRenderer {
 	renderers := make([]columnRenderer, len(result.Columns))
 	for i, col := range result.Columns {
 		renderers[i] = newRenderer(col.Type, result.Display)
@@ -118,21 +118,21 @@ func prepareRenderers(result *Result) []columnRenderer {
 // decimal column per currency, named "column (CUR)", with currencies in
 // order of first appearance. Numbers are rounded to their currency's display
 // precision, like bean-query's numberify.
-func numberifyResult(result *Result) *Result {
+func numberifyResult(result *table) *table {
 	type split struct {
 		column     int
 		currencies []string
 		index      map[string]int
 	}
 
-	var columns []ResultColumn
+	var columns []tableColumn
 	splits := make(map[int]*split)
 	mapping := make([]int, 0, len(result.Columns)) // start index of each source column
 
 	for i, col := range result.Columns {
 		mapping = append(mapping, len(columns))
 		switch col.Type {
-		case TAmount, TPosition, TInventory:
+		case tAmount, tPosition, tInventory:
 			s := &split{column: i, index: make(map[string]int)}
 			for _, row := range result.Rows {
 				for _, currency := range valueCurrencies(row[i]) {
@@ -144,14 +144,14 @@ func numberifyResult(result *Result) *Result {
 			}
 			splits[i] = s
 			for _, currency := range s.currencies {
-				columns = append(columns, ResultColumn{
+				columns = append(columns, tableColumn{
 					Name: fmt.Sprintf("%s (%s)", col.Name, currency),
-					Type: TDecimal,
+					Type: tDecimal,
 				})
 			}
 			if len(s.currencies) == 0 {
 				// Keep a single empty column so the header survives.
-				columns = append(columns, ResultColumn{Name: col.Name, Type: TDecimal})
+				columns = append(columns, tableColumn{Name: col.Name, Type: tDecimal})
 			}
 		default:
 			columns = append(columns, col)
@@ -178,17 +178,17 @@ func numberifyResult(result *Result) *Result {
 		rows[r] = values
 	}
 
-	return &Result{Columns: columns, Rows: rows, Display: result.Display}
+	return &table{Columns: columns, Rows: rows, Display: result.Display}
 }
 
 // valueCurrencies lists the currencies present in an amount-bearing value.
 func valueCurrencies(v any) []string {
 	switch val := v.(type) {
-	case *Amount:
+	case *amountValue:
 		return []string{val.Currency}
-	case *Position:
+	case *positionValue:
 		return []string{val.Units.Currency}
-	case *Inventory:
+	case *inventoryValue:
 		var currencies []string
 		seen := make(map[string]bool)
 		for _, p := range val.Positions() {
@@ -206,15 +206,15 @@ func valueCurrencies(v any) []string {
 // amount-bearing value, summing inventory lots.
 func currencyNumber(v any, currency string) (decimal.Decimal, bool) {
 	switch val := v.(type) {
-	case *Amount:
+	case *amountValue:
 		if val.Currency == currency {
 			return val.Number, true
 		}
-	case *Position:
+	case *positionValue:
 		if val.Units.Currency == currency {
 			return val.Units.Number, true
 		}
-	case *Inventory:
+	case *inventoryValue:
 		total := decimal.Decimal{}
 		found := false
 		for _, p := range val.Positions() {
@@ -241,23 +241,23 @@ type columnRenderer interface {
 	format(v any) string
 }
 
-func newRenderer(t DType, display *ledger.DisplayContext) columnRenderer {
+func newRenderer(t dtype, display *ledger.DisplayContext) columnRenderer {
 	switch t {
-	case TAny:
+	case tAny:
 		return &objectRenderer{}
-	case TSet:
+	case tSet:
 		return &setRenderer{}
-	case TDate:
+	case tDate:
 		return &dateRenderer{}
-	case TInt:
+	case tInt:
 		return &intRenderer{}
-	case TBool:
+	case tBool:
 		return &boolRenderer{}
-	case TDecimal:
+	case tDecimal:
 		return &decimalRenderer{numbers: newNumberField(display)}
-	case TAmount:
+	case tAmount:
 		return &amountRenderer{amounts: amountField{numbers: newNumberField(display)}}
-	case TPosition, TInventory:
+	case tPosition, tInventory:
 		return &positionRenderer{
 			units: amountField{numbers: newNumberField(display)},
 			costs: amountField{numbers: newNumberField(display)},
@@ -334,11 +334,11 @@ func objectString(v any) string {
 		return "None"
 	case decimal.Decimal:
 		return decimalLiteral(val)
-	case *Amount:
+	case *amountValue:
 		return decimalLiteral(val.Number) + " " + val.Currency
-	case *Position:
+	case *positionValue:
 		return positionString(val, decimalLiteral)
-	case *Inventory:
+	case *inventoryValue:
 		return "(" + inventoryString(val, decimalLiteral) + ")"
 	}
 	return valueString(v)
@@ -353,7 +353,7 @@ type setRenderer struct {
 }
 
 func (r *setRenderer) prepare(v any) {
-	if set, ok := v.(Set); ok {
+	if set, ok := v.(setValue); ok {
 		for elem := range set {
 			r.w = max(r.w, len(elem))
 		}
@@ -364,7 +364,7 @@ func (r *setRenderer) contentWidth() int { return r.w }
 func (r *setRenderer) width() int        { return max(r.w, 1) }
 
 func (r *setRenderer) format(v any) string {
-	set, _ := v.(Set)
+	set, _ := v.(setValue)
 	if len(set) == 0 {
 		return strings.Repeat(" ", r.w)
 	}
@@ -623,7 +623,7 @@ type amountRenderer struct {
 }
 
 func (r *amountRenderer) prepare(v any) {
-	if a, ok := v.(*Amount); ok && a != nil {
+	if a, ok := v.(*amountValue); ok && a != nil {
 		r.amounts.observe(a.Number, a.Currency)
 	}
 }
@@ -635,7 +635,7 @@ func (r *amountRenderer) width() int {
 }
 
 func (r *amountRenderer) format(v any) string {
-	a, ok := v.(*Amount)
+	a, ok := v.(*amountValue)
 	if !ok || a == nil {
 		return strings.Repeat(" ", r.contentWidth())
 	}
@@ -651,13 +651,13 @@ type positionRenderer struct {
 	costs amountField
 }
 
-func (r *positionRenderer) positions(v any) []*Position {
+func (r *positionRenderer) positions(v any) []*positionValue {
 	switch val := v.(type) {
-	case *Position:
+	case *positionValue:
 		if val != nil {
-			return []*Position{val}
+			return []*positionValue{val}
 		}
-	case *Inventory:
+	case *inventoryValue:
 		if val != nil {
 			return val.Positions()
 		}
@@ -689,7 +689,7 @@ func (r *positionRenderer) width() int {
 	return max(r.subWidth(), 1)
 }
 
-func (r *positionRenderer) formatPosition(p *Position) string {
+func (r *positionRenderer) formatPosition(p *positionValue) string {
 	s := r.units.format(p.Units.Number, p.Units.Currency)
 	if p.Cost != nil {
 		s += " {" + r.costs.format(p.Cost.Number, p.Cost.Currency) + "}"

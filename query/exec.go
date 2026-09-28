@@ -10,30 +10,28 @@ import (
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
-// Result is an executed query: a header of visible columns and the result
+// table is an executed query: a header of visible columns and the result
 // rows, with one value per column.
-type Result struct {
-	Columns []ResultColumn
+type table struct {
+	Columns []tableColumn
 	Rows    [][]any
 	// Display holds the ledger's per-currency display precision, which the
 	// renderers size number columns with; nil renders numbers as written.
 	Display *ledger.DisplayContext
 }
 
-// ResultColumn describes one output column for the renderers.
-type ResultColumn struct {
+// tableColumn describes one output column for the renderers.
+type tableColumn struct {
 	Name string
-	Type DType
+	Type dtype
 }
 
-// Execute runs a compiled query over the processed directive stream. The
-// tree must have been processed by the ledger so posting amounts and costs
-// are interpolated.
-func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compiled) (*Result, error) {
+// execute runs a compiled query over the context's processed directives.
+func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*table, error) {
 	timer := telemetry.FromContext(ctx).Start("query.execute")
 	defer timer.End()
 
-	rows, err := generateRows(ctx, qctx, tree, compiled)
+	rows, err := generateRows(ctx, qctx, compiled)
 	if err != nil {
 		return nil, err
 	}
@@ -57,10 +55,10 @@ func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compil
 		output = output[:*compiled.Limit]
 	}
 
-	result := &Result{Rows: output, Display: qctx.Ledger.DisplayContext()}
+	result := &table{Rows: output, Display: qctx.Ledger.DisplayContext()}
 	for _, target := range compiled.Targets {
 		if !target.Hidden {
-			result.Columns = append(result.Columns, ResultColumn{Name: target.Name, Type: target.Type})
+			result.Columns = append(result.Columns, tableColumn{Name: target.Name, Type: target.Type})
 		}
 	}
 	return result, nil
@@ -70,14 +68,14 @@ func Execute(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compil
 // the surviving transactions into posting rows, one per booked position (see
 // postingPositions). The balance column is a single running inventory over
 // the rows that survive WHERE, matching the official executor.
-func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *Compiled) ([]*Row, error) {
-	entries := []ast.Directive(tree.Directives)
-	if compiled.From != nil {
-		qctx, entries = applyFromTransforms(qctx, entries, compiled.From)
+func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) ([]*evalRow, error) {
+	qctx, entries, err := compiled.From.entries(ctx, qctx)
+	if err != nil {
+		return nil, err
 	}
 
-	var rows []*Row
-	running := NewInventory()
+	var rows []*evalRow
+	running := newInventory()
 
 	for i, entry := range entries {
 		if i%1024 == 0 {
@@ -85,13 +83,6 @@ func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			default:
-			}
-		}
-
-		entryRow := &Row{Ctx: qctx, Entry: entry}
-		if compiled.From != nil && compiled.From.Expr != nil {
-			if !truthy(compiled.From.Expr.eval(entryRow)) {
-				continue
 			}
 		}
 
@@ -103,11 +94,11 @@ func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 		for _, posting := range txn.Postings {
 			positions := postingPositions(qctx, posting)
 			if len(positions) == 0 {
-				positions = []*Position{nil}
+				positions = []*positionValue{nil}
 			}
 
 			for _, position := range positions {
-				row := &Row{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position}
+				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position}
 				if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
 					continue
 				}
@@ -125,7 +116,7 @@ func generateRows(ctx context.Context, qctx *Context, tree *ast.AST, compiled *C
 }
 
 // evalTargets evaluates every target (visible and hidden) for a row.
-func evalTargets(row *Row, compiled *Compiled) []any {
+func evalTargets(row *evalRow, compiled *compiledSelect) []any {
 	values := make([]any, len(compiled.Targets))
 	for i, target := range compiled.Targets {
 		values[i] = target.expr.eval(row)
@@ -135,13 +126,13 @@ func evalTargets(row *Row, compiled *Compiled) []any {
 
 // group accumulates aggregate state for one distinct set of group keys.
 type group struct {
-	rep  *Row // representative row for evaluating group-key targets
+	rep  *evalRow // representative row for evaluating group-key targets
 	accs []accumulator
 }
 
 // executeGrouped hash-aggregates rows by the GROUP-BY targets and evaluates
 // the full target list once per group, in first-seen order.
-func executeGrouped(rows []*Row, compiled *Compiled) [][]any {
+func executeGrouped(rows []*evalRow, compiled *compiledSelect) [][]any {
 	groups := make(map[string]*group)
 	var order []string
 
@@ -182,7 +173,7 @@ func executeGrouped(rows []*Row, compiled *Compiled) [][]any {
 // orderRows sorts rows by the ORDER-BY target values. The sort is stable so
 // ties keep their natural (ledger) order, and a single direction applies to
 // the whole key list, matching the official grammar.
-func orderRows(output [][]any, compiled *Compiled) [][]any {
+func orderRows(output [][]any, compiled *compiledSelect) [][]any {
 	if len(compiled.OrderBy) == 0 {
 		return output
 	}
@@ -201,7 +192,7 @@ func orderRows(output [][]any, compiled *Compiled) [][]any {
 }
 
 // projectVisible strips hidden (group/order key) columns from the output.
-func projectVisible(output [][]any, compiled *Compiled) [][]any {
+func projectVisible(output [][]any, compiled *compiledSelect) [][]any {
 	visible := make([]int, 0, len(compiled.Targets))
 	for i, target := range compiled.Targets {
 		if !target.Hidden {

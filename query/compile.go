@@ -13,39 +13,38 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// CompileError represents a semantic error found while compiling a query.
-type CompileError struct {
+// compileError represents a semantic error found while compiling a query.
+type compileError struct {
 	Pos     ast.Position
 	Message string
 }
 
-func (e *CompileError) Error() string {
+func (e *compileError) Error() string {
 	return e.Message
 }
 
-// GetPosition implements the positioned-error interface used by the CLI
-// error renderer.
-func (e *CompileError) GetPosition() ast.Position {
+// GetPosition reports where in the query text the error is.
+func (e *compileError) GetPosition() ast.Position {
 	return e.Pos
 }
 
-func compileErrorf(node bql.Node, format string, args ...any) *CompileError {
-	return &CompileError{Pos: node.Pos(), Message: fmt.Sprintf(format, args...)}
+func compileErrorf(node bql.Node, format string, args ...any) *compileError {
+	return &compileError{Pos: node.Pos(), Message: fmt.Sprintf(format, args...)}
 }
 
 // cexpr is a compiled expression: a typed, evaluatable tree node.
 type cexpr interface {
-	typ() DType
-	eval(row *Row) any
+	typ() dtype
+	eval(row *evalRow) any
 }
 
-// Compiled is a fully resolved SELECT ready for execution. GroupBy and
+// compiledSelect is a fully resolved SELECT ready for execution. GroupBy and
 // OrderBy reference targets by index; hidden targets were appended
 // during resolution and are not rendered.
-type Compiled struct {
-	Targets   []CompiledTarget
+type compiledSelect struct {
+	Targets   []compiledTarget
 	Where     cexpr
-	From      *CompiledFrom
+	From      *compiledFrom
 	GroupBy   []int
 	OrderBy   []int
 	OrderDesc bool
@@ -58,36 +57,33 @@ type Compiled struct {
 	UsesBalance bool
 }
 
-// CompiledTarget is one output column (or hidden sort/group key).
-type CompiledTarget struct {
+// compiledTarget is one output column (or hidden sort/group key).
+type compiledTarget struct {
 	Name   string
-	Type   DType
+	Type   dtype
 	Hidden bool
 	IsAgg  bool // the expression contains an aggregate function
 	expr   cexpr
 	key    string // canonical expression key for structural matching
 }
 
-// CompiledFrom is the compiled FROM clause: an entry-level filter plus
-// summarization transforms applied by the executor.
-type CompiledFrom struct {
-	Expr    cexpr
-	OpenOn  *ast.Date
-	Close   bool
-	CloseOn *ast.Date
-	Clear   bool
-}
-
-// Compile resolves and type-checks a parsed BQL statement against the query
-// environments. BALANCES and JOURNAL desugar to their SELECT expansions;
-// PRINT compiles separately via CompilePrint.
-func Compile(ctx *Context, stmt bql.Statement) (*Compiled, error) {
-	sel, ok := Desugar(stmt).(*bql.Select)
-	if !ok {
-		return nil, fmt.Errorf("statement %T is not supported yet", stmt)
+// compile resolves and type-checks a parsed BQL statement against the query
+// environments. PRINT compiles to its FROM clause; every other statement
+// compiles as a SELECT, BALANCES and JOURNAL as the SELECT they desugar to.
+func compile(qctx *Context, parsed bql.Statement) (statement, error) {
+	c := &compiler{ctx: qctx}
+	if p, ok := parsed.(*bql.Print); ok {
+		compiled, err := c.compilePrint(p)
+		if err != nil {
+			return nil, err
+		}
+		return compiled, nil
 	}
-	c := &compiler{ctx: ctx}
-	return c.compileSelect(sel)
+	compiled, err := c.compileSelect(desugar(parsed).(*bql.Select))
+	if err != nil {
+		return nil, err
+	}
+	return compiled, nil
 }
 
 type compiler struct {
@@ -97,28 +93,14 @@ type compiler struct {
 	usesBalance bool
 }
 
-func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
-	compiled := &Compiled{Distinct: sel.Distinct, Limit: sel.Limit}
+func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
+	compiled := &compiledSelect{Distinct: sel.Distinct, Limit: sel.Limit}
 
-	// FROM compiles against the entry environment, everything else against
-	// the posting environment.
-	if sel.From != nil {
-		from := &CompiledFrom{
-			OpenOn:  sel.From.OpenOn,
-			Close:   sel.From.Close,
-			CloseOn: sel.From.CloseOn,
-			Clear:   sel.From.Clear,
-		}
-		if sel.From.Expr != nil {
-			c.env = fromEnv
-			expr, err := c.compileExpr(sel.From.Expr)
-			if err != nil {
-				return nil, err
-			}
-			from.Expr = expr
-		}
-		compiled.From = from
+	from, err := c.compileFrom(sel.From)
+	if err != nil {
+		return nil, err
 	}
+	compiled.From = from
 
 	c.env = targetsEnv
 
@@ -142,7 +124,7 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 		}
 		name = uniqueName(name, allocated)
 		allocated[name] = true
-		compiled.Targets = append(compiled.Targets, CompiledTarget{
+		compiled.Targets = append(compiled.Targets, compiledTarget{
 			Name:  name,
 			Type:  expr.typ(),
 			IsAgg: c.isAggregate(target.Expr),
@@ -206,7 +188,7 @@ func (c *compiler) compileSelect(sel *bql.Select) (*Compiled, error) {
 // targets for expressions that are not in the select list. Without an
 // explicit GROUP BY, an aggregate query implicitly groups by all
 // non-aggregate targets (official behavior).
-func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *Compiled) error {
+func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) error {
 	if sel.Having != nil {
 		return compileErrorf(sel.Having, "The HAVING clause is not supported yet.")
 	}
@@ -242,7 +224,7 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *Compiled) error {
 		if compiled.Targets[idx].IsAgg {
 			return compileErrorf(item, "GROUP-BY expressions may not reference aggregates: '%s'.", ref)
 		}
-		if compiled.Targets[idx].Type == TInventory {
+		if compiled.Targets[idx].Type == tInventory {
 			return compileErrorf(item, "GROUP-BY a non-hashable type is not supported: '%s'.", ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)
@@ -254,7 +236,7 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *Compiled) error {
 // a target name refers to that target; any other expression, which may
 // not be an aggregate, matches a target structurally or becomes a hidden
 // one.
-func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *Compiled) (int, error) {
+func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect) (int, error) {
 	switch ref := item.(type) {
 	case *bql.Int:
 		return c.targetIndex(ref, compiled, "GROUP-BY")
@@ -272,7 +254,7 @@ func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *Compiled) (int, e
 // resolveOrderBy maps ORDER BY expressions to target indices, appending
 // hidden targets as needed. A single trailing direction applies to the
 // whole list.
-func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *Compiled) error {
+func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *compiledSelect) error {
 	compiled.OrderDesc = sel.OrderDesc
 	for _, item := range sel.OrderBy {
 		idx, err := c.resolveTargetRef(item, compiled, "ORDER-BY")
@@ -288,7 +270,7 @@ func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *Compiled) error {
 // literals are 1-based indices into the visible targets; identifiers match
 // aliases; other expressions match targets structurally or are appended as
 // hidden targets. clause names the clause in index errors.
-func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, clause string) (int, error) {
+func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, clause string) (int, error) {
 	if lit, ok := item.(*bql.Int); ok {
 		return c.targetIndex(lit, compiled, clause)
 	}
@@ -309,7 +291,7 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *Compiled, clause st
 	if err != nil {
 		return 0, err
 	}
-	compiled.Targets = append(compiled.Targets, CompiledTarget{
+	compiled.Targets = append(compiled.Targets, compiledTarget{
 		Name:   deriveName(item),
 		Type:   expr.typ(),
 		Hidden: true,
@@ -331,7 +313,7 @@ func uniqueName(name string, allocated map[string]bool) string {
 }
 
 // targetIndex resolves a 1-based index into the visible targets.
-func (c *compiler) targetIndex(lit *bql.Int, compiled *Compiled, clause string) (int, error) {
+func (c *compiler) targetIndex(lit *bql.Int, compiled *compiledSelect, clause string) (int, error) {
 	// Walk the visible targets to the index; no int64-to-int narrowing.
 	var n int64
 	for i, target := range compiled.Targets {
@@ -347,7 +329,7 @@ func (c *compiler) targetIndex(lit *bql.Int, compiled *Compiled, clause string) 
 }
 
 // targetNamed finds the visible target with the given name or alias.
-func targetNamed(name string, compiled *Compiled) (int, bool) {
+func targetNamed(name string, compiled *compiledSelect) (int, bool) {
 	for i, target := range compiled.Targets {
 		if !target.Hidden && target.Name == name {
 			return i, true
@@ -392,7 +374,7 @@ func (c *compiler) isAggregate(e bql.Expr) bool {
 
 // checkGroupCoverage enforces that grouped queries cover every visible
 // non-aggregate target with a GROUP-BY key, using the official error message.
-func checkGroupCoverage(sel *bql.Select, compiled *Compiled) error {
+func checkGroupCoverage(sel *bql.Select, compiled *compiledSelect) error {
 	if !compiled.HasAgg && len(sel.GroupBy) == 0 {
 		return nil
 	}
@@ -418,17 +400,17 @@ func checkGroupCoverage(sel *bql.Select, compiled *Compiled) error {
 func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 	switch node := e.(type) {
 	case *bql.Str:
-		return &cLiteral{v: node.Value, t: TString}, nil
+		return &cLiteral{v: node.Value, t: tString}, nil
 	case *bql.Int:
-		return &cLiteral{v: node.Value, t: TInt}, nil
+		return &cLiteral{v: node.Value, t: tInt}, nil
 	case *bql.Dec:
-		return &cLiteral{v: node.Value, t: TDecimal}, nil
+		return &cLiteral{v: node.Value, t: tDecimal}, nil
 	case *bql.DateLit:
-		return &cLiteral{v: node.Value, t: TDate}, nil
+		return &cLiteral{v: node.Value, t: tDate}, nil
 	case *bql.Bool:
-		return &cLiteral{v: node.Value, t: TBool}, nil
+		return &cLiteral{v: node.Value, t: tBool}, nil
 	case *bql.Null:
-		return &cLiteral{v: nil, t: TAny}, nil
+		return &cLiteral{v: nil, t: tAny}, nil
 
 	case *bql.Ident:
 		def, ok := c.env.columns[node.Name]
@@ -457,7 +439,7 @@ func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
 
 	// Like bean-query, compile the arguments before resolving the function.
 	args := make([]cexpr, len(node.Args))
-	argTypes := make([]DType, len(node.Args))
+	argTypes := make([]dtype, len(node.Args))
 	for i, argNode := range node.Args {
 		arg, err := c.compileExpr(argNode)
 		if err != nil {
@@ -524,16 +506,16 @@ func (c *compiler) compileBinary(node *bql.Binary) (cexpr, error) {
 		return nil, err
 	}
 
-	t := TBool
+	t := tBool
 	switch node.Op {
 	case bql.PLUS, bql.MINUS, bql.ASTERISK:
-		if l.typ() == TInt && r.typ() == TInt {
-			t = TInt
+		if l.typ() == tInt && r.typ() == tInt {
+			t = tInt
 		} else {
-			t = TDecimal
+			t = tDecimal
 		}
 	case bql.SLASH:
-		t = TDecimal
+		t = tDecimal
 	}
 	return &cBinary{op: node.Op, l: l, r: r, t: t}, nil
 }
@@ -683,33 +665,33 @@ func exprKey(e bql.Expr) string {
 
 type cLiteral struct {
 	v any
-	t DType
+	t dtype
 }
 
-func (c *cLiteral) typ() DType    { return c.t }
-func (c *cLiteral) eval(*Row) any { return c.v }
+func (c *cLiteral) typ() dtype        { return c.t }
+func (c *cLiteral) eval(*evalRow) any { return c.v }
 
 type cColumn struct {
 	def *columnDef
 }
 
-func (c *cColumn) typ() DType        { return c.def.typ }
-func (c *cColumn) eval(row *Row) any { return c.def.eval(row) }
+func (c *cColumn) typ() dtype            { return c.def.typ }
+func (c *cColumn) eval(row *evalRow) any { return c.def.eval(row) }
 
 type cCall struct {
 	overload *funcOverload
 	args     []cexpr
 }
 
-func (c *cCall) typ() DType { return c.overload.result }
+func (c *cCall) typ() dtype { return c.overload.result }
 
-func (c *cCall) eval(row *Row) any {
+func (c *cCall) eval(row *evalRow) any {
 	args := make([]any, len(c.args))
 	for i, arg := range c.args {
 		args[i] = arg.eval(row)
-		// Propagate NULL through typed parameters; polymorphic (TAny)
+		// Propagate NULL through typed parameters; polymorphic (tAny)
 		// parameters receive NULL and decide themselves.
-		if args[i] == nil && c.overload.params[i] != TAny {
+		if args[i] == nil && c.overload.params[i] != tAny {
 			return nil
 		}
 	}
@@ -718,17 +700,17 @@ func (c *cCall) eval(row *Row) any {
 
 // cAgg is a reference to an aggregate accumulator slot. During accumulation
 // the executor feeds rows to the accumulator; during output evaluation the
-// finalized value is read back from Row.AggValues.
+// finalized value is read back from evalRow.AggValues.
 type cAgg struct {
 	def    *aggDef
 	arg    cexpr
-	result DType
+	result dtype
 	slot   int
 }
 
-func (c *cAgg) typ() DType { return c.result }
+func (c *cAgg) typ() dtype { return c.result }
 
-func (c *cAgg) eval(row *Row) any {
+func (c *cAgg) eval(row *evalRow) any {
 	if c.slot < len(row.AggValues) {
 		return row.AggValues[c.slot]
 	}
@@ -739,18 +721,18 @@ type cNot struct {
 	x cexpr
 }
 
-func (c *cNot) typ() DType        { return TBool }
-func (c *cNot) eval(row *Row) any { return !truthy(c.x.eval(row)) }
+func (c *cNot) typ() dtype            { return tBool }
+func (c *cNot) eval(row *evalRow) any { return !truthy(c.x.eval(row)) }
 
 type cBinary struct {
 	op   bql.TokenType
 	l, r cexpr
-	t    DType
+	t    dtype
 }
 
-func (c *cBinary) typ() DType { return c.t }
+func (c *cBinary) typ() dtype { return c.t }
 
-func (c *cBinary) eval(row *Row) any {
+func (c *cBinary) eval(row *evalRow) any {
 	switch c.op {
 	case bql.AND:
 		return truthy(c.l.eval(row)) && truthy(c.r.eval(row))
@@ -801,7 +783,7 @@ func (c *cBinary) eval(row *Row) any {
 		if !ok {
 			return false
 		}
-		set, ok := r.(Set)
+		set, ok := r.(setValue)
 		if !ok {
 			return false
 		}

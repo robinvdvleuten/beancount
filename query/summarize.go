@@ -15,10 +15,10 @@ import (
 // A bare CLOSE truncates nothing, but still adds the conversion entry.
 // OPEN ON, CLOSE and CLEAR create transactions, and the returned context
 // knows their postings' positions.
-func applyFromTransforms(qctx *Context, entries []ast.Directive, from *CompiledFrom) (*Context, []ast.Directive) {
+func applyFromTransforms(qctx *Context, entries []ast.Directive, from *compiledFrom) (*Context, []ast.Directive) {
 	if from.OpenOn != nil || from.CloseOn != nil || from.Close || from.Clear {
 		summarizing := *qctx
-		summarizing.summarized = make(map[*ast.Posting]*Position)
+		summarizing.summarized = make(map[*ast.Posting]*positionValue)
 		qctx = &summarizing
 	}
 
@@ -43,7 +43,7 @@ func applyFromTransforms(qctx *Context, entries []ast.Directive, from *CompiledF
 // the last prices stay, sorted in among the opening transactions.
 func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) []ast.Directive {
 	var before, after []ast.Directive
-	accounts := make(map[string]*Inventory)
+	accounts := make(map[string]*inventoryValue)
 
 	for _, entry := range entries {
 		if !entry.Date().Before(openDate.Time) {
@@ -72,7 +72,7 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 		}
 		target, ok := accounts[earnings]
 		if !ok {
-			target = NewInventory()
+			target = newInventory()
 			accounts[earnings] = target
 		}
 		for _, p := range accounts[account].Positions() {
@@ -189,7 +189,7 @@ func closeTransform(qctx *Context, entries []ast.Directive, closeDate *ast.Date)
 // the conversion currency so the entry still balances. It records each
 // leg's position in qctx and returns nil when the cost balance is empty.
 func conversionTransaction(qctx *Context, entries []ast.Directive, date *ast.Date, account string) *ast.Transaction {
-	balance := NewInventory()
+	balance := newInventory()
 	for _, entry := range entries {
 		txn, ok := entry.(*ast.Transaction)
 		if !ok {
@@ -202,7 +202,7 @@ func conversionTransaction(qctx *Context, entries []ast.Directive, date *ast.Dat
 		}
 	}
 
-	costs := NewInventory()
+	costs := newInventory()
 	for _, p := range balance.Positions() {
 		costs.AddAmount(positionCost(p))
 	}
@@ -213,11 +213,11 @@ func conversionTransaction(qctx *Context, entries []ast.Directive, date *ast.Dat
 	price := ast.NewAmount("0", conversionCurrency)
 	var postings []*ast.Posting
 	for _, p := range costs.Positions() {
-		units := Amount{Number: p.Units.Number.Neg(), Currency: p.Units.Currency}
+		units := amountValue{Number: p.Units.Number.Neg(), Currency: p.Units.Currency}
 		leg := ast.NewPosting(ast.Account(account),
 			ast.WithAmount(numberString(units.Number), units.Currency),
 			ast.WithPrice(price))
-		qctx.summarized[leg] = &Position{Units: units}
+		qctx.summarized[leg] = &positionValue{Units: units}
 		postings = append(postings, leg)
 	}
 	narration := "Conversion for " + objectString(balance)
@@ -231,7 +231,7 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 		return entries
 	}
 
-	accounts := make(map[string]*Inventory)
+	accounts := make(map[string]*inventoryValue)
 	var lastDate time.Time
 	for _, entry := range entries {
 		if entry.Date().After(lastDate) {
@@ -262,11 +262,11 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 
 // bookTransaction books a transaction's postings into the per-account
 // inventories, using the same booked positions as row generation.
-func bookTransaction(qctx *Context, accounts map[string]*Inventory, txn *ast.Transaction) {
+func bookTransaction(qctx *Context, accounts map[string]*inventoryValue, txn *ast.Transaction) {
 	for _, posting := range txn.Postings {
 		inventory, ok := accounts[string(posting.Account)]
 		if !ok {
-			inventory = NewInventory()
+			inventory = newInventory()
 			accounts[string(posting.Account)] = inventory
 		}
 		for _, position := range postingPositions(qctx, posting) {
@@ -281,7 +281,7 @@ func bookTransaction(qctx *Context, accounts map[string]*Inventory, txn *ast.Tra
 // directly by an equity leg for that position's cost value. When negate is
 // set the account legs carry the negated balance (transfers); otherwise they
 // restate it (opening balances). It records each leg's position in qctx.
-func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account, equity string, inventory *Inventory, negate bool) *ast.Transaction {
+func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account, equity string, inventory *inventoryValue, negate bool) *ast.Transaction {
 	positions := inventory.Positions()
 	postings := make([]*ast.Posting, 0, 2*len(positions))
 
@@ -298,7 +298,7 @@ func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account,
 			opts = append(opts, ast.WithCost(cost))
 		}
 		leg := ast.NewPosting(ast.Account(account), opts...)
-		qctx.summarized[leg] = &Position{Units: units, Cost: p.Cost}
+		qctx.summarized[leg] = &positionValue{Units: units, Cost: p.Cost}
 		postings = append(postings, leg)
 
 		value := *positionCost(p)
@@ -306,14 +306,14 @@ func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account,
 			value.Number = value.Number.Neg()
 		}
 		leg = ast.NewPosting(ast.Account(equity), ast.WithAmount(numberString(value.Number), value.Currency))
-		qctx.summarized[leg] = &Position{Units: value}
+		qctx.summarized[leg] = &positionValue{Units: value}
 		postings = append(postings, leg)
 	}
 
 	return ast.NewTransaction(date, narration, ast.WithFlag(flag), ast.WithPostings(postings...))
 }
 
-func sortedAccounts(accounts map[string]*Inventory) []string {
+func sortedAccounts(accounts map[string]*inventoryValue) []string {
 	names := make([]string, 0, len(accounts))
 	for name := range accounts {
 		names = append(names, name)

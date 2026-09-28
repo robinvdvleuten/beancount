@@ -38,19 +38,19 @@ option "operating_currency" "USD"
 2014-05-01 price HOOL 520.00 USD
 `
 
-func renderText(t *testing.T, query string) string {
+func textOutput(t *testing.T, query string) string {
 	t.Helper()
-	ctx, tree := newContextFromSource(t, renderLedger)
+	ctx := newContextFromSource(t, renderLedger)
 	var b strings.Builder
-	assert.NoError(t, RenderText(runQueryOn(t, ctx, tree, query), &b))
+	assert.NoError(t, renderText(runQueryOn(t, ctx, query), &b))
 	return b.String()
 }
 
-func renderCSV(t *testing.T, query string, numberify bool) string {
+func csvOutput(t *testing.T, query string, numberify bool) string {
 	t.Helper()
-	ctx, tree := newContextFromSource(t, renderLedger)
+	ctx := newContextFromSource(t, renderLedger)
 	var b strings.Builder
-	assert.NoError(t, RenderCSV(runQueryOn(t, ctx, tree, query), &b, numberify))
+	assert.NoError(t, renderCSV(runQueryOn(t, ctx, query), &b, numberify))
 	return b.String()
 }
 
@@ -63,7 +63,7 @@ func TestRenderTextGroupedInventory(t *testing.T) {
 		"Income:Salary           -2500.00 USD              \n" +
 		"Expenses:Food               4.50 USD              \n" +
 		"Assets:Invest              10    HOOL {500.00 USD}\n"
-	assert.Equal(t, expected, renderText(t, "select account, sum(position) group by account"))
+	assert.Equal(t, expected, textOutput(t, "select account, sum(position) group by account"))
 }
 
 func TestRenderTextInventoryJoinsPositions(t *testing.T) {
@@ -73,7 +73,7 @@ func TestRenderTextInventoryJoinsPositions(t *testing.T) {
 		"       sum_position       \n" +
 		"--------------------------\n" +
 		"   10    HOOL {500.00 USD}, -5000.00 USD              \n"
-	assert.Equal(t, expected, renderText(t, "select sum(position)"))
+	assert.Equal(t, expected, textOutput(t, "select sum(position)"))
 }
 
 func TestRenderTextHeaderTruncation(t *testing.T) {
@@ -83,7 +83,7 @@ func TestRenderTextHeaderTruncation(t *testing.T) {
 		"    10 2014-01-02\n" +
 		"    10 2014-01-02\n" +
 		"job 14 2014-02-03\n"
-	assert.Equal(t, expected, renderText(t, "select tags, lineno, date limit 3"))
+	assert.Equal(t, expected, textOutput(t, "select tags, lineno, date limit 3"))
 }
 
 func TestRenderTextScalarTypes(t *testing.T) {
@@ -91,7 +91,7 @@ func TestRenderTextScalarTypes(t *testing.T) {
 		"equal c3_ c4\n" +
 		"----- --- --\n" +
 		"TRUE  3.5 42\n"
-	assert.Equal(t, expected, renderText(t, "select 2 = 2, 3.5, 42 limit 1"))
+	assert.Equal(t, expected, textOutput(t, "select 2 = 2, 3.5, 42 limit 1"))
 }
 
 func TestRenderTextSignColumn(t *testing.T) {
@@ -103,7 +103,7 @@ func TestRenderTextSignColumn(t *testing.T) {
 		" -1  1000.00  1000.00 USD\n" +
 		" 11  2500.00  2500.00 USD\n" +
 		" 23    -4.50    -4.50 USD\n"
-	assert.Equal(t, expected, renderText(t,
+	assert.Equal(t, expected, textOutput(t,
 		"select lineno * 3 - 31, number, position where account = 'Assets:Checking' and number > -10"))
 }
 
@@ -111,7 +111,7 @@ func TestRenderCSVPadsValues(t *testing.T) {
 	expected := "account\r\n" +
 		"Assets:Checking        \r\n" +
 		"Equity:Opening-Balances\r\n"
-	assert.Equal(t, expected, renderCSV(t, "select account limit 2", false))
+	assert.Equal(t, expected, csvOutput(t, "select account limit 2", false))
 }
 
 func TestRenderCSVGroupedInventory(t *testing.T) {
@@ -121,7 +121,7 @@ func TestRenderCSVGroupedInventory(t *testing.T) {
 		"Equity:Opening-Balances,-1000.00 USD              \r\n" +
 		"Expenses:Food          ,    4.50 USD              \r\n" +
 		"Income:Salary          ,-2500.00 USD              \r\n"
-	assert.Equal(t, expected, renderCSV(t, "select account, sum(position) group by account order by account", false))
+	assert.Equal(t, expected, csvOutput(t, "select account, sum(position) group by account order by account", false))
 }
 
 func TestRenderCSVNumberify(t *testing.T) {
@@ -131,5 +131,5 @@ func TestRenderCSVNumberify(t *testing.T) {
 		"Equity:Opening-Balances,-1000.00,  \r\n" +
 		"Expenses:Food          ,    4.50,  \r\n" +
 		"Income:Salary          ,-2500.00,  \r\n"
-	assert.Equal(t, expected, renderCSV(t, "select account, sum(position) group by account order by account", true))
+	assert.Equal(t, expected, csvOutput(t, "select account, sum(position) group by account order by account", true))
 }

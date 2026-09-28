@@ -6,28 +6,21 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
-	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
 )
 
 // runQuery compiles and executes a query against the shared test ledger.
-func runQuery(t *testing.T, query string) *Result {
+func runQuery(t *testing.T, query string) *table {
 	t.Helper()
-	ctx, tree := newTestContext(t)
-	return runQueryOn(t, ctx, tree, query)
+	return runQueryOn(t, newTestContext(t), query)
 }
 
-func runQueryOn(t *testing.T, ctx *Context, tree *ast.AST, query string) *Result {
+func runQueryOn(t *testing.T, ctx *Context, query string) *table {
 	t.Helper()
-	stmt, err := bql.Parse(query)
-	assert.NoError(t, err)
-	compiled, err := Compile(ctx, stmt)
-	assert.NoError(t, err)
-	result, err := Execute(context.Background(), ctx, tree, compiled)
+	result, err := execute(context.Background(), ctx, mustCompile(t, ctx, query))
 	assert.NoError(t, err)
 	return result
 }
@@ -68,13 +61,13 @@ func TestExecuteGroupBySum(t *testing.T) {
 	assert.Equal(t, 5, len(result.Rows))
 	// 1000 + 2500 - 4.50 - 5000 (HOOL purchase), matching bean-query.
 	assert.Equal(t, "Assets:Checking", result.Rows[0][0].(string))
-	inv := result.Rows[0][1].(*Inventory)
+	inv := result.Rows[0][1].(*inventoryValue)
 	assert.Equal(t, "-1504.5 USD", valueString(inv))
 
 	// The HOOL position keeps its cost basis, stamped with the transaction
 	// date like official booking.
 	assert.Equal(t, "Assets:Invest", result.Rows[1][0].(string))
-	assert.Equal(t, "10 HOOL {500 USD, 2014-04-01}", valueString(result.Rows[1][1].(*Inventory)))
+	assert.Equal(t, "10 HOOL {500 USD, 2014-04-01}", valueString(result.Rows[1][1].(*inventoryValue)))
 }
 
 func TestExecuteImplicitGroupBy(t *testing.T) {
@@ -186,7 +179,7 @@ func TestExecuteOpenOnSummarizes(t *testing.T) {
 func TestExecuteOpenOnPostsEquityLegPerLot(t *testing.T) {
 	// Each summarized lot is followed by its own equity leg, as in
 	// beancount's create_entries_from_balances.
-	ctx, tree := newContextFromSource(t, `
+	ctx := newContextFromSource(t, `
 2020-01-01 open Assets:Stock
 2020-01-01 open Equity:Opening-Balances
 
@@ -198,7 +191,7 @@ func TestExecuteOpenOnPostsEquityLegPerLot(t *testing.T) {
   Assets:Stock   5 HOOL {110.00 USD}
   Equity:Opening-Balances
 `)
-	result := runQueryOn(t, ctx, tree, "SELECT account, weight FROM OPEN ON 2020-01-04 WHERE narration ~ 'Assets:Stock'")
+	result := runQueryOn(t, ctx, "SELECT account, weight FROM OPEN ON 2020-01-04 WHERE narration ~ 'Assets:Stock'")
 
 	var got []string
 	for _, row := range result.Rows {
@@ -213,29 +206,26 @@ func TestExecuteOpenOnPostsEquityLegPerLot(t *testing.T) {
 }
 
 func TestExecuteCancellation(t *testing.T) {
-	qctx, tree := newTestContext(t)
-	stmt, err := bql.Parse("SELECT date")
-	assert.NoError(t, err)
-	compiled, err := Compile(qctx, stmt)
-	assert.NoError(t, err)
+	qctx := newTestContext(t)
+	compiled := mustCompile(t, qctx, "SELECT date")
 
 	cancelled, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err = Execute(cancelled, qctx, tree, compiled)
+	_, err := execute(cancelled, qctx, compiled)
 	assert.Error(t, err)
 }
 
 func TestInventoryKeepsInsertionOrder(t *testing.T) {
 	// Like beancount's dict-backed inventory: first-added order, and a
 	// position that sums to zero goes to the end when added again.
-	inv := NewInventory()
-	aapl := &Amount{Number: decimal.NewFromInt(1), Currency: "AAPL"}
-	zzz := &Amount{Number: decimal.NewFromInt(2), Currency: "ZZZ"}
+	inv := newInventory()
+	aapl := &amountValue{Number: decimal.NewFromInt(1), Currency: "AAPL"}
+	zzz := &amountValue{Number: decimal.NewFromInt(2), Currency: "ZZZ"}
 	inv.AddAmount(aapl)
 	inv.AddAmount(zzz)
 	assert.Equal(t, []string{"AAPL", "ZZZ"}, positionCurrencies(inv.Positions()))
 
-	inv.AddAmount(&Amount{Number: decimal.NewFromInt(-1), Currency: "AAPL"})
+	inv.AddAmount(&amountValue{Number: decimal.NewFromInt(-1), Currency: "AAPL"})
 	inv.AddAmount(aapl)
 	assert.Equal(t, []string{"ZZZ", "AAPL"}, positionCurrencies(inv.Positions()))
 }
@@ -243,15 +233,15 @@ func TestInventoryKeepsInsertionOrder(t *testing.T) {
 func TestInventoryStringSortsPositions(t *testing.T) {
 	// Like beancount's str() of an inventory: major currencies first, then
 	// the others by length, whatever order they were added in.
-	inv := NewInventory()
+	inv := newInventory()
 	for _, currency := range []string{"HOOL", "CAD", "ZZZ", "USD"} {
-		inv.AddAmount(&Amount{Number: decimal.NewFromInt(1), Currency: currency})
+		inv.AddAmount(&amountValue{Number: decimal.NewFromInt(1), Currency: currency})
 	}
 	assert.Equal(t, "1 USD, 1 CAD, 1 ZZZ, 1 HOOL", valueString(inv))
 	assert.Equal(t, []string{"HOOL", "CAD", "ZZZ", "USD"}, positionCurrencies(inv.Positions()))
 }
 
-func positionCurrencies(positions []*Position) []string {
+func positionCurrencies(positions []*positionValue) []string {
 	currencies := make([]string, len(positions))
 	for i, p := range positions {
 		currencies[i] = p.Units.Currency
@@ -260,9 +250,9 @@ func positionCurrencies(positions []*Position) []string {
 }
 
 func TestSumSkipsNullPosition(t *testing.T) {
-	acc := &sumInventoryAcc{inv: NewInventory()}
-	acc.update((*Position)(nil))
-	acc.update(&Position{Units: Amount{Number: decimal.NewFromInt(1), Currency: "USD"}})
+	acc := &sumInventoryAcc{inv: newInventory()}
+	acc.update((*positionValue)(nil))
+	acc.update(&positionValue{Units: amountValue{Number: decimal.NewFromInt(1), Currency: "USD"}})
 	assert.Equal(t, "1 USD", valueString(acc.finalize()))
 }
 
@@ -270,23 +260,18 @@ func TestHasAccountMatchesEveryEntryAccount(t *testing.T) {
 	// Like bean-query, has_account searches every account an entry
 	// references, case-insensitively, so it also selects open and pad
 	// directives.
-	ctx, tree := newContextFromSource(t, `
+	ctx := newContextFromSource(t, `
 2020-01-01 open Assets:Cash
 2020-01-01 open Equity:Opening
 2020-01-02 pad Assets:Cash Equity:Opening
 2020-01-03 balance Assets:Cash 10 USD
 2020-01-04 open Expenses:Food
 `)
-	stmt, err := bql.Parse("PRINT FROM has_account('opening')")
-	assert.NoError(t, err)
-	compiled, err := CompilePrint(ctx, stmt.(*bql.Print))
-	assert.NoError(t, err)
-	var out strings.Builder
-	assert.NoError(t, ExecutePrint(context.Background(), ctx, tree, compiled, &out))
-	assert.Contains(t, out.String(), "open Equity:Opening")
-	assert.Contains(t, out.String(), "pad Assets:Cash Equity:Opening")
-	assert.NotContains(t, out.String(), "balance")
-	assert.NotContains(t, out.String(), "Expenses:Food")
+	out := run(t, ctx, "PRINT FROM has_account('opening')", FormatText, false)
+	assert.Contains(t, out, "open Equity:Opening")
+	assert.Contains(t, out, "pad Assets:Cash Equity:Opening")
+	assert.NotContains(t, out, "balance")
+	assert.NotContains(t, out, "Expenses:Food")
 }
 
 func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
@@ -306,17 +291,11 @@ func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
 	assert.NoError(t, err)
 	l := ledger.New()
 	assert.Error(t, l.Process(context.Background(), tree))
-	ctx := &Context{Ledger: l, Config: config.New()}
+	ctx := &Context{Ledger: l, Config: config.New(), AST: tree}
 
-	stmt, err := bql.Parse("PRINT FROM type = 'balance'")
-	assert.NoError(t, err)
-	compiled, err := CompilePrint(ctx, stmt.(*bql.Print))
-	assert.NoError(t, err)
-	var out strings.Builder
-	assert.NoError(t, ExecutePrint(context.Background(), ctx, tree, compiled, &out))
-
-	lines := strings.Split(strings.TrimSpace(out.String()), "\n")
-	assert.Equal(t, 3, len(lines), out.String())
+	out := run(t, ctx, "PRINT FROM type = 'balance'", FormatText, false)
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	assert.Equal(t, 3, len(lines), out)
 	assert.True(t, strings.HasSuffix(lines[0], "12.00 USD   ; Diff: -1.75 USD"), lines[0])
 	assert.True(t, strings.HasSuffix(lines[1], "10.25 USD"), lines[1])
 	assert.True(t, strings.HasSuffix(lines[2], "USD   ; Diff: 2.25 USD"), lines[2])
@@ -325,7 +304,7 @@ func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
 func TestConvertPositionThroughItsCostCurrency(t *testing.T) {
 	// Like beancount's convert_position, a position without a price in the
 	// target converts through its cost currency; a plain amount does not.
-	ctx, tree := newContextFromSource(t, `
+	ctx := newContextFromSource(t, `
 2020-01-01 open Assets:Stock
 2020-01-01 open Equity:O
 2020-01-01 price GOOG 3 USD
@@ -334,10 +313,10 @@ func TestConvertPositionThroughItsCostCurrency(t *testing.T) {
   Assets:Stock  2 GOOG {2 USD}
   Equity:O
 `)
-	result := runQueryOn(t, ctx, tree, "SELECT convert(position, 'CHF'), convert(units(position), 'CHF') WHERE account = 'Assets:Stock'")
+	result := runQueryOn(t, ctx, "SELECT convert(position, 'CHF'), convert(units(position), 'CHF') WHERE account = 'Assets:Stock'")
 	assert.Equal(t, 1, len(result.Rows))
-	converted := result.Rows[0][0].(*Amount)
+	converted := result.Rows[0][0].(*amountValue)
 	assert.Equal(t, "5.4 CHF", converted.Number.String()+" "+converted.Currency)
-	units := result.Rows[0][1].(*Amount)
+	units := result.Rows[0][1].(*amountValue)
 	assert.Equal(t, "2 GOOG", units.Number.String()+" "+units.Currency)
 }

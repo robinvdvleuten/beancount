@@ -9,24 +9,24 @@ import (
 // with the query types that pass its issubclass() check.
 type pyType struct {
 	repr    string
-	accepts []DType // nil accepts every type, like object
+	accepts []dtype // nil accepts every type, like object
 }
 
-func (t pyType) admits(arg DType) bool {
+func (t pyType) admits(arg dtype) bool {
 	return t.accepts == nil || slices.Contains(t.accepts, arg)
 }
 
 var (
 	pyObject    = pyType{repr: "<class 'object'>"}
-	pyStr       = pyType{"<class 'str'>", []DType{TString}}
-	pyInt       = pyType{"<class 'int'>", []DType{TInt, TBool}} // bool subclasses int
-	pyDate      = pyType{"<class 'datetime.date'>", []DType{TDate}}
-	pySet       = pyType{"<class 'set'>", []DType{TSet}}
-	pyDict      = pyType{"<class 'dict'>", []DType{}}
-	pyAmount    = pyType{"<class 'beancount.core.amount.Amount'>", []DType{TAmount}}
-	pyInventory = pyType{"<class 'beancount.core.inventory.Inventory'>", []DType{TInventory}}
-	pyNumber    = pyType{"(<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)", []DType{TInt, TBool, TDecimal}}
-	pySized     = pyType{"(<class 'list'>, <class 'set'>, <class 'str'>)", []DType{TSet, TString}}
+	pyStr       = pyType{"<class 'str'>", []dtype{tString}}
+	pyInt       = pyType{"<class 'int'>", []dtype{tInt, tBool}} // bool subclasses int
+	pyDate      = pyType{"<class 'datetime.date'>", []dtype{tDate}}
+	pySet       = pyType{"<class 'set'>", []dtype{tSet}}
+	pyDict      = pyType{"<class 'dict'>", []dtype{}}
+	pyAmount    = pyType{"<class 'beancount.core.amount.Amount'>", []dtype{tAmount}}
+	pyInventory = pyType{"<class 'beancount.core.inventory.Inventory'>", []dtype{tInventory}}
+	pyNumber    = pyType{"(<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>)", []dtype{tInt, tBool, tDecimal}}
+	pySized     = pyType{"(<class 'list'>, <class 'set'>, <class 'str'>)", []dtype{tSet, tString}}
 )
 
 // fallbackClass is the class bean-query instantiates when no signature of a
@@ -102,17 +102,17 @@ func (f *fallbackClass) rejection(args []cexpr) string {
 	return ""
 }
 
-var dtypeReprs = map[DType]string{
-	TAny:       "<class 'object'>",
-	TBool:      "<class 'bool'>",
-	TInt:       "<class 'int'>",
-	TDecimal:   "<class 'decimal.Decimal'>",
-	TString:    "<class 'str'>",
-	TDate:      "<class 'datetime.date'>",
-	TSet:       "<class 'set'>",
-	TAmount:    "<class 'beancount.core.amount.Amount'>",
-	TPosition:  "<class 'beancount.core.position.Position'>",
-	TInventory: "<class 'beancount.core.inventory.Inventory'>",
+var dtypeReprs = map[dtype]string{
+	tAny:       "<class 'object'>",
+	tBool:      "<class 'bool'>",
+	tInt:       "<class 'int'>",
+	tDecimal:   "<class 'decimal.Decimal'>",
+	tString:    "<class 'str'>",
+	tDate:      "<class 'datetime.date'>",
+	tSet:       "<class 'set'>",
+	tAmount:    "<class 'beancount.core.amount.Amount'>",
+	tPosition:  "<class 'beancount.core.position.Position'>",
+	tInventory: "<class 'beancount.core.inventory.Inventory'>",
 }
 
 // pyTypeRepr renders an argument's type like Python's repr() of its class.

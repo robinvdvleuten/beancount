@@ -22,11 +22,11 @@ func TestQueryShell(t *testing.T) {
 	assert.NoError(t, l.Process(ctx, result.AST))
 	cfg, err := config.FromAST(result.AST)
 	assert.NoError(t, err)
-	qctx := &query.Context{Ledger: l, Config: cfg}
+	qctx := &query.Context{Ledger: l, Config: cfg, AST: result.AST}
 
 	in := strings.NewReader("help\nerrors\nselect count(date);\nbogus query\nexit\n")
 	var out strings.Builder
-	assert.NoError(t, runShell(ctx, qctx, result.AST, "text", false, in, &out, nil, nil))
+	assert.NoError(t, runShell(ctx, qctx, query.FormatText, false, in, &out, nil, nil))
 
 	output := out.String()
 	assert.Contains(t, output, `Input file: "Query Compliance Ledger"`)
@@ -37,28 +37,6 @@ func TestQueryShell(t *testing.T) {
 	assert.Contains(t, output, "22")         // count(date) result
 	assert.Contains(t, output, "ERROR: ")    // bogus query reports, shell continues
 	assert.NotContains(t, output, "bogus\n") // and does not echo the input
-}
-
-func TestQueryEmptyResult(t *testing.T) {
-	ctx := context.Background()
-	ldr := loader.New(loader.WithFollowIncludes())
-	result, err := ldr.Load(ctx, "../testdata/compliance/query/ledger.beancount")
-	assert.NoError(t, err)
-
-	l := ledger.New()
-	assert.NoError(t, l.Process(ctx, result.AST))
-	cfg, err := config.FromAST(result.AST)
-	assert.NoError(t, err)
-	qctx := &query.Context{Ledger: l, Config: cfg}
-
-	for _, tt := range []struct {
-		format    string
-		numberify bool
-	}{{"text", false}, {"csv", false}, {"csv", true}} {
-		var out strings.Builder
-		assert.NoError(t, runQuery(ctx, qctx, result.AST, "select account where account = 'NOPE'", tt.format, tt.numberify, &out))
-		assert.Equal(t, "(empty)\n", out.String(), "format %s, numberify %v", tt.format, tt.numberify)
-	}
 }
 
 func TestQueryShellEOF(t *testing.T) {
@@ -73,6 +51,6 @@ func TestQueryShellEOF(t *testing.T) {
 	assert.NoError(t, err)
 
 	var out strings.Builder
-	assert.NoError(t, runShell(ctx, &query.Context{Ledger: l, Config: cfg}, result.AST,
-		"text", false, strings.NewReader(""), &out, nil, nil))
+	assert.NoError(t, runShell(ctx, &query.Context{Ledger: l, Config: cfg, AST: result.AST},
+		query.FormatText, false, strings.NewReader(""), &out, nil, nil))
 }

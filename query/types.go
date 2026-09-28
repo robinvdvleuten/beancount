@@ -1,7 +1,7 @@
-// Package query implements the Beancount Query Language (BQL) engine: it
-// compiles statements parsed by the bql package against a processed ledger
-// and executes them into result tables. The pipeline mirrors the official
-// bean-query tool: parse (bql package) → compile → execute → render.
+// Package query implements the Beancount Query Language (BQL) engine. Run
+// takes one statement's text and writes what the official bean-query tool
+// writes for it, through the same pipeline: parse (bql package) → compile →
+// execute → render.
 package query
 
 import (
@@ -14,68 +14,69 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// DType identifies the static type of a compiled expression. It drives
+// dtype identifies the static type of a compiled expression. It drives
 // function overload resolution at compile time and column formatting in the
 // renderers. Runtime values are Go values: bool, int64, decimal.Decimal,
-// string, *ast.Date, Set, *Amount, *Position, and *Inventory; NULL is nil.
-type DType uint8
+// string, *ast.Date, setValue, *amountValue, *positionValue and
+// *inventoryValue; NULL is nil.
+type dtype uint8
 
 const (
-	TAny DType = iota // unknown or polymorphic (renders via str)
-	TBool
-	TInt
-	TDecimal
-	TString
-	TDate
-	TSet
-	TAmount
-	TPosition
-	TInventory
+	tAny dtype = iota // unknown or polymorphic (renders via str)
+	tBool
+	tInt
+	tDecimal
+	tString
+	tDate
+	tSet
+	tAmount
+	tPosition
+	tInventory
 )
 
-var dtypeNames = map[DType]string{
-	TAny:       "object",
-	TBool:      "bool",
-	TInt:       "int",
-	TDecimal:   "Decimal",
-	TString:    "str",
-	TDate:      "date",
-	TSet:       "set",
-	TAmount:    "Amount",
-	TPosition:  "Position",
-	TInventory: "Inventory",
+var dtypeNames = map[dtype]string{
+	tAny:       "object",
+	tBool:      "bool",
+	tInt:       "int",
+	tDecimal:   "Decimal",
+	tString:    "str",
+	tDate:      "date",
+	tSet:       "set",
+	tAmount:    "Amount",
+	tPosition:  "Position",
+	tInventory: "Inventory",
 }
 
-func (t DType) String() string {
+func (t dtype) String() string {
 	if name, ok := dtypeNames[t]; ok {
 		return name
 	}
 	return "object"
 }
 
-// Amount is a number with a currency, the query-engine counterpart of a
+// amountValue is a number with a currency, the query-engine counterpart of a
 // beancount amount.
-type Amount struct {
+type amountValue struct {
 	Number   decimal.Decimal
 	Currency string
 }
 
-// Cost is the per-unit cost basis attached to a position.
-type Cost struct {
+// costValue is the per-unit cost basis attached to a position.
+type costValue struct {
 	Number   decimal.Decimal
 	Currency string
 	Date     *ast.Date
 	Label    string
 }
 
-// Position is an amount of units held at an optional cost.
-type Position struct {
-	Units Amount
-	Cost  *Cost
+// positionValue is an amount of units held at an optional cost.
+type positionValue struct {
+	Units amountValue
+	Cost  *costValue
 }
 
 // costKey returns a stable identity for grouping positions by (currency, cost).
-func (p *Position) costKey() string {
+func (p *positionValue) costKey() string {
 	if p.Cost == nil {
 		return p.Units.Currency
 	}
@@ -83,29 +84,29 @@ func (p *Position) costKey() string {
 		p.Units.Currency, p.Cost.Currency, p.Cost.Number.String(), p.Cost.Date.String(), p.Cost.Label)
 }
 
-// Inventory is a collection of positions keyed by currency and cost basis.
-// Summing amounts or positions in aggregate functions produces an Inventory.
+// inventoryValue is a collection of positions keyed by currency and cost basis.
+// Summing amounts or positions in aggregate functions produces an inventoryValue.
 // Like beancount's inventory (a Python dict), positions keep the order they
 // were first added in, and a position that sums to zero is dropped.
-type Inventory struct {
-	positions []*Position
+type inventoryValue struct {
+	positions []*positionValue
 	index     map[string]int // costKey -> index into positions
 }
 
-// NewInventory creates an empty inventory.
-func NewInventory() *Inventory {
-	return &Inventory{index: make(map[string]int)}
+// newInventory creates an empty inventory.
+func newInventory() *inventoryValue {
+	return &inventoryValue{index: make(map[string]int)}
 }
 
 // AddAmount adds a cost-less amount to the inventory.
-func (inv *Inventory) AddAmount(a *Amount) {
-	inv.AddPosition(&Position{Units: *a})
+func (inv *inventoryValue) AddAmount(a *amountValue) {
+	inv.AddPosition(&positionValue{Units: *a})
 }
 
 // AddPosition merges a position into the inventory, summing units for
 // positions with the same currency and cost basis. Positions that sum to
 // zero are removed, matching official inventories.
-func (inv *Inventory) AddPosition(p *Position) {
+func (inv *inventoryValue) AddPosition(p *positionValue) {
 	key := p.costKey()
 	if i, ok := inv.index[key]; ok {
 		existing := inv.positions[i]
@@ -119,11 +120,11 @@ func (inv *Inventory) AddPosition(p *Position) {
 		return
 	}
 	inv.index[key] = len(inv.positions)
-	inv.positions = append(inv.positions, &Position{Units: p.Units, Cost: p.Cost})
+	inv.positions = append(inv.positions, &positionValue{Units: p.Units, Cost: p.Cost})
 }
 
 // remove drops the position at i, keeping the order of the others.
-func (inv *Inventory) remove(i int) {
+func (inv *inventoryValue) remove(i int) {
 	delete(inv.index, inv.positions[i].costKey())
 	inv.positions = append(inv.positions[:i], inv.positions[i+1:]...)
 	for j := i; j < len(inv.positions); j++ {
@@ -132,21 +133,21 @@ func (inv *Inventory) remove(i int) {
 }
 
 // AddInventory merges another inventory into this one.
-func (inv *Inventory) AddInventory(other *Inventory) {
+func (inv *inventoryValue) AddInventory(other *inventoryValue) {
 	for _, p := range other.positions {
 		inv.AddPosition(p)
 	}
 }
 
 // IsEmpty reports whether the inventory has no non-zero positions.
-func (inv *Inventory) IsEmpty() bool {
+func (inv *inventoryValue) IsEmpty() bool {
 	return len(inv.positions) == 0
 }
 
 // Positions returns the inventory positions in the order they were first
 // added, as beancount's inventory iterates them.
-func (inv *Inventory) Positions() []*Position {
-	return append([]*Position(nil), inv.positions...)
+func (inv *inventoryValue) Positions() []*positionValue {
+	return append([]*positionValue(nil), inv.positions...)
 }
 
 // currencyOrder puts the major currencies first when sorting positions, like
@@ -158,14 +159,14 @@ var currencyOrder = map[string]int{
 // sortedPositions returns the positions in the order Python's sorted()
 // gives a beancount inventory (Position.sortkey): by currency rank, cost
 // number, cost currency, then units, ties keeping their insertion order.
-func (inv *Inventory) sortedPositions() []*Position {
+func (inv *inventoryValue) sortedPositions() []*positionValue {
 	rank := func(currency string) int {
 		if r, ok := currencyOrder[currency]; ok {
 			return r
 		}
 		return len(currencyOrder) + len(currency)
 	}
-	costOf := func(p *Position) (decimal.Decimal, string) {
+	costOf := func(p *positionValue) (decimal.Decimal, string) {
 		if p.Cost == nil {
 			return decimal.Zero, ""
 		}
@@ -192,8 +193,8 @@ func (inv *Inventory) sortedPositions() []*Position {
 }
 
 // Copy returns a deep copy of the inventory.
-func (inv *Inventory) Copy() *Inventory {
-	copied := NewInventory()
+func (inv *inventoryValue) Copy() *inventoryValue {
+	copied := newInventory()
 	for _, p := range inv.positions {
 		copied.AddPosition(p)
 	}
@@ -201,38 +202,29 @@ func (inv *Inventory) Copy() *Inventory {
 }
 
 // Neg returns a new inventory with all unit numbers negated.
-func (inv *Inventory) Neg() *Inventory {
-	negated := NewInventory()
+func (inv *inventoryValue) Neg() *inventoryValue {
+	negated := newInventory()
 	for _, p := range inv.positions {
-		negated.AddPosition(&Position{
-			Units: Amount{Number: p.Units.Number.Neg(), Currency: p.Units.Currency},
+		negated.AddPosition(&positionValue{
+			Units: amountValue{Number: p.Units.Number.Neg(), Currency: p.Units.Currency},
 			Cost:  p.Cost,
 		})
 	}
 	return negated
 }
 
-// Set is an unordered collection of strings, used for tags, links, and
+// setValue is an unordered collection of strings, used for tags, links, and
 // other-accounts values.
-type Set map[string]struct{}
-
-// NewSet builds a Set from the given elements.
-func NewSet(elems ...string) Set {
-	set := make(Set, len(elems))
-	for _, elem := range elems {
-		set[elem] = struct{}{}
-	}
-	return set
-}
+type setValue map[string]struct{}
 
 // Contains reports whether the set contains the given element.
-func (s Set) Contains(elem string) bool {
+func (s setValue) Contains(elem string) bool {
 	_, ok := s[elem]
 	return ok
 }
 
 // Sorted returns the set elements in lexicographic order.
-func (s Set) Sorted() []string {
+func (s setValue) Sorted() []string {
 	elems := make([]string, 0, len(s))
 	for elem := range s {
 		elems = append(elems, elem)
@@ -258,13 +250,13 @@ func truthy(v any) bool {
 		return val != ""
 	case *ast.Date:
 		return !val.IsZero()
-	case Set:
+	case setValue:
 		return len(val) > 0
-	case *Amount:
+	case *amountValue:
 		return val != nil
-	case *Position:
+	case *positionValue:
 		return val != nil
-	case *Inventory:
+	case *inventoryValue:
 		return val != nil && len(val.positions) > 0
 	default:
 		return v != nil
@@ -353,7 +345,7 @@ func valueString(v any) string {
 		return val.String()
 	case *ast.Date:
 		return val.String()
-	case Set:
+	case setValue:
 		if len(val) == 0 {
 			return "frozenset()"
 		}
@@ -363,11 +355,11 @@ func valueString(v any) string {
 			quoted[i] = fmt.Sprintf("'%s'", elem)
 		}
 		return "frozenset({" + strings.Join(quoted, ", ") + "})"
-	case *Amount:
+	case *amountValue:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)
-	case *Position:
+	case *positionValue:
 		return positionString(val, decimal.Decimal.String)
-	case *Inventory:
+	case *inventoryValue:
 		return inventoryString(val, decimal.Decimal.String)
 	default:
 		return fmt.Sprintf("%v", v)
@@ -376,7 +368,7 @@ func valueString(v any) string {
 
 // positionString renders a position as "units {cost, date, "label"}",
 // spelling its numbers with number.
-func positionString(p *Position, number func(decimal.Decimal) string) string {
+func positionString(p *positionValue, number func(decimal.Decimal) string) string {
 	units := number(p.Units.Number) + " " + p.Units.Currency
 	if p.Cost == nil {
 		return units
@@ -393,7 +385,7 @@ func positionString(p *Position, number func(decimal.Decimal) string) string {
 
 // inventoryString joins an inventory's positions with ", ", sorted like
 // beancount's str() of an inventory.
-func inventoryString(inv *Inventory, number func(decimal.Decimal) string) string {
+func inventoryString(inv *inventoryValue, number func(decimal.Decimal) string) string {
 	positions := inv.sortedPositions()
 	parts := make([]string, len(positions))
 	for i, p := range positions {

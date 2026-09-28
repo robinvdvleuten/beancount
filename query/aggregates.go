@@ -16,51 +16,51 @@ type accumulator interface {
 // given argument type (ok=false when the argument type is unsupported) and a
 // factory for per-group accumulators.
 type aggDef struct {
-	resultType func(arg DType) (DType, bool)
-	new        func(arg DType) accumulator
+	resultType func(arg dtype) (dtype, bool)
+	new        func(arg dtype) accumulator
 }
 
 // aggregates is the registry of aggregate functions, matching the official
 // bean-query environment.
 var aggregates = map[string]*aggDef{
 	"count": {
-		resultType: func(DType) (DType, bool) { return TInt, true },
-		new:        func(DType) accumulator { return &countAcc{} },
+		resultType: func(dtype) (dtype, bool) { return tInt, true },
+		new:        func(dtype) accumulator { return &countAcc{} },
 	},
 	"first": {
-		resultType: func(arg DType) (DType, bool) { return arg, true },
-		new:        func(DType) accumulator { return &firstAcc{} },
+		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		new:        func(dtype) accumulator { return &firstAcc{} },
 	},
 	"last": {
-		resultType: func(arg DType) (DType, bool) { return arg, true },
-		new:        func(DType) accumulator { return &lastAcc{} },
+		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		new:        func(dtype) accumulator { return &lastAcc{} },
 	},
 	"min": {
-		resultType: func(arg DType) (DType, bool) { return arg, true },
-		new:        func(DType) accumulator { return &minMaxAcc{keepMin: true} },
+		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		new:        func(dtype) accumulator { return &minMaxAcc{keepMin: true} },
 	},
 	"max": {
-		resultType: func(arg DType) (DType, bool) { return arg, true },
-		new:        func(DType) accumulator { return &minMaxAcc{} },
+		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		new:        func(dtype) accumulator { return &minMaxAcc{} },
 	},
 	"sum": {
-		resultType: func(arg DType) (DType, bool) {
+		resultType: func(arg dtype) (dtype, bool) {
 			switch arg {
-			case TInt:
-				return TInt, true
-			case TDecimal:
-				return TDecimal, true
-			case TAmount, TPosition, TInventory:
-				return TInventory, true
+			case tInt:
+				return tInt, true
+			case tDecimal:
+				return tDecimal, true
+			case tAmount, tPosition, tInventory:
+				return tInventory, true
 			}
-			return TAny, false
+			return tAny, false
 		},
-		new: func(arg DType) accumulator {
+		new: func(arg dtype) accumulator {
 			switch arg {
-			case TInt:
+			case tInt:
 				return &sumIntAcc{}
-			case TAmount, TPosition, TInventory:
-				return &sumInventoryAcc{inv: NewInventory()}
+			case tAmount, tPosition, tInventory:
+				return &sumInventoryAcc{inv: newInventory()}
 			default:
 				return &sumDecimalAcc{}
 			}
@@ -138,23 +138,23 @@ func (a *sumDecimalAcc) update(v any) {
 }
 func (a *sumDecimalAcc) finalize() any { return a.total }
 
-// sumInventoryAcc sums amounts, positions, or inventories into an Inventory,
-// matching the official SUM aggregates.
+// sumInventoryAcc sums amounts, positions, or inventories into an
+// inventoryValue, matching the official SUM aggregates.
 type sumInventoryAcc struct {
-	inv *Inventory
+	inv *inventoryValue
 }
 
 func (a *sumInventoryAcc) update(v any) {
 	switch val := v.(type) {
-	case *Amount:
+	case *amountValue:
 		a.inv.AddAmount(val)
-	case *Position:
+	case *positionValue:
 		// A posting without a position yields a NULL (typed nil) position,
 		// which adds nothing.
 		if val != nil {
 			a.inv.AddPosition(val)
 		}
-	case *Inventory:
+	case *inventoryValue:
 		a.inv.AddInventory(val)
 	}
 }

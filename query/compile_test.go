@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
@@ -41,14 +40,13 @@ const testLedger = `
 2014-05-01 price HOOL 520.00 USD
 `
 
-// newTestContext parses and processes the test ledger into a query Context
-// and the processed directive tree.
-func newTestContext(t *testing.T) (*Context, *ast.AST) {
+// newTestContext parses and processes the test ledger into a query Context.
+func newTestContext(t *testing.T) *Context {
 	t.Helper()
 	return newContextFromSource(t, testLedger)
 }
 
-func newContextFromSource(t *testing.T, source string) (*Context, *ast.AST) {
+func newContextFromSource(t *testing.T, source string) *Context {
 	t.Helper()
 
 	tree, err := parser.ParseBytesWithFilename(context.Background(), "test.beancount", []byte(source))
@@ -60,29 +58,29 @@ func newContextFromSource(t *testing.T, source string) (*Context, *ast.AST) {
 	cfg, err := config.FromAST(tree)
 	assert.NoError(t, err)
 
-	return &Context{Ledger: l, Config: cfg}, tree
+	return &Context{Ledger: l, Config: cfg, AST: tree}
 }
 
-func mustCompile(t *testing.T, ctx *Context, query string) *Compiled {
+func mustCompile(t *testing.T, ctx *Context, query string) *compiledSelect {
 	t.Helper()
 	stmt, err := bql.Parse(query)
 	assert.NoError(t, err)
-	compiled, err := Compile(ctx, stmt)
+	compiled, err := compile(ctx, stmt)
 	assert.NoError(t, err)
-	return compiled
+	return compiled.(*compiledSelect)
 }
 
-func compileError(t *testing.T, ctx *Context, query string) error {
+func compileFails(t *testing.T, ctx *Context, query string) error {
 	t.Helper()
 	stmt, err := bql.Parse(query)
 	assert.NoError(t, err)
-	_, err = Compile(ctx, stmt)
+	_, err = compile(ctx, stmt)
 	assert.Error(t, err)
 	return err
 }
 
 func TestCompileWildcard(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT *")
 
 	names := make([]string, len(compiled.Targets))
@@ -93,7 +91,7 @@ func TestCompileWildcard(t *testing.T) {
 }
 
 func TestCompileTargetNaming(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 
 	for _, tt := range []struct {
 		query string
@@ -119,27 +117,27 @@ func TestCompileTargetNaming(t *testing.T) {
 }
 
 func TestCompileTargetTypes(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 
 	for _, tt := range []struct {
 		query string
-		typ   DType
+		typ   dtype
 	}{
-		{"SELECT account", TString},
-		{"SELECT date", TDate},
-		{"SELECT position", TPosition},
-		{"SELECT balance", TInventory},
-		{"SELECT number", TDecimal},
-		{"SELECT lineno", TInt},
-		{"SELECT tags", TSet},
-		{"SELECT price", TAmount},
-		{"SELECT sum(position)", TInventory},
-		{"SELECT sum(number)", TDecimal},
-		{"SELECT count(date)", TInt},
-		{"SELECT first(account)", TString},
-		{"SELECT year(date)", TInt},
-		{"SELECT number / 2", TDecimal},
-		{"SELECT 1 + 2", TInt},
+		{"SELECT account", tString},
+		{"SELECT date", tDate},
+		{"SELECT position", tPosition},
+		{"SELECT balance", tInventory},
+		{"SELECT number", tDecimal},
+		{"SELECT lineno", tInt},
+		{"SELECT tags", tSet},
+		{"SELECT price", tAmount},
+		{"SELECT sum(position)", tInventory},
+		{"SELECT sum(number)", tDecimal},
+		{"SELECT count(date)", tInt},
+		{"SELECT first(account)", tString},
+		{"SELECT year(date)", tInt},
+		{"SELECT number / 2", tDecimal},
+		{"SELECT 1 + 2", tInt},
 	} {
 		compiled := mustCompile(t, ctx, tt.query)
 		assert.Equal(t, tt.typ, compiled.Targets[0].Type, tt.query)
@@ -147,21 +145,21 @@ func TestCompileTargetTypes(t *testing.T) {
 }
 
 func TestCompileInvalidColumn(t *testing.T) {
-	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT bogus")
+	ctx := newTestContext(t)
+	err := compileFails(t, ctx, "SELECT bogus")
 	assert.Equal(t, "Invalid column name 'bogus' in targets/column context.", err.Error())
 }
 
 func TestCompileInvalidFunction(t *testing.T) {
-	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT bogusfn(date)")
+	ctx := newTestContext(t)
+	err := compileFails(t, ctx, "SELECT bogusfn(date)")
 	assert.Equal(t, "Invalid function 'bogusfn(date)' in targets/column context.", err.Error())
 }
 
 func TestCompileImplicitGroupBy(t *testing.T) {
 	// An aggregate query without GROUP BY implicitly groups by all
 	// non-aggregate targets (official behavior).
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT account, sum(position)")
 
 	assert.True(t, compiled.HasAgg)
@@ -169,15 +167,15 @@ func TestCompileImplicitGroupBy(t *testing.T) {
 }
 
 func TestCompileGroupByCoverage(t *testing.T) {
-	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT date GROUP BY narration")
+	ctx := newTestContext(t)
+	err := compileFails(t, ctx, "SELECT date GROUP BY narration")
 	assert.Equal(t,
 		`All non-aggregates must be covered by GROUP-BY clause in aggregate query; the following targets are missing: "date".`,
 		err.Error())
 }
 
 func TestCompileGroupByIndexAndAlias(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 
 	compiled := mustCompile(t, ctx, "SELECT account, sum(position) GROUP BY 1")
 	assert.Equal(t, []int{0}, compiled.GroupBy)
@@ -190,20 +188,20 @@ func TestCompileGroupByIndexAndAlias(t *testing.T) {
 }
 
 func TestCompileGroupByIndexOutOfRange(t *testing.T) {
-	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT account, sum(position) GROUP BY 5")
+	ctx := newTestContext(t)
+	err := compileFails(t, ctx, "SELECT account, sum(position) GROUP BY 5")
 	assert.Contains(t, err.Error(), "Invalid GROUP-BY column index 5")
 }
 
 func TestCompileGroupByAggregate(t *testing.T) {
-	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT account, sum(position) GROUP BY 2")
+	ctx := newTestContext(t)
+	err := compileFails(t, ctx, "SELECT account, sum(position) GROUP BY 2")
 	assert.Equal(t, "GROUP-BY expressions may not reference aggregates: '2'.", err.Error())
 }
 
 func TestCompileOrderByHiddenTarget(t *testing.T) {
 	// ORDER BY on a column not in the targets appends a hidden target.
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT account ORDER BY date")
 
 	assert.Equal(t, 2, len(compiled.Targets))
@@ -212,7 +210,7 @@ func TestCompileOrderByHiddenTarget(t *testing.T) {
 }
 
 func TestCompileOrderByMatchesTarget(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT account, sum(position) GROUP BY account ORDER BY sum(position) DESC")
 
 	assert.Equal(t, 2, len(compiled.Targets))
@@ -224,7 +222,7 @@ func TestCompileClauseEnvironments(t *testing.T) {
 	// Like bean-query, each clause compiles in its own environment: only
 	// targets have aggregates, only FROM has has_account, and errors name
 	// the clause.
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	for query, want := range map[string]string{
 		"SELECT account WHERE sum(number) > 0":                  "Invalid function 'sum(Decimal)' in WHERE clause context.",
 		"SELECT account WHERE has_account('x')":                 "Invalid function 'has_account(str)' in WHERE clause context.",
@@ -239,16 +237,16 @@ func TestCompileClauseEnvironments(t *testing.T) {
 		"SELECT account ORDER BY 5":                             "Invalid ORDER-BY column index 5.",
 		"SELECT account GROUP BY count(date) = 2014-01-02 OR 1": "GROUP-BY expressions may not be aggregates: 'Or(left=Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=datetime.date(2014, 1, 2))), right=Constant(value=1))'.",
 	} {
-		assert.Equal(t, want, compileError(t, ctx, query).Error(), query)
+		assert.Equal(t, want, compileFails(t, ctx, query).Error(), query)
 	}
 	mustCompile(t, ctx, "SELECT account, sum(number) + 1 GROUP BY account")
 }
 
 func TestCompileFromUsesEntryEnvironment(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 
 	// account is a posting column, not available in the FROM filter.
-	err := compileError(t, ctx, "SELECT date FROM account ~ 'Assets'")
+	err := compileFails(t, ctx, "SELECT date FROM account ~ 'Assets'")
 	assert.Contains(t, err.Error(), "Invalid column name 'account'")
 
 	// has_account is the FROM-environment predicate for that.
@@ -256,22 +254,22 @@ func TestCompileFromUsesEntryEnvironment(t *testing.T) {
 }
 
 func TestCompileFunctionOverloads(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 
-	assert.Equal(t, TAmount, mustCompile(t, ctx, "SELECT units(position)").Targets[0].Type)
-	assert.Equal(t, TInventory, mustCompile(t, ctx, "SELECT units(sum(position))").Targets[0].Type)
-	assert.Equal(t, TAmount, mustCompile(t, ctx, "SELECT convert(price, 'USD')").Targets[0].Type)
-	assert.Equal(t, TDecimal, mustCompile(t, ctx, "SELECT safediv(number, 2)").Targets[0].Type)
+	assert.Equal(t, tAmount, mustCompile(t, ctx, "SELECT units(position)").Targets[0].Type)
+	assert.Equal(t, tInventory, mustCompile(t, ctx, "SELECT units(sum(position))").Targets[0].Type)
+	assert.Equal(t, tAmount, mustCompile(t, ctx, "SELECT convert(price, 'USD')").Targets[0].Type)
+	assert.Equal(t, tDecimal, mustCompile(t, ctx, "SELECT safediv(number, 2)").Targets[0].Type)
 }
 
 func TestCompileInvalidOverload(t *testing.T) {
-	ctx, _ := newTestContext(t)
-	err := compileError(t, ctx, "SELECT units(account)")
+	ctx := newTestContext(t)
+	err := compileFails(t, ctx, "SELECT units(account)")
 	assert.True(t, strings.HasPrefix(err.Error(), "Invalid function 'units(str)'"), err.Error())
 }
 
 func TestCompileDistinctAndLimit(t *testing.T) {
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT DISTINCT account LIMIT 5")
 	assert.True(t, compiled.Distinct)
 	assert.Equal(t, int64(5), *compiled.Limit)
@@ -296,15 +294,15 @@ func TestCompileFallbackClassErrors(t *testing.T) {
 		"SELECT str(entry_meta('x'))":     "",
 		"SELECT maxwidth(account, 1 + 1)": "",
 	} {
-		ctx, _ := newTestContext(t)
+		ctx := newTestContext(t)
 		stmt, err := bql.Parse(query)
 		assert.NoError(t, err, query)
-		_, err = Compile(ctx, stmt)
+		_, err = compile(ctx, stmt)
 		if want == "" {
 			assert.NoError(t, err, query)
 			continue
 		}
-		var compileErr *CompileError
+		var compileErr *compileError
 		assert.True(t, errors.As(err, &compileErr), query)
 		assert.Equal(t, want, compileErr.Message, query)
 	}
@@ -313,7 +311,7 @@ func TestCompileFallbackClassErrors(t *testing.T) {
 func TestCompileMakesTargetNamesUnique(t *testing.T) {
 	// Like bean-query's find_unique_name, a repeated name, derived or given
 	// with AS, gets _1, _2, … and ORDER BY a name finds its first column.
-	ctx, _ := newTestContext(t)
+	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT account, account, number AS n, date AS n, number AS n ORDER BY n")
 	var names []string
 	for _, target := range compiled.Targets {
