@@ -86,11 +86,8 @@ type BalanceDelta struct {
 }
 
 // CommodityDelta describes changes from a commodity declaration.
-// Stores commodity metadata for graph node creation.
 type CommodityDelta struct {
-	CommodityID string          // Currency/commodity code
-	Date        *ast.Date       // Effective date
-	Metadata    []*ast.Metadata // Commodity metadata
+	CommodityID string // Currency/commodity code
 }
 
 // NoteDelta - no mutations needed (validation only)

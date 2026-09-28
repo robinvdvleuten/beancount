@@ -38,11 +38,9 @@ import (
 	"fmt"
 	"slices"
 	"strings"
-	"sync"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
@@ -51,18 +49,16 @@ import (
 // transaction validation, and error tracking. It processes directives in date order
 // and maintains the complete state of all accounts including their inventory positions.
 //
-// The ledger is implemented as a unified graph where:
-//   - Nodes represent accounts and currencies
-//   - Edges represent prices (currency conversions) and account state changes
-//   - Temporal queries use forward-fill semantics (most recent price on or before date)
-//
 // The ledger validates all transactions for balance, ensures accounts are opened before
 // use, verifies balance assertions, and processes pad directives. All validation errors
 // are collected and returned together after processing.
 type Ledger struct {
-	graph    *Graph // Unified graph of accounts, currencies, and relationships
 	accounts map[string]*Account
-	config   *Config
+	// Prices by currency pair, for GetPrice
+	prices priceIndex
+	// Currencies declared by a commodity directive
+	commodities map[string]bool
+	config      *Config
 	// The tolerances Booking and balance assertions check against, from
 	// the config's tolerance options
 	tolerances tolerances
@@ -82,8 +78,6 @@ type Ledger struct {
 	booked          map[*ast.Transaction]*bookedTransaction
 	unopened        map[string]*Account // Accounts posted to before any open
 	display         *DisplayContext
-	priceGraphMu    sync.RWMutex
-	priceGraphs     map[string]*Graph
 }
 
 // ValidationErrors wraps multiple validation errors
@@ -117,13 +111,12 @@ func (e *ValidationErrors) Unwrap() []error {
 func New() *Ledger {
 	cfg := NewConfig()
 	return &Ledger{
-		graph:           NewGraph(),
 		accounts:        make(map[string]*Account),
 		config:          cfg,
 		tolerances:      newTolerances(cfg.Tolerance),
 		errors:          make([]error, 0),
 		pads:            newPads(),
-		priceGraphs:     make(map[string]*Graph),
+		commodities:     make(map[string]bool),
 		bookedPositions: make(map[*ast.Posting][]BookedPosition),
 		booked:          make(map[*ast.Transaction]*bookedTransaction),
 		unopened:        make(map[string]*Account),
@@ -156,15 +149,6 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		return err
 	}
 	prepareTimer.End()
-
-	// Enrich AST with semantic information (currencies, accounts)
-	enriched := tree.Enrich()
-
-	// Pre-populate graph with currency nodes (they're not explicitly opened)
-	// Account nodes are created by Open directives with full metadata
-	for currency := range enriched.Currencies {
-		l.graph.AddNode(currency, NodeCurrency, nil)
-	}
 
 	// Parse configuration from AST options; an invalid option is reported
 	// and keeps its default while the others apply.
@@ -313,362 +297,7 @@ func (l *Ledger) Accounts() map[string]*Account {
 //
 // Same-currency conversions always return 1.0.
 func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (decimal.Decimal, bool) {
-	if fromCurrency == toCurrency {
-		return decimal.NewFromInt(1), true
-	}
-	for _, edge := range l.forwardFillGraph(date).GetOutgoingEdges(fromCurrency) {
-		if edge.Kind == EdgePrice && edge.To == toCurrency {
-			return edge.Weight, true
-		}
-	}
-	return decimal.Zero, false
-}
-
-func (l *Ledger) forwardFillGraph(date *ast.Date) *Graph {
-	key := date.String()
-
-	l.priceGraphMu.RLock()
-	graph := l.priceGraphs[key]
-	l.priceGraphMu.RUnlock()
-	if graph != nil {
-		return graph
-	}
-
-	graph = l.buildForwardFillGraph(date)
-
-	l.priceGraphMu.Lock()
-	if cached := l.priceGraphs[key]; cached != nil {
-		graph = cached
-	} else {
-		l.priceGraphs[key] = graph
-	}
-	l.priceGraphMu.Unlock()
-
-	return graph
-}
-
-// buildForwardFillGraph constructs a temporary graph with only the most recent
-// price edges for each currency pair on or before the given date.
-// This implements forward-fill semantics for price lookups.
-func (l *Ledger) buildForwardFillGraph(date *ast.Date) *Graph {
-	tempGraph := NewGraph()
-	validEdges := l.graph.GetPriceEdgesOnDate(date)
-	seenPairs := make(map[string]bool)
-
-	for _, edge := range validEdges {
-		// Only add the first (most recent) edge for each currency pair
-		pairKey := edge.From + "->" + edge.To
-		if !seenPairs[pairKey] {
-			tempGraph.AddEdge(edge)
-			seenPairs[pairKey] = true
-		}
-
-		// Also add inverse if not inferred and not already seen. Like
-		// beancount, a zero price has no inverse.
-		if !edge.Inferred && !edge.Weight.IsZero() {
-			inversePairKey := edge.To + "->" + edge.From
-			if !seenPairs[inversePairKey] {
-				inverseEdge := &Edge{
-					From:     edge.To,
-					To:       edge.From,
-					Kind:     EdgePrice,
-					Date:     edge.Date,
-					Weight:   pydecimal.Quo(decimal.NewFromInt(1), edge.Weight),
-					Meta:     edge.Meta,
-					Inferred: true,
-				}
-				tempGraph.AddEdge(inverseEdge)
-				seenPairs[inversePairKey] = true
-			}
-		}
-	}
-
-	return tempGraph
-}
-
-// Graph returns the underlying graph for advanced queries.
-func (l *Ledger) Graph() *Graph {
-	return l.graph
-}
-
-// forEachAccount iterates over all accounts in the ledger, calling fn for each.
-// The callback can return false to break early (not used currently, but enables future filtering).
-func (l *Ledger) forEachAccount(fn func(*Account) bool) {
-	for _, account := range l.accounts {
-		if !fn(account) {
-			break
-		}
-	}
-}
-
-// GetBalanceTree returns a hierarchical view of account balances for reporting.
-//
-// Parameters:
-//   - types: Account types to include (e.g., Assets, Liabilities). Empty means all types (trial balance).
-//   - startDate, endDate: Date range for balance calculation.
-//   - Both nil: Current inventory state (all postings).
-//   - startDate == endDate: Point-in-time balance (balance sheet).
-//   - startDate < endDate: Period change (income statement).
-//
-// Returns an error if only one date is provided or startDate > endDate.
-//
-// The tree is organized with account types as virtual root nodes. Balances are
-// aggregated bottom-up so parent nodes include the sum of all their descendants.
-func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast.Date) (*BalanceTree, error) {
-	// Validate date range
-	if (startDate == nil) != (endDate == nil) {
-		return nil, fmt.Errorf("startDate and endDate must both be set or both be nil")
-	}
-	if startDate != nil && endDate != nil && startDate.After(endDate.Time) {
-		return nil, fmt.Errorf("startDate %s is after endDate %s", startDate.String(), endDate.String())
-	}
-
-	// Build type filter from enum to configured names
-	typeFilter := make(map[string]bool)
-	for _, t := range types {
-		typeFilter[l.config.ToAccountTypeName(t)] = true
-	}
-
-	// Collect all accounts with their balances
-	var entries []balanceTreeEntry
-	currencySet := make(map[string]bool)
-
-	l.forEachAccount(func(account *Account) bool {
-		// Skip if type filter is set and account doesn't match
-		if len(typeFilter) > 0 && !typeFilter[account.Type] {
-			return true
-		}
-
-		// Calculate balance for the period
-		var balance *Balance
-		if startDate == nil && endDate == nil {
-			// Current inventory state
-			balance = l.getAccountCurrentBalance(account)
-		} else {
-			// Use GetBalanceInPeriod with the dates
-			start := *startDate
-			end := *endDate
-			balance = account.GetBalanceInPeriod(start, end)
-		}
-
-		entries = append(entries, balanceTreeEntry{account: account, balance: balance})
-
-		// Track currencies
-		for _, currency := range balance.Currencies() {
-			currencySet[currency] = true
-		}
-
-		return true
-	})
-
-	// Build sorted currency list
-	currencies := make([]string, 0, len(currencySet))
-	for currency := range currencySet {
-		currencies = append(currencies, currency)
-	}
-	slices.Sort(currencies)
-
-	// Build the tree structure
-	tree := l.buildBalanceTree(entries, typeFilter)
-
-	// Set metadata
-	if startDate != nil {
-		s := startDate.String()
-		tree.StartDate = &s
-	}
-	if endDate != nil {
-		e := endDate.String()
-		tree.EndDate = &e
-	}
-	tree.Currencies = currencies
-
-	return tree, nil
-}
-
-// getAccountCurrentBalance returns the current inventory balance for an account.
-func (l *Ledger) getAccountCurrentBalance(account *Account) *Balance {
-	if account.Inventory == nil {
-		return NewBalance()
-	}
-
-	balance := NewBalance()
-	for _, currency := range account.Inventory.Currencies() {
-		balance.Set(currency, account.Inventory.Get(currency))
-	}
-	return balance
-}
-
-// buildBalanceTree constructs the hierarchical tree structure from account entries.
-// balanceTreeEntry is used internally by GetBalanceTree.
-type balanceTreeEntry struct {
-	account *Account
-	balance *Balance
-}
-
-func (l *Ledger) buildBalanceTree(entries []balanceTreeEntry, typeFilter map[string]bool) *BalanceTree {
-	// Group accounts by type
-	accountsByType := make(map[string][]balanceTreeEntry)
-	for _, entry := range entries {
-		accountsByType[entry.account.Type] = append(accountsByType[entry.account.Type], entry)
-	}
-
-	// Determine which types to include
-	var typeOrder []ast.AccountType
-	if len(typeFilter) > 0 {
-		// Use filtered types in standard order
-		for _, t := range []ast.AccountType{
-			ast.AccountTypeAssets,
-			ast.AccountTypeLiabilities,
-			ast.AccountTypeEquity,
-			ast.AccountTypeIncome,
-			ast.AccountTypeExpenses,
-		} {
-			typeName := l.config.ToAccountTypeName(t)
-			if typeFilter[typeName] {
-				typeOrder = append(typeOrder, t)
-			}
-		}
-	} else {
-		// All types in standard order
-		typeOrder = []ast.AccountType{
-			ast.AccountTypeAssets,
-			ast.AccountTypeLiabilities,
-			ast.AccountTypeEquity,
-			ast.AccountTypeIncome,
-			ast.AccountTypeExpenses,
-		}
-	}
-
-	// Build root nodes for each type
-	var roots []*BalanceNode
-	for _, accountType := range typeOrder {
-		typeName := l.config.ToAccountTypeName(accountType)
-		typeEntries := accountsByType[typeName]
-
-		if len(typeEntries) == 0 {
-			continue
-		}
-
-		// Build subtree for this type
-		root := l.buildTypeSubtree(typeName, typeEntries)
-		roots = append(roots, root)
-	}
-
-	return &BalanceTree{Roots: roots}
-}
-
-// buildTypeSubtree builds a subtree for a single account type.
-func (l *Ledger) buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode {
-	// Create a map of account name to node for quick lookup
-	nodeMap := make(map[string]*BalanceNode)
-	childSets := make(map[string]map[string]struct{})
-
-	// Create leaf nodes for all accounts
-	for _, entry := range entries {
-		accountName := string(entry.account.Name)
-		nodeMap[accountName] = &BalanceNode{
-			Name:     accountName,
-			Account:  accountName,
-			Depth:    strings.Count(accountName, ":"),
-			Balance:  entry.balance.Copy(),
-			Children: nil,
-		}
-	}
-
-	// Build parent-child relationships and create intermediate nodes
-	for _, entry := range entries {
-		accountName := string(entry.account.Name)
-		parts := strings.Split(accountName, ":")
-
-		// Ensure all parent nodes exist
-		for i := 1; i < len(parts); i++ {
-			parentPath := strings.Join(parts[:i], ":")
-			childPath := strings.Join(parts[:i+1], ":")
-
-			// Create parent node if it doesn't exist
-			if _, exists := nodeMap[parentPath]; !exists {
-				nodeMap[parentPath] = &BalanceNode{
-					Name:     parentPath,
-					Account:  parentPath,
-					Depth:    i - 1,
-					Balance:  NewBalance(),
-					Children: nil,
-				}
-			}
-
-			// Add child to parent if not already added
-			parent := nodeMap[parentPath]
-			child := nodeMap[childPath]
-			if child != nil {
-				children := childSets[parentPath]
-				if children == nil {
-					children = make(map[string]struct{})
-					childSets[parentPath] = children
-				}
-				if _, exists := children[childPath]; !exists {
-					parent.Children = append(parent.Children, child)
-					children[childPath] = struct{}{}
-				}
-			}
-		}
-	}
-
-	// Sort children at each level
-	for _, node := range nodeMap {
-		slices.SortFunc(node.Children, func(a, b *BalanceNode) int {
-			if a.Name < b.Name {
-				return -1
-			}
-			if a.Name > b.Name {
-				return 1
-			}
-			return 0
-		})
-	}
-
-	// Aggregate balances bottom-up using post-order traversal
-	var aggregate func(node *BalanceNode)
-	aggregate = func(node *BalanceNode) {
-		for _, child := range node.Children {
-			aggregate(child)
-			node.Balance.Merge(child.Balance)
-		}
-	}
-
-	// Create the type root node
-	root := &BalanceNode{
-		Name:     typeName,
-		Account:  "", // Virtual root, not an actual account
-		Depth:    0,
-		Balance:  NewBalance(),
-		Children: nil,
-	}
-
-	// Find direct children of the type root (depth 1 nodes)
-	for name, node := range nodeMap {
-		if node.Depth == 1 && strings.HasPrefix(name, typeName+":") {
-			root.Children = append(root.Children, node)
-		}
-	}
-
-	// Sort root's children
-	slices.SortFunc(root.Children, func(a, b *BalanceNode) int {
-		if a.Name < b.Name {
-			return -1
-		}
-		if a.Name > b.Name {
-			return 1
-		}
-		return 0
-	})
-
-	// Aggregate balances from children to root
-	for _, child := range root.Children {
-		aggregate(child)
-		root.Balance.Merge(child.Balance)
-	}
-
-	return root
+	return l.prices.rate(date, fromCurrency, toCurrency)
 }
 
 // processDirective validates a directive, records its errors, and applies
@@ -712,51 +341,7 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 		account.Postings = early.Postings
 		delete(l.unopened, accountName)
 	}
-	node := l.graph.AddNode(accountName, NodeAccount, account)
-	node.Kind = NodeAccount
-	node.Meta = account
 	l.accounts[accountName] = account
-
-	// Create implicit parent nodes and hierarchy edges
-	l.ensureAccountHierarchy(accountName)
-}
-
-// ensureAccountHierarchy creates parent nodes and hierarchy edges for an account.
-// For example, "Assets:US:Checking" creates edges:
-//
-//	Assets -> Assets:US
-//	Assets:US -> Assets:US:Checking
-func (l *Ledger) ensureAccountHierarchy(accountName string) {
-	parts := strings.Split(accountName, ":")
-	for i := 1; i < len(parts); i++ {
-		parentPath := strings.Join(parts[:i], ":")
-		childPath := strings.Join(parts[:i+1], ":")
-
-		// Ensure parent node exists (implicit if not explicitly opened)
-		if l.graph.GetNode(parentPath) == nil {
-			l.graph.AddNode(parentPath, NodeAccount, nil)
-		}
-
-		// Ensure hierarchy edge exists
-		existsEdge := false
-		for _, edge := range l.graph.GetOutgoingEdges(parentPath) {
-			if edge.Kind == EdgeHierarchy && edge.To == childPath {
-				existsEdge = true
-				break
-			}
-		}
-
-		if !existsEdge {
-			l.graph.AddEdge(&Edge{
-				From:   parentPath,
-				To:     childPath,
-				Kind:   EdgeHierarchy,
-				Date:   nil,
-				Weight: decimal.Zero,
-				Meta:   nil,
-			})
-		}
-	}
 }
 
 // applyClose applies the close delta to the ledger (mutation only)
@@ -795,71 +380,16 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransactio
 	}
 }
 
-// applyPrice adds price edges to the ledger's graph (mutation only)
+// applyPrice adds a price to the price index (mutation only)
 func (l *Ledger) applyPrice(price *ast.Price) {
 	amount, err := ParseAmount(price.Amount)
 	if err != nil {
 		panic(fmt.Sprintf("BUG: amount parsing failed after validation: %v", err))
 	}
-
-	from := string(price.Commodity)
-	to := price.Amount.Currency
-
-	// Add forward price edge
-	l.graph.AddEdge(&Edge{
-		From:     from,
-		To:       to,
-		Kind:     EdgePrice,
-		Date:     price.Date(),
-		Weight:   amount,
-		Meta:     price,
-		Inferred: false,
-	})
-
-	// Add inverse price edge (bidirectional). Like beancount, which filters
-	// out zero prices for zero-cost postings such as gifted options, a zero
-	// price has no inverse: the inverse falls back to an earlier price.
-	if !amount.IsZero() {
-		l.graph.AddEdge(&Edge{
-			From:     to,
-			To:       from,
-			Kind:     EdgePrice,
-			Date:     price.Date(),
-			Weight:   pydecimal.Quo(decimal.NewFromInt(1), amount),
-			Meta:     price,
-			Inferred: true,
-		})
-	}
-
-	l.priceGraphMu.Lock()
-	clear(l.priceGraphs)
-	l.priceGraphMu.Unlock()
+	l.prices.add(price.Date(), string(price.Commodity), price.Amount.Currency, amount)
 }
 
-// applyCommodity creates an explicit commodity node in the graph with metadata.
-// Commodities are treated as explicit graph nodes rather than implicit currency references.
-// This allows tracking commodity-specific metadata, properties, and constraints.
-//
-// If a currency node was previously created implicitly (e.g., via enrichment or a transaction),
-// it is upgraded to an explicit commodity node with kind "commodity" and its metadata.
-func (l *Ledger) applyCommodity(commodity *ast.Commodity, delta *CommodityDelta) {
-	// Create or upgrade the commodity node with metadata
-	// This upgrades implicit "currency" nodes to explicit "commodity" nodes
-	node := l.graph.AddNode(delta.CommodityID, NodeCommodity, &CommodityNode{
-		ID:       delta.CommodityID,
-		Date:     delta.Date,
-		Metadata: delta.Metadata,
-	})
-
-	// Ensure the node kind is set to "commodity" (not "currency")
-	// This handles the case where the node was previously created as "currency"
-	node.Kind = NodeCommodity
-}
-
-// CommodityNode represents a commodity or currency as an explicit graph node.
-// Stores metadata from the Commodity directive for future queries and constraints.
-type CommodityNode struct {
-	ID       string          // Currency/commodity code (e.g., "USD", "HOOL")
-	Date     *ast.Date       // Effective date of the commodity declaration
-	Metadata []*ast.Metadata // Commodity-specific metadata (name, precision, etc.)
+// applyCommodity records a declared commodity (mutation only)
+func (l *Ledger) applyCommodity(delta *CommodityDelta) {
+	l.commodities[delta.CommodityID] = true
 }

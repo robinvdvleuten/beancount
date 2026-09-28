@@ -294,7 +294,7 @@ func postingWeight(posting *ast.Posting, position *positionValue) any {
 	return &position.Units
 }
 
-// priceLookup fetches a conversion rate from the ledger price graph.
+// priceLookup fetches a conversion rate from the ledger's prices.
 func priceLookup(ctx *Context, date *ast.Date, from, to string) (decimal.Decimal, bool) {
 	if ctx == nil || ctx.Ledger == nil {
 		return decimal.Decimal{}, false

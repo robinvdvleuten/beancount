@@ -964,7 +964,7 @@ plugin "beancount.plugins.auto_accounts"
 	assert.True(t, rate5.Equal(mustParseDec("1.10")))
 }
 
-func TestLedger_ExplicitAccountUpgradesImplicitHierarchyNode(t *testing.T) {
+func TestLedger_OpensAnAccountThatIsAlsoAParent(t *testing.T) {
 	source := `
 2021-01-01 open Assets:Cash USD
 2021-01-01 open Expenses:Taxes:Y2021:US:Federal:PreTax401k USD
@@ -985,11 +985,6 @@ func TestLedger_ExplicitAccountUpgradesImplicitHierarchyNode(t *testing.T) {
 	account, ok := ledger.GetAccount("Expenses:Taxes:Y2021:US:Federal")
 	assert.True(t, ok)
 	assert.True(t, account.Inventory.Get("USD").Equal(mustParseDec("100")))
-
-	node := ledger.Graph().GetNode("Expenses:Taxes:Y2021:US:Federal")
-	nodeAccount, ok := node.Meta.(*Account)
-	assert.True(t, ok)
-	assert.Equal(t, account, nodeAccount)
 }
 
 func TestLedger_GetPriceSameCurrency(t *testing.T) {
@@ -1001,22 +996,6 @@ func TestLedger_GetPriceSameCurrency(t *testing.T) {
 	rate, found := ledger.GetPrice(date, "USD", "USD")
 	assert.True(t, found)
 	assert.True(t, rate.Equal(mustParseDec("1")))
-}
-
-func TestLedger_GetPriceCachesForwardFillGraphByDate(t *testing.T) {
-	ctx := context.Background()
-	tree := parser.MustParseString(ctx, "2024-01-15 price USD 1.08 CAD\n")
-	ledger := New()
-	err := ledger.Process(ctx, tree)
-	assert.NoError(t, err)
-
-	date := newTestDate("2024-01-15")
-	_, found := ledger.GetPrice(date, "USD", "CAD")
-	assert.True(t, found)
-	_, found = ledger.GetPrice(date, "CAD", "USD")
-	assert.True(t, found)
-
-	assert.Equal(t, 1, len(ledger.priceGraphs))
 }
 
 func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
@@ -1036,28 +1015,6 @@ func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
 	rate, found := ledger.GetPrice(dateBefore, "USD", "CAD")
 	assert.False(t, found)
 	assert.True(t, rate.IsZero())
-}
-
-func TestLedger_GraphAccessor(t *testing.T) {
-	source := `
-2024-01-15 price USD 1.08 CAD
-`
-
-	ctx := context.Background()
-	tree := parser.MustParseString(ctx, source)
-
-	ledger := New()
-	err := ledger.Process(ctx, tree)
-	assert.NoError(t, err)
-
-	// Verify we can access the graph directly
-	g := ledger.Graph()
-	assert.NotZero(t, g)
-
-	date := newTestDate("2024-01-15")
-	rate, found := ledger.GetPrice(date, "USD", "CAD")
-	assert.True(t, found)
-	assert.True(t, rate.Equal(mustParseDec("1.08")))
 }
 
 func TestLedger_InvalidPriceMissingAmount(t *testing.T) {

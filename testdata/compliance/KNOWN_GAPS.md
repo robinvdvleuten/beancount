@@ -35,7 +35,9 @@ v2 (`applied_merge_cost`, `merge_cost_avg`).
 **Two prices on one date**: `getprice` returns the first price of the day,
 bean-query the last, because v2's `build_price_map` keeps a date's latest
 entry. When `implicit_prices` inserts 20 USD and then 21 USD for ACME on
-the same date, we return 20 and bean-query 21.
+the same date, we return 20 and bean-query 21. The same holds across
+directions: with `price AUD 0.6 USD` and then `price USD 1.5 AUD` on one
+date, we convert AUD to USD at 0.6 and bean-query at 1/1.5.
 
 **Cost and price in different currencies**: bean-check reports `Cost and
 price currencies must match: EUR != USD` for `10 BOND {95 EUR} @@ 1100 USD`;

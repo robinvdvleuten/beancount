@@ -688,7 +688,7 @@ func validatePrice(price *ast.Price) []error {
 // Per Beancount spec and Parser → Validate separation:
 //   - Parser ensures: non-empty currency code (via parseIdent requirement)
 //   - Parser ensures: valid IDENT format (via lexer tokenization)
-//   - The commodity handler rejects a repeated declaration (it needs the graph)
+//   - The commodity handler rejects a repeated declaration (it needs the declared commodities)
 //
 // Currently, the parser already enforces all syntactic requirements for
 // commodity directives, so validateCommodity is a pass-through.
