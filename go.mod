@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-runewidth v0.0.30
 	github.com/shopspring/decimal v1.4.0
 	golang.org/x/term v0.46.0
-	google.golang.org/grpc v1.83.2
+	google.golang.org/grpc v1.84.0
 	google.golang.org/protobuf v1.36.12
 )
 
