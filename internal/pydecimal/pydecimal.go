@@ -4,7 +4,9 @@
 package pydecimal
 
 import (
+	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/shopspring/decimal"
 )
@@ -129,4 +131,41 @@ func reduce(d decimal.Decimal, limit int32) decimal.Decimal {
 		coefficient, exponent = quotient, exponent+1
 	}
 	return decimal.NewFromBigInt(coefficient, exponent)
+}
+
+// String renders d like Python's str(Decimal): plain notation when the
+// exponent is at most zero and the adjusted exponent (that of the leading
+// digit) is at least -6, scientific notation otherwise (1E-7,
+// 3.333333333333333333333333333E-11, 2E+1).
+func String(d decimal.Decimal) string {
+	coefficient := d.Coefficient()
+	sign := ""
+	if coefficient.Sign() < 0 {
+		sign = "-"
+		coefficient.Neg(coefficient)
+	}
+	digits := coefficient.String()
+	exponent := int(d.Exponent())
+	leftDigits := exponent + len(digits)
+
+	dotPlace := 1
+	if exponent <= 0 && leftDigits > -6 {
+		dotPlace = leftDigits
+	}
+
+	var intPart, fracPart string
+	switch {
+	case dotPlace <= 0:
+		intPart, fracPart = "0", "."+strings.Repeat("0", -dotPlace)+digits
+	case dotPlace >= len(digits):
+		intPart = digits + strings.Repeat("0", dotPlace-len(digits))
+	default:
+		intPart, fracPart = digits[:dotPlace], "."+digits[dotPlace:]
+	}
+
+	exp := ""
+	if leftDigits != dotPlace {
+		exp = fmt.Sprintf("E%+d", leftDigits-dotPlace)
+	}
+	return sign + intPart + fracPart + exp
 }

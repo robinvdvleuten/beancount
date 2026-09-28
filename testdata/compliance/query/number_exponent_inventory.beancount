@@ -1,0 +1,15 @@
+2020-01-01 open Assets:Wallet
+2020-01-01 open Assets:Other
+2020-01-01 open Equity:E
+2020-01-02 * "sats"
+  Assets:Wallet  0.00000001 BTC
+  Equity:E
+2020-01-03 * "more"
+  Assets:Wallet  0.00000012 BTC
+  Equity:E
+2020-01-04 * "big"
+  Assets:Other  1.50 USD
+  Equity:E
+2020-01-05 * "cost"
+  Assets:Other  1 SAT {0.00000005 USD}
+  Equity:E

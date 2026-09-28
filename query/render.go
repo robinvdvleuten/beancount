@@ -572,6 +572,24 @@ func (f *numberField) width() int {
 }
 
 func (f *numberField) format(number decimal.Decimal) string {
+	if s := pydecimal.String(number); strings.Contains(s, "E-") {
+		// Like bean-query, a number Python prints in exponent form (an
+		// adjusted exponent below -6) keeps that form, in the field the
+		// fixed notation sizes: 1E-7 fills 0.0000001's width. It aligns
+		// on its point, or its end without one, behind a sign column.
+		// A positive exponent keeps fixed notation, where bean-query
+		// prints a wrong or blank cell (KNOWN_GAPS.md).
+		if f.integral.negative && number.Sign() >= 0 {
+			s = " " + s
+		}
+		point := strings.IndexByte(s, '.')
+		if point < 0 {
+			point = len(s)
+		}
+		s = strings.Repeat(" ", max(f.integral.width()-point, 0)) + s
+		return padRight(truncate(s, f.width()), f.width())
+	}
+
 	intPart, fracPart := decimalParts(number)
 	s := padLeft(intPart, f.integral.width())
 	if fracPart != "" {

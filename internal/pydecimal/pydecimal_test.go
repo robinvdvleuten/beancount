@@ -78,3 +78,28 @@ func TestArithmetic(t *testing.T) {
 		assert.Equal(t, want.Exponent(), tt.got.Exponent(), tt.name)
 	}
 }
+
+func TestString(t *testing.T) {
+	// Expected values are Python's str(Decimal).
+	for _, tt := range []struct {
+		in   decimal.Decimal
+		want string
+	}{
+		{decimal.New(1, -6), "0.000001"},
+		{decimal.New(1, -7), "1E-7"},
+		{decimal.New(12, -8), "1.2E-7"},
+		{decimal.New(-1, -7), "-1E-7"},
+		{decimal.New(0, -7), "0E-7"},
+		{decimal.New(0, -6), "0.000000"},
+		{decimal.RequireFromString("3.333333333333333333333333333E-11"), "3.333333333333333333333333333E-11"},
+		{decimal.New(250, -2), "2.50"},
+		{decimal.New(-5, -1), "-0.5"},
+		{decimal.New(200, 0), "200"},
+		{decimal.New(0, 0), "0"},
+		{decimal.New(2, 1), "2E+1"},
+		{decimal.New(0, 2), "0E+2"},
+		{decimal.New(123, 3), "1.23E+5"},
+	} {
+		assert.Equal(t, tt.want, String(tt.in), tt.want)
+	}
+}

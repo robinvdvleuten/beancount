@@ -153,6 +153,15 @@ limits:
   `sum(true) + 1` is `23`. We reject it: `ERROR: Invalid function
   'sum(bool)' in targets/column context.` (#422).
 
+- **BQL numbers with a positive exponent** (#512): Python keeps a
+  quotient's exponent, so `100 / 5.0` is `2E+1`. bean-query sizes the
+  column for one digit and cuts the value to it, printing `2` for 20 and
+  a blank cell for `1000 / 5.0` (`2E+2`), which hides the value. We print
+  fixed notation (`20`, `200`); `query/gap_number_exponent_positive.bql`
+  pins it. A number whose adjusted exponent is below -6 matches: it keeps
+  Python's form (`1E-7`) in the width fixed notation would take
+  (`query/number_exponent_*.bql`).
+
 - **BQL ordering of mixed types**: `<`, `<=`, `>` and `>=` between a
   number or date and a string (`year < '2024'`) raise Python's `TypeError`
   in bean-query, which prints the traceback to stdout on the first row it
