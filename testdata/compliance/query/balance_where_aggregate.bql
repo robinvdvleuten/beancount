@@ -1,0 +1,1 @@
+SELECT account, count(date) WHERE balance = balance GROUP BY account

@@ -133,6 +133,32 @@ func TestExecuteRunningBalance(t *testing.T) {
 	assert.Equal(t, "-1504.5 USD", valueString(result.Rows[3][0]))
 }
 
+// WHERE sees the running balance of the rows it kept before the one it
+// filters, like bean-query, which adds a posting only once WHERE keeps it.
+func TestExecuteBalanceInWhere(t *testing.T) {
+	for query, rows := range map[string]int{
+		"SELECT date WHERE balance = balance":                                  8,
+		"SELECT date WHERE balance != balance":                                 0,
+		"SELECT count(date) WHERE balance = balance":                           1,
+		"SELECT account, count(date) WHERE balance = balance GROUP BY account": 5,
+		// The last posting sees the HOOL lot, held at cost.
+		"SELECT date WHERE balance = units(balance)": 7,
+	} {
+		t.Run(query, func(t *testing.T) {
+			assert.Equal(t, rows, len(runQuery(t, query).Rows))
+		})
+	}
+
+	// Before the first kept row the balance is empty. The salary's income
+	// leg is filtered against the 2500 USD its checking leg left, without
+	// its own -2500 USD, so it is dropped.
+	result := runQuery(t, "SELECT account, balance WHERE number(only('USD', balance)) <= 1000")
+	assert.Equal(t, 3, len(result.Rows))
+	assert.Equal(t, "1000 USD", valueString(result.Rows[0][1]))
+	assert.Equal(t, "Equity:Opening-Balances", result.Rows[1][0])
+	assert.Equal(t, "2500 USD", valueString(result.Rows[2][1]))
+}
+
 func TestExecuteTagsAndLinks(t *testing.T) {
 	result := runQuery(t, "SELECT date WHERE 'job' in tags")
 	assert.Equal(t, 2, len(result.Rows))

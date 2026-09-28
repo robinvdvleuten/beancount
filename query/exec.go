@@ -99,8 +99,15 @@ func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) 
 
 			for _, position := range positions {
 				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position}
-				if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
-					continue
+				if compiled.Where != nil {
+					// WHERE sees the balance of the rows kept so far, without
+					// the one it filters.
+					if compiled.UsesBalance {
+						row.Balance = running
+					}
+					if !truthy(compiled.Where.eval(row)) {
+						continue
+					}
 				}
 				if compiled.UsesBalance {
 					if position != nil {
