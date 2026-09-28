@@ -37,16 +37,14 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 	runCtx := context.Background()
 
-	sourceContent, err := cmd.File.GetSourceContent()
-	if err != nil {
-		return fmt.Errorf("failed to read file for error context: %w", err)
-	}
-
 	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
-		renderer := NewErrorRenderer(sourceContent)
-		_, _ = fmt.Fprintln(ctx.Stderr, renderer.Render(err))
+		sourceContent, readErr := cmd.File.GetSourceContent()
+		if readErr != nil {
+			return fmt.Errorf("failed to read file for error context: %w", readErr)
+		}
+		_, _ = fmt.Fprintln(ctx.Stderr, cmd.File.errorRenderer(sourceContent).Render(err))
 		return NewCommandError(1)
 	}
 	tree := loadResult.AST
@@ -63,7 +61,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	l := ledger.New()
 	if err := l.Process(runCtx, tree); err != nil {
 		if stdErrors.As(err, &validationErrors) {
-			renderer := NewErrorRenderer(sourceContent)
+			renderer := NewErrorRenderer(loadResult.Sources)
 			_, _ = fmt.Fprintln(ctx.Stderr, renderer.RenderAll(validationErrors.Errors))
 		} else {
 			return err
@@ -80,7 +78,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// piped stdin is read as a single query, like bean-query.
 	if queryText == "" {
 		if cmd.File.Filename != "<stdin>" && term.IsTerminal(int(os.Stdin.Fd())) {
-			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, validationErrors, sourceContent)
+			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, validationErrors, loadResult.Sources)
 		}
 		piped, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -111,7 +109,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 // runShell is the interactive query REPL: one query per line, with help,
 // errors, and exit commands.
-func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out io.Writer, validationErrors *ledger.ValidationErrors, sourceContent []byte) error {
+func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out io.Writer, validationErrors *ledger.ValidationErrors, sources map[string][]byte) error {
 	printShellBanner(out, qctx.AST)
 
 	scanner := bufio.NewScanner(in)
@@ -137,7 +135,7 @@ func runShell(ctx context.Context, qctx *query.Context, format query.Format, num
 				_, _ = fmt.Fprintln(out, "(no errors)")
 				continue
 			}
-			renderer := NewErrorRenderer(sourceContent)
+			renderer := NewErrorRenderer(sources)
 			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors.Errors))
 			continue
 		}

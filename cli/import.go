@@ -99,7 +99,7 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 		if !stdErrors.As(err, &syntaxErrs) {
 			syntaxErrs = parser.ParseErrors{parser.NewParseErrorWithSource(extractedName, err, text)}
 		}
-		renderer := NewErrorRenderer(text)
+		renderer := NewErrorRenderer(map[string][]byte{extractedName: text})
 		for _, syntaxErr := range syntaxErrs {
 			_, _ = fmt.Fprintln(ctx.Stderr, renderer.Render(syntaxErr))
 		}
@@ -117,7 +117,7 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 		return err
 	}
 
-	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, loadResult.Root, source)
+	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, loadResult.Root)
 	if err != nil {
 		return err
 	}
@@ -134,7 +134,7 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 func (cmd *ImportCmd) loadLedger(ctx context.Context, stderr io.Writer, source []byte) (*loader.LoadResult, bool) {
 	loadResult, err := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery()).Load(ctx, cmd.Ledger)
 	if err != nil {
-		_, _ = fmt.Fprintln(stderr, NewErrorRenderer(source).Render(err))
+		_, _ = fmt.Fprintln(stderr, NewErrorRenderer(map[string][]byte{cmd.Ledger: source}).Render(err))
 		_, _ = fmt.Fprintln(stderr)
 		printError(stderr, "parse error")
 		return nil, false

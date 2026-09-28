@@ -89,7 +89,7 @@ func (cmd *MissingOpenCmd) Run(ctx *kong.Context) error {
 		if readErr != nil {
 			return fmt.Errorf("failed to read file for error context: %w", readErr)
 		}
-		_, _ = fmt.Fprintln(ctx.Stderr, NewErrorRenderer(sourceContent).Render(err))
+		_, _ = fmt.Fprintln(ctx.Stderr, cmd.File.errorRenderer(sourceContent).Render(err))
 		_, _ = fmt.Fprintln(ctx.Stderr)
 		printError(ctx.Stderr, "parse error")
 		return NewCommandError(1)

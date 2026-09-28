@@ -71,7 +71,7 @@ func BenchmarkCheckScaling(b *testing.B) {
 					if err != nil {
 						b.Fatal(err)
 					}
-					errorCount, err := checkLedger(ctx, io.Discard, result, path, source)
+					errorCount, err := checkLedger(ctx, io.Discard, result, path)
 					if err != nil {
 						b.Fatal(err)
 					}

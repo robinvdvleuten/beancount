@@ -94,7 +94,7 @@ func TestErrorRenderer_RenderWithSourceContext(t *testing.T) {
 		Column:   35,
 	}
 
-	renderer := NewErrorRenderer([]byte(sourceContent))
+	renderer := NewErrorRenderer(nil)
 	output := renderer.renderWithSourceContext(pos, "test error message", ast.SplitSourceLines(sourceContent))
 
 	// Verify error message is included
@@ -205,7 +205,7 @@ func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {
 		Column:   10,
 	}
 
-	renderer := NewErrorRenderer([]byte(sourceContent))
+	renderer := NewErrorRenderer(nil)
 	output := renderer.renderWithSourceContext(pos, "error", ast.SplitSourceLines(sourceContent))
 
 	// Should not panic and should include source lines
@@ -237,3 +237,70 @@ func TestCheckShowsTheDirectiveUnderALedgerError(t *testing.T) {
 	assert.Contains(t, output, "     Assets:B  -1 USD\n")
 	assert.Equal(t, []int{3}, errorLines(path, output))
 }
+
+// writeLedgerWithInclude writes main.beancount, which includes
+// sub.beancount, into a temporary directory and returns both paths.
+func writeLedgerWithInclude(t *testing.T, mainSource, subSource string) (mainPath, subPath string) {
+	t.Helper()
+	dir := t.TempDir()
+	mainPath = filepath.Join(dir, "main.beancount")
+	subPath = filepath.Join(dir, "sub.beancount")
+	assert.NoError(t, os.WriteFile(mainPath, []byte(mainSource), 0o644))
+	assert.NoError(t, os.WriteFile(subPath, []byte(subSource), 0o644))
+	return mainPath, subPath
+}
+
+func TestCheckShowsAnIncludedPluginErrorInItsOwnFile(t *testing.T) {
+	mainPath, subPath := writeLedgerWithInclude(t,
+		"option \"title\" \"Main\"\n\ninclude \"sub.beancount\"\n\n2020-01-01 open Assets:Cash\n",
+		"; sub\n\nplugin \"beancount.plugins.nope\"\n\n2020-01-01 open Assets:Bank\n")
+
+	output := runOurCheck(t, mainPath)
+	assert.Contains(t, output, subPath+":3: Error importing \"beancount.plugins.nope\"\n\n"+
+		"   ; sub\n"+
+		"   \n"+
+		"   plugin \"beancount.plugins.nope\"\n"+
+		"   ^\n"+
+		"   \n"+
+		"   2020-01-01 open Assets:Bank\n")
+	assert.NotContains(t, output, "include \"sub.beancount\"")
+	assert.NotContains(t, output, "option \"title\"")
+	assert.Equal(t, []int{3}, errorLines(subPath, output))
+}
+
+func TestCheckShowsAMainFilePluginErrorInTheMainFile(t *testing.T) {
+	mainPath, _ := writeLedgerWithInclude(t,
+		"plugin \"beancount.plugins.nope\"\n\ninclude \"sub.beancount\"\n\n2020-01-01 open Assets:Cash\n",
+		"2020-01-01 open Assets:Bank\n")
+
+	output := runOurCheck(t, mainPath)
+	assert.Contains(t, output, mainPath+":1: Error importing \"beancount.plugins.nope\"\n\n"+
+		"   plugin \"beancount.plugins.nope\"\n"+
+		"   ^\n"+
+		"   \n"+
+		"   include \"sub.beancount\"\n")
+}
+
+func TestCheckShowsAnIncludedSyntaxErrorWithoutContext(t *testing.T) {
+	mainPath, subPath := writeLedgerWithInclude(t,
+		"include \"sub.beancount\"\n\n2020-01-01 open Assets:Cash\n",
+		"2020-01-01 open Assets:Bank\n\n2020-01-02 * \"x\"\n  Assets:Bank  1 USD USD\n  Assets:Cash\n")
+
+	output := runOurCheck(t, mainPath)
+	assert.Equal(t, subPath+":4:22: unexpected token IDENT \"USD\"\n", output)
+}
+
+func TestErrorRendererShowsNoContextForAFileItDoesNotHave(t *testing.T) {
+	renderer := NewErrorRenderer(map[string][]byte{"main.beancount": []byte("plugin \"a\"\n")})
+	err := positionedError{pos: ast.Position{Filename: "sub.beancount", Line: 1}, message: "sub.beancount:1: boom"}
+
+	assert.Equal(t, "sub.beancount:1: boom", renderer.Render(err))
+}
+
+type positionedError struct {
+	pos     ast.Position
+	message string
+}
+
+func (e positionedError) Error() string             { return e.message }
+func (e positionedError) GetPosition() ast.Position { return e.pos }

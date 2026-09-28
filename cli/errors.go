@@ -18,13 +18,14 @@ var (
 
 // ErrorRenderer renders errors with terminal styling and source context.
 type ErrorRenderer struct {
-	source []byte
-	lines  []string // source split into lines, on first use
+	sources map[string][]byte
+	lines   map[string][]string // each source split into lines, on first use
 }
 
-// NewErrorRenderer creates a renderer with source content for context.
-func NewErrorRenderer(source []byte) *ErrorRenderer {
-	return &ErrorRenderer{source: source}
+// NewErrorRenderer creates a renderer that shows an error in the context of
+// the source its position names, looked up by filename in sources.
+func NewErrorRenderer(sources map[string][]byte) *ErrorRenderer {
+	return &ErrorRenderer{sources: sources, lines: make(map[string][]string)}
 }
 
 // Render formats a single error with styling and context: like bean-check,
@@ -37,8 +38,8 @@ func (r *ErrorRenderer) Render(err error) string {
 	}
 
 	if e, ok := err.(*parser.ParseError); ok {
-		if r.source != nil {
-			return r.renderWithSourceContext(e.Pos, e.Error(), r.sourceLines())
+		if lines, ok := r.sourceLines(e.Pos.Filename); ok {
+			return r.renderWithSourceContext(e.Pos, e.Error(), lines)
 		}
 		if e.SourceRange.Source != nil {
 			return r.renderWithSourceContext(e.Pos, e.Error(), ast.SplitSourceLines(string(e.SourceRange.Source)))
@@ -49,8 +50,8 @@ func (r *ErrorRenderer) Render(err error) string {
 		GetPosition() ast.Position
 		Error() string
 	}); ok {
-		if r.source != nil {
-			return r.renderWithSourceContext(e.GetPosition(), e.Error(), r.sourceLines())
+		if lines, ok := r.sourceLines(e.GetPosition().Filename); ok {
+			return r.renderWithSourceContext(e.GetPosition(), e.Error(), lines)
 		}
 	}
 
@@ -75,13 +76,20 @@ func (r *ErrorRenderer) RenderAll(errs []error) string {
 	return buf.String()
 }
 
-// sourceLines splits the source into lines once, so rendering many errors
-// stays linear in the source size.
-func (r *ErrorRenderer) sourceLines() []string {
-	if r.lines == nil {
-		r.lines = ast.SplitSourceLines(string(r.source))
+// sourceLines returns the lines of filename's source, or false when the
+// renderer does not have it. Each source is split once, so rendering many
+// errors stays linear in the source size.
+func (r *ErrorRenderer) sourceLines(filename string) ([]string, bool) {
+	if lines, ok := r.lines[filename]; ok {
+		return lines, true
 	}
-	return r.lines
+	source, ok := r.sources[filename]
+	if !ok {
+		return nil, false
+	}
+	lines := ast.SplitSourceLines(string(source))
+	r.lines[filename] = lines
+	return lines, true
 }
 
 func (r *ErrorRenderer) renderWithSourceContext(pos ast.Position, message string, sourceLines []string) string {

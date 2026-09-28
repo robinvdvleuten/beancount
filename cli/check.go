@@ -53,16 +53,14 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		defer reportTelemetry()
 	}
 
-	sourceContent, err := cmd.File.GetSourceContent()
-	if err != nil {
-		return fmt.Errorf("failed to read file for error context: %w", err)
-	}
-
 	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
-		renderer := NewErrorRenderer(sourceContent)
-		formatted := renderer.Render(err)
+		sourceContent, readErr := cmd.File.GetSourceContent()
+		if readErr != nil {
+			return fmt.Errorf("failed to read file for error context: %w", readErr)
+		}
+		formatted := cmd.File.errorRenderer(sourceContent).Render(err)
 		_, _ = fmt.Fprintln(ctx.Stderr, formatted)
 
 		_, _ = fmt.Fprintln(ctx.Stderr)
@@ -71,7 +69,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
-	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, cmd.File.GetAbsoluteFilename(), sourceContent)
+	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, cmd.File.GetAbsoluteFilename())
 	if err != nil {
 		return err
 	}
@@ -86,13 +84,13 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 }
 
 // checkLedger prints the load diagnostics, processes the loaded AST and
-// prints its validation errors. sourceContent is mainFile's. It returns how
-// many errors it printed.
-func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadResult, mainFile string, sourceContent []byte) (int, error) {
+// prints its validation errors, each in the context of the loaded file its
+// position names. It returns how many errors it printed.
+func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadResult, mainFile string) (int, error) {
 	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
 		printInfof(stderr, "%s", warning)
 	}
-	renderer := NewErrorRenderer(sourceContent)
+	renderer := NewErrorRenderer(loadResult.Sources)
 	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
 	for _, loadErr := range loadErrors {
 		// A syntax error in the main file is shown in its source context,

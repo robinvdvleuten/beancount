@@ -48,6 +48,9 @@ type LoadResult struct {
 	Includes []string
 	// Diagnostics contains non-fatal warnings produced while loading.
 	Diagnostics []error
+	// Sources holds the text of every file read, keyed by the filename its
+	// positions carry, so an error can be shown in its own file's context.
+	Sources map[string][]byte
 }
 
 // IncludedOptionWarning reports an option ignored because it came from an included file.
@@ -224,6 +227,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 			Root:        absPath,
 			Includes:    nil,
 			Diagnostics: diagnostics,
+			Sources:     map[string][]byte{filename: data},
 		}, nil
 	}
 
@@ -232,6 +236,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 	rootTimer := telemetry.RootTimerFromContext(ctx)
 	state := &loaderState{
 		visited:        make(map[string]bool),
+		sources:        make(map[string][]byte),
 		collector:      collector,
 		rootTimer:      rootTimer,
 		root:           absPath,
@@ -260,6 +265,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 		Root:        absPath,
 		Includes:    includes,
 		Diagnostics: state.diagnostics,
+		Sources:     state.sources,
 	}, nil
 }
 
@@ -417,6 +423,7 @@ func (l *Loader) MustLoadBytes(ctx context.Context, filename string, data []byte
 // loaderState tracks state during recursive loading.
 type loaderState struct {
 	visited        map[string]bool     // Absolute paths of files already loaded
+	sources        map[string][]byte   // Text of each file read, by the filename its positions carry
 	collector      telemetry.Collector // Telemetry collector for tracking load operations
 	rootTimer      telemetry.Timer     // Root check timer from context
 	root           string
@@ -490,6 +497,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 		loadTimer.End()
 		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
 	}
+	l.sources[filename] = data
 
 	result, syntaxErrs, err := parseFile(ctx, filename, data, l.syntaxRecovery)
 	parseTimer.End()

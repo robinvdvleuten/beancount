@@ -45,8 +45,7 @@ func (cmd *FormatCmd) Run(ctx *kong.Context, globals *Globals) error {
 	ldr := loader.New()
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
 	if err != nil {
-		renderer := NewErrorRenderer(sourceContent)
-		formatted := renderer.Render(err)
+		formatted := cmd.File.errorRenderer(sourceContent).Render(err)
 		_, _ = fmt.Fprint(ctx.Stderr, formatted)
 		_, _ = fmt.Fprintln(ctx.Stderr)
 		printError(ctx.Stderr, "parse error")

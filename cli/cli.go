@@ -134,6 +134,12 @@ func (f *FileOrStdin) GetSourceContent() ([]byte, error) {
 	return os.ReadFile(f.Filename)
 }
 
+// errorRenderer returns a renderer that shows errors in content, the text
+// of this file, under the filename LoadResult gives its positions.
+func (f *FileOrStdin) errorRenderer(content []byte) *ErrorRenderer {
+	return NewErrorRenderer(map[string][]byte{f.GetAbsoluteFilename(): content})
+}
+
 // GetAbsoluteFilename returns the absolute path, or "<stdin>" for stdin.
 func (f *FileOrStdin) GetAbsoluteFilename() string {
 	if f.Filename == "<stdin>" {
@@ -164,7 +170,7 @@ func (f *FileOrStdin) LoadResult(ctx context.Context, ldr *loader.Loader) (*load
 		if err != nil {
 			return nil, err
 		}
-		return &loader.LoadResult{AST: tree, Root: absFilename}, nil
+		return &loader.LoadResult{AST: tree, Root: absFilename, Sources: map[string][]byte{absFilename: f.Contents}}, nil
 	}
 	return ldr.Load(ctx, absFilename)
 }

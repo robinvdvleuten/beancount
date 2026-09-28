@@ -137,6 +137,27 @@ include "included.beancount"
 	assert.Equal(t, absIncludedFile, result.Includes[0])
 }
 
+func TestLoadKeepsEachFilesSourceByItsPositionsFilename(t *testing.T) {
+	tmpDir := t.TempDir()
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	subFile := filepath.Join(tmpDir, "sub.beancount")
+	mainSource := "include \"sub.beancount\"\n"
+	subSource := "2024-01-01 open Assets:Savings USD\n"
+	assert.NoError(t, os.WriteFile(mainFile, []byte(mainSource), 0o644))
+	assert.NoError(t, os.WriteFile(subFile, []byte(subSource), 0o644))
+
+	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+
+	open := result.AST.Directives[0]
+	assert.Equal(t, subSource, string(result.Sources[open.Position().Filename]))
+	assert.Equal(t, map[string][]byte{mainFile: []byte(mainSource), subFile: []byte(subSource)}, result.Sources)
+
+	result, err = New().Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, map[string][]byte{mainFile: []byte(mainSource)}, result.Sources)
+}
+
 func TestLoadWithFollowIncludesDoesNotDuplicatePushPopDuringLedgerProcess(t *testing.T) {
 	tmpDir := t.TempDir()
 
