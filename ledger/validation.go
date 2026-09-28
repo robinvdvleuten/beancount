@@ -139,6 +139,10 @@ func validateMetadataEntries(
 // price, postings it cannot sort into groups, missing numbers that cannot be
 // interpolated, a reduction that matches no lot or several).
 //
+// A transaction without a booking result, which only a Plugin that adds one
+// after Booking can produce, is reported as an UnbookedTransactionError and
+// not applied.
+//
 // Like beancount, which books every transaction before it checks it, the
 // booked transaction is returned for Apply even when it is reported for
 // posting to an unopened or inactive account, invalid metadata, not
@@ -147,7 +151,7 @@ func validateMetadataEntries(
 // follow-on errors.
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction, booked *bookedTransaction) ([]error, *bookedTransaction) {
 	if booked == nil {
-		return nil, nil
+		return []error{NewUnbookedTransactionError(txn)}, nil
 	}
 
 	var errs []error

@@ -67,6 +67,7 @@ func TestErrorKinds(t *testing.T) {
 		{NewNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
 		{NewTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
 		{NewInvalidBookingMethodError(open), "InvalidBookingMethodError", 10, open},
+		{NewUnbookedTransactionError(txn), "UnbookedTransactionError", 10, txn},
 		{NewTransactionNotBalancedError(txn, map[string]string{"USD": "1"}), "TransactionNotBalancedError", 10, txn},
 		{NewInvalidAmountError(txn, account, "x", details), "InvalidAmountError", 10, txn},
 		{NewBalanceMismatchError(balance, decimal.NewFromInt(1), decimal.NewFromInt(2)), "BalanceMismatchError", 10, balance},

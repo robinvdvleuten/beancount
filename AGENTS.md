@@ -33,7 +33,7 @@ Each phase owns one job and trusts the one before it. Booking comes before valid
 |-------|------|-------------------------|
 | **Parser** | Parse tokens into AST, report syntax errors | Semantic validation, cross-directive checks, business logic |
 | **Booking** | Interpolate missing numbers, match reductions to lots, write booked postings onto the AST, drop transactions that cannot be booked (`ledger/booking.go`, own inventory per account) | Account open/close checks, balance errors, mutating ledger state |
-| **Plugins** | Built-in Plugins rewrite the booked directives, in `plugin` directive order, dispatched through `pluginRegistry` (`ledger/plugins.go`) | Validation, mutating ledger state |
+| **Plugins** | Built-in Plugins rewrite the booked directives, in `plugin` directive order, dispatched through `pluginRegistry` (`ledger/plugins.go`) | Validation, mutating ledger state, booking (a transaction a Plugin adds is reported as an `UnbookedTransactionError` and not applied) |
 | **Validation** | All semantic checks on booked directives; compute mutation deltas | Booking, mutating ledger state |
 | **Apply** | Apply the delta Validate returned, compute derived state | Checking correctness, re-planning bookings |
 

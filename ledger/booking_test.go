@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
@@ -821,4 +822,46 @@ func BenchmarkValidatePrices(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		validatePrices(txn)
 	}
+}
+
+func TestTransactionAddedAfterBookingIsReportedAndNotApplied(t *testing.T) {
+	// No Built-in Plugin adds a transaction, so a test Plugin simulates one
+	// that does. Booking has already run, so the transaction has no booking
+	// result: it is reported, naming it, and left out of the balances.
+	const name = "test.add_transaction"
+	var added *ast.Transaction
+	pluginRegistry[name] = func(ctx context.Context, l *Ledger, tree *ast.AST) []error {
+		date, _ := ast.NewDate("2020-01-02")
+		added = ast.NewTransaction(date, "added by a plugin", ast.WithPostings(
+			ast.NewPosting("Assets:Cash", ast.WithAmount("10", "USD")),
+			ast.NewPosting("Equity:Open", ast.WithAmount("-10", "USD")),
+		))
+		tree.Directives = append(tree.Directives, added)
+		_ = ast.SortDirectives(tree)
+		return nil
+	}
+	t.Cleanup(func() { delete(pluginRegistry, name) })
+
+	source := `
+plugin "test.add_transaction"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Open
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	assert.Equal(t, "UnbookedTransactionError", kindOf(errs[0]))
+	var diagnostic *Diagnostic
+	assert.True(t, errors.As(errs[0], &diagnostic))
+	assert.Equal(t, ast.Directive(added), diagnostic.GetDirective())
+	assert.Equal(t, "2020-01-02: Transaction was not booked: it was added after Booking", errs[0].Error())
+
+	cash, ok := l.GetAccount("Assets:Cash")
+	assert.True(t, ok)
+	assert.Equal(t, 0, len(cash.Postings))
+	assert.True(t, cash.Inventory.IsEmpty())
 }

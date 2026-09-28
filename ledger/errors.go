@@ -239,6 +239,14 @@ func NewInvalidBookingMethodError(open *ast.Open) *Diagnostic {
 		"Invalid booking method: %s", open.BookingMethod)
 }
 
+// NewUnbookedTransactionError creates an error for a transaction that
+// reached validation without a booking result, because a Plugin added it
+// after Booking ran.
+func NewUnbookedTransactionError(txn *ast.Transaction) *Diagnostic {
+	return newError("UnbookedTransactionError", txn, "",
+		"Transaction was not booked: it was added after Booking")
+}
+
 // NewTransactionNotBalancedError creates an error for a transaction that does
 // not balance, listing its residuals by currency.
 func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *Diagnostic {
