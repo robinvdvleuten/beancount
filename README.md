@@ -229,7 +229,7 @@ The command also exits with `1` when the Importer does not recognize the stateme
 beancount web ledger.beancount --watch
 ```
 
-This starts a local server on `127.0.0.1:8080`. It has a source editor and balance sheet and income statement reports. Use `--read-only` to turn off writes, `--watch` to reload when the file changes, and `--host`/`--port` to change the address.
+This starts a local server on `127.0.0.1:8080`. It has a source editor and income statement, balance sheet and trial balance reports. Use `--read-only` to turn off writes, `--watch` to reload when the file changes, and `--host`/`--port` to change the address.
 
 ### `doctor lex`: show tokens
 

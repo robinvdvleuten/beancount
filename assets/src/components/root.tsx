@@ -51,6 +51,7 @@ const Root: ParentComponent = (props) => {
           <ul class="menu w-full px-0">
             <MenuItem href="/income-statement">Income Statement</MenuItem>
             <MenuItem href="/balance-sheet">Balance Sheet</MenuItem>
+            <MenuItem href="/trial-balance">Trial Balance</MenuItem>
             <MenuItem href="/editor">Editor</MenuItem>
           </ul>
         </aside>
