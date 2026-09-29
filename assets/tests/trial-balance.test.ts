@@ -54,6 +54,21 @@ test.describe("Trial Balance", () => {
     expect(await linkColor(true)).toEqual(await linkColor(false));
   });
 
+  test("lines up the currency columns of every table", async ({ page }) => {
+    await navigateTo(page, "/trial-balance");
+    await expect(page.getByRole("table")).toHaveCount(5);
+
+    // The tests compile without the DOM lib, so the page evaluates this as a string
+    const edges: number[][] = await page.evaluate(
+      `Array.from(document.querySelectorAll("table"), (table) =>
+        Array.from(table.querySelectorAll("thead th"), (th) => th.getBoundingClientRect().left))`,
+    );
+
+    for (const columns of edges) {
+      expect(columns).toEqual(edges[0]);
+    }
+  });
+
   test("totals match the balance sheet and income statement", async ({ page }) => {
     await navigateTo(page, "/trial-balance");
     const assets = await rootRow(page, "Assets").textContent();

@@ -138,7 +138,14 @@ const Table = (props: TableProps) => {
 
   return (
     <div class="overflow-x-auto">
-      <table class="table table-sm" aria-label={props.section.name}>
+      {/* Like fava, the amount columns have fixed widths and the account
+          column takes the rest, so tables of one width line up their columns */}
+      <table class="table min-w-lg table-fixed table-sm" aria-label={props.section.name}>
+        <colgroup>
+          <col />
+          <For each={main()}>{() => <col class="w-32" />}</For>
+          <col class="w-48" />
+        </colgroup>
         <thead>
           <tr class="bg-base-200">
             <th aria-label="Account" />
@@ -153,7 +160,7 @@ const Table = (props: TableProps) => {
             {(row) => (
               <tr>
                 <td
-                  class="text-primary"
+                  class="align-top text-primary"
                   style={{
                     "padding-left": `${row.depth * 1.25 + 0.75}rem`,
                   }}
