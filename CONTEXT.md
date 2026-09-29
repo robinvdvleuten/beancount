@@ -77,3 +77,19 @@ _Avoid_: position (a Beancount position is units held at a cost), location
 **Valuation**:
 How a report states the balances it shows: in Units, At cost, At market value, or Converted to one of the ledger's operating currencies. Every report shows the same Valuation, At cost unless the user picks another.
 _Avoid_: conversion (beancount's conversions are the `Conversions:Current` account and the entries `CLOSE` adds), display mode
+
+**Closed balances**:
+The balances of a balance sheet, which adds Current earnings, Current conversions and Unrealized gains under Equity so that Assets, Liabilities and Equity sum to zero. Other reports show the accounts as they are.
+_Avoid_: capped balances (fava's term), closing (BQL's `CLOSE` adds only the conversions)
+
+**Current earnings**:
+The ledger's net Income and Expenses up to the report date, at cost, shown under Equity in the account `account_current_earnings` names (`Earnings:Current` by default).
+_Avoid_: net income, retained earnings, profit
+
+**Current conversions**:
+The negated cost balance that price conversions leave behind up to the report date, shown under Equity in the account `account_current_conversions` names (`Conversions:Current` by default). It is what keeps the ledger's cost balance at zero.
+_Avoid_: conversion, rounding
+
+**Unrealized gains**:
+What the balance sheet's other balances leave over once each is stated At market value or Converted to X, shown under Equity in `Earnings:Unrealized` so the sheet sums to zero. Since the ledger's cost balance is zero, it is the holdings' value minus their cost, plus the units of any holding that could not be valued. It is zero At cost and not shown in Units, where a balance sheet does not balance.
+_Avoid_: capital gains, market gains
