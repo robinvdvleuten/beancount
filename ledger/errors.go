@@ -189,7 +189,7 @@ func NewDuplicateCommodityError(commodity *ast.Commodity) *Diagnostic {
 // currency its account does not allow.
 func NewBalanceCurrencyError(balance *ast.Balance) *Diagnostic {
 	return newError("BalanceCurrencyError", balance, balance.Account,
-		"Invalid currency '%s' for Balance directive", balance.Amount.Currency)
+		"Invalid currency '%s' for Balance directive: ", balance.Amount.Currency)
 }
 
 // NewDuplicateBalanceError creates an error for a balance assertion that

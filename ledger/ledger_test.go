@@ -1249,7 +1249,7 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 	t.Run("balance before the open, in a currency the open does not allow", func(t *testing.T) {
 		assert.Equal(t, []string{
 			"2020-01-16: Invalid reference to inactive account 'Assets:Cash'",
-			"2020-01-16: Invalid currency 'EUR' for Balance directive",
+			"2020-01-16: Invalid currency 'EUR' for Balance directive: ",
 		}, messages(`
 2020-02-01 open Assets:Cash USD
 2020-01-16 balance Assets:Cash 0 EUR
