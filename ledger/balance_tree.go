@@ -231,40 +231,43 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 		}
 	}
 
-	// Build parent-child relationships and create intermediate nodes
+	// node returns the node for path, creating an intermediate one if needed.
+	node := func(path string, depth int) *BalanceNode {
+		if n, exists := nodeMap[path]; exists {
+			return n
+		}
+		n := &BalanceNode{
+			Name:     path,
+			Account:  path,
+			Depth:    depth,
+			Balance:  NewBalance(),
+			Children: nil,
+		}
+		nodeMap[path] = n
+		return n
+	}
+
+	// Link every parent-child pair along each account's path, creating
+	// both ends first so an intermediate node is linked to its own parent
+	// even when no other account passes through it.
 	for _, entry := range entries {
 		accountName := string(entry.account.Name)
 		parts := strings.Split(accountName, ":")
 
-		// Ensure all parent nodes exist
 		for i := 1; i < len(parts); i++ {
 			parentPath := strings.Join(parts[:i], ":")
 			childPath := strings.Join(parts[:i+1], ":")
+			parent := node(parentPath, i-1)
+			child := node(childPath, i)
 
-			// Create parent node if it doesn't exist
-			if _, exists := nodeMap[parentPath]; !exists {
-				nodeMap[parentPath] = &BalanceNode{
-					Name:     parentPath,
-					Account:  parentPath,
-					Depth:    i - 1,
-					Balance:  NewBalance(),
-					Children: nil,
-				}
+			children := childSets[parentPath]
+			if children == nil {
+				children = make(map[string]struct{})
+				childSets[parentPath] = children
 			}
-
-			// Add child to parent if not already added
-			parent := nodeMap[parentPath]
-			child := nodeMap[childPath]
-			if child != nil {
-				children := childSets[parentPath]
-				if children == nil {
-					children = make(map[string]struct{})
-					childSets[parentPath] = children
-				}
-				if _, exists := children[childPath]; !exists {
-					parent.Children = append(parent.Children, child)
-					children[childPath] = struct{}{}
-				}
+			if _, exists := children[childPath]; !exists {
+				parent.Children = append(parent.Children, child)
+				children[childPath] = struct{}{}
 			}
 		}
 	}

@@ -66,6 +66,30 @@ func TestNewBalanceTreeNesting(t *testing.T) {
 	assert.Equal(t, []string{"USD"}, tree.Currencies)
 }
 
+// An intermediate account with a single open descendant must still be
+// linked to its own parent, so the descendant counts toward the root.
+func TestNewBalanceTreeSingleLeafUnderIntermediates(t *testing.T) {
+	accounts := testAccounts(
+		testAccount("Expenses:Health:Dental:Insurance", [2]string{"2024-01-01", "7"}),
+		testAccount("Expenses:Food", [2]string{"2024-01-01", "3"}),
+		testAccount("Liabilities:US:Chase:Slate", [2]string{"2024-01-01", "-10"}),
+	)
+
+	tree, err := newBalanceTree(accounts, NewConfig(), nil, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{
+		"Liabilities -10",
+		"Liabilities:US -10",
+		"Liabilities:US:Chase -10",
+		"Liabilities:US:Chase:Slate -10",
+		"Expenses 10",
+		"Expenses:Food 3",
+		"Expenses:Health 7",
+		"Expenses:Health:Dental 7",
+		"Expenses:Health:Dental:Insurance 7",
+	}, treeLines(tree.Roots))
+}
+
 func TestNewBalanceTreeTypeWithoutAccounts(t *testing.T) {
 	accounts := testAccounts(testAccount("Assets:Cash", [2]string{"2024-01-01", "5"}))
 
