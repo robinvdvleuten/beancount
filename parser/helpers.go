@@ -192,33 +192,12 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	hasLabel := false
 	for {
 		switch {
-		case p.check(NUMBER) || p.check(EXPRESSION):
+		case p.check(NUMBER) || p.check(EXPRESSION) || p.checkHash():
 			if cost.Amount != nil || cost.Total != nil {
 				return nil, p.error("duplicate cost amount in cost spec")
 			}
-			valueTok, isExpression, value, err := p.parseAmountValueToken()
-			if err != nil {
+			if err := p.parseCostAmount(cost); err != nil {
 				return nil, err
-			}
-			if p.check(FLAG) && p.peek().String(p.source) == "#" {
-				if isTotal {
-					return nil, p.error("compound cost cannot use total cost syntax {{}}")
-				}
-				p.advance()
-				total, err := p.parseAmount()
-				if err != nil {
-					return nil, err
-				}
-				currTok := p.tokens[p.pos-1]
-				cost.Amount = p.amountFromValueToken(valueTok, currTok, isExpression, value)
-				cost.Total = total
-			} else {
-				// A number without a currency leaves the currency to
-				// Booking (official grammar: number maybe_currency).
-				cost.Amount = ast.NewAmountWithRaw(valueTok.String(p.source), value, "")
-				if p.check(IDENT) {
-					cost.Amount.Currency = p.internCurrency(p.advance())
-				}
 			}
 
 		case p.check(IDENT):
@@ -276,6 +255,55 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	}
 
 	return cost, nil
+}
+
+// parseCostAmount parses a cost's amount like beancount's compound_amount:
+// a number with an optional currency, or a compound of a per-unit number
+// and a total around '#', either of which may be left out, before a
+// currency. Booking fills in what is left out; a compound inside total
+// braces is Booking's to report too.
+func (p *Parser) parseCostAmount(cost *ast.Cost) error {
+	number := func() (*ast.Amount, error) {
+		if !p.check(NUMBER) && !p.check(EXPRESSION) {
+			return &ast.Amount{}, nil
+		}
+		valueTok, _, value, err := p.parseAmountValueToken()
+		if err != nil {
+			return nil, err
+		}
+		return ast.NewAmountWithRaw(valueTok.String(p.source), value, ""), nil
+	}
+
+	perUnit, err := number()
+	if err != nil {
+		return err
+	}
+	if !p.checkHash() {
+		if p.check(IDENT) {
+			perUnit.Currency = p.internCurrency(p.advance())
+		}
+		cost.Amount = perUnit
+		return nil
+	}
+
+	p.advance() // '#'
+	total, err := number()
+	if err != nil {
+		return err
+	}
+	if !p.check(IDENT) {
+		return p.errorAtEndOfPrevious("expected currency")
+	}
+	currency := p.internCurrency(p.advance())
+	perUnit.Currency, total.Currency = currency, currency
+	cost.Amount, cost.Total = perUnit, total
+	return nil
+}
+
+// checkHash reports whether the next token is the '#' of a compound cost,
+// which the lexer reads as a flag.
+func (p *Parser) checkHash() bool {
+	return p.check(FLAG) && p.peek().String(p.source) == "#"
 }
 
 // parseString parses a STRING token and returns a RawString with both

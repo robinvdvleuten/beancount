@@ -106,13 +106,15 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 // bookTransaction books txn and reports whether it stays in the ledger.
 func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 	// Beancount v2 reports these while parsing, so they are reported
-	// whether or not the transaction books: a merge cost {*}, and a price
-	// that is negative or a total on a posting without units, which it
-	// fixes up before booking.
+	// whether or not the transaction books: a merge cost {*}, a compound
+	// cost inside total braces, and a price that is negative or a total on
+	// a posting without units, the last three of which it fixes up before
+	// booking.
 	for _, posting := range txn.Postings {
 		if posting.Cost.IsMergeCost() {
 			l.errors = append(l.errors, NewMergeCostError(txn, posting))
 		}
+		l.errors = append(l.errors, fixTotalCost(txn, posting)...)
 		l.errors = append(l.errors, fixPrice(txn, posting)...)
 	}
 	booked, errs := l.booker.book(txn)
@@ -150,6 +152,22 @@ func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
 	return errs
 }
 
+// fixTotalCost reports a compound cost inside total braces and, like
+// beancount's parser, ignores its per-unit number: {{5 # 3 USD}} and
+// {{# 3 USD}} book as {0 # 3 USD}.
+func fixTotalCost(txn *ast.Transaction, posting *ast.Posting) []error {
+	cost := posting.Cost
+	if cost == nil || !cost.IsTotal || cost.Total == nil {
+		return nil
+	}
+	err := NewTotalCompoundCostError(txn, posting)
+	fixed := *cost
+	fixed.IsTotal = false
+	fixed.Amount = &ast.Amount{Value: "0", Currency: cost.Total.Currency}
+	posting.Cost = &fixed
+	return []error{err}
+}
+
 // book books txn one Currency group at a time. A nil result with errors is a
 // Dropped transaction: a date out of range, a malformed number, cost or
 // price, or postings that cannot be sorted into groups. Otherwise the errors
@@ -175,7 +193,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 
 	delta := &TransactionDelta{
 		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
+		InferredCosts:   make(map[*ast.Posting]*ast.Cost),
 		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
 		Postings:        make([]*ast.Posting, 0, len(txn.Postings)),
 	}
@@ -336,7 +354,7 @@ func validateCosts(txn *ast.Transaction) []error {
 				continue
 			}
 
-			if posting.Cost.HasNumber() {
+			if posting.Cost.Amount.Value != "" {
 				if _, err := decimal.NewFromString(posting.Cost.Amount.Value); err != nil {
 					errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err)))
 					continue
@@ -349,22 +367,22 @@ func validateCosts(txn *ast.Transaction) []error {
 			}
 		}
 
-		// Validate cost amount if present
-		if posting.Cost.HasNumber() {
-			if _, err := ParseAmount(posting.Cost.Amount); err != nil {
-				costSpec := fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
+		// Validate the per-unit (or total cost) number if present
+		if amount := posting.Cost.Amount; amount != nil && amount.Value != "" {
+			if _, err := ParseAmount(amount); err != nil {
+				costSpec := fmt.Sprintf("{%s %s}", amount.Value, amount.Currency)
 				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
 			}
 		}
-		if posting.Cost.Total != nil {
-			if posting.Cost.IsTotal {
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{{... # ...}}", fmt.Errorf("compound cost cannot use total cost syntax")))
-			} else if posting.Cost.Amount == nil {
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{# ...}", fmt.Errorf("compound cost requires a per-unit amount")))
-			} else if posting.Cost.Total.Currency != posting.Cost.Amount.Currency {
+		// A compound's total may be left out; fixTotalCost has rewritten
+		// one inside total braces.
+		if total := posting.Cost.Total; total != nil {
+			if posting.Cost.Amount == nil || total.Currency != posting.Cost.Amount.Currency {
 				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", fmt.Errorf("compound cost currencies must match")))
-			} else if _, err := ParseAmount(posting.Cost.Total); err != nil {
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", err))
+			} else if total.Value != "" {
+				if _, err := ParseAmount(total); err != nil {
+					errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", err))
+				}
 			}
 		}
 
@@ -565,9 +583,8 @@ func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
 		posting.Amount = amount
 		posting.Inferred = true
 	}
-	for posting, amount := range delta.InferredCosts {
-		posting.Cost.Amount = amount
-		posting.Cost.Inferred = true
+	for posting, cost := range delta.InferredCosts {
+		posting.Cost = cost
 	}
 	for posting, price := range delta.InferredPrices {
 		posting.Price = price
@@ -639,7 +656,7 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 
 	delta := &TransactionDelta{
 		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-		InferredCosts:   make(map[*ast.Posting]*ast.Amount),
+		InferredCosts:   make(map[*ast.Posting]*ast.Cost),
 		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
 		Dropped:         make(map[*ast.Posting]bool),
 	}
@@ -841,20 +858,37 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 			// weighs, as for {USD} next to postings in other currencies.
 			currency := group.currency
 			residual := balance[currency]
-			// A total cost {{USD}} completes its total, like beancount's
-			// number_total; the lot's per-unit cost follows from it, and
-			// the weight is the units at that (rounded) per-unit cost.
-			number := residual.Neg()
-			weight := pydecimal.Mul(amount, pydecimal.Quo(number, amount.Abs()))
-			if !posting.Cost.IsTotal {
-				number = pydecimal.Quo(number, amount)
-				weight = pydecimal.Mul(amount, number)
+			// The weight the posting must carry, and the number that gives
+			// it, like beancount's COST_PER and COST_TOTAL; the weight is
+			// then the units at the lot's (rounded) per-unit cost.
+			needed := residual.Neg()
+			cost := posting.Cost
+			completed := *cost
+			completed.Inferred = true
+			var perUnit decimal.Decimal
+			switch {
+			case cost.Total != nil && cost.Total.Value == "":
+				// {5 # USD}: the total is what the per-unit part leaves.
+				per, _ := ParseAmount(cost.Amount)
+				total := pydecimal.Sub(needed, pydecimal.Mul(per, amount))
+				completed.Total = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
+				perUnit = compoundCostNumber(per, total, amount)
+			case cost.Total != nil:
+				// {# 5 USD}: the per-unit number is what the total leaves.
+				total, _ := ParseAmount(cost.Total)
+				per := pydecimal.Quo(pydecimal.Sub(needed, total), amount)
+				completed.Amount = &ast.Amount{Value: formatInferredNumber(per), Currency: currency}
+				perUnit = compoundCostNumber(per, total, amount)
+			case cost.IsTotal:
+				// {{USD}} completes its total, beancount's number_total.
+				completed.Amount = &ast.Amount{Value: formatInferredNumber(needed), Currency: currency}
+				perUnit = pydecimal.Quo(needed, amount.Abs())
+			default:
+				perUnit = pydecimal.Quo(needed, amount)
+				completed.Amount = &ast.Amount{Value: formatInferredNumber(perUnit), Currency: currency}
 			}
-			delta.InferredCosts[posting] = &ast.Amount{
-				Value:    formatInferredNumber(number),
-				Currency: currency,
-			}
-			balance[currency] = pydecimal.Add(residual, weight)
+			delta.InferredCosts[posting] = &completed
+			balance[currency] = pydecimal.Add(residual, pydecimal.Mul(amount, perUnit))
 		}
 	}
 
@@ -880,8 +914,8 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 // tooManyMissing returns the first posting of a Currency group with a missing
 // number when the group has more than one, which beancount cannot
 // interpolate: a missing units number (or no amount at all), a missing cost
-// number other than on a reduction booked against lots, or a missing price
-// number.
+// number (a compound's two count twice) other than on a reduction booked
+// against lots, or a missing price number.
 func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]BookedPosition) *ast.Posting {
 	var first *ast.Posting
 	missing := 0
@@ -890,8 +924,8 @@ func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]Boo
 		if posting.Amount == nil || posting.Amount.Value == "" {
 			n++
 		}
-		if _, reduced := reducedPositions[posting]; posting.Cost != nil && !posting.Cost.HasNumber() && !reduced {
-			n++
+		if _, reduced := reducedPositions[posting]; posting.Cost != nil && !reduced {
+			n += missingCostNumbers(posting.Cost)
 		}
 		if posting.Price != nil && posting.Price.Value == "" {
 			n++
@@ -905,6 +939,20 @@ func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]Boo
 		return first
 	}
 	return nil
+}
+
+// missingCostNumbers counts the numbers a cost leaves to Booking, like
+// beancount's COST_PER and COST_TOTAL: its per-unit number (a total cost's
+// number, for total braces), and a compound's total.
+func missingCostNumbers(cost *ast.Cost) int {
+	n := 0
+	if cost.Amount == nil || cost.Amount.Value == "" {
+		n++
+	}
+	if cost.Total != nil && cost.Total.Value == "" {
+		n++
+	}
+	return n
 }
 
 func unbalancedValidation(balance map[string]decimal.Decimal) *balanceValidation {

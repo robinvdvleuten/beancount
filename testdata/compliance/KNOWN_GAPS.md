@@ -11,12 +11,6 @@ them. Closing a gap means making the fixture pass and renaming it to drop the
 None among the `.pass`/`.fail` check fixtures. Every one agrees with
 `bean-check` 2.3.x; the differential suite enforces it.
 
-**Compound costs with a missing number** (#528): v2 interpolates the
-missing part of a compound cost (`{# 5 USD}`, `{5 # USD}`; `{# USD}` has
-two missing numbers). We reject these as syntax errors. A cost that states
-only its currency (`{USD}`, `{{USD}}`, `cost_currency_only*` fixtures) or
-only its number (`{5}`, `{{5}}`, `cost_number_only*` fixtures) matches v2.
-
 **Merge cost on an augmentation**: both implementations report a merge
 cost `{*}` ("Cost merging is not supported yet"), and v2 then books it like
 `{}`: an augmentation at `{*}` gets the cost the transaction's residual

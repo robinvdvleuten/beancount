@@ -215,11 +215,18 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		if err != nil {
 			return fmt.Errorf("invalid compound total: %w", err)
 		}
-		perUnitCost := pydecimal.Add(*lotSpec.Cost, pydecimal.Quo(total, quantity.Abs()))
+		perUnitCost := compoundCostNumber(*lotSpec.Cost, total, quantity)
 		lotSpec.Cost = &perUnitCost
 	}
 
 	return nil
+}
+
+// compoundCostNumber is the per-unit cost of a compound cost on units, as
+// beancount's compute_cost_number computes it, whose rounding this keeps:
+// (total + per-unit × |units|) / |units|.
+func compoundCostNumber(perUnit, total, units decimal.Decimal) decimal.Decimal {
+	return pydecimal.Quo(pydecimal.Add(total, pydecimal.Mul(perUnit, units.Abs())), units.Abs())
 }
 
 // postingLotSpec returns the lot spec a posting's cost names, per unit: its

@@ -1230,16 +1230,22 @@ func (f *run) formatCost(cost *ast.Cost, buf *strings.Builder) {
 
 	if cost.Amount != nil {
 		writeSeparator()
-		// A currency-only cost {USD} has no number to write.
-		if cost.HasNumber() {
-			buf.WriteString(numberText(cost.Amount))
-			if cost.Total != nil {
-				buf.WriteString(" # ")
-				buf.WriteString(numberText(cost.Total))
-			}
-			buf.WriteByte(' ')
+		// Any of the numbers and the currency may be left out: {USD},
+		// {10}, {# 5 USD}, {5 # USD}.
+		var words []string
+		if cost.Amount.Value != "" {
+			words = append(words, numberText(cost.Amount))
 		}
-		buf.WriteString(cost.Amount.Currency)
+		if cost.Total != nil {
+			words = append(words, "#")
+			if cost.Total.Value != "" {
+				words = append(words, numberText(cost.Total))
+			}
+		}
+		if cost.Amount.Currency != "" {
+			words = append(words, cost.Amount.Currency)
+		}
+		buf.WriteString(strings.Join(words, " "))
 	}
 
 	if cost.Date != nil {

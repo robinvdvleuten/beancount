@@ -129,22 +129,29 @@ func lotStrings(lots []*lot) []string {
 
 // reducingPosting renders a reducing posting as beancount's
 // position.to_string quotes it: its units, then its cost spec as written
-// (cost_to_str), a total cost {{T C}} as the {0 # T C} v2 parses it into.
+// (cost_to_str), a total cost {{T C}} as the {0 # T C} v2 parses it into
+// and a compound's numbers without the one it leaves out.
 func reducingPosting(posting *ast.Posting, units decimal.Decimal) string {
 	cost := posting.Cost
-	var parts []string
-	if cost.HasNumber() {
-		// A malformed number drops its transaction before Booking.
-		number, _ := ParseAmount(cost.Amount)
-		text := pydecimal.String(number)
-		switch {
-		case cost.IsTotal:
-			text = "0 # " + text
-		case cost.Total != nil:
-			total, _ := ParseAmount(cost.Total)
-			text += " # " + pydecimal.String(total)
+	// The numbers the spec states; one left out is not shown. A malformed
+	// number drops its transaction before Booking.
+	number := func(amount *ast.Amount) string {
+		n, _ := ParseAmount(amount)
+		return pydecimal.String(n)
+	}
+	var numbers []string
+	if amount := cost.Amount; amount != nil && amount.Value != "" {
+		numbers = append(numbers, number(amount))
+		if cost.IsTotal {
+			numbers = []string{"0", "#", numbers[0]}
 		}
-		parts = append(parts, text+" "+cost.Amount.Currency)
+	}
+	if total := cost.Total; total != nil && total.Value != "" {
+		numbers = append(numbers, "#", number(total))
+	}
+	var parts []string
+	if len(numbers) > 0 {
+		parts = append(parts, strings.Join(numbers, " ")+" "+cost.Amount.Currency)
 	}
 	if cost.Date != nil {
 		parts = append(parts, cost.Date.String())

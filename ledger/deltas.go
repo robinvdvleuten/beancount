@@ -20,8 +20,10 @@ import (
 // This is a pure data structure describing WHAT TO CHANGE, not validation results.
 type TransactionDelta struct {
 	InferredAmounts map[*ast.Posting]*ast.Amount
-	InferredCosts   map[*ast.Posting]*ast.Amount
-	InferredPrices  map[*ast.Posting]*ast.Amount
+	// InferredCosts are the costs Booking completed, with the numbers
+	// it inferred filled in.
+	InferredCosts  map[*ast.Posting]*ast.Cost
+	InferredPrices map[*ast.Posting]*ast.Amount
 	// Postings, when set, replaces the transaction's postings with the booked
 	// ones. Beancount books an amount-less posting once per currency with a
 	// non-zero residual, as a copy of the posting per extra currency, and
@@ -48,11 +50,8 @@ func (d *TransactionDelta) amountFor(posting *ast.Posting) *ast.Amount {
 }
 
 func (d *TransactionDelta) costFor(posting *ast.Posting) *ast.Cost {
-	if amount := d.InferredCosts[posting]; amount != nil {
-		cost := *posting.Cost
-		cost.Amount = amount
-		cost.Inferred = true
-		return &cost
+	if cost := d.InferredCosts[posting]; cost != nil {
+		return cost
 	}
 	return posting.Cost
 }

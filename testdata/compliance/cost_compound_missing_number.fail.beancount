@@ -1,0 +1,27 @@
+; Interpolating a compound cost's missing number, v2 computes the per-unit
+; cost from both parts, so short positions and inexact divisions may not
+; balance; a compound missing both numbers, or one next to an amount-less
+; posting, has too many missing numbers.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:S
+2020-01-01 open Assets:C
+
+2020-01-02 * "both numbers left out"
+  Assets:I  5 HOOL {# USD}
+  Assets:C  -30 USD
+
+2020-01-03 * "with an amount-less posting"
+  Assets:I  5 HOOL {# 5 USD}
+  Assets:C
+
+2020-01-04 * "short, per-unit number left out"
+  Assets:S  -5 GOOG {# 5 USD}
+  Assets:C  30 USD
+
+2020-01-05 * "short, total left out"
+  Assets:S  -5 AAPL {5 # USD}
+  Assets:C  30 USD
+
+2020-01-06 * "inexact division"
+  Assets:I  3 IBM {# 1.00 USD}
+  Assets:C  -10 USD

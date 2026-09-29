@@ -1,0 +1,23 @@
+; A compound cost may leave out its per-unit number or its total, which
+; Booking interpolates like beancount's COST_PER and COST_TOTAL; a reduction
+; with a number left out matches lots whatever their cost.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "per-unit number left out"
+  Assets:I  5 HOOL {# 5 USD}
+  Assets:C  -30 USD
+
+2020-01-03 * "total left out"
+  Assets:I  5 GOOG {5 # USD}
+  Assets:C  -30 USD
+
+2020-01-04 * "dated and labelled"
+  Assets:I  5 AAPL {# 5 USD, 2020-01-01, "lab"}
+  Assets:C  -30 USD
+
+2020-01-05 * "reduce"
+  Assets:I  -2 HOOL {# 4 USD}
+  Assets:C  12 USD
+
+2020-01-06 balance Assets:I 3 HOOL

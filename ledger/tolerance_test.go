@@ -211,7 +211,7 @@ func TestBookedTolerances(t *testing.T) {
 
 	empty := units("1.5", "HOOL", ast.WithCost(&ast.Cost{}))
 	postings = []*ast.Posting{empty, units("-150", "USD")}
-	delta = &TransactionDelta{InferredCosts: map[*ast.Posting]*ast.Amount{empty: ast.NewAmount("100", "USD")}}
+	delta = &TransactionDelta{InferredCosts: map[*ast.Posting]*ast.Cost{empty: {Amount: ast.NewAmount("100", "USD"), Inferred: true}}}
 	assert.Equal(t, "0", tolerances.spec(postings).of("USD").String(), "an empty cost has no currency")
 	assert.Equal(t, "0.5", tolerances.booked(postings, delta, nil).of("USD").String(), "an inferred cost counts")
 

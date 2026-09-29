@@ -219,6 +219,18 @@ func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 			wantErr: `No position matches "-1 STOCK {10 # 5 USD}" against balance (10 STOCK)`,
 		},
 		{
+			name: "a compound spec without its per-unit number", method: BookingSTRICT,
+			held:    []string{"5 STOCK {10 USD, 2024-01-15}", "5 STOCK {11 USD, 2024-01-15}"},
+			posting: "-3 STOCK {# 4 USD}",
+			wantErr: `Ambiguous matches for "-3 STOCK {# 4 USD}": 5 STOCK {10 USD, 2024-01-15}, 5 STOCK {11 USD, 2024-01-15}`,
+		},
+		{
+			name: "a compound spec without its total", method: BookingSTRICT,
+			held:    []string{"5 STOCK {10 USD, 2024-01-15}", "5 STOCK {11 USD, 2024-01-15}"},
+			posting: "-3 STOCK {4 # USD}",
+			wantErr: `Ambiguous matches for "-3 STOCK {4 USD}": 5 STOCK {10 USD, 2024-01-15}, 5 STOCK {11 USD, 2024-01-15}`,
+		},
+		{
 			name: "a total cost names the lot at its per-unit cost", method: BookingSTRICT,
 			held: []string{"10 STOCK {5 USD, 2024-01-15}"}, posting: "-4 STOCK {{20 USD}}",
 			want: []BookedPosition{at("-4", "5", "2024-01-15", "")},

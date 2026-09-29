@@ -115,6 +115,32 @@ func TestFormatCost(t *testing.T) {
 			cost:     &ast.Cost{},
 			expected: "{}",
 		},
+		{
+			name:     "CurrencyOnlyCost",
+			cost:     &ast.Cost{Amount: &ast.Amount{Currency: "USD"}},
+			expected: "{USD}",
+		},
+		{
+			name:     "NumberOnlyCost",
+			cost:     &ast.Cost{Amount: &ast.Amount{Value: "10"}},
+			expected: "{10}",
+		},
+		{
+			name: "CompoundWithoutPerUnitNumber",
+			cost: &ast.Cost{
+				Amount: &ast.Amount{Currency: "USD"},
+				Total:  &ast.Amount{Value: "5", Currency: "USD"},
+			},
+			expected: "{# 5 USD}",
+		},
+		{
+			name: "CompoundWithoutTotal",
+			cost: &ast.Cost{
+				Amount: &ast.Amount{Value: "5", Currency: "USD"},
+				Total:  &ast.Amount{Currency: "USD"},
+			},
+			expected: "{5 # USD}",
+		},
 	}
 
 	for _, test := range tests {

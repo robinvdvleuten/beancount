@@ -103,10 +103,11 @@ func (c *Cost) IsEmpty() bool {
 	return c != nil && !c.IsMerge && !c.IsTotal && c.Amount == nil && c.Total == nil && c.Date == nil && c.Label == ""
 }
 
-// HasNumber reports whether the cost states its number, as {100 USD} does;
-// {} and {USD} leave it to Booking.
+// HasNumber reports whether the cost states every number it has, as
+// {100 USD} and {100 # 5 USD} do; {}, {USD}, {# 5 USD} and {100 # USD}
+// leave one to Booking.
 func (c *Cost) HasNumber() bool {
-	return c != nil && c.Amount != nil && c.Amount.Value != ""
+	return c != nil && c.Amount != nil && c.Amount.Value != "" && (c.Total == nil || c.Total.Value != "")
 }
 
 // IsMergeCost returns true if this is a merge cost specification {*}.

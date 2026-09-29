@@ -9,6 +9,7 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/shopspring/decimal"
 )
 
@@ -299,6 +300,24 @@ func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex
 // one on zero units.
 func NewTotalCostError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
 	return newError("TotalCostError", txn, posting.Account, "Invalid total cost specification: %s", message)
+}
+
+// NewTotalCompoundCostError creates an error for a compound cost inside
+// total braces ({{5 # 3 USD}}), whose per-unit number beancount ignores. Like
+// beancount, it blames the posting's line and quotes the compound amount's
+// Python repr.
+func NewTotalCompoundCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+	number := func(amount *ast.Amount) string {
+		n, err := ParseAmount(amount)
+		if amount.Value == "" || err != nil {
+			return "<class 'beancount.core.number.MISSING'>"
+		}
+		return "Decimal(" + pyrepr.String(pydecimal.String(n)) + ")"
+	}
+	cost := posting.Cost
+	return newError("TotalCostError", txn, posting.Account,
+		"Per-unit cost may not be specified using total cost syntax: 'CompoundAmount(number_per=%s, number_total=%s, currency=%s)'; ignoring per-unit cost",
+		number(cost.Amount), number(cost.Total), pyrepr.String(cost.Total.Currency)).atPosting(posting)
 }
 
 // NewInvalidPriceError creates an error for an invalid price specification.

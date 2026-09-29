@@ -1,0 +1,18 @@
+; A compound cost inside total braces is reported and booked with its
+; per-unit number ignored.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "per-unit number left out"
+  Assets:I  5 HOOL {{# 30 USD}}
+  Assets:C  -30 USD
+
+2020-01-03 * "per-unit number given"
+  Assets:I  5 GOOG {{5 # 3 USD}}
+  Assets:C  -3 USD
+
+2020-01-04 * "no numbers"
+  Assets:I  5 AAPL {{# USD}}
+  Assets:C  -30 USD
+
+2020-01-05 balance Assets:I 5 HOOL

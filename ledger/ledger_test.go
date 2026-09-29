@@ -1366,6 +1366,56 @@ func TestLedger_CostNumberWithoutCurrency(t *testing.T) {
 	assert.Equal(t, "", sell.directive.(*ast.Transaction).Postings[0].Cost.Amount.Currency, "the error shows the cost as written")
 }
 
+func TestLedger_CompoundCostMissingNumber(t *testing.T) {
+	// Like beancount's COST_PER and COST_TOTAL, Booking interpolates the
+	// part of a compound cost the source leaves out, and the lot's cost is
+	// compute_cost_number's (total + per-unit × |units|) / |units|. Inside
+	// total braces the per-unit number is reported and ignored.
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:I
+2020-01-01 open Assets:S
+2020-01-01 open Assets:C
+
+2020-01-02 * "per-unit number left out"
+  Assets:I  5 HOOL {# 5 USD}
+  Assets:C  -30 USD
+
+2020-01-03 * "total left out"
+  Assets:I  5 GOOG {5 # USD}
+  Assets:C  -30 USD
+
+2020-01-04 * "short, per-unit number left out"
+  Assets:S  -5 IBM {# 5 USD}
+  Assets:C  30 USD
+
+2020-01-05 * "total braces"
+  Assets:I  5 AAPL {{5 # 3 USD}}
+  Assets:C  -3 USD
+`)
+	l := New()
+	_ = l.Process(context.Background(), tree)
+
+	var costs []string
+	for _, directive := range tree.Directives {
+		if txn, ok := directive.(*ast.Transaction); ok {
+			positions := l.BookedPositions(txn.Postings[0])
+			assert.Equal(t, 1, len(positions))
+			costs = append(costs, positions[0].Cost.Number.String()+" "+positions[0].Cost.Currency)
+		}
+	}
+	assert.Equal(t, []string{"6 USD", "6 USD", "8 USD", "0.6 USD"}, costs)
+
+	var messages []string
+	for _, err := range l.Errors() {
+		messages = append(messages, err.(*Diagnostic).message)
+	}
+	assert.Equal(t, []string{
+		"Per-unit cost may not be specified using total cost syntax: " +
+			"'CompoundAmount(number_per=Decimal('5'), number_total=Decimal('3'), currency='USD')'; ignoring per-unit cost",
+		"Transaction does not balance: (-10 USD)",
+	}, messages)
+}
+
 func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {
 	// Like beancount, an interpolated cost is the weight divided by the
 	// units with Python's decimal, which keeps the weight's exponent.

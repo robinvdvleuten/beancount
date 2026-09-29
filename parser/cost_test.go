@@ -267,8 +267,62 @@ func TestParseCost(t *testing.T) {
 			hasError: true,
 		},
 		{
-			name:     "CompoundInsideTotalCost",
-			input:    "{{502.12 # 9.95 USD}}",
+			// Beancount reports it while booking and ignores the per-unit
+			// number; the parser keeps it.
+			name:  "CompoundInsideTotalCost",
+			input: "{{502.12 # 9.95 USD}}",
+			expected: &ast.Cost{
+				IsTotal: true,
+				Amount:  &ast.Amount{Raw: "502.12", Value: "502.12", Currency: "USD"},
+				Total:   &ast.Amount{Raw: "9.95", Value: "9.95", Currency: "USD"},
+			},
+		},
+		{
+			name:  "CompoundWithoutPerUnitNumber",
+			input: "{# 5 USD}",
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Currency: "USD"},
+				Total:  &ast.Amount{Raw: "5", Value: "5", Currency: "USD"},
+			},
+		},
+		{
+			name:  "CompoundWithoutTotal",
+			input: "{5 # USD}",
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "5", Value: "5", Currency: "USD"},
+				Total:  &ast.Amount{Currency: "USD"},
+			},
+		},
+		{
+			name:  "CompoundWithoutNumbers",
+			input: "{# USD}",
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Currency: "USD"},
+				Total:  &ast.Amount{Currency: "USD"},
+			},
+		},
+		{
+			name:  "CompoundWithoutPerUnitNumberInsideTotalCost",
+			input: "{{# 5 USD}}",
+			expected: &ast.Cost{
+				IsTotal: true,
+				Amount:  &ast.Amount{Currency: "USD"},
+				Total:   &ast.Amount{Raw: "5", Value: "5", Currency: "USD"},
+			},
+		},
+		{
+			name:  "CompoundWithoutPerUnitNumberWithDateAndLabel",
+			input: `{# 5 USD, 2020-01-01, "lab"}`,
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Currency: "USD"},
+				Total:  &ast.Amount{Raw: "5", Value: "5", Currency: "USD"},
+				Date:   &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+				Label:  "lab",
+			},
+		},
+		{
+			name:     "CompoundTotalWithoutCurrency",
+			input:    "{# 5}",
 			hasError: true,
 		},
 	}
