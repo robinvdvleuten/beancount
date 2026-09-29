@@ -1,0 +1,5 @@
+# Beancount files mean what their line endings say: like bean-check, a lone
+# "*" or ":" line is skipped before CRLF but a syntax error before LF. Keep
+# them LF on every checkout, Windows included, so the fixtures test the same
+# input everywhere.
+*.beancount text eol=lf
