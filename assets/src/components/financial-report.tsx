@@ -13,6 +13,12 @@ interface ErrorProps {
   error: Error;
 }
 
+interface DateFieldProps {
+  label: string;
+  value: string | undefined;
+  onChange: (value: string | undefined) => void;
+}
+
 interface TableProps {
   section: BalanceNode;
   currencies: string[];
@@ -109,6 +115,23 @@ const Grid: ParentComponent = (props) => (
 
 const Column: ParentComponent = (props) => <div class="flex flex-col gap-4">{props.children}</div>;
 
+const Toolbar: ParentComponent = (props) => (
+  <div class="mb-4 flex flex-wrap items-end gap-3">{props.children}</div>
+);
+
+// DateField edits one YYYY-MM-DD date; clearing it reports undefined.
+const DateField = (props: DateFieldProps) => (
+  <label class="flex flex-col gap-1 text-xs text-base-content/70">
+    {props.label}
+    <input
+      type="date"
+      class="input input-sm"
+      value={props.value ?? ""}
+      onChange={(event) => props.onChange(event.currentTarget.value || undefined)}
+    />
+  </label>
+);
+
 const Table = (props: TableProps) => {
   const main = () => mainCurrencies(props.currencies, props.operatingCurrencies);
   const secondary = () => otherCurrencies(props.currencies, main());
@@ -167,6 +190,8 @@ export const FinancialReport = {
   Empty,
   Grid,
   Column,
+  Toolbar,
+  DateField,
   Table,
   getSections,
 };

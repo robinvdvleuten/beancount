@@ -102,7 +102,7 @@ func TestGetBalanceTree_BalanceSheet(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-31")
 	balanceTree, err := l.GetBalanceTree(
 		[]ast.AccountType{ast.AccountTypeAssets, ast.AccountTypeLiabilities, ast.AccountTypeEquity},
-		date, date, // Point-in-time
+		nil, date, // As of date
 	)
 	assert.NoError(t, err)
 
@@ -278,8 +278,8 @@ func TestGetBalanceTree_MixedNilDates(t *testing.T) {
 		wantError bool
 	}{
 		{name: "both nil"},
-		{name: "only start date", startDate: date, wantError: true},
-		{name: "only end date", endDate: date, wantError: true},
+		{name: "only start date", startDate: date},
+		{name: "only end date", endDate: date},
 		{name: "both set", startDate: date, endDate: date},
 	}
 

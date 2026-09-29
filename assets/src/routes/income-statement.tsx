@@ -1,10 +1,16 @@
 import { type Component, For, Match, Show, Switch, createResource } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { useFileChange } from "../hooks/useFileChange";
 import { fetchBalances } from "../lib/balances";
 import { FinancialReport } from "../components/financial-report";
 
 const IncomeStatement: Component = () => {
-  const [data, { refetch }] = createResource(() => fetchBalances(["Income", "Expenses"]));
+  // The period lives in the URL (?from=&to=), so reloading or sharing keeps it
+  const [searchParams, setSearchParams] = useSearchParams<{ from: string; to: string }>();
+  const [data, { refetch }] = createResource(
+    () => ({ startDate: searchParams.from, endDate: searchParams.to }),
+    (period) => fetchBalances(["Income", "Expenses"], period),
+  );
 
   // File change detection via SSE - click to reload
   const fileChange = useFileChange({
@@ -21,6 +27,27 @@ const IncomeStatement: Component = () => {
   return (
     <>
       <FinancialReport.Root>
+        <FinancialReport.Toolbar>
+          <FinancialReport.DateField
+            label="From"
+            value={searchParams.from}
+            onChange={(from) => setSearchParams({ from })}
+          />
+          <FinancialReport.DateField
+            label="To"
+            value={searchParams.to}
+            onChange={(to) => setSearchParams({ to })}
+          />
+          <Show when={searchParams.from || searchParams.to}>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              onClick={() => setSearchParams({ from: undefined, to: undefined })}
+            >
+              All time
+            </button>
+          </Show>
+        </FinancialReport.Toolbar>
         <Switch>
           <Match when={data.loading}>
             <FinancialReport.Loading />

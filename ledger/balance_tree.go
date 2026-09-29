@@ -22,10 +22,10 @@ type BalanceTree struct {
 	// Currencies lists all currencies present in the tree, sorted alphabetically.
 	Currencies []string
 
-	// StartDate and EndDate define the period for the balance calculation.
-	// When StartDate == EndDate, this is a point-in-time balance (balance sheet).
-	// When StartDate < EndDate, this is a period change (income statement).
-	// When both are nil, this represents the current inventory state.
+	// StartDate and EndDate bound the period of the balance calculation, both
+	// inclusive; a nil bound leaves that side open. With only EndDate, this is
+	// the balance as of that date (balance sheet). When both are nil, this
+	// represents the current inventory state.
 	StartDate *string
 	EndDate   *string
 }
@@ -57,12 +57,15 @@ type BalanceNode struct {
 //
 // Parameters:
 //   - types: Account types to include (e.g., Assets, Liabilities). Empty means all types (trial balance).
-//   - startDate, endDate: Date range for balance calculation.
+//   - startDate, endDate: Date range for balance calculation, both inclusive;
+//     a nil bound leaves that side open.
 //   - Both nil: Current inventory state (all postings).
-//   - startDate == endDate: Point-in-time balance (balance sheet).
-//   - startDate < endDate: Period change (income statement).
+//   - Only endDate: Balance as of endDate (balance sheet).
+//   - Only startDate: Change from startDate on.
+//   - Both set: Change within the period (income statement); a period of
+//     one day, startDate == endDate, holds that day's postings.
 //
-// Returns an error if only one date is provided or startDate > endDate.
+// Returns an error if startDate > endDate.
 //
 // The tree is organized with account types as virtual root nodes. Balances are
 // aggregated bottom-up so parent nodes include the sum of all their descendants.
@@ -74,9 +77,6 @@ func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast
 // accounts, with the account-type roots cfg names.
 func newBalanceTree(accounts map[string]*Account, cfg *Config, types []ast.AccountType, startDate, endDate *ast.Date) (*BalanceTree, error) {
 	// Validate date range
-	if (startDate == nil) != (endDate == nil) {
-		return nil, fmt.Errorf("startDate and endDate must both be set or both be nil")
-	}
 	if startDate != nil && endDate != nil && startDate.After(endDate.Time) {
 		return nil, fmt.Errorf("startDate %s is after endDate %s", startDate.String(), endDate.String())
 	}
@@ -100,13 +100,9 @@ func newBalanceTree(accounts map[string]*Account, cfg *Config, types []ast.Accou
 		// Calculate balance for the period
 		var balance *Balance
 		if startDate == nil && endDate == nil {
-			// Current inventory state
 			balance = currentBalance(account)
 		} else {
-			// Use GetBalanceInPeriod with the dates
-			start := *startDate
-			end := *endDate
-			balance = account.GetBalanceInPeriod(start, end)
+			balance = account.GetBalanceBetween(startDate, endDate)
 		}
 
 		entries = append(entries, balanceTreeEntry{account: account, balance: balance})

@@ -85,9 +85,9 @@ func TestGetPostingsInPeriod_MultipleTransactions(t *testing.T) {
 	assert.Equal(t, postings[0].Transaction.Date(), date2)
 }
 
-// TestGetPostingsInPeriod_PointInTime verifies that when start == end,
-// all postings up to and including that date are returned.
-func TestGetPostingsInPeriod_PointInTime(t *testing.T) {
+// TestGetPostingsInPeriod_OneDay verifies that a period with start == end
+// holds only that day's postings.
+func TestGetPostingsInPeriod_OneDay(t *testing.T) {
 	l := New()
 	assets, _ := ast.NewAccount("Assets:Cash")
 	equity, _ := ast.NewAccount("Equity:Opening")
@@ -117,14 +117,13 @@ func TestGetPostingsInPeriod_PointInTime(t *testing.T) {
 
 	account := l.Accounts()[string(assets)]
 
-	// Point-in-time query: start == end
-	// Should return all postings up to and including date2
 	postings := account.GetPostingsInPeriod(*date2, *date2)
-	assert.Equal(t, len(postings), 2) // First and Second transactions
+	assert.Equal(t, len(postings), 1) // Second transaction only
 }
 
-// TestGetBalanceInPeriod_PointInTime verifies point-in-time balance calculation.
-func TestGetBalanceInPeriod_PointInTime(t *testing.T) {
+// TestGetBalanceBetween verifies open-ended bounds: up to and including a
+// date, from a date on, and a one-day period.
+func TestGetBalanceBetween(t *testing.T) {
 	l := New()
 	assets, _ := ast.NewAccount("Assets:Cash")
 	equity, _ := ast.NewAccount("Equity:Opening")
@@ -154,9 +153,14 @@ func TestGetBalanceInPeriod_PointInTime(t *testing.T) {
 
 	account := l.Accounts()[string(assets)]
 
-	// Point-in-time: balance as of date2 (should include first two transactions)
-	balance := account.GetBalanceInPeriod(*date2, *date2)
+	balance := account.GetBalanceBetween(nil, date2)
 	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(300))) // 100 + 200
+
+	balance = account.GetBalanceBetween(date2, nil)
+	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(500))) // 200 + 300
+
+	balance = account.GetBalanceInPeriod(*date2, *date2)
+	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(200)))
 }
 
 // TestGetBalanceInPeriod_Range verifies period balance calculation.

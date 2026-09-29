@@ -38,14 +38,17 @@ type BalanceNodeResponse struct {
 //   - startDate: Start date in YYYY-MM-DD format.
 //   - endDate: End date in YYYY-MM-DD format.
 //
-// Date semantics:
+// Date semantics (both dates inclusive, an omitted one leaves that side open):
 //   - Both omitted: Current inventory state (all postings).
-//   - startDate == endDate: Point-in-time balance (balance sheet).
-//   - startDate < endDate: Period change (income statement).
+//   - Only endDate: Balance as of endDate (balance sheet).
+//   - Only startDate: Change from startDate on.
+//   - Both: Change within the period (income statement); startDate == endDate
+//     is that one day.
+//   - startDate after endDate: 400.
 //
 // Examples:
 //   - GET /api/balances - Trial balance (all types, current state)
-//   - GET /api/balances?types=Assets,Liabilities,Equity&startDate=2024-01-31&endDate=2024-01-31 - Balance sheet
+//   - GET /api/balances?types=Assets,Liabilities,Equity&endDate=2024-01-31 - Balance sheet
 //   - GET /api/balances?types=Income,Expenses&startDate=2024-01-01&endDate=2024-01-31 - Income statement
 func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
@@ -82,12 +85,6 @@ func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		endDate = d
-	}
-
-	// Validate date consistency
-	if (startDate == nil) != (endDate == nil) {
-		http.Error(w, "both startDate and endDate must be provided together, or neither", http.StatusBadRequest)
-		return
 	}
 
 	// Get balance tree from ledger

@@ -126,7 +126,13 @@ func TestNewBalanceTreeDateRange(t *testing.T) {
 
 	tree, err = newBalanceTree(accounts, NewConfig(), nil, newTestDate("2024-02-05"), newTestDate("2024-02-05"))
 	assert.NoError(t, err)
+	assert.Equal(t, []string{"Expenses 20", "Expenses:Food 20"}, treeLines(tree.Roots))
+
+	tree, err = newBalanceTree(accounts, NewConfig(), nil, nil, newTestDate("2024-02-05"))
+	assert.NoError(t, err)
 	assert.Equal(t, []string{"Expenses 30", "Expenses:Food 30"}, treeLines(tree.Roots))
+	assert.Equal(t, (*string)(nil), tree.StartDate)
+	assert.Equal(t, "2024-02-05", *tree.EndDate)
 
 	_, err = newBalanceTree(accounts, NewConfig(), nil, newTestDate("2024-03-01"), newTestDate("2024-02-01"))
 	assert.Error(t, err)

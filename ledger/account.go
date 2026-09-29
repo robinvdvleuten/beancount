@@ -55,23 +55,10 @@ func (a *Account) IsClosed() bool {
 	return a.CloseDate != nil
 }
 
-// GetPostingsInPeriod returns postings within [start, end] inclusive.
-// When start == end, returns all postings up to and including that date (point-in-time).
-// When start < end, returns postings within the period (for income statements).
+// GetPostingsInPeriod returns postings within [start, end] inclusive, so a
+// period with start == end holds that one day's postings.
 func (a *Account) GetPostingsInPeriod(start, end ast.Date) []*AccountPosting {
 	var result []*AccountPosting
-
-	// Point-in-time: return all postings up to and including the date
-	if start.Equal(end.Time) {
-		for _, posting := range a.Postings {
-			if !posting.Transaction.Date().After(end.Time) {
-				result = append(result, posting)
-			}
-		}
-		return result
-	}
-
-	// Period: return postings within [start, end]
 	for _, posting := range a.Postings {
 		txnDate := posting.Transaction.Date()
 		if !txnDate.Before(start.Time) && !txnDate.After(end.Time) {
@@ -81,14 +68,22 @@ func (a *Account) GetPostingsInPeriod(start, end ast.Date) []*AccountPosting {
 	return result
 }
 
-// GetBalanceInPeriod returns the balance for this account within [start, end].
-// When start == end, returns point-in-time balance (all postings up to that date).
-// When start < end, returns net change within the period.
+// GetBalanceInPeriod returns this account's net change within [start, end]
+// inclusive.
 func (a *Account) GetBalanceInPeriod(start, end ast.Date) *Balance {
-	balance := NewBalance()
-	postings := a.GetPostingsInPeriod(start, end)
+	return a.GetBalanceBetween(&start, &end)
+}
 
-	for _, posting := range postings {
+// GetBalanceBetween returns the sum of this account's postings dated within
+// [start, end] inclusive, where a nil bound leaves that side open: with only
+// end, it is the balance at the end of that day.
+func (a *Account) GetBalanceBetween(start, end *ast.Date) *Balance {
+	balance := NewBalance()
+	for _, posting := range a.Postings {
+		date := posting.Transaction.Date()
+		if start != nil && date.Before(start.Time) || end != nil && date.After(end.Time) {
+			continue
+		}
 		if posting.Posting.Amount == nil {
 			continue
 		}
@@ -97,10 +92,7 @@ func (a *Account) GetBalanceInPeriod(start, end ast.Date) *Balance {
 		if err != nil {
 			continue
 		}
-		currency := posting.Posting.Amount.Currency
-
-		balance.Add(currency, amount)
+		balance.Add(posting.Posting.Amount.Currency, amount)
 	}
-
 	return balance
 }

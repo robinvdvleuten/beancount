@@ -95,7 +95,7 @@ func TestAPIBalances(t *testing.T) {
 	})
 
 	t.Run("PointInTimeBalance", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/balances?types=Assets&startDate=2024-01-31&endDate=2024-01-31", nil)
+		req := httptest.NewRequest(http.MethodGet, "/api/balances?types=Assets&endDate=2024-01-31", nil)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
@@ -110,9 +110,8 @@ func TestAPIBalances(t *testing.T) {
 		assert.Equal(t, 1, len(response.Roots))
 
 		// Verify dates are set
-		assert.NotEqual(t, (*string)(nil), response.StartDate)
+		assert.Equal(t, (*string)(nil), response.StartDate)
 		assert.NotEqual(t, (*string)(nil), response.EndDate)
-		assert.Equal(t, "2024-01-31", *response.StartDate)
 		assert.Equal(t, "2024-01-31", *response.EndDate)
 
 		// Assets as of Jan 31: 1000 - 200 + 200 = 1000 (only opening and transfer)
@@ -204,24 +203,34 @@ func TestAPIBalances(t *testing.T) {
 		assert.True(t, rec.Body.String() != "", "Should have error message")
 	})
 
-	t.Run("MissingEndDate", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/balances?startDate=2024-01-01", nil)
+	t.Run("StartDateOnly", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/balances?types=Expenses&startDate=2024-02-01", nil)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.True(t, rec.Body.String() != "", "Should have error message about both dates")
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var response BalancesResponse
+		assert.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
+
+		// Everything from Feb 1 on: the groceries of Feb 15
+		assert.Equal(t, "150", response.Roots[0].Balance["USD"])
 	})
 
-	t.Run("MissingStartDate", func(t *testing.T) {
-		req := httptest.NewRequest(http.MethodGet, "/api/balances?endDate=2024-01-31", nil)
+	t.Run("OneDayPeriod", func(t *testing.T) {
+		req := httptest.NewRequest(http.MethodGet, "/api/balances?types=Assets&startDate=2024-02-01&endDate=2024-02-01", nil)
 		rec := httptest.NewRecorder()
 
 		mux.ServeHTTP(rec, req)
 
-		assert.Equal(t, http.StatusBadRequest, rec.Code)
-		assert.True(t, rec.Body.String() != "", "Should have error message about both dates")
+		assert.Equal(t, http.StatusOK, rec.Code)
+
+		var response BalancesResponse
+		assert.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
+
+		// Only the salary of Feb 1, not the balance up to it
+		assert.Equal(t, "3000", response.Roots[0].Balance["USD"])
 	})
 
 	t.Run("StartDateAfterEndDate", func(t *testing.T) {

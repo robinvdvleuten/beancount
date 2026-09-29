@@ -1,11 +1,15 @@
 import { type Component, For, Match, Show, Switch, createResource } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { useFileChange } from "../hooks/useFileChange";
 import { fetchBalances } from "../lib/balances";
 import { FinancialReport } from "../components/financial-report";
 
 const BalanceSheet: Component = () => {
-  const [data, { refetch }] = createResource(() =>
-    fetchBalances(["Assets", "Liabilities", "Equity"]),
+  // The as-of date lives in the URL (?asOf=), so reloading or sharing keeps it
+  const [searchParams, setSearchParams] = useSearchParams<{ asOf: string }>();
+  const [data, { refetch }] = createResource(
+    () => ({ endDate: searchParams.asOf }),
+    (period) => fetchBalances(["Assets", "Liabilities", "Equity"], period),
   );
 
   // File change detection via SSE - click to reload
@@ -23,6 +27,22 @@ const BalanceSheet: Component = () => {
   return (
     <>
       <FinancialReport.Root>
+        <FinancialReport.Toolbar>
+          <FinancialReport.DateField
+            label="As of"
+            value={searchParams.asOf}
+            onChange={(asOf) => setSearchParams({ asOf })}
+          />
+          <Show when={searchParams.asOf}>
+            <button
+              type="button"
+              class="btn btn-ghost btn-sm"
+              onClick={() => setSearchParams({ asOf: undefined })}
+            >
+              Today
+            </button>
+          </Show>
+        </FinancialReport.Toolbar>
         <Switch>
           <Match when={data.loading}>
             <FinancialReport.Loading />
