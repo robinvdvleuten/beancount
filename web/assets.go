@@ -21,17 +21,18 @@ type metadata struct {
 	CommitSHA string `json:"commitSHA"`
 	ReadOnly  bool   `json:"readOnly"`
 	Watching  bool   `json:"watching"`
+	Title     string `json:"title"`
 }
 
 // mountAssets registers all asset routes (index + static files) for production.
-// Replaces Go template variables in index.html at server startup.
+// index.html is rendered per request, so its metadata follows the ledger's
+// options as the ledger reloads.
 func (s *Server) mountAssets(mux *http.ServeMux) {
 	fsys, err := fs.Sub(distEmbed, "dist")
 	if err != nil {
 		panic(fmt.Sprintf("failed to create sub filesystem: %v", err))
 	}
 
-	// Read index.html and parse as template
 	indexHTML, err := fs.ReadFile(fsys, "index.html")
 	if err != nil {
 		panic(fmt.Sprintf("failed to read embedded index.html: %v", err))
@@ -42,37 +43,39 @@ func (s *Server) mountAssets(mux *http.ServeMux) {
 		panic(fmt.Sprintf("failed to parse index.html template: %v", err))
 	}
 
-	// Marshal metadata to JSON
-	meta := metadata{
-		Version:   s.Version,
-		CommitSHA: s.CommitSHA,
-		ReadOnly:  s.ReadOnly,
-		Watching:  s.WatchEnabled,
-	}
-	metadataJSON, err := json.Marshal(meta)
-	if err != nil {
-		panic(fmt.Sprintf("failed to marshal metadata: %v", err))
-	}
-
-	// Execute template with JSON metadata
-	var buf bytes.Buffer
-	data := struct {
-		Metadata template.JS
-	}{
-		Metadata: template.JS(metadataJSON),
-	}
-	if err := tmpl.Execute(&buf, data); err != nil {
-		panic(fmt.Sprintf("failed to execute index.html template: %v", err))
-	}
-
-	htmlContent := buf.String()
-
 	// Register static assets
 	mux.Handle("/assets/", http.FileServerFS(fsys))
 
 	// Register catch-all route for SPA (serves index.html for all unmatched paths)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		s.mu.RLock()
+		title := s.config.Title
+		s.mu.RUnlock()
+
+		metadataJSON, err := json.Marshal(metadata{
+			Version:   s.Version,
+			CommitSHA: s.CommitSHA,
+			ReadOnly:  s.ReadOnly,
+			Watching:  s.WatchEnabled,
+			Title:     title,
+		})
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		var buf bytes.Buffer
+		data := struct {
+			Metadata template.JS
+		}{
+			Metadata: template.JS(metadataJSON),
+		}
+		if err := tmpl.Execute(&buf, data); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		_, _ = fmt.Fprint(w, htmlContent)
+		_, _ = w.Write(buf.Bytes())
 	})
 }

@@ -8,6 +8,8 @@ const metadataDevValue = {
   version: "dev",
   commitSHA: "local",
   readOnly: false,
+  watching: false,
+  title: "Beancount",
 };
 
 // Plugin to handle globals: replaces Go templates in HTML (dev only) and provides virtual module

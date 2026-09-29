@@ -101,7 +101,7 @@ beancount format f.beancount | bean-check /dev/stdin  # round-trip
 
 ## Frontend (assets/)
 
-Vite + Solid + TypeScript, styled with Tailwind CSS 4 + DaisyUI, built into `web/dist/` and embedded in the Go binary. `web.go` injects metadata (version, commitSHA, readOnly) into `index.html`; the dev server injects dummy values via a Vite plugin. `npm run --prefix assets dev` proxies `/api` to `:8080`.
+Vite + Solid + TypeScript, styled with Tailwind CSS 4 + DaisyUI, built into `web/dist/` and embedded in the Go binary. `web/assets.go` injects metadata (version, commitSHA, readOnly, watching, and the ledger's title) into `index.html` on each request; the dev server injects dummy values via a Vite plugin. `npm run --prefix assets dev` proxies `/api` to `:8080`.
 
 **Dependencies**: change them only through `npm install --prefix assets <pkg>` / `npm uninstall --prefix assets <pkg>`, so `package.json` and the lockfile stay in sync.
 

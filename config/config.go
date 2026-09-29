@@ -51,6 +51,9 @@ type Config struct {
 	BookingMethod string
 	AccountNames  *AccountNames
 
+	// Title names the ledger, "Beancount" unless the title option says otherwise.
+	Title string
+
 	// OperatingCurrencies accumulates every operating_currency option in
 	// declaration order, matching beancount's list semantics (the option
 	// may be declared multiple times; duplicates are preserved).
@@ -62,6 +65,7 @@ func New() *Config {
 	return &Config{
 		Tolerance:     NewTolerance(),
 		BookingMethod: "STRICT",
+		Title:         "Beancount",
 		AccountNames: &AccountNames{
 			Assets:      "Assets",
 			Liabilities: "Liabilities",
@@ -205,6 +209,8 @@ func (c *Config) apply(name, value string) error {
 			return fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, HIFO, or AVERAGE", value)
 		}
 		c.BookingMethod = value
+	case "title":
+		c.Title = value
 	case "name_assets":
 		c.AccountNames.Assets = value
 	case "name_liabilities":

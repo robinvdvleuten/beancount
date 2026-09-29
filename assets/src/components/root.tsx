@@ -1,4 +1,4 @@
-import { type ParentComponent, createMemo } from "solid-js";
+import { type ParentComponent, createEffect, createMemo } from "solid-js";
 import { A, useCurrentMatches } from "@solidjs/router";
 import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid";
 import { meta } from "virtual:globals";
@@ -25,6 +25,10 @@ const Root: ParentComponent = (props) => {
       .find(Boolean),
   );
 
+  createEffect(() => {
+    document.title = title() ? `${title()} - ${meta.title}` : meta.title;
+  });
+
   return (
     <div class="flex h-screen flex-col">
       <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
@@ -32,7 +36,13 @@ const Root: ParentComponent = (props) => {
           <div class="text-primary">
             <DocumentCurrencyDollarIcon class="size-8" />
           </div>
-          <h1 class="text-xl font-semibold">{title()}</h1>
+          <h1 class="text-xl font-semibold">
+            <span class="text-base-content/60">{meta.title}</span>
+            <span class="px-2 text-base-content/40" aria-hidden="true">
+              ›
+            </span>
+            {title()}
+          </h1>
         </div>
       </header>
 

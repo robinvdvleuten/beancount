@@ -5,6 +5,7 @@ declare global {
       commitSHA: string;
       readOnly: boolean;
       watching: boolean;
+      title: string;
     };
   }
 }
@@ -15,5 +16,6 @@ declare module "virtual:globals" {
     commitSHA: string;
     readOnly: boolean;
     watching: boolean;
+    title: string;
   };
 }

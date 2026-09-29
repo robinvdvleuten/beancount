@@ -23,7 +23,7 @@ func TestFromASTOptionValidation(t *testing.T) {
 		},
 		{
 			name:   "known but unconsumed options are ignored",
-			source: "option \"operating_currency\" \"USD\"\noption \"title\" \"My Ledger\"",
+			source: `option "render_commas" "TRUE"`,
 		},
 		{
 			name:    "unknown option is rejected",
@@ -76,6 +76,17 @@ func TestOperatingCurrenciesAccumulate(t *testing.T) {
 	cfg, err = FromAST(parser.MustParseString(context.Background(), `option "title" "No currencies"`))
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(cfg.OperatingCurrencies))
+}
+
+func TestTitle(t *testing.T) {
+	cfg, err := FromAST(parser.MustParseString(context.Background(), ""))
+	assert.NoError(t, err)
+	assert.Equal(t, "Beancount", cfg.Title)
+
+	cfg, err = FromAST(parser.MustParseString(context.Background(),
+		"option \"title\" \"First\"\noption \"title\" \"Joe's Ledger\""))
+	assert.NoError(t, err)
+	assert.Equal(t, "Joe's Ledger", cfg.Title)
 }
 
 func TestParseOptionsAppliesEachOptionOnItsOwn(t *testing.T) {

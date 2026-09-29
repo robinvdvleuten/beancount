@@ -45,6 +45,8 @@ test.describe("Balance Sheet", () => {
     await navigateToBalanceSheet(page);
 
     await expect(page.getByRole("heading", { name: "Balance Sheet" })).toBeVisible();
+    await expect(page.getByRole("heading")).toContainText("Example Beancount file");
+    await expect(page).toHaveTitle("Balance Sheet - Example Beancount file");
     await expect(page.getByRole("link", { name: "Balance Sheet" })).toBeVisible();
     await waitForBalanceSheetRows(page);
 
