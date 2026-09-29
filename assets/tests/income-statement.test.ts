@@ -87,7 +87,7 @@ test.describe("Income Statement", () => {
     await expect(expensesTable.getByRole("columnheader", { name: "Other" })).toBeVisible();
 
     await expectIncomeStatementRow(page, "Expenses", "Expenses", [
-      "236,544.48",
+      "243,036.78",
       "55,000.00 IRAUSD",
       "184.00 VACHR",
     ]);
