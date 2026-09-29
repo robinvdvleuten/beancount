@@ -2,6 +2,76 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.14.0](https://github.com/robinvdvleuten/beancount/compare/v0.13.0...v0.14.0) (2026-09-29)
+
+
+### ⚠ BREAKING CHANGES
+
+* **parser:** ast.Metadata has no Inline field.
+* **ledger:** ledger.Graph, Node, Edge, NodeKind, EdgeKind, their constants, NewGraph, Stats, CommodityNode, Ledger.Graph, Account.GetParent and Account.GetChildren are removed, and CommodityDelta keeps only CommodityID.
+* **ledger:** ledger.InferTolerance, ledger.ToleranceConfig and ledger.NewToleranceConfig are removed. Tolerance options live in config.Tolerance (config.NewTolerance).
+* **ledger:** ledger.Account and ledger.OpenDelta no longer have a BookingMethod field.
+* **query:** the query package exports only Run, Context (with the new AST field), Format, FormatText and FormatCSV. Removed from the API: Compile, CompilePrint, Execute, ExecutePrint, RenderText, RenderCSV, Desugar, NewInventory, NewSet, and the types Compiled, CompiledFrom, CompiledTarget, CompileError, CompiledPrint, Result, ResultColumn, Row, Amount, Cost, Position, Inventory, Set and DType with its TAny ... TInventory constants. Run PRINT and every other statement through query.Run.
+* **query:** formatter.WithParsedNumbers and Formatter.FormatTransaction are removed; use printer.Sprint or printer.Print to render directives without a source.
+* **ledger:** Inventory.Book and Inventory.Add are removed from the public API; booking a posting is internal to the ledger package.
+* **ledger:** Ledger.BookedLots and BookedLot are replaced by Ledger.BookedPositions, BookedPosition and BookedCost; PerUnitCost is no longer exported.
+
+### Features
+
+* **ledger:** publish booked positions per posting ([1ca0829](https://github.com/robinvdvleuten/beancount/commit/1ca0829d3c89693c9cb98d3f7dd2adfc155a8dc9)), closes [#482](https://github.com/robinvdvleuten/beancount/issues/482)
+* **query:** print directives through a printer like beancount's ([819b941](https://github.com/robinvdvleuten/beancount/commit/819b941d6280c9a0144ecaf378856f6cd53bfd9d)), closes [#485](https://github.com/robinvdvleuten/beancount/issues/485)
+* **query:** run BQL through one Run entry, with PRINT in the pipeline ([fe4a6bc](https://github.com/robinvdvleuten/beancount/commit/fe4a6bcb919010e9f921539c1ad0fa63b855b46f)), closes [#486](https://github.com/robinvdvleuten/beancount/issues/486)
+
+
+### Bug Fixes
+
+* **cli:** collect import's stderr in a concurrency-safe buffer ([f5a81e9](https://github.com/robinvdvleuten/beancount/commit/f5a81e9fe25404adb0865829730696ad02a12cba))
+* **cli:** show a positioned error in the context of its own file ([4a6f62c](https://github.com/robinvdvleuten/beancount/commit/4a6f62ce4803bdd494951c583f24afecddbf1755)), closes [#492](https://github.com/robinvdvleuten/beancount/issues/492)
+* generate valid dates in the large-file generator ([01c62b5](https://github.com/robinvdvleuten/beancount/commit/01c62b54e03c33d33ce88fa23107100e67136433))
+* **ledger:** check a balance's currency against its account's open, wherever dated ([56c5b21](https://github.com/robinvdvleuten/beancount/commit/56c5b217cda3323be41177f39ec942c4d0a5f1d1)), closes [#525](https://github.com/robinvdvleuten/beancount/issues/525)
+* **ledger:** drop a zero-unit posting at a cost to infer, like beancount ([dacc453](https://github.com/robinvdvleuten/beancount/commit/dacc45353f574f7cda6ff8a0e8f824946ea80cbe))
+* **ledger:** end the balance currency error with bean-check's ": " ([a4a5f5b](https://github.com/robinvdvleuten/beancount/commit/a4a5f5b8fb7b5b9bcda71601d2a0d8c88f8d7fbc)), closes [#526](https://github.com/robinvdvleuten/beancount/issues/526)
+* **ledger:** interpolate a compound cost's missing number, as {# 5 USD} ([3c4e9b2](https://github.com/robinvdvleuten/beancount/commit/3c4e9b22b2e26d13e0ac49d27ed2bade408a0570)), closes [#528](https://github.com/robinvdvleuten/beancount/issues/528)
+* **ledger:** keep the exponent of an interpolated cost ([1d31efc](https://github.com/robinvdvleuten/beancount/commit/1d31efcc9748b74f727fa0835364af403f5eb2a0)), closes [#511](https://github.com/robinvdvleuten/beancount/issues/511)
+* **ledger:** keep the written scale of implicit prices ([fca110f](https://github.com/robinvdvleuten/beancount/commit/fca110f2a46991d36326a52e5722af3e295a83bc))
+* **ledger:** pad and check balances on accounts outside their interval ([2c7b586](https://github.com/robinvdvleuten/beancount/commit/2c7b5863a43fbef96b22997b64c8a0c14f257db2)), closes [#517](https://github.com/robinvdvleuten/beancount/issues/517)
+* **ledger:** print currency group errors without an account suffix ([282bf68](https://github.com/robinvdvleuten/beancount/commit/282bf6881ac692a5f28e7dede3d843fa9919610f)), closes [#527](https://github.com/robinvdvleuten/beancount/issues/527)
+* **ledger:** report a pad that fills a currency held at cost ([68c645b](https://github.com/robinvdvleuten/beancount/commit/68c645bc18ae8f75de885c51d68905ef382b1160)), closes [#509](https://github.com/robinvdvleuten/beancount/issues/509)
+* **ledger:** report a reference outside an opened account's interval as inactive ([8101865](https://github.com/robinvdvleuten/beancount/commit/8101865f36fc69db3949c716b891d36a823db999)), closes [#516](https://github.com/robinvdvleuten/beancount/issues/516)
+* **ledger:** report a transaction added after Booking, not skip it ([abadc32](https://github.com/robinvdvleuten/beancount/commit/abadc32b2e73afd1b6bd699a500425dcec32b469)), closes [#491](https://github.com/robinvdvleuten/beancount/issues/491)
+* **ledger:** report zero units at cost, like bean-check ([178187f](https://github.com/robinvdvleuten/beancount/commit/178187f70ec75edc27d90a5c66bf7e51c9c6aa4f))
+* **ledger:** word booking errors as bean-check does ([39b70d9](https://github.com/robinvdvleuten/beancount/commit/39b70d9cadb667c66d5854deadd508eb86940193)), closes [#518](https://github.com/robinvdvleuten/beancount/issues/518)
+* **ledger:** word the merge cost error as bean-check does ([91dfbeb](https://github.com/robinvdvleuten/beancount/commit/91dfbeb2034fd347ad765a713ae37530844aaff1)), closes [#523](https://github.com/robinvdvleuten/beancount/issues/523)
+* **loader:** ignore plugin directives in included files ([9bda881](https://github.com/robinvdvleuten/beancount/commit/9bda8810293548262e88b56b17a626e815ca65e9)), closes [#508](https://github.com/robinvdvleuten/beancount/issues/508)
+* **parser:** accept a cost number without a currency, as {10} ([152e66e](https://github.com/robinvdvleuten/beancount/commit/152e66eb3089db3876e1bac3d414092f48efb9b5)), closes [#522](https://github.com/robinvdvleuten/beancount/issues/522)
+* **parser:** end a dated directive's header at its line ([c113bdf](https://github.com/robinvdvleuten/beancount/commit/c113bdfb6dc9e0fdbecb4d8fd2d2e46ab2496bec)), closes [#507](https://github.com/robinvdvleuten/beancount/issues/507)
+* **parser:** end a header on the line its string spanning lines closes ([a6aaf49](https://github.com/robinvdvleuten/beancount/commit/a6aaf499534b0d9f306dd51acce03bafc6f8f299)), closes [#521](https://github.com/robinvdvleuten/beancount/issues/521)
+* **parser:** reject inline metadata and undated lines split over two ([84072b9](https://github.com/robinvdvleuten/beancount/commit/84072b940047a29acee75851fb21accb7095e39b)), closes [#519](https://github.com/robinvdvleuten/beancount/issues/519)
+* **parser:** skip column-1 flag lines like beancount's lexer ([82f2cba](https://github.com/robinvdvleuten/beancount/commit/82f2cba72f614e95fff145d5571496bd075bc5f0)), closes [#495](https://github.com/robinvdvleuten/beancount/issues/495)
+* **query:** add beancount's conversion entry to FROM OPEN and CLOSE ([d2ed634](https://github.com/robinvdvleuten/beancount/commit/d2ed63447e8af16e1b6f92b30776a28e728a04cc))
+* **query:** compare values of different types as never equal ([0dfd649](https://github.com/robinvdvleuten/beancount/commit/0dfd6498809a423a0d7ccde0878285a212d33e61)), closes [#514](https://github.com/robinvdvleuten/beancount/issues/514)
+* **query:** evaluate balance in WHERE as the running balance so far ([dcc0336](https://github.com/robinvdvleuten/beancount/commit/dcc0336f841d8053d1bc9ec50008da2469373a6c)), closes [#520](https://github.com/robinvdvleuten/beancount/issues/520)
+* **query:** fold earnings in sorted account order, like bean-query ([3300dd8](https://github.com/robinvdvleuten/beancount/commit/3300dd83c9b3026155900264ca6331f7f8a59125))
+* **query:** keep only active opens and last prices before FROM OPEN ([c847a3f](https://github.com/robinvdvleuten/beancount/commit/c847a3f5cf48ee6478a603e164bd0a7f8c2807f0))
+* **query:** print a number below 1E-6 in Python's exponent form ([bc10de4](https://github.com/robinvdvleuten/beancount/commit/bc10de4b6837f3eb862129a1502f52ecf24c90a9)), closes [#512](https://github.com/robinvdvleuten/beancount/issues/512)
+* **query:** print open and price lines in beancount's printer columns ([75d17d0](https://github.com/robinvdvleuten/beancount/commit/75d17d0da1a32d10b9a9ec2eb3951def11647f81))
+* **query:** reject a FROM clause whose CLOSE ON precedes its OPEN ON ([27d9a0d](https://github.com/robinvdvleuten/beancount/commit/27d9a0dfdbad5bbfee04e221238671dcbdd05d9f)), closes [#513](https://github.com/robinvdvleuten/beancount/issues/513)
+* **query:** skip a NULL position in sum ([e0cf77a](https://github.com/robinvdvleuten/beancount/commit/e0cf77a3934604766deac591359ac45b124d5a58))
+
+
+### Performance Improvements
+
+* **ledger:** find the lot a posting adds to by key ([bde8414](https://github.com/robinvdvleuten/beancount/commit/bde84141de023e487ede879277da097705ceb59d)), closes [#497](https://github.com/robinvdvleuten/beancount/issues/497)
+* **parser:** find error context lines in linear time ([0c5a66f](https://github.com/robinvdvleuten/beancount/commit/0c5a66fdec35ff4e6e835152c47cdc50e18d923e))
+
+
+### Code Refactoring
+
+* **ledger:** decide and book augment vs reduce on the inventory ([cab569f](https://github.com/robinvdvleuten/beancount/commit/cab569f4ce1b1a5e442688648ee44c483b2b54a2)), closes [#483](https://github.com/robinvdvleuten/beancount/issues/483)
+* **ledger:** delete dead Account.BookingMethod ([092fd9a](https://github.com/robinvdvleuten/beancount/commit/092fd9aa51a9021abe3b9de5fee1e4ccafc320a4)), closes [#493](https://github.com/robinvdvleuten/beancount/issues/493)
+* **ledger:** move tolerance rules off the booker into one module ([7e187fb](https://github.com/robinvdvleuten/beancount/commit/7e187fb9e8c50c45404dfca2f040c74aea030149)), closes [#489](https://github.com/robinvdvleuten/beancount/issues/489)
+* **ledger:** replace Graph with a price index and plain balance tree ([7c4f73b](https://github.com/robinvdvleuten/beancount/commit/7c4f73bb3a04230d0256b86b7ac9c25226d850bb)), closes [#487](https://github.com/robinvdvleuten/beancount/issues/487)
+
 ## [0.13.0](https://github.com/robinvdvleuten/beancount/compare/v0.12.0...v0.13.0) (2026-09-27)
 
 
