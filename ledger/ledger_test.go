@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -1286,6 +1287,41 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 2020-01-08 balance Assets:Cash 10 USD
 `))
 	})
+}
+
+func TestLedger_CostNumberWithoutCurrency(t *testing.T) {
+	// Like beancount's replace_currencies, a cost that states its number
+	// but not its currency takes its Currency group's, so it is booked in
+	// that currency; an error still carries the transaction as written.
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  5 HOOL {10}
+  Assets:C  -50 USD
+
+2020-01-02 * "buy more"
+  Assets:I  5 HOOL {11}
+  Assets:C  -55 USD
+
+2020-01-03 * "sell"
+  Assets:I  -6 HOOL {10}
+  Assets:C  60 USD
+`)
+	l := New()
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
+
+	buy := tree.Directives[2].(*ast.Transaction)
+	positions := l.BookedPositions(buy.Postings[0])
+	assert.Equal(t, 1, len(positions))
+	assert.Equal(t, "USD", positions[0].Cost.Currency)
+
+	assert.Equal(t, 1, len(validationErrors.Errors))
+	sell := validationErrors.Errors[0].(*Diagnostic)
+	assert.Equal(t, `Not enough lots to reduce "-6 HOOL {10 USD}": 5 HOOL {10 USD, 2020-01-02}`, sell.message)
+	assert.Equal(t, "", sell.directive.(*ast.Transaction).Postings[0].Cost.Amount.Currency, "the error shows the cost as written")
 }
 
 func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {

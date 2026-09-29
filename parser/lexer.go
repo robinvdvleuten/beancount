@@ -393,13 +393,13 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 		l.advance()
 	}
 
-	if l.pos < len(l.source) && l.source[l.pos] == ',' {
+	if l.groupSeparatorAhead() {
 		if l.pos-digitStart > 3 {
 			l.consumeNumberRemainder()
 			return Token{ILLEGAL, start, l.pos, line, col}
 		}
 
-		for l.pos < len(l.source) && l.source[l.pos] == ',' {
+		for l.groupSeparatorAhead() {
 			l.advance()
 			for i := 0; i < 3; i++ {
 				if l.pos >= len(l.source) || !isDigit(l.source[l.pos]) {
@@ -424,6 +424,18 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 	}
 
 	return Token{NUMBER, start, l.pos, line, col}
+}
+
+// groupSeparatorAhead reports whether the next byte is a comma inside the
+// number: one a digit (or, for the malformed 1,,000, another comma) follows.
+// Like v2's number pattern, a number never ends on a comma, so any other
+// comma ends it, as in a cost spec's {10, 2020-01-01}.
+func (l *Lexer) groupSeparatorAhead() bool {
+	if l.pos+1 >= len(l.source) || l.source[l.pos] != ',' {
+		return false
+	}
+	next := l.source[l.pos+1]
+	return isDigit(next) || next == ','
 }
 
 // signedValueAhead reports whether the sign just consumed starts a number

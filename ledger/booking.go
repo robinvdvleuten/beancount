@@ -171,6 +171,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	if len(errs) > 0 {
 		return nil, errs
 	}
+	written := resolveCostCurrencies(txn, groups)
 
 	delta := &TransactionDelta{
 		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
@@ -240,7 +241,14 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	if len(errs) > 0 {
 		// Like beancount's, the errors carry the transaction as written:
 		// commitDelta takes the Dropped groups' postings out of txn.
-		withUnbooked(errs, txn)
+		if written == nil {
+			written = unbooked(txn)
+		}
+		for _, err := range errs {
+			if diagnostic, ok := err.(*Diagnostic); ok && diagnostic.directive == txn {
+				diagnostic.directive = written
+			}
+		}
 	}
 	commitDelta(txn, delta)
 	maps.Copy(b.inventories, staged)
@@ -503,25 +511,49 @@ func newBookingError(txn *ast.Transaction, account ast.Account, err error) error
 	return NewInsufficientInventoryError(txn, account, err)
 }
 
-// withUnbooked points the errors reported on txn at a copy of it as
-// written, before commitDelta rewrites its postings and fills in their
-// numbers, so an error shows the postings of the group it dropped.
-func withUnbooked(errs []error, txn *ast.Transaction) {
-	unbooked := *txn
-	unbooked.Postings = make([]*ast.Posting, len(txn.Postings))
+// unbooked returns a copy of txn as written, before resolveCostCurrencies
+// and commitDelta rewrite its postings and fill in their numbers, for the
+// errors reported on it to carry, so an error shows the postings of the
+// group it dropped.
+func unbooked(txn *ast.Transaction) *ast.Transaction {
+	copied := *txn
+	copied.Postings = make([]*ast.Posting, len(txn.Postings))
 	for i, posting := range txn.Postings {
-		copied := *posting
+		p := *posting
 		if posting.Cost != nil {
 			cost := *posting.Cost
-			copied.Cost = &cost
+			p.Cost = &cost
 		}
-		unbooked.Postings[i] = &copied
+		copied.Postings[i] = &p
 	}
-	for _, err := range errs {
-		if diagnostic, ok := err.(*Diagnostic); ok && diagnostic.directive == txn {
-			diagnostic.directive = &unbooked
+	return &copied
+}
+
+// resolveCostCurrencies gives a cost that states its number but not its
+// currency the currency of its posting's Currency group, which categorize
+// resolved it to, like beancount's replace_currencies, so Booking weighs
+// and books it in that currency. The cost is replaced, not edited, and
+// resolveCostCurrencies returns the transaction as written when it
+// replaced one, nil otherwise.
+func resolveCostCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Transaction {
+	var written *ast.Transaction
+	for _, group := range groups {
+		for _, posting := range group.postings {
+			cost := posting.Cost
+			if !cost.HasNumber() || cost.Amount.Currency != "" {
+				continue
+			}
+			if written == nil {
+				written = unbooked(txn)
+			}
+			amount := *cost.Amount
+			amount.Currency = group.currency
+			resolved := *cost
+			resolved.Amount = &amount
+			posting.Cost = &resolved
 		}
 	}
+	return written
 }
 
 // commitDelta writes Booking's results onto the transaction. The processed

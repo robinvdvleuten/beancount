@@ -1,0 +1,13 @@
+; A cost number without a currency that neither a single group nor the
+; account's holdings resolve cannot be categorized.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+2020-01-01 open Income:G
+2020-02-02 * "two currencies, nothing held"
+  Assets:I  1 GOOG {7}
+  Assets:C  -7 USD
+  Assets:C  -1 EUR
+  Income:G  1 EUR
+2020-02-03 * "no other currency"
+  Assets:I  1 GOOG {7}
+  Income:G

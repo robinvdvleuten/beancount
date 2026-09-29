@@ -238,6 +238,30 @@ func TestParseCost(t *testing.T) {
 			hasError: true,
 		},
 		{
+			name:     "NumberOnlyCost",
+			input:    "{10}",
+			expected: &ast.Cost{Amount: &ast.Amount{Raw: "10", Value: "10"}},
+		},
+		{
+			name:     "NumberOnlyTotalCost",
+			input:    "{{30}}",
+			expected: &ast.Cost{IsTotal: true, Amount: &ast.Amount{Raw: "30", Value: "30"}},
+		},
+		{
+			name:  "NumberOnlyCostWithDateAndLabel",
+			input: `{10, 2020-01-01, "lab"}`,
+			expected: &ast.Cost{
+				Amount: &ast.Amount{Raw: "10", Value: "10"},
+				Date:   &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+				Label:  "lab",
+			},
+		},
+		{
+			name:     "CompoundCostWithoutCurrency",
+			input:    "{10 # 5}",
+			hasError: true,
+		},
+		{
 			name:     "HashWithoutCurrency",
 			input:    "{#}",
 			hasError: true,

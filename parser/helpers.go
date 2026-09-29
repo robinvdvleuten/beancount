@@ -213,11 +213,12 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 				cost.Amount = p.amountFromValueToken(valueTok, currTok, isExpression, value)
 				cost.Total = total
 			} else {
-				if !p.check(IDENT) {
-					return nil, p.errorAtEndOfPrevious("expected currency")
+				// A number without a currency leaves the currency to
+				// Booking (official grammar: number maybe_currency).
+				cost.Amount = ast.NewAmountWithRaw(valueTok.String(p.source), value, "")
+				if p.check(IDENT) {
+					cost.Amount.Currency = p.internCurrency(p.advance())
 				}
-				currTok := p.advance()
-				cost.Amount = p.amountFromValueToken(valueTok, currTok, isExpression, value)
 			}
 
 		case p.check(IDENT):

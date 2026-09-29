@@ -102,6 +102,11 @@ func TestLexerNumbers(t *testing.T) {
 		{"1,000.00", "1,000.00"},
 		{"-1,000.50", "-1,000.50"},
 		{"1,234,567.89", "1,234,567.89"},
+		// A comma that no digit follows ends the number, as in a cost
+		// spec's {10, 2020-01-01}: v2's number pattern never ends on one.
+		{"10, 2020-01-01", "10"},
+		{"1,000, x", "1,000"},
+		{"1234,", "1234"},
 	}
 
 	for _, tt := range tests {

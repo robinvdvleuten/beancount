@@ -80,7 +80,9 @@ func (p *numberExpressionParser) parseNumber() (decimal.Decimal, error) {
 	foundDigit, seenDot := false, false
 	for p.pos < p.lineEnd {
 		ch := p.source[p.pos]
-		if isDigit(ch) || ch == ',' {
+		// Like v2's number pattern, a comma is a digit group separator
+		// only with a digit after it: {10, 2020-01-01} ends at "10".
+		if isDigit(ch) || (ch == ',' && p.pos+1 < p.lineEnd && isDigit(p.source[p.pos+1])) {
 			foundDigit = true
 			p.pos++
 			continue

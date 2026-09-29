@@ -1,0 +1,25 @@
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+2020-01-01 open Income:G
+
+2020-01-02 * "buy"
+  Assets:I  5 HOOL {10}
+  Assets:C  -50 USD
+
+2020-01-03 * "buy total"
+  Assets:I  2 HOOL {{30}}
+  Assets:C  -30 USD
+
+2020-02-01 * "sell"
+  Assets:I  -5 HOOL {10}
+  Assets:C  50 USD
+
+2020-02-02 * "two currencies"
+  Assets:I  1 GOOG {7}
+  Assets:C  -7 USD
+  Assets:C  -1 EUR
+  Income:G  1 EUR
+
+2020-02-03 * "dated and labelled"
+  Assets:I  1 GOOG {7, 2020-01-01, "lab"}
+  Assets:C  -7 USD
