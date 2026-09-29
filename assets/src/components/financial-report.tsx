@@ -82,7 +82,7 @@ const Root: ParentComponent = (props) => (
 
 const Loading = () => (
   <div class="flex items-center justify-center py-12">
-    <span class="loading loading-spinner loading-lg" />
+    <span class="loading loading-lg loading-spinner" />
   </div>
 );
 
@@ -128,10 +128,10 @@ const Table = (props: TableProps) => {
                 >
                   {displayName(row)}
                 </td>
-                <td class={`align-top text-right font-mono tabular-nums ${valueClass(row)}`}>
+                <td class={`text-right align-top font-mono tabular-nums ${valueClass(row)}`}>
                   {formatAmount(primary() ? row.balance[primary() as string] : undefined)}
                 </td>
-                <td class={`align-top text-right font-mono tabular-nums ${valueClass(row)}`}>
+                <td class={`text-right align-top font-mono tabular-nums ${valueClass(row)}`}>
                   <For each={secondary().filter((currency) => row.balance[currency])}>
                     {(currency) => (
                       <div>{formatAmountWithCurrency(row.balance[currency], currency)}</div>

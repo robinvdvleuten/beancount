@@ -38,7 +38,7 @@ const Root: ParentComponent = (props) => {
 
       <div class="flex flex-1 overflow-hidden">
         <aside class="w-56 border-r border-base-300 bg-base-200">
-          <ul class="menu px-0 w-full">
+          <ul class="menu w-full px-0">
             <MenuItem href="/income-statement">Income Statement</MenuItem>
             <MenuItem href="/balance-sheet">Balance Sheet</MenuItem>
             <MenuItem href="/editor">Editor</MenuItem>

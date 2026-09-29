@@ -67,7 +67,7 @@ const IncomeStatement: Component = () => {
         <div class="toast toast-end">
           <div
             ref={fileChange.setToastRef}
-            class="alert alert-info hidden cursor-pointer"
+            class="alert hidden cursor-pointer alert-info"
             onClick={fileChange.handleReloadClick}
           >
             <span>File changed — click to reload</span>

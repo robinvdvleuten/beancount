@@ -274,7 +274,7 @@ const Editor: Component = () => {
 
   return (
     <>
-      <div class="navbar bg-base-100 border-b border-base-300 min-h-0 px-4 py-2">
+      <div class="navbar min-h-0 border-b border-base-300 bg-base-100 px-4 py-2">
         <div class="navbar-start">
           <Show
             when={currentFiles() && currentFiles()!.includes.length > 0}
@@ -285,11 +285,11 @@ const Editor: Component = () => {
             }
           >
             <details ref={(el) => (fileDropdownRef = el)} class="dropdown">
-              <summary class="btn btn-ghost btn-sm gap-1 px-2" aria-label="Select file">
+              <summary class="btn gap-1 btn-ghost px-2 btn-sm" aria-label="Select file">
                 {currentFile() ? displayFilename(currentFile()!) : "..."}
                 <ChevronDownIcon class="size-3" />
               </summary>
-              <ul class="menu dropdown-content bg-base-100 rounded-box z-10 w-64 p-2 shadow-lg">
+              <ul class="menu dropdown-content z-10 w-64 rounded-box bg-base-100 p-2 shadow-lg">
                 <For each={allFiles()}>
                   {(filepath) => (
                     <li>
@@ -323,13 +323,13 @@ const Editor: Component = () => {
         <Switch>
           <Match when={isLoading()}>
             <div class="flex items-center justify-center py-12">
-              <span class="loading loading-spinner loading-lg" />
+              <span class="loading loading-lg loading-spinner" />
             </div>
           </Match>
 
           <Match when={loadError()}>
             {(error) => (
-              <div class="alert alert-error m-6" role="alert">
+              <div class="m-6 alert alert-error" role="alert">
                 <span>Error: {error().message}</span>
               </div>
             )}
@@ -351,7 +351,7 @@ const Editor: Component = () => {
       {/* Save success toast */}
       <Show when={saveToast.visible()}>
         <div class="toast toast-end">
-          <div ref={saveToast.setToastRef} class="alert alert-success hidden">
+          <div ref={saveToast.setToastRef} class="alert hidden alert-success">
             <span>File saved</span>
           </div>
         </div>
@@ -362,7 +362,7 @@ const Editor: Component = () => {
         <div class="toast toast-end">
           <div
             ref={fileChange.setToastRef}
-            class="alert alert-info hidden cursor-pointer"
+            class="alert hidden cursor-pointer alert-info"
             onClick={fileChange.handleReloadClick}
           >
             <span>File changed — click to reload</span>
@@ -383,7 +383,7 @@ const Editor: Component = () => {
       <Show when={showConflictModal()}>
         <dialog ref={(el) => (conflictModalRef = el)} class="modal">
           <div class="modal-box">
-            <h3 class="font-bold text-lg">File Changed</h3>
+            <h3 class="text-lg font-bold">File Changed</h3>
             <p class="py-4">This file was modified externally. Overwrite with your changes?</p>
             <div class="modal-action">
               <button class="btn" onClick={handleCancelOverwrite}>
