@@ -24,6 +24,23 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    ignore:
+      - dependency-name: "@types/node"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+    groups:
+      lint:
+        patterns:
+          - "eslint-*"
+          - "oxfmt"
+          - "oxlint"
+          - "oxlint-*"
+      vite:
+        patterns:
+          - "@tailwindcss/vite"
+          - "vite"
+          - "vite-*"
 
   - package-ecosystem: "github-actions"
     directory: "/"
