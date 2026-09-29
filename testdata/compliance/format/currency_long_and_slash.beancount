@@ -1,0 +1,41 @@
+2020-01-01 commodity /ESZ24
+  quote: /6J
+  lot: 10 /ESZ24
+2020-01-01 open Assets:Cash /ESZ24,USD, /6J,ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+2020-01-01 open Assets:Futures       /NQH21_QNEG21C13100, ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF "FIFO"
+2020-01-01 open Equity:Open
+2020-01-02 price /ESZ24 5000 USD
+2020-01-02 price USD    0.0002     /ESZ24
+2020-01-02 price USD 1/5000 /ESZ24
+2020-01-02 price USD 1 / 5000 /ESZ24
+2020-01-02 price USD 2/ESZ24
+2020-01-02 price ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF 2 ABCDEFGHIJKLMNOPQRSTUVWXY
+2020-01-03 * "units"
+  Assets:Cash 1 /ESZ24
+  Assets:Cash          2.50 /6J ; a comment
+  Assets:Cash  1,000 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+  Equity:Open -1 /ESZ24
+  Equity:Open    -2.50    /6J
+  Equity:Open  -1,000   ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+2020-01-04 * "cost and price"
+  Assets:Futures 2 /NQH21_QNEG21C13100 {3 /ESZ24}
+  Assets:Futures 1 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF {2 # 1 /ESZ24, "lot"}
+  Assets:Cash 4 USD @ 1 /ESZ24
+  Assets:Cash   4 USD   @@   4   /ESZ24
+  ! Assets:Cash 1 /ESZ24
+  Equity:Open -18 /ESZ24
+2020-01-05 * "a slash before a letter is no division"
+  Assets:Cash 10/ESZ24
+  Assets:Cash -10 /ESZ24
+  Assets:Cash 2 / 4 /ESZ24
+  Assets:Cash 2/4/ESZ24
+  Assets:Cash 10 /2 /ESZ24
+  Assets:Cash 3 * 5 /ESZ24
+  Assets:Cash 1 /2 USD
+  Assets:Cash /ESZ24
+  Equity:Open -0.5 USD
+2020-01-09 balance Assets:Cash 2 /ESZ24
+2020-01-09 balance Assets:Cash 2.5 ~ 0.1 /6J
+2020-01-09 balance Assets:Cash 4 / 2 /ESZ24
+2020-01-09 balance Assets:Cash 1000 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+2020-01-12 custom "budget" 10 /ESZ24

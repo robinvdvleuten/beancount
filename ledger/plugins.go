@@ -22,11 +22,10 @@ var pluginRegistry = map[string]Plugin{
 	"beancount.plugins.implicit_prices": implicitPrices,
 }
 
-// ignoredPlugins are the other plugin modules beancount v2 ships: they
+// ignoredPlugins are the other plugin modules beancount v3 ships: they
 // import, so naming one is not an error, but they do not run here.
 var ignoredPlugins = map[string]bool{
 	"beancount.plugins.auto":               true,
-	"beancount.plugins.book_conversions":   true,
 	"beancount.plugins.check_average_cost": true,
 	"beancount.plugins.check_closing":      true,
 	"beancount.plugins.check_commodity":    true,
@@ -35,28 +34,17 @@ var ignoredPlugins = map[string]bool{
 	"beancount.plugins.coherent_cost":      true,
 	"beancount.plugins.commodity_attr":     true,
 	"beancount.plugins.currency_accounts":  true,
-	"beancount.plugins.divert_expenses":    true,
-	"beancount.plugins.exclude_tag":        true,
-	"beancount.plugins.fill_account":       true,
-	"beancount.plugins.fix_payees":         true,
-	"beancount.plugins.forecast":           true,
-	"beancount.plugins.ira_contribs":       true,
 	"beancount.plugins.leafonly":           true,
-	"beancount.plugins.mark_unverified":    true,
-	"beancount.plugins.merge_meta":         true,
 	"beancount.plugins.noduplicates":       true,
 	"beancount.plugins.nounused":           true,
 	"beancount.plugins.onecommodity":       true,
 	"beancount.plugins.pedantic":           true,
 	"beancount.plugins.sellgains":          true,
-	"beancount.plugins.split_expenses":     true,
-	"beancount.plugins.tag_pending":        true,
 	"beancount.plugins.unique_prices":      true,
-	"beancount.plugins.unrealized":         true,
 }
 
 // runPlugins runs the Built-in Plugins named by plugin directives, in the
-// order the directives appear. A name under beancount.plugins that v2 does
+// order the directives appear. A name under beancount.plugins that v3 does
 // not ship fails to import there, and is reported; other names are
 // ignored, since a module outside beancount may import.
 func (l *Ledger) runPlugins(ctx context.Context, tree *ast.AST) {

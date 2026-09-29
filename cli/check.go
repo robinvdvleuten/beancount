@@ -2,9 +2,10 @@ package cli
 
 import (
 	"context"
-	stdErrors "errors"
+	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"path/filepath"
 	"sync"
 
@@ -20,10 +21,14 @@ import (
 
 type CheckCmd struct {
 	File FileOrStdin `help:"Beancount input filename (use '-' for stdin, or omit for stdin)." arg:"" optional:""`
+	JSON bool        `name:"json" help:"Output errors as JSON."`
 }
 
 func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	if err := cmd.File.EnsureContents(); err != nil {
+		if cmd.JSON && errors.Is(err, fs.ErrNotExist) {
+			return writeJSONErrors(ctx.Stdout, []error{newMissingFileError(cmd.File.GetAbsoluteFilename())})
+		}
 		return err
 	}
 
@@ -55,6 +60,9 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
 	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
+	if cmd.JSON {
+		return cmd.writeJSON(runCtx, ctx.Stdout, loadResult, err)
+	}
 	if err != nil {
 		sourceContent, readErr := cmd.File.GetSourceContent()
 		if readErr != nil {
@@ -91,7 +99,10 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 		printInfof(stderr, "%s", warning)
 	}
 	renderer := NewErrorRenderer(loadResult.Sources)
-	loadErrors := diagnostic.Errors(loadResult.Diagnostics)
+	loadErrors, validationErrors, err := ledgerErrors(ctx, loadResult)
+	if err != nil {
+		return 0, err
+	}
 	for _, loadErr := range loadErrors {
 		// A syntax error in the main file is shown in its source context,
 		// like a failed load.
@@ -108,17 +119,28 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 		printError(stderr, loadErr.Error())
 	}
 
-	if err := ledger.New().Process(ctx, loadResult.AST); err != nil {
-		var validationErrors *ledger.ValidationErrors
-		if !stdErrors.As(err, &validationErrors) {
-			return 0, err
-		}
-		_, _ = fmt.Fprintln(stderr, renderer.RenderAll(validationErrors.Errors))
+	if len(validationErrors) > 0 {
+		_, _ = fmt.Fprintln(stderr, renderer.RenderAll(validationErrors))
 
 		_, _ = fmt.Fprintln(stderr)
-		total := len(validationErrors.Errors) + len(loadErrors)
+		total := len(validationErrors) + len(loadErrors)
 		printError(stderr, fmt.Sprintf("%d validation error(s) found", total))
 		return total, nil
 	}
 	return len(loadErrors), nil
+}
+
+// ledgerErrors processes the loaded AST and returns the errors check
+// reports, in its order: the fatal load diagnostics, then the validation
+// errors.
+func ledgerErrors(ctx context.Context, loadResult *loader.LoadResult) (loadErrors, validationErrors []error, err error) {
+	loadErrors = diagnostic.Errors(loadResult.Diagnostics)
+	if err := ledger.New().Process(ctx, loadResult.AST); err != nil {
+		var validation *ledger.ValidationErrors
+		if !errors.As(err, &validation) {
+			return nil, nil, err
+		}
+		validationErrors = validation.Errors
+	}
+	return loadErrors, validationErrors, nil
 }

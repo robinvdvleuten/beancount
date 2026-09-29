@@ -1,0 +1,7 @@
+2020-01-01 open Assets:A
+pushmeta k: "single char key"
+popmeta k:
+2020-01-01 open Assets:B
+pushmeta USD: "a currency"
+2020-01-01 open Assets:C
+popmeta USD:

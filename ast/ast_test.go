@@ -1,6 +1,8 @@
 package ast
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -337,6 +339,88 @@ func TestLinesWithMultipleItems(t *testing.T) {
 		// All items are on different lines, so no multiple items
 		assert.Equal(t, 0, len(multiLines))
 	})
+}
+
+// Like beancount v3, a note takes the tags pushed around it, after its own.
+func TestApplyPushPopDirectivesTagsNotes(t *testing.T) {
+	date, _ := NewDate("2024-01-01")
+	account, _ := NewAccount("Assets:Checking")
+
+	inside := newNoteForTest(2, date, account)
+	inside.Tags = []Tag{"own"}
+	// A pushed tag the note already has is kept twice; beancount holds a
+	// set, and the printer writes each tag once.
+	repeated := newNoteForTest(3, date, account)
+	repeated.Tags = []Tag{"trip"}
+	outside := newNoteForTest(5, date, account)
+
+	tree := &AST{
+		Pushtags:   []*Pushtag{newPushtagForTest(1, NewTag("trip"))},
+		Poptags:    []*Poptag{newPoptagForTest(4, NewTag("trip"))},
+		Directives: []Directive{inside, repeated, outside},
+	}
+
+	assert.Equal(t, 0, len(ApplyPushPopDirectives(tree)))
+	assert.Equal(t, []Tag{"own", "trip"}, inside.Tags)
+	assert.Equal(t, []Tag{"trip", "trip"}, repeated.Tags)
+	assert.Equal(t, 0, len(outside.Tags))
+}
+
+// Beancount resolves a document's path when parsing, so its errors and its
+// printer show the same one.
+func TestDocumentResolvedPath(t *testing.T) {
+	dir := t.TempDir()
+	cwd, err := os.Getwd()
+	assert.NoError(t, err)
+
+	// Absolute on every OS, and not cleaned.
+	sep := string(filepath.Separator)
+	absolute := dir + sep + "docs" + sep + ".." + sep + "x.pdf"
+
+	tests := []struct {
+		name     string
+		filename string
+		path     string
+		want     string
+	}{
+		{"AbsoluteAsWritten", filepath.Join(dir, "main.beancount"), absolute, absolute},
+		{"RelativeToItsFile", filepath.Join(dir, "sub", "main.beancount"), "../docs/x.pdf", filepath.Join(dir, "docs", "x.pdf")},
+		{"EmptyNamesItsFilesDirectory", filepath.Join(dir, "main.beancount"), "", dir},
+		// Like beancount's load_string, whose "<string>" has no directory.
+		{"StdinResolvesAgainstWorkingDirectory", "<stdin>", "docs/x.pdf", filepath.Join(cwd, "docs", "x.pdf")},
+		// Built in code: no file to resolve against.
+		{"NoSourceAsWritten", "", "docs/x.pdf", "docs/x.pdf"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			doc := &Document{PathToDocument: NewRawString(tt.path)}
+			doc.SetPosition(Position{Filename: tt.filename, Line: 1})
+			assert.Equal(t, tt.want, doc.ResolvedPath())
+		})
+	}
+}
+
+// Like beancount, a document takes the tags pushed around it, after its own.
+func TestApplyPushPopDirectivesTagsDocuments(t *testing.T) {
+	date, _ := NewDate("2024-01-01")
+	account, _ := NewAccount("Assets:Checking")
+
+	inside := newDocumentForTest(2, date, account)
+	inside.Tags = []Tag{"own"}
+	untagged := newDocumentForTest(3, date, account)
+	outside := newDocumentForTest(5, date, account)
+
+	tree := &AST{
+		Pushtags:   []*Pushtag{newPushtagForTest(1, NewTag("trip"))},
+		Poptags:    []*Poptag{newPoptagForTest(4, NewTag("trip"))},
+		Directives: []Directive{inside, untagged, outside},
+	}
+
+	assert.Equal(t, 0, len(ApplyPushPopDirectives(tree)))
+	assert.Equal(t, []Tag{"own", "trip"}, inside.Tags)
+	assert.Equal(t, []Tag{"trip"}, untagged.Tags)
+	assert.Equal(t, 0, len(outside.Tags))
 }
 
 func TestApplyPushPopDirectivesReportsImbalance(t *testing.T) {

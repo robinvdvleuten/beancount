@@ -209,8 +209,8 @@ func TestStdinIntegration(t *testing.T) {
 		checkCmd.Stdin = strings.NewReader("2024-01-01 invalid directive")
 		output, err := checkCmd.CombinedOutput()
 		assert.Error(t, err)
-		assert.Contains(t, string(output), "<stdin>:")
-		assert.Contains(t, string(output), "parse error")
+		// Reported like a file's syntax error, in its source context.
+		assert.Contains(t, string(output), "<stdin>:1:12: invalid token")
 	})
 
 	t.Run("CheckStdinWithIncludesError", func(t *testing.T) {

@@ -193,7 +193,7 @@ func (p *Parser) parsePad(pos ast.Position, date *ast.Date) (*ast.Pad, error) {
 	return pad, nil
 }
 
-// parseNote parses: DATE note ACCOUNT STRING
+// parseNote parses: DATE note ACCOUNT STRING [TAG|LINK]*
 func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) {
 	if err := p.consume(NOTE, "expected 'note'"); err != nil {
 		return nil, err
@@ -209,9 +209,16 @@ func (p *Parser) parseNote(pos ast.Position, date *ast.Date) (*ast.Note, error) 
 		return nil, err
 	}
 
+	tags, links, err := p.parseTagsLinks()
+	if err != nil {
+		return nil, err
+	}
+
 	note := &ast.Note{
 		Account:     account,
 		Description: description,
+		Tags:        tags,
+		Links:       links,
 	}
 	note.SetPosition(pos)
 	note.SetDate(date)
@@ -237,29 +244,17 @@ func (p *Parser) parseDocument(pos ast.Position, date *ast.Date) (*ast.Document,
 		return nil, err
 	}
 
+	tags, links, err := p.parseTagsLinks()
+	if err != nil {
+		return nil, err
+	}
+
 	doc := &ast.Document{
 		Account:        account,
 		PathToDocument: path,
+		Tags:           tags,
+		Links:          links,
 	}
-
-	// Documents are the only non-transaction directive that accepts
-	// tags and links in the official grammar; they end at EOL.
-	for (p.check(TAG) || p.check(LINK)) && p.continuesPreviousLine() {
-		if p.check(TAG) {
-			tag, err := p.parseTag()
-			if err != nil {
-				return nil, err
-			}
-			doc.Tags = append(doc.Tags, tag)
-		} else {
-			link, err := p.parseLink()
-			if err != nil {
-				return nil, err
-			}
-			doc.Links = append(doc.Links, link)
-		}
-	}
-
 	doc.SetPosition(pos)
 	doc.SetDate(date)
 	if err := p.finishDirective(doc); err != nil {

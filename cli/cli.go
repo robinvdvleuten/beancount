@@ -85,6 +85,9 @@ func isTerminal() bool {
 type FileOrStdin struct {
 	Filename string
 	Contents []byte
+
+	// missing is why the file cannot be read, which EnsureContents returns.
+	missing error
 }
 
 // Decode implements kong.MapperValue.
@@ -104,17 +107,21 @@ func (f *FileOrStdin) Decode(ctx *kong.DecodeContext) error {
 		return nil
 	}
 
-	if _, err := os.Stat(filename); err != nil {
-		return err
-	}
 	f.Filename = filename
 	f.Contents = nil
+	if _, err := os.Stat(filename); err != nil {
+		f.missing = err
+	}
 
 	return nil
 }
 
-// EnsureContents populates Contents from stdin if Filename is empty.
+// EnsureContents populates Contents from stdin if Filename is empty, and
+// reports a file that cannot be read.
 func (f *FileOrStdin) EnsureContents() error {
+	if f.missing != nil {
+		return f.missing
+	}
 	if f.Filename == "" {
 		contents, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -166,11 +173,7 @@ func (f *FileOrStdin) LoadResult(ctx context.Context, ldr *loader.Loader) (*load
 	absFilename := f.GetAbsoluteFilename()
 
 	if f.Filename == "<stdin>" {
-		tree, err := ldr.LoadBytes(ctx, absFilename, f.Contents)
-		if err != nil {
-			return nil, err
-		}
-		return &loader.LoadResult{AST: tree, Root: absFilename, Sources: map[string][]byte{absFilename: f.Contents}}, nil
+		return ldr.LoadBytesResult(ctx, absFilename, f.Contents)
 	}
 	return ldr.Load(ctx, absFilename)
 }

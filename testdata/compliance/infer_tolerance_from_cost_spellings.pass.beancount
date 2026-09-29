@@ -1,0 +1,16 @@
+; Like beancount's boolean options, infer_tolerance_from_cost is on for
+; "true" and "on" in any case and for "1". On, the price widens the USD
+; tolerance, so -576.11252 USD keeps its five digits; off, it would be
+; rounded to -576.1125 USD.
+option "infer_tolerance_from_cost" "on"
+
+2020-01-01 open Assets:Fund
+2020-01-01 open Assets:Fee
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Fund  18.572 VWELX @ 30.96 USD
+  Assets:Fee   1.1234 USD
+  Assets:Cash
+
+2020-01-03 balance Assets:Cash  -576.11252 USD

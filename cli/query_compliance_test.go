@@ -112,13 +112,8 @@ func isQueryError(output string) bool {
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query
 // in both text and csv formats. Runs whenever bean-query 2.x is installed.
 func TestOfficialQueryParity(t *testing.T) {
-	if _, err := exec.LookPath("bean-query"); err != nil {
-		t.Skip("bean-query not found in PATH; install beancount 2.x to run the query parity suite")
-	}
-
-	version, err := exec.Command("bean-query", "--version").CombinedOutput()
-	assert.NoError(t, err)
-	assert.Contains(t, string(version), "2.", "query parity suite targets beancount v2")
+	// BQL stays on bean-query 2.x until it moves to beanquery (#562).
+	requireOfficialTool(t, "bean-query", 2)
 
 	for _, fixture := range loadQueryFixtures(t) {
 		t.Run(fixture.name, func(t *testing.T) {

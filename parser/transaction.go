@@ -64,23 +64,12 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		}
 	}
 
-	// Parse tags and links (can be intermixed); they end at EOL in the
-	// official grammar, so never absorb tokens from following lines.
-	for (p.check(TAG) || p.check(LINK)) && p.continuesPreviousLine() {
-		if p.check(TAG) {
-			tag, err := p.parseTag()
-			if err != nil {
-				return nil, err
-			}
-			txn.Tags = append(txn.Tags, tag)
-		} else {
-			link, err := p.parseLink()
-			if err != nil {
-				return nil, err
-			}
-			txn.Links = append(txn.Links, link)
-		}
+	tags, links, err := p.parseTagsLinks()
+	if err != nil {
+		return nil, err
 	}
+	txn.Tags = tags
+	txn.Links = links
 
 	if err := p.finishHeader(txn, txn.Position().Offset); err != nil {
 		return nil, err
@@ -122,6 +111,30 @@ func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
 			return nil
 		}
 	}
+}
+
+// parseTagsLinks parses the tags and links (can be intermixed) that close
+// the header of a transaction, note or document. They end at EOL in the
+// official grammar, so it never absorbs tokens from following lines.
+func (p *Parser) parseTagsLinks() ([]ast.Tag, []ast.Link, error) {
+	var tags []ast.Tag
+	var links []ast.Link
+	for (p.check(TAG) || p.check(LINK)) && p.continuesPreviousLine() {
+		if p.check(TAG) {
+			tag, err := p.parseTag()
+			if err != nil {
+				return nil, nil, err
+			}
+			tags = append(tags, tag)
+		} else {
+			link, err := p.parseLink()
+			if err != nil {
+				return nil, nil, err
+			}
+			links = append(links, link)
+		}
+	}
+	return tags, links, nil
 }
 
 func (p *Parser) startsIndentedTagsLinksLine() bool {

@@ -45,7 +45,8 @@ func runOurMissingOpen(t *testing.T, path string) string {
 func TestMissingOpenCmd(t *testing.T) {
 	t.Run("PrintsOpensByFirstUse", func(t *testing.T) {
 		out := runOurMissingOpen(t, filepath.Join(missingOpenDir, "balance_and_note.beancount"))
-		assert.Equal(t, "2024-01-03 open Assets:Other\n"+
+		assert.Equal(t, "2024-01-02 open Liabilities:Card\n"+
+			"2024-01-03 open Assets:Other\n"+
 			"2024-01-04 open Expenses:Zed\n"+
 			"2024-01-05 open Expenses:Food\n", out)
 	})
@@ -58,7 +59,8 @@ func TestMissingOpenCmd(t *testing.T) {
 
 // TestMissingOpenPasteBack pastes each fixture's output into its ledger,
 // after which no account it opens is reported as unknown. Like bean-doctor,
-// it leaves out a close-only account and one used only by a balance.
+// it leaves out a close-only account. It also leaves out an account used
+// only by a balance, which bean-doctor opens (#556).
 func TestMissingOpenPasteBack(t *testing.T) {
 	for _, path := range missingOpenFixtures(t) {
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".beancount"), func(t *testing.T) {
@@ -93,19 +95,33 @@ func TestMissingOpenPasteBack(t *testing.T) {
 	}
 }
 
+// missingOpenGaps lists missing_open fixtures whose output differs from
+// bean-doctor's, with the reason. An entry whose output agrees, or that names
+// no fixture, fails the missing_open parity suite.
+var missingOpenGaps = map[string]string{}
+
 // TestOfficialMissingOpenParity compares doctor missing_open byte-for-byte
 // with bean-doctor missing_open on the fixtures under
-// testdata/compliance/missing_open. Runs whenever bean-doctor is installed.
+// testdata/compliance/missing_open. Runs whenever bean-doctor 3.x is
+// installed.
 func TestOfficialMissingOpenParity(t *testing.T) {
-	if _, err := exec.LookPath("bean-doctor"); err != nil {
-		t.Skip("bean-doctor not found in PATH; install beancount 2.x to run the missing_open parity suite")
-	}
+	requireOfficialTool(t, "bean-doctor", 3)
 
+	var names []string
 	for _, path := range missingOpenFixtures(t) {
-		t.Run(strings.TrimSuffix(filepath.Base(path), ".beancount"), func(t *testing.T) {
+		name := strings.TrimSuffix(filepath.Base(path), ".beancount")
+		names = append(names, name)
+		t.Run(name, func(t *testing.T) {
 			official, err := exec.Command("bean-doctor", "missing_open", path).Output()
 			assert.NoError(t, err)
-			assert.Equal(t, string(official), runOurMissingOpen(t, path))
+			ours := runOurMissingOpen(t, path)
+
+			if reason, ok := missingOpenGaps[name]; ok {
+				assert.NotEqual(t, string(official), ours, "the output agrees; remove the missingOpenGaps entry (%s)", reason)
+				return
+			}
+			assert.Equal(t, string(official), ours)
 		})
 	}
+	assertGapsNameFixtures(t, missingOpenGaps, names)
 }

@@ -1,0 +1,9 @@
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+pushmeta open: "a keyword is a key"
+pushmeta balance: 1
+2020-01-02 * "gets both"
+  Expenses:B  1.00 USD
+  Assets:A   -1.00 USD
+popmeta balance:
+popmeta open:

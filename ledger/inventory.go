@@ -168,12 +168,13 @@ func reducingPosting(posting *ast.Posting, units decimal.Decimal) string {
 type BookingMethod string
 
 const (
-	BookingSTRICT  BookingMethod = "STRICT"
-	BookingNONE    BookingMethod = "NONE"
-	BookingFIFO    BookingMethod = "FIFO"
-	BookingLIFO    BookingMethod = "LIFO"
-	BookingHIFO    BookingMethod = "HIFO"
-	BookingAVERAGE BookingMethod = "AVERAGE"
+	BookingSTRICT         BookingMethod = "STRICT"
+	BookingSTRICTWithSize BookingMethod = "STRICT_WITH_SIZE"
+	BookingNONE           BookingMethod = "NONE"
+	BookingFIFO           BookingMethod = "FIFO"
+	BookingLIFO           BookingMethod = "LIFO"
+	BookingHIFO           BookingMethod = "HIFO"
+	BookingAVERAGE        BookingMethod = "AVERAGE"
 )
 
 func defaultBookingMethod(method BookingMethod) BookingMethod {
@@ -528,6 +529,8 @@ func planReduction(commodity string, matches []*lot, amount decimal.Decimal, boo
 		return nil, errAverageUnsupported
 	case BookingSTRICT:
 		return planStrictReduction(commodity, matches, amount)
+	case BookingSTRICTWithSize:
+		return planStrictReductionWithSize(commodity, matches, amount)
 	default:
 		return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
 	}
@@ -562,6 +565,46 @@ func planStrictReduction(commodity string, matches []*lot, amount decimal.Decima
 		commodity:  commodity,
 		reductions: reductions,
 	}, nil
+}
+
+// planStrictReductionWithSize books as planStrictReduction, and when that
+// cannot choose among several lots, the oldest lot of the reduction's size,
+// like beancount's booking_method_STRICT_WITH_SIZE.
+func planStrictReductionWithSize(commodity string, matches []*lot, amount decimal.Decimal) (*reductionPlan, error) {
+	plan, err := planStrictReduction(commodity, matches, amount)
+	if err == nil || len(matches) < 2 {
+		return plan, err
+	}
+	var sized []*lot
+	for _, lot := range matches {
+		if lot.Amount.Abs().Equal(amount) {
+			sized = append(sized, lot)
+		}
+	}
+	if len(sized) == 0 {
+		return nil, err
+	}
+	// The first of the oldest, as beancount's stable sort on the cost date
+	// leaves it.
+	oldest := slices.MinFunc(sized, func(a, b *lot) int { return compareLotDates(a, b) })
+	return &reductionPlan{
+		commodity:  commodity,
+		reductions: []lotReduction{{lot: oldest, amount: amount}},
+	}, nil
+}
+
+// compareLotDates orders lots by their cost date. Every lot at cost is
+// dated once augmented; one without a date sorts first.
+func compareLotDates(a, b *lot) int {
+	switch {
+	case a.Spec.Date == nil && b.Spec.Date == nil:
+		return 0
+	case a.Spec.Date == nil:
+		return -1
+	case b.Spec.Date == nil:
+		return 1
+	}
+	return a.Spec.Date.Compare(b.Spec.Date.Time)
 }
 
 // planReductionAcrossLots reduces the given amount across lots in order,

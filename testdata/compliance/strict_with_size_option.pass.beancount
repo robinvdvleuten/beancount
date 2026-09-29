@@ -1,0 +1,21 @@
+; option "booking_method" "STRICT_WITH_SIZE" books every account so.
+option "booking_method" "STRICT_WITH_SIZE"
+
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock  10 HOOL {1 USD}
+  Assets:Cash  -10 USD
+
+2020-01-03 * "Buy"
+  Assets:Stock  5 HOOL {2 USD}
+  Assets:Cash  -10 USD
+
+2020-01-04 * "Sell the lot of five"
+  Assets:Stock  -5 HOOL {}
+  Assets:Cash   10 USD
+
+2020-01-05 * "Sell the lot of ten"
+  Assets:Stock  -10 HOOL {1 USD}
+  Assets:Cash    10 USD

@@ -1,6 +1,6 @@
 # Beancount
 
-A Go implementation of Beancount v2's tools, held to the official tools' behavior, for bookkeeping by people and AI agents.
+A Go implementation of Beancount's tools, held to the behavior of the official Beancount v3 tools (BQL to `bean-query` 2.3.6 until it moves to beanquery), for bookkeeping by people and AI agents.
 
 ## Language
 
@@ -35,7 +35,7 @@ Code named by a `plugin` directive that rewrites the ledger's directives each ti
 _Avoid_: extension, hook, importer
 
 **Built-in Plugin**:
-A Plugin that ships with Beancount v2, such as `beancount.plugins.auto_accounts`, and that this project reproduces with the same behavior.
+A Plugin that ships with Beancount, such as `beancount.plugins.auto_accounts`, and that this project reproduces with the same behavior.
 _Avoid_: core plugin, standard plugin
 
 ### Checking the ledger

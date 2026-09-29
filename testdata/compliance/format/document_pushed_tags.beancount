@@ -1,0 +1,8 @@
+2020-01-01 open Assets:Checking
+
+pushtag #pushed
+
+2020-03-14   document Assets:Checking   "../docs/Assets/Checking/2020-03-14.statement.pdf"  ^stmt-1 #own
+2020-03-15 document Assets:Checking "../docs/Assets/Checking/2020-03-14.statement.pdf" ; comment
+
+poptag #pushed

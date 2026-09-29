@@ -499,6 +499,35 @@ func TestAPISourceLedgerErrorsKeepTypeAndPosition(t *testing.T) {
 	assert.Equal(t, map[string]float64{"PluginConfigError": 1, "DocumentFileError": 3}, lines)
 }
 
+func TestAPISourceOptionErrorsKeepTypeAndPosition(t *testing.T) {
+	ledgerFile := filepath.Join(t.TempDir(), "main.beancount")
+	source := "option \"nosuch\" \"1\"\n" +
+		"option \"booking_method\" \"NOPE\"\n" +
+		"option \"inferred_tolerance_multiplier\" \"0.5\"\n"
+	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
+
+	server := New(8080, ledgerFile)
+	_, err := server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	lines := map[string]float64{}
+	for _, raw := range decodeSourceResponse(t, rec)["errors"].([]any) {
+		sourceErr := raw.(map[string]any)
+		position, ok := sourceErr["position"].(map[string]any)
+		assert.True(t, ok, "error without position: %v", sourceErr)
+		assert.Equal[any](t, ledgerFile, position["filename"])
+		assert.NotZero(t, sourceErr["message"])
+		lines[sourceErr["type"].(string)] = position["line"].(float64)
+	}
+	assert.Equal(t, map[string]float64{"InvalidOptionError": 1, "OptionValueError": 2, "RenamedOptionError": 3}, lines)
+}
+
 func TestJSONSafeSourceErrorKeepsLedgerErrors(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), "2024-01-01 price HOOL 1 USD\n")
 	price := tree.Directives[0].(*ast.Price)

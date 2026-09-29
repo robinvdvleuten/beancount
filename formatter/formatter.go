@@ -785,6 +785,14 @@ func (f *run) formatNote(n *ast.Note, buf *strings.Builder) {
 	buf.WriteString(string(n.Account))
 	buf.WriteByte(' ')
 	f.formatRawString(n.Description, buf)
+	for _, tag := range n.Tags {
+		buf.WriteString(" #")
+		buf.WriteString(string(tag))
+	}
+	for _, link := range n.Links {
+		buf.WriteString(" ^")
+		buf.WriteString(string(link))
+	}
 	f.writeInlineComment(n.GetComment(), buf)
 	buf.WriteByte('\n')
 	f.formatMetadata(n.Metadata, buf)

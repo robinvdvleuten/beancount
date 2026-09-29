@@ -482,11 +482,25 @@ func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 	return metadata, nil
 }
 
+// parseMetadataKey parses the key of a pushmeta or popmeta and its colon.
+func (p *Parser) parseMetadataKey() (string, error) {
+	if !p.isMetadataKeyStart(p.peek()) {
+		return "", p.errorAtEndOfPrevious("expected metadata key")
+	}
+	key := p.advance().String(p.source)
+	p.advance() // the colon
+	return key, nil
+}
+
+// isMetadataKeyStart reports whether tok is a metadata key, as beancount's
+// lexer matches one, directly followed by its colon.
 func (p *Parser) isMetadataKeyStart(tok Token) bool {
 	// The official lexer requires keys of at least two characters
-	// ([a-z][a-zA-Z0-9-_]+); a single-letter key is an invalid token.
+	// ([a-z][a-zA-Z0-9-_]+), a keyword included; a single-letter key is an
+	// invalid token, and a currency before a colon (/ESZ24:) is no key.
 	return (tok.Type == IDENT || p.isKeyword(tok.Type)) &&
 		tok.Len() >= 2 &&
+		isLowercaseLetter(p.source[tok.Start]) &&
 		p.peekAhead(1).Type == COLON &&
 		tok.Column+tok.Len() == p.peekAhead(1).Column
 }

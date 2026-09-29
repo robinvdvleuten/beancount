@@ -1,0 +1,12 @@
+; tolerance_multiplier and its old name set one value, so the last one
+; written wins: the multiplier is back at 0.5 and the transaction is
+; reported, next to the old name.
+option "inferred_tolerance_multiplier" "10"
+option "tolerance_multiplier" "0.5"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "Residual beyond the default tolerance"
+  Expenses:Food   1.00 USD
+  Assets:Cash    -1.04 USD

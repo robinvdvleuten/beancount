@@ -1,8 +1,6 @@
 package ledger
 
 import (
-	"slices"
-
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
@@ -52,15 +50,7 @@ func MissingOpens(tree *ast.AST) []*ast.Open {
 		}
 	}
 
-	// Loading drops a balance on an account without an open or close
-	// (beancount's ops/balance.py), so no balance is the first use of a
-	// missing account.
-	loaded := slices.DeleteFunc(slices.Clone(tree.Directives), func(directive ast.Directive) bool {
-		_, ok := directive.(*ast.Balance)
-		return ok
-	})
-
-	uses := firstUses(loaded, known)
+	uses := firstUses(tree.Directives, known)
 	opens := make([]*ast.Open, len(uses))
 	for i, use := range uses {
 		opens[i] = ast.NewOpen(use.date, use.account, nil, "")

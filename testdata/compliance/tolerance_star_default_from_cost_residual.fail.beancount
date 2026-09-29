@@ -1,0 +1,11 @@
+; The residual check reads the same tolerance: with "*:0.5" alone the
+; 0.3 USD residual would pass, but the 0.15 USD the cost adds replaces it.
+option "inferred_tolerance_default" "*:0.5"
+option "infer_tolerance_from_cost" "TRUE"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:C
+
+2020-01-02 * "Does not balance"
+  Assets:A  1.1 HOOL {3.00 USD}
+  Assets:C  -3 USD

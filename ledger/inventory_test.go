@@ -189,6 +189,48 @@ func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 			wantErr: `Ambiguous matches for "-200 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
 		},
 		{
+			name: "STRICT_WITH_SIZE books the lot of the reduction's size", method: BookingSTRICTWithSize,
+			held:    []string{"10 STOCK {1 USD, 2024-01-15}", "5 STOCK {2 USD, 2024-02-15}"},
+			posting: "-5 STOCK {}",
+			want:    []BookedPosition{at("-5", "2", "2024-02-15", "")},
+		},
+		{
+			name: "STRICT_WITH_SIZE books the oldest lot of the size", method: BookingSTRICTWithSize,
+			held:    []string{"5 STOCK {1 USD, 2024-03-15}", "10 STOCK {3 USD, 2024-01-15}", "5 STOCK {2 USD, 2024-02-15}"},
+			posting: "-5 STOCK {}",
+			want:    []BookedPosition{at("-5", "2", "2024-02-15", "")},
+		},
+		{
+			name: "STRICT_WITH_SIZE books the first of the oldest", method: BookingSTRICTWithSize,
+			held:    []string{"5 STOCK {1 USD, 2024-01-15}", "5 STOCK {2 USD, 2024-01-15}"},
+			posting: "-5 STOCK {}",
+			want:    []BookedPosition{at("-5", "1", "2024-01-15", "")},
+		},
+		{
+			name: "STRICT_WITH_SIZE covers a short position of the size", method: BookingSTRICTWithSize,
+			held:    []string{"-10 STOCK {5 USD, 2024-01-15}", "-4 STOCK {6 USD, 2024-02-15}"},
+			posting: "4 STOCK {}",
+			want:    []BookedPosition{at("4", "6", "2024-02-15", "")},
+		},
+		{
+			name: "STRICT_WITH_SIZE books as STRICT first", method: BookingSTRICTWithSize,
+			held:    []string{"5 STOCK {10 USD, 2024-01-15}", "5 STOCK {10 USD, 2024-02-15}"},
+			posting: "-10 STOCK {}",
+			want:    []BookedPosition{at("-5", "10", "2024-01-15", ""), at("-5", "10", "2024-02-15", "")},
+		},
+		{
+			name: "STRICT_WITH_SIZE reports STRICT's error without a lot of the size", method: BookingSTRICTWithSize,
+			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
+			posting: "-40 STOCK {}",
+			wantErr: `Ambiguous matches for "-40 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
+		},
+		{
+			name: "STRICT_WITH_SIZE leaves one lot too small to STRICT", method: BookingSTRICTWithSize,
+			held:    []string{"10 STOCK {100 USD, 2024-01-15}"},
+			posting: "-20 STOCK {}",
+			wantErr: `Not enough lots to reduce "-20 STOCK {}": 10 STOCK {100 USD, 2024-01-15}`,
+		},
+		{
 			name: "a labelled lot too small", method: BookingSTRICT,
 			held:    []string{`10 STOCK {100 USD, 2024-01-15, "a"}`, `10 STOCK {100 USD, 2024-01-15, "b"}`},
 			posting: `-15 STOCK {"a"}`,

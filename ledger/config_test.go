@@ -28,7 +28,7 @@ func TestConfigFromOptions(t *testing.T) {
 		{
 			name: "custom multiplier",
 			options: map[string][]string{
-				"inferred_tolerance_multiplier": {"0.6"},
+				"tolerance_multiplier": {"0.6"},
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
@@ -80,10 +80,10 @@ func TestConfigFromOptions(t *testing.T) {
 		{
 			name: "all options combined",
 			options: map[string][]string{
-				"inferred_tolerance_multiplier": {"0.75"},
-				"inferred_tolerance_default":    {"EUR:0.002"},
-				"infer_tolerance_from_cost":     {"TRUE"},
-				"booking_method":                {"AVERAGE"},
+				"tolerance_multiplier":       {"0.75"},
+				"inferred_tolerance_default": {"EUR:0.002"},
+				"infer_tolerance_from_cost":  {"TRUE"},
+				"booking_method":             {"AVERAGE"},
 			},
 			wantErr: false,
 			checkConfig: func(t *testing.T, config *Config) {
@@ -113,7 +113,7 @@ func TestConfigFromOptions(t *testing.T) {
 		{
 			name: "invalid multiplier",
 			options: map[string][]string{
-				"inferred_tolerance_multiplier": {"not-a-number"},
+				"tolerance_multiplier": {"not-a-number"},
 			},
 			wantErr: true,
 		},

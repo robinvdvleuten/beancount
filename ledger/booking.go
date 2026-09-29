@@ -189,6 +189,9 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	if len(errs) > 0 {
 		return nil, errs
 	}
+	// Like beancount, tolerances come from the whole transaction as
+	// written, before a cost takes its group's currency.
+	specTolerances := b.tolerances.spec(txn.Postings)
 	written := resolveCostCurrencies(txn, groups)
 
 	delta := &TransactionDelta{
@@ -211,7 +214,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		var balance *balanceValidation
 		var autoAmounts []*ast.Amount
 		if len(groupErrs) == 0 {
-			groupDelta, balance, autoAmounts, groupErrs = b.calculateBalance(txn, group, groupReductions)
+			groupDelta, balance, autoAmounts, groupErrs = b.calculateBalance(txn, group, groupReductions, specTolerances)
 			if len(groupErrs) == 0 && groupDelta == nil {
 				// Missing numbers could not be interpolated.
 				groupErrs = []error{newNotBalancedError(txn, balance.residuals)}
@@ -592,11 +595,11 @@ func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
 }
 
 // calculateBalance computes a Currency group's weights, infers its missing
-// numbers, and checks whether it balances. It returns the delta (mutations),
+// numbers, rounded to specTolerances, and checks whether it balances. It returns the delta (mutations),
 // the balance state, and the amounts the group books its amount-less posting
 // at, which the caller records; a nil delta without errors means the missing
 // numbers could not be interpolated.
-func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, reductions map[*ast.Posting][]BookedPosition) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
+func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, reductions map[*ast.Posting][]BookedPosition, specTolerances transactionTolerances) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
 	var errs []error
 	pc := classifyPostings(group.postings)
 
@@ -730,8 +733,6 @@ func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, red
 	// transaction. It absorbs the residual of every weight currency, so it
 	// is booked once per currency with a non-zero residual, in the order the
 	// currencies first appear.
-	// Like beancount, tolerances come from the whole transaction.
-	specTolerances := b.tolerances.spec(classifyPostings(txn.Postings).withAmounts)
 	var autoPosting *ast.Posting
 	var autoAmounts []*ast.Amount
 	if len(pc.withoutAmounts) == 1 {

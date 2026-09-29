@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -177,6 +178,41 @@ func TestParseNote(t *testing.T) {
 	assert.True(t, ok)
 	assert.Equal(t, "Assets:Checking", string(note.Account))
 	assert.Equal(t, "Called about rebate", note.Description.Value)
+}
+
+func TestParseNoteWithTagsAndLinks(t *testing.T) {
+	input := `2014-07-09 note Assets:Checking "Called about rebate" ^call-1 #rebate #bank ; comment
+  key: "value"
+2014-07-10 note Assets:Checking "No tags"`
+
+	result, err := ParseString(context.Background(), input)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(result.Directives))
+
+	note, ok := result.Directives[0].(*ast.Note)
+	assert.True(t, ok)
+	assert.Equal(t, "Called about rebate", note.Description.Value)
+	assert.Equal(t, []ast.Tag{"rebate", "bank"}, note.Tags)
+	assert.Equal(t, []ast.Link{"call-1"}, note.Links)
+	assert.Equal(t, 1, len(note.Metadata))
+
+	plain, ok := result.Directives[1].(*ast.Note)
+	assert.True(t, ok)
+	assert.Equal(t, 0, len(plain.Tags))
+	assert.Equal(t, 0, len(plain.Links))
+}
+
+// A note's header ends at its line, as it did before notes took tags and
+// links: like beancount, a tag on the next line is a syntax error there
+// rather than one of the note's.
+func TestParseNoteHeaderEndsAtLine(t *testing.T) {
+	input := "2014-07-09 note Assets:Checking \"Called about rebate\"\n  #rebate\n"
+
+	_, err := ParseString(context.Background(), input)
+	var parseErrs ParseErrors
+	assert.True(t, errors.As(err, &parseErrs))
+	assert.Equal(t, 1, len(parseErrs))
+	assert.Equal(t, 2, parseErrs[0].Pos.Line)
 }
 
 // Document directive tests

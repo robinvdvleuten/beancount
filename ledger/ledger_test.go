@@ -1258,7 +1258,7 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 
 	t.Run("balance on an account never opened", func(t *testing.T) {
 		assert.Equal(t, []string{
-			"2020-01-07: Account 'Assets:Never' does not exist: ",
+			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
 		}, messages(`
 2020-01-01 open Equity:E
 2020-01-07 balance Assets:Never 0 USD
@@ -1268,7 +1268,7 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 	t.Run("pad of an account never opened", func(t *testing.T) {
 		assert.Equal(t, []string{
 			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
-			"2020-01-08: Account 'Assets:Never' does not exist: ",
+			"2020-01-08: Invalid reference to unknown account 'Assets:Never'",
 			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
 		}, messages(`
 2020-01-01 open Equity:E
@@ -1414,6 +1414,89 @@ func TestLedger_CompoundCostMissingNumber(t *testing.T) {
 			"'CompoundAmount(number_per=Decimal('5'), number_total=Decimal('3'), currency='USD')'; ignoring per-unit cost",
 		"Transaction does not balance: (-10 USD)",
 	}, messages)
+}
+
+func TestLedger_PreciseInterpolation(t *testing.T) {
+	// Interpolated numbers as beancount 3.2.3 books them, at the precision
+	// it holds them. bean-query 2.3.6 rejects the option, so no query
+	// fixture can pin them.
+	const transactions = `
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "units"
+  Assets:A  10.12345 USD
+  Assets:B  -3.1 USD
+  Assets:C
+
+2020-01-03 * "one posting per currency"
+  Assets:A  10.12345 USD
+  Assets:B  -3.1 USD
+  Assets:A  5.123 EUR
+  Assets:B  -1.10 EUR
+  Assets:C
+
+2020-01-04 * "units held at cost"
+  Assets:C  HOOL {3.00 USD}
+  Assets:A  1.1 HOOL {3.00 USD}
+  Assets:A  1.12345 HOOL {3.00 USD}
+  Assets:B  -100.12 USD
+
+2020-01-05 * "units at a price"
+  Assets:C  EUR @ 3.00 USD
+  Assets:A  1.1 EUR
+  Assets:A  -1.12345 EUR
+  Assets:B  -100.12 USD
+
+2020-01-06 * "whole numbers leave the number as computed"
+  Assets:A  10 HOOL @ 1.23456 USD
+  Assets:B  -3 USD
+  Assets:C
+`
+	tests := []struct {
+		name    string
+		options string
+		want    []string
+	}{
+		{
+			name: "off",
+			want: []string{"-7.0 USD", "-7.0 USD", "-4.02 EUR", "31.1 HOOL", "33.4 EUR", "-9.34560 USD"},
+		},
+		{
+			name:    "on",
+			options: `option "use_precise_interpolation" "TRUE"`,
+			want:    []string{"-7.02345 USD", "-7.02345 USD", "-4.023 EUR", "31.14988 HOOL", "33.37333 EUR", "-9.34560 USD"},
+		},
+		{
+			name: "on: a quantum finer than the number pads it",
+			options: `option "use_precise_interpolation" "TRUE"
+option "tolerance_multiplier" "1.1"`,
+			want: []string{"-7.023450 USD", "-7.023450 USD", "-4.0230 EUR", "31.149883 HOOL", "33.373333 EUR", "-9.34560 USD"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tree := parser.MustParseString(context.Background(), tt.options+"\n"+transactions)
+			l := New()
+			_ = l.Process(context.Background(), tree)
+
+			var got []string
+			for _, directive := range tree.Directives {
+				txn, ok := directive.(*ast.Transaction)
+				if !ok {
+					continue
+				}
+				for _, posting := range txn.Postings {
+					if posting.Account == "Assets:C" {
+						got = append(got, posting.Amount.Value+" "+posting.Amount.Currency)
+					}
+				}
+			}
+			assert.Equal(t, tt.want, got)
+		})
+	}
 }
 
 func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {

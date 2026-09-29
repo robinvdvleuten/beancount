@@ -133,12 +133,6 @@ func NewInactiveAccountError(d ast.Directive, account ast.Account) *Diagnostic {
 	return newError("AccountNotOpenError", d, account, "Invalid reference to inactive account '%s'", account)
 }
 
-// NewAccountDoesNotExistError creates an error for a balance assertion on an
-// account the ledger never opens, in beancount's words.
-func NewAccountDoesNotExistError(balance *ast.Balance) *Diagnostic {
-	return newError("AccountNotOpenError", balance, balance.Account, "Account '%s' does not exist: ", balance.Account)
-}
-
 // NewAccountAlreadyOpenError creates an error for opening an account that is
 // already open.
 func NewAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *Diagnostic {
@@ -391,8 +385,8 @@ func NewUnusedPadWarning(pad *ast.Pad) *Diagnostic {
 // NewDocumentFileError creates an error for a document directive referencing
 // a file that does not exist, matching beancount's
 // verify_document_files_exist.
-func NewDocumentFileError(doc *ast.Document, path string) *Diagnostic {
-	return newError("DocumentFileError", doc, doc.Account, "File does not exist: %q", path)
+func NewDocumentFileError(doc *ast.Document) *Diagnostic {
+	return newError("DocumentFileError", doc, doc.Account, "File does not exist: %q", doc.ResolvedPath())
 }
 
 // NewInvalidDirectivePriceError creates an error for a price directive with

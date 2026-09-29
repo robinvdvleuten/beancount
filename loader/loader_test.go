@@ -938,3 +938,18 @@ func TestMustLoadBytesEmpty(t *testing.T) {
 	assert.True(t, tree != nil)
 	assert.Equal(t, len(tree.Directives), 0)
 }
+
+func TestLoadBytesResultRecoversFromSyntaxErrors(t *testing.T) {
+	data := []byte("2024-01-01 open Assets:A\ngarbage\n2024-01-02 open Assets:B\nmore junk\n")
+
+	// Like Load, every syntax error is a diagnostic and the rest loads.
+	result, err := New(WithSyntaxRecovery()).LoadBytesResult(context.Background(), "<stdin>", data)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(result.AST.Directives))
+	assert.Equal(t, 2, len(result.Diagnostics))
+	assert.Equal(t, data, result.Sources["<stdin>"])
+
+	// Without it, the first one fails the load.
+	_, err = New().LoadBytesResult(context.Background(), "<stdin>", data)
+	assert.Error(t, err)
+}

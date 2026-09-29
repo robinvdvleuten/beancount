@@ -118,6 +118,10 @@ func (p *numberExpressionParser) parseExpr(minPrecedence int) (decimal.Decimal, 
 		if precedence < minPrecedence {
 			break
 		}
+		// A slash that starts a currency (/ESZ24) is no division.
+		if op == '/' && slashCurrencyLen(p.source[p.pos:p.lineEnd]) > 0 {
+			break
+		}
 		p.consume()
 		right, err := p.parseExpr(precedence + 1)
 		if err != nil {

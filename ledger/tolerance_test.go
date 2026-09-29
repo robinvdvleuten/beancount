@@ -28,10 +28,14 @@ func withMultiplier(multiplier string) func(*sharedconfig.Tolerance) {
 
 func fromCost(o *sharedconfig.Tolerance) { o.InferFromCost = true }
 
+func precise(o *sharedconfig.Tolerance) { o.PreciseInterpolation = true }
+
 func both(sets ...func(*sharedconfig.Tolerance)) func(*sharedconfig.Tolerance) {
 	return func(o *sharedconfig.Tolerance) {
 		for _, set := range sets {
-			set(o)
+			if set != nil {
+				set(o)
+			}
 		}
 	}
 }
@@ -113,7 +117,7 @@ func TestTransactionTolerances(t *testing.T) {
 			want:     map[string]string{"USD": "0.003", "CAD": "0.005"},
 		},
 		{
-			name:     "inferred_tolerance_multiplier",
+			name:     "tolerance_multiplier",
 			options:  withMultiplier("0.6"),
 			postings: []*ast.Posting{units("100.00", "USD"), units("-100.00", "USD")},
 			want:     map[string]string{"USD": "0.006"},
@@ -186,6 +190,175 @@ func TestTransactionTolerances(t *testing.T) {
 			for currency, want := range tt.want {
 				assert.Equal(t, want, spec.of(currency).String(), "spec %s", currency)
 				assert.Equal(t, want, booked.of(currency).String(), "booked %s", currency)
+			}
+		})
+	}
+}
+
+// TestPreciseInterpolationTolerances pins the two tolerances of a transaction
+// under use_precise_interpolation to beancount 3.2.3's infer_tolerances: the
+// finest for rounding interpolated numbers (mode="min"), and still the
+// coarsest for the residual check.
+func TestPreciseInterpolationTolerances(t *testing.T) {
+	tests := []struct {
+		name     string
+		options  func(*sharedconfig.Tolerance)
+		postings []*ast.Posting
+		spec     map[string]string
+		booked   map[string]string
+	}{
+		{
+			name:     "off: the coarsest precision wins",
+			postings: []*ast.Posting{units("100.00", "USD"), units("-50.123", "USD")},
+			spec:     map[string]string{"USD": "0.005"},
+			booked:   map[string]string{"USD": "0.005"},
+		},
+		{
+			name:     "on: the finest precision rounds, the coarsest checks",
+			options:  precise,
+			postings: []*ast.Posting{units("100.00", "USD"), units("-50.123", "USD")},
+			spec:     map[string]string{"USD": "0.0005", "EUR": "0"},
+			booked:   map[string]string{"USD": "0.005", "EUR": "0"},
+		},
+		{
+			name:     "a coarser currency default does not join the minimum",
+			options:  both(precise, withDefault("USD", "0.02")),
+			postings: []*ast.Posting{units("100.00", "USD"), units("-100.000", "USD")},
+			spec:     map[string]string{"USD": "0.0005"},
+			booked:   map[string]string{"USD": "0.02"},
+		},
+		{
+			name:     "a finer currency default is the minimum",
+			options:  both(precise, withDefault("USD", "0.0002")),
+			postings: []*ast.Posting{units("100.00", "USD"), units("-100.000", "USD")},
+			spec:     map[string]string{"USD": "0.0002"},
+			booked:   map[string]string{"USD": "0.005"},
+		},
+		{
+			name:     "* covers only currencies without a tolerance of their own",
+			options:  both(precise, withDefault("*", "0.0001")),
+			postings: []*ast.Posting{units("100.00", "USD"), units("-100.000", "USD"), units("1", "EUR")},
+			spec:     map[string]string{"USD": "0.0005", "EUR": "0.0001"},
+			booked:   map[string]string{"USD": "0.005", "EUR": "0.0001"},
+		},
+		{
+			name:     "whole numbers infer nothing",
+			options:  precise,
+			postings: []*ast.Posting{units("100", "USD"), units("-100", "USD")},
+			spec:     map[string]string{"USD": "0"},
+			booked:   map[string]string{"USD": "0"},
+		},
+		{
+			name:     "tolerance_multiplier",
+			options:  both(precise, withMultiplier("0.6")),
+			postings: []*ast.Posting{units("100.00", "USD"), units("-100.000", "USD")},
+			spec:     map[string]string{"USD": "0.0006"},
+			booked:   map[string]string{"USD": "0.006"},
+		},
+		{
+			name:    "infer_tolerance_from_cost joins the minimum",
+			options: both(precise, fromCost),
+			postings: []*ast.Posting{
+				units("18.572", "VWELX", atCost("30.96", "USD")),
+				units("18.572", "VWELX", atCost("30.96", "USD")),
+				units("-1150.00", "USD"),
+			},
+			spec:   map[string]string{"VWELX": "0.0005", "USD": "0.005"},
+			booked: map[string]string{"VWELX": "0.0005", "USD": "0.03096"},
+		},
+		{
+			name:     "infer_tolerance_from_cost: a price joins the minimum",
+			options:  both(precise, fromCost),
+			postings: []*ast.Posting{units("18.572", "VWELX", atPrice("30.96", "USD")), units("1.1234", "USD")},
+			spec:     map[string]string{"USD": "0.00005"},
+			booked:   map[string]string{"USD": "0.01548"},
+		},
+		{
+			name:     "infer_tolerance_from_cost: a cost alone is the tolerance",
+			options:  both(precise, fromCost),
+			postings: []*ast.Posting{units("18.572", "VWELX", atCost("30.96", "USD")), units("-1150", "USD")},
+			spec:     map[string]string{"USD": "0.01548"},
+			booked:   map[string]string{"USD": "0.01548"},
+		},
+		{
+			name:     "infer_tolerance_from_cost: a cost comes before *",
+			options:  both(precise, fromCost, withDefault("*", "0.1")),
+			postings: []*ast.Posting{units("18.572", "VWELX", atCost("30.96", "USD")), units("-1150", "USD")},
+			spec:     map[string]string{"USD": "0.01548", "EUR": "0.1"},
+		},
+		{
+			name:     "infer_tolerance_from_cost: a cost replaces a coarser *",
+			options:  both(fromCost, withDefault("*", "0.5")),
+			postings: []*ast.Posting{units("1.1", "HOOL", atCost("3.33", "USD"))},
+			spec:     map[string]string{"USD": "0.1665", "EUR": "0.5"},
+			booked:   map[string]string{"USD": "0.1665", "EUR": "0.5"},
+		},
+		{
+			name:     "infer_tolerance_from_cost: a cost joins the currency default",
+			options:  both(precise, fromCost, withDefault("USD", "0.1")),
+			postings: []*ast.Posting{units("18.572", "VWELX", atCost("30.96", "USD")), units("-1150", "USD")},
+			spec:     map[string]string{"USD": "0.01548"},
+			booked:   map[string]string{"USD": "0.1"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tolerances := newTolerances(toleranceOptions(tt.options))
+			spec := tolerances.spec(tt.postings)
+			booked := tolerances.booked(tt.postings, &TransactionDelta{}, nil)
+			for currency, want := range tt.spec {
+				assert.Equal(t, want, spec.of(currency).Round(5).String(), "spec %s", currency)
+			}
+			for currency, want := range tt.booked {
+				assert.Equal(t, want, booked.of(currency).Round(5).String(), "booked %s", currency)
+			}
+		})
+	}
+}
+
+// TestSpecTolerancesCurrencyDefaults pins which currency defaults count
+// before booking, like beancount 3.2.3's infer_tolerances: those of the
+// currencies the transaction's postings name in their units, cost or price.
+func TestSpecTolerancesCurrencyDefaults(t *testing.T) {
+	auto := ast.NewPosting("Assets:Other")
+	tests := []struct {
+		name     string
+		postings []*ast.Posting
+		want     string
+	}{
+		{
+			name:     "a currency no posting names falls back to *",
+			postings: []*ast.Posting{units("-1", "HOOL", ast.WithCost(&ast.Cost{})), auto},
+			want:     "0.01",
+		},
+		{
+			name:     "named by units",
+			postings: []*ast.Posting{units("1", "USD"), auto},
+			want:     "0.05",
+		},
+		{
+			name:     "named by units without a number",
+			postings: []*ast.Posting{units("1", "HOOL", atPrice("2", "EUR")), units("", "USD", atPrice("", "EUR"))},
+			want:     "0.05",
+		},
+		{
+			name:     "named by a cost",
+			postings: []*ast.Posting{units("-1", "HOOL", atCost("", "USD")), auto},
+			want:     "0.05",
+		},
+		{
+			name:     "named by a price",
+			postings: []*ast.Posting{units("-1", "HOOL", atPrice("", "USD")), auto},
+			want:     "0.05",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, options := range []func(*sharedconfig.Tolerance){nil, precise} {
+				tolerances := newTolerances(toleranceOptions(both(withDefault("USD", "0.05"), withDefault("*", "0.01"), options)))
+				assert.Equal(t, tt.want, tolerances.spec(tt.postings).of("USD").String())
 			}
 		})
 	}

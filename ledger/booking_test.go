@@ -652,7 +652,7 @@ func TestCalculateBalance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := newBooker(NewConfig(), newTolerances(nil), nil)
-			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil)
+			delta, validation, _, errs := b.calculateBalance(tt.txn, currencyGroup{postings: tt.txn.Postings}, nil, b.tolerances.spec(tt.txn.Postings))
 
 			assert.Equal(t, 0, len(errs))
 

@@ -1,0 +1,34 @@
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Open
+2020-01-01 commodity /63
+2020-01-01 commodity /6.3
+2020-01-01 commodity /
+2020-01-01 commodity /esz24
+2020-01-01 commodity /ESz24
+2020-01-01 commodity /ESZ24.
+2020-01-01 commodity /ESZ24-
+2020-01-01 commodity /ESZ24_
+2020-01-01 commodity /ESZ24'
+2020-01-01 commodity /ES/Z24
+2020-01-01 commodity //ES
+2020-01-02 price /63 100 USD
+2020-01-02 price USD 100 / /ESZ24
+2020-01-02 price USD (100 /ESZ24)
+2020-01-02 price USD 100 / USD
+2020-01-03 open Assets:Slash /63
+2020-01-03 open Assets:Key
+  /ESZ24: 1
+2020-01-04 balance Assets:Cash 0 /ESZ24.
+2020-01-05 * "a number without a currency"
+  Assets:Cash  1 /63
+  Equity:Open
+2020-01-06 * "a currency dividing"
+  Assets:Cash  1 / /ESZ24
+  Equity:Open
+2020-01-07 * "a trailing special character"
+  Assets:Cash  1 /ESZ24_
+  Equity:Open
+2020-01-08 open Assets:Pushed
+pushmeta /ESZ24: 1
+2020-01-08 open Assets:Popped
+popmeta /ESZ24:

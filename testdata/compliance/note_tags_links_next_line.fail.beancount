@@ -1,0 +1,4 @@
+; A note's tags and links end at its line; it has no body to hold them.
+2020-01-01 open Assets:Cash
+2020-01-02 note Assets:Cash "hello"
+  #trip

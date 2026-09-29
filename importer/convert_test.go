@@ -39,6 +39,13 @@ const roundTripLedger = `2024-01-15 * "Coffee Shop" "Latte" #food ^receipt-1
   Assets:Cash  100 EUR @@ 135 USD
   Assets:Cash
 
+2024-01-17 * "Currencies beancount v3 added"
+  contract: /ESZ24
+  margin: 10 /6J
+  Assets:Brokerage  1 /ESZ24 {5000 /6J} @ 5100 /6J
+  Assets:Brokerage  1 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+  Assets:Cash
+
 2024-01-31 balance Assets:Checking  1250.00 ~ 0.01 USD
   statement: "jan"
 `

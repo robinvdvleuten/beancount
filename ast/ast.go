@@ -287,10 +287,10 @@ func ApplyPushPopDirectives(ast *AST) []error {
 			}
 
 		case item.directive != nil:
-			// Apply active tags to transactions (preserving order)
-			if txn, ok := item.directive.(*Transaction); ok {
+			// Apply active tags after the directive's own (preserving order)
+			if tags := pushedTagsTarget(item.directive); tags != nil {
 				for _, pushed := range activeTags {
-					txn.Tags = append(txn.Tags, pushed.Tag)
+					*tags = append(*tags, pushed.Tag)
 				}
 			}
 
@@ -330,6 +330,20 @@ func ApplyPushPopDirectives(ast *AST) []error {
 	}
 
 	return errs
+}
+
+// pushedTagsTarget returns the tags of a directive that takes pushed tags,
+// which like beancount's are transactions, notes and documents, or nil.
+func pushedTagsTarget(d Directive) *[]Tag {
+	switch d := d.(type) {
+	case *Transaction:
+		return &d.Tags
+	case *Note:
+		return &d.Tags
+	case *Document:
+		return &d.Tags
+	}
+	return nil
 }
 
 // MarkPushPopDirectivesApplied marks a tree as already containing derived push/pop effects.

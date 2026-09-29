@@ -1,0 +1,9 @@
+; account_unrealized_gains must be a leaf account name: components that
+; start with a capital letter or a digit, joined by colons. Unlike an
+; account in a directive, a component may not start with a letter
+; without case.
+option "account_unrealized_gains" "unrealized"
+option "account_unrealized_gains" "Gains:"
+option "account_unrealized_gains" ""
+option "account_unrealized_gains" "It's"
+option "account_unrealized_gains" "中文"

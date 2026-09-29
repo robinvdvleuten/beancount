@@ -1,0 +1,11 @@
+; A note between pushtag and poptag takes the pushed tag, as in beancount
+; v3. bean-query 2.3.6, whose notes have no tags, prints none (#562).
+2020-01-01 open Assets:Cash
+
+pushtag #pushed
+
+2020-01-02 note Assets:Cash "inside"
+
+poptag #pushed
+
+2020-01-03 note Assets:Cash "outside"

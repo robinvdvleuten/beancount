@@ -182,9 +182,9 @@ option "title" "Ledger"
 	assert.Equal(t, 1, len(tree.Directives))
 }
 
-// Like beancount's skipped-line rule ^[*:#!&?%PSTCURM]., whose '.' matches a
-// carriage return, a lone flag character is a skipped line before CRLF and
-// a syntax error before LF, as bean-check 2.3.6 reports both.
+// Like beancount's skipped-line rule ^[*:#]/., whose '.' matches a carriage
+// return, a lone flag character is a skipped line before CRLF and a syntax
+// error before LF, as bean-check 3.2.3 reports both.
 func TestParseLoneFlagLineDependsOnLineEnding(t *testing.T) {
 	for _, flag := range []string{"*", ":"} {
 		for eol, wantErr := range map[string]bool{"\r\n": false, "\n": true} {

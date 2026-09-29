@@ -375,6 +375,20 @@ func (l *Loader) MustLoad(ctx context.Context, filename string) *LoadResult {
 //	// Parse from bytes with file context for includes
 //	ast, err := ldr.LoadBytes(ctx, "/path/to/main.beancount", mainBytes)
 func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*ast.AST, error) {
+	result, err := l.loadBytes(ctx, filename, data, false)
+	if err != nil {
+		return nil, err
+	}
+	return result.AST, nil
+}
+
+// LoadBytesResult parses data like LoadBytes and returns it with its
+// diagnostics: under SyntaxRecovery, like Load, its syntax errors.
+func (l *Loader) LoadBytesResult(ctx context.Context, filename string, data []byte) (*LoadResult, error) {
+	return l.loadBytes(ctx, filename, data, l.SyntaxRecovery)
+}
+
+func (l *Loader) loadBytes(ctx context.Context, filename string, data []byte, syntaxRecovery bool) (*LoadResult, error) {
 	collector := telemetry.FromContext(ctx)
 
 	// For display in telemetry, use basename
@@ -382,7 +396,7 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 	parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", displayName))
 	defer parseTimer.End()
 
-	result, _, err := parseFile(ctx, filename, data, false)
+	result, diagnostics, err := parseFile(ctx, filename, data, syntaxRecovery)
 	if err != nil {
 		return nil, err
 	}
@@ -402,7 +416,12 @@ func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*
 		return nil, fmt.Errorf("include directives found; use Load() instead of LoadBytes() to resolve includes")
 	}
 
-	return result, nil
+	return &LoadResult{
+		AST:         result,
+		Root:        filename,
+		Diagnostics: diagnostics,
+		Sources:     map[string][]byte{filename: data},
+	}, nil
 }
 
 // MustLoadBytes parses beancount content from bytes, panicking on error.

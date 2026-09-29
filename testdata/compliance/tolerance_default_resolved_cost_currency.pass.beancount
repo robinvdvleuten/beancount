@@ -1,0 +1,19 @@
+; A cost that states its number but not its currency names none: like
+; beancount, which infers tolerances from the postings as written, before
+; the cost takes its group's currency, the USD default does not count and
+; the interpolated number keeps its three digits.
+option "inferred_tolerance_default" "USD:0.05"
+
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Proceeds
+
+2020-01-02 * "Buy"
+  Assets:Stock   3 HOOL {33.333 USD}
+  Assets:Cash  -99.999 USD
+
+2020-01-03 * "Buy more"
+  Assets:Stock   1 HOOL {33.333}
+  Assets:Proceeds
+
+2020-01-04 balance Assets:Proceeds  -33.333 USD

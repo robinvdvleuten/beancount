@@ -1,0 +1,13 @@
+; beancount v3's display_precision and account_unrealized_gains options.
+; display_precision takes CURRENCY:NUMBER, one currency per option line,
+; like inferred_tolerance_default; nothing reads either option yet.
+option "display_precision" "USD:0.001"
+option "display_precision" "EUR:0.01"
+option "account_unrealized_gains" "Earnings:Unrealized"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "Lunch"
+  Expenses:Food  1.5 USD
+  Assets:Cash

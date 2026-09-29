@@ -357,6 +357,33 @@ func TestFormatDirectives(t *testing.T) {
 		assert.Equal(t, expected, buf.String())
 	})
 
+	t.Run("NoteWithTagsAndLinks", func(t *testing.T) {
+		source := "2021-01-01  note Assets:Checking \"Initial balance\"  ^link   #tag ; comment\n"
+		ast := parser.MustParseString(context.Background(), source)
+
+		f := New()
+		var buf bytes.Buffer
+		err := f.Format(context.Background(), ast, []byte(source), &buf)
+		assert.NoError(t, err)
+
+		assert.Equal(t, source, buf.String())
+	})
+
+	// Without the note's source line, the formatter reconstructs it from
+	// the AST, tags before links.
+	t.Run("NoteWithTagsAndLinksReconstructed", func(t *testing.T) {
+		source := "2021-01-01  note Assets:Checking \"Initial balance\"  ^link   #tag\n"
+		ast := parser.MustParseString(context.Background(), source)
+
+		f := New()
+		var buf bytes.Buffer
+		err := f.Format(context.Background(), ast, []byte(""), &buf)
+		assert.NoError(t, err)
+
+		expected := "2021-01-01 note Assets:Checking \"Initial balance\" #tag ^link\n"
+		assert.Equal(t, expected, buf.String())
+	})
+
 	t.Run("Document", func(t *testing.T) {
 		source := `2021-01-01 document Assets:Checking "/path/to/doc.pdf"`
 		ast := parser.MustParseString(context.Background(), source)
@@ -1166,4 +1193,34 @@ func TestFormatKeepsSourceSpelling(t *testing.T) {
 	var out bytes.Buffer
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &out))
 	assert.Equal(t, source, out.String())
+}
+
+func TestFormatSlashAndLongCurrencies(t *testing.T) {
+	// Like bean-format 3's line pattern (amount.CURRENCY_RE), a currency
+	// starting with a slash or longer than 24 characters aligns; a number
+	// glued to a slash currency does not.
+	source := `2020-01-02 price /ESZ24 5000 USD
+2020-01-02 price USD 1 / 5000 /ESZ24
+2020-01-02 price USD 2/ESZ24
+2020-01-03 * "units"
+  Assets:Cash 1 /ESZ24 {2 /6J} @ 3 /6J
+  Assets:Cash -1,000 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+  Assets:Cash 10/ESZ24
+  Assets:Cash 2 / 4 /ESZ24
+  Assets:Cash /ESZ24
+`
+	want := `2020-01-02 price /ESZ24     5000 USD
+2020-01-02 price USD 1 /    5000 /ESZ24
+2020-01-02 price USD 2/ESZ24
+2020-01-03 * "units"
+  Assets:Cash                  1 /ESZ24 {2 /6J} @ 3 /6J
+  Assets:Cash             -1,000 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF
+  Assets:Cash 10/ESZ24
+  Assets:Cash 2 / 4 /ESZ24
+  Assets:Cash /ESZ24
+`
+	tree := parser.MustParseString(context.Background(), source)
+	var buf bytes.Buffer
+	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &buf))
+	assert.Equal(t, want, buf.String())
 }

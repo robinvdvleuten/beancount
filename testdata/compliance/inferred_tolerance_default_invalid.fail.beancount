@@ -1,0 +1,7 @@
+; An inferred_tolerance_default is read like a display_precision, so
+; these values are errors.
+option "inferred_tolerance_default" "USD"
+option "inferred_tolerance_default" "USD:abc"
+option "inferred_tolerance_default" "USD:-0.01"
+option "inferred_tolerance_default" " USD : 0.01"
+option "inferred_tolerance_default" "USD:0.0.1"

@@ -1,0 +1,15 @@
+; With use_precise_interpolation, an interpolated number is rounded to the
+; finest precision the transaction's numbers state, not the coarsest: five
+; digits here, where the default rounds to one and books -7.0 USD.
+option "use_precise_interpolation" "TRUE"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "Interpolated to five digits"
+  Assets:A  10.12345 USD
+  Assets:B  -3.1 USD
+  Assets:C
+
+2020-01-03 balance Assets:C  -7.02345 USD

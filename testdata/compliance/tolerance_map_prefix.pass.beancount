@@ -1,0 +1,10 @@
+; beancount matches a tolerance map value from its start only, with a
+; greedy currency: trailing text is ignored, the last colon splits, and
+; neither side is checked further.
+option "inferred_tolerance_default" "USD:0.01abc"
+option "inferred_tolerance_default" "A:B:0.01"
+option "inferred_tolerance_default" ":0.01"
+option "display_precision" "USD:0.01abc"
+option "display_precision" "A:B:0.01"
+
+2020-01-01 open Assets:Cash

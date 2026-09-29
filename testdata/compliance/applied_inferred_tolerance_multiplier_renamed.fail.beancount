@@ -1,0 +1,11 @@
+; inferred_tolerance_multiplier is the name beancount v2 gave
+; tolerance_multiplier: it is reported as renamed and still sets the
+; multiplier, so the transaction balances.
+option "inferred_tolerance_multiplier" "10"
+
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "Residual within the widened tolerance"
+  Expenses:Food   1.00 USD
+  Assets:Cash    -1.04 USD

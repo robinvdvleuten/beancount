@@ -1,0 +1,13 @@
+; Without use_precise_interpolation, an interpolated number is rounded to
+; the coarsest precision the transaction's numbers state: Assets:C is
+; booked -7.0 USD, so the balance assertion fails.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "Interpolated to one digit"
+  Assets:A  10.12345 USD
+  Assets:B  -3.1 USD
+  Assets:C
+
+2020-01-03 balance Assets:C  -7.02345 USD

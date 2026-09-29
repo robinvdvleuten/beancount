@@ -1,6 +1,6 @@
 # Booking is its own phase, before Plugins
 
-Beancount v2 books transactions before it runs Plugins, and Built-in Plugins such as `implicit_prices` depend on that: they read interpolated amounts, per-unit prices and whether a posting reduced a lot. We used to book inside Validate and Apply, which planned the booking twice and never exposed it. We made Booking its own phase, so the pipeline is Parse → Book → Plugins → Validate → Apply, and every Plugin transforms a booked ledger. Like beancount, Booking keeps its own inventory per account, independent of `open` directives, and leaves out a transaction whose reductions it cannot match to lots.
+Beancount books transactions before it runs Plugins, and Built-in Plugins such as `implicit_prices` depend on that: they read interpolated amounts, per-unit prices and whether a posting reduced a lot. We used to book inside Validate and Apply, which planned the booking twice and never exposed it. We made Booking its own phase, so the pipeline is Parse → Book → Plugins → Validate → Apply, and every Plugin transforms a booked ledger. Like beancount, Booking keeps its own inventory per account, independent of `open` directives, and leaves out a transaction whose reductions it cannot match to lots.
 
 ## Considered options
 
@@ -9,5 +9,5 @@ Beancount v2 books transactions before it runs Plugins, and Built-in Plugins suc
 
 ## Consequences
 
-- Pad still runs inside Apply, which is after Plugins here and before them in beancount. For the supported Plugins this makes no visible difference. The gap is recorded in `KNOWN_GAPS.md`.
+- Pad still runs inside Apply, which is after Plugins, as in beancount v3. Beancount v2 ran it before them, which made no visible difference for the supported Plugins.
 - A transaction that fails Booking disappears from query results, as it does in bean-query.

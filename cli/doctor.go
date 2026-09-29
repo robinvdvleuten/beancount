@@ -17,7 +17,7 @@ import (
 // DoctorCmd provides doctor utilities for debugging beancount files.
 type DoctorCmd struct {
 	Lex         LexCmd         `cmd:"" help:"Show lexical tokens from a beancount file."`
-	MissingOpen MissingOpenCmd `cmd:"" name:"missing_open" help:"Print the open directives a beancount file is missing."`
+	MissingOpen MissingOpenCmd `cmd:"" name:"missing_open" aliases:"missing-open" help:"Print the open directives a beancount file is missing."`
 }
 
 // LexCmd shows lexical tokens from a beancount file.

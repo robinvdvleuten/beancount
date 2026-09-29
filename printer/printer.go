@@ -381,12 +381,20 @@ func (p *printer) balance(b *ast.Balance, buf *strings.Builder) {
 }
 
 func (p *printer) note(n *ast.Note, buf *strings.Builder) {
-	buf.WriteString(n.Date().String() + " note " + string(n.Account) + ` "` + n.Description.Value + "\"\n")
+	buf.WriteString(n.Date().String() + " note " + string(n.Account) + ` "` + n.Description.Value + `"`)
+	// Like beancount v3's printer: tags, then links, each after a space.
+	for _, tag := range sortedUnique(n.Tags) {
+		buf.WriteString(" #" + string(tag))
+	}
+	for _, link := range sortedUnique(n.Links) {
+		buf.WriteString(" ^" + string(link))
+	}
+	buf.WriteByte('\n')
 	writeMetadata(n.Metadata, metadataIndent, buf)
 }
 
 func (p *printer) document(d *ast.Document, buf *strings.Builder) {
-	buf.WriteString(d.Date().String() + " document " + string(d.Account) + ` "` + d.PathToDocument.Value + `"`)
+	buf.WriteString(d.Date().String() + " document " + string(d.Account) + ` "` + d.ResolvedPath() + `"`)
 	if len(d.Tags) > 0 || len(d.Links) > 0 {
 		buf.WriteByte(' ')
 		for _, tag := range sortedUnique(d.Tags) {

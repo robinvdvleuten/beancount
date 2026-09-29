@@ -1,0 +1,15 @@
+; The 12 plugin modules beancount v2 shipped and v3 removed fail to import,
+; like any other name under beancount.plugins v3 does not ship.
+2020-01-01 open Assets:A
+plugin "beancount.plugins.book_conversions"
+plugin "beancount.plugins.divert_expenses"
+plugin "beancount.plugins.exclude_tag"
+plugin "beancount.plugins.fill_account"
+plugin "beancount.plugins.fix_payees"
+plugin "beancount.plugins.forecast"
+plugin "beancount.plugins.ira_contribs"
+plugin "beancount.plugins.mark_unverified"
+plugin "beancount.plugins.merge_meta"
+plugin "beancount.plugins.split_expenses"
+plugin "beancount.plugins.tag_pending"
+plugin "beancount.plugins.unrealized"

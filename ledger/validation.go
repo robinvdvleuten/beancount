@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -208,14 +207,14 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 }
 
 // checkBalance checks a balance assertion against the amount its account
-// holds, padding included. Like beancount, an assertion on an account the
-// ledger never opens is reported as not existing and not checked; on an
+// holds, padding included. An assertion on an account the ledger never
+// opens is reported as an unknown account, once, and not checked; on an
 // account outside its open interval it is reported and still checked,
 // against the postings made before the open too (assertions are allowed
 // after close).
 func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.Decimal) []error {
 	if v.opened[string(balance.Account)] == nil {
-		return []error{NewAccountDoesNotExistError(balance)}
+		return []error{NewAccountNotOpenError(balance, balance.Account)}
 	}
 
 	var errs []error
@@ -418,12 +417,8 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 	// verify_document_files_exist plugin. Relative paths resolve against
 	// the directory of the file declaring the directive, so an empty path
 	// names that directory and passes, as in bean-check.
-	docPath := doc.PathToDocument.Value
-	if !filepath.IsAbs(docPath) {
-		docPath = filepath.Join(filepath.Dir(doc.Position().Filename), docPath)
-	}
-	if _, err := os.Stat(docPath); err != nil {
-		errs = append(errs, NewDocumentFileError(doc, docPath))
+	if _, err := os.Stat(doc.ResolvedPath()); err != nil {
+		errs = append(errs, NewDocumentFileError(doc))
 	}
 
 	return errs

@@ -2,6 +2,7 @@ package parser
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -771,24 +772,23 @@ func TestTransactionFlagTokens(t *testing.T) {
 }
 
 func TestNonDirectiveLinesAreComments(t *testing.T) {
-	source := []byte(":PROPERTIES:\n#+options: toc:nil\n! note\nS generated heading\n2000-01-01 open Assets:Cash USD\n")
+	source := []byte(":PROPERTIES:\n#+options: toc:nil\n! note\n2000-01-01 open Assets:Cash USD\n")
 	lexer := NewLexer(source, "test.beancount")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
-	assert.Equal(t, []TokenType{COMMENT, COMMENT, COMMENT, COMMENT, DATE, OPEN, ACCOUNT, IDENT, EOF}, tokenTypes(tokens))
+	assert.Equal(t, []TokenType{COMMENT, COMMENT, COMMENT, DATE, OPEN, ACCOUNT, IDENT, EOF}, tokenTypes(tokens))
 	assert.Equal(t, ":PROPERTIES:\n", tokens[0].String(source))
-	assert.Equal(t, "S generated heading\n", tokens[3].String(source))
+	assert.Equal(t, "! note\n", tokens[2].String(source))
 }
 
 func TestColumnOneFlagLines(t *testing.T) {
-	// Like beancount's lexer rule ^[*:#!&?%PSTCURM]. with flex's longest
-	// match: a column-1 line starting with a flag character and holding a
-	// second one is skipped, unless a TAG, CURRENCY or ACCOUNT token of two
-	// or more characters starts there (a token rule also wins the tie).
+	// Like beancount v3's lexer rules ^[*:#]/. and ^[!&#?%]/. with flex's
+	// longest match: a column-1 line starting with one of those characters
+	// and holding a second one is skipped, unless a TAG token of two or
+	// more characters starts there (a token rule also wins the tie).
 	skipped := []string{
 		"# x", "#\tx", "#  ", "#!", `#"x"`, "#\u00e9", "#;", "!x", "&x", "*x", "%%", "**", "::",
-		"Price list", "Cash", "Mx", "Mxyz foo", "Tx:y", "T:", "C: x", "#+TITLE", "* x", "! x", "& x",
-		"? x", "P x", "S\tx", ":x", "#\r",
+		"#+TITLE", "* x", "! x", "& x", "? x", ":x", "#\r",
 	}
 	for _, line := range skipped {
 		t.Run(line, func(t *testing.T) {
@@ -809,6 +809,15 @@ func TestColumnOneFlagLines(t *testing.T) {
 			tokens, err := NewLexer([]byte(line+"\n"), "test").ScanAll()
 			assert.NoError(t, err)
 			assert.Equal(t, first, tokens[0].Type)
+		})
+	}
+
+	// Unlike v2's rule, a line starting with a letter is lexed.
+	for _, line := range []string{"Price list", "Cash", "Mx", "Mxyz foo", "Tx:y", "T:", "C: x", "P x", "S\tx"} {
+		t.Run(line, func(t *testing.T) {
+			tokens, err := NewLexer([]byte(line+"\n"), "test").ScanAll()
+			assert.NoError(t, err)
+			assert.NotEqual(t, COMMENT, tokens[0].Type)
 		})
 	}
 
@@ -839,4 +848,89 @@ func TestLexerLowercaseWords(t *testing.T) {
 			assert.Equal(t, tt.want, tokenTypes(tokens))
 		})
 	}
+}
+
+func TestLexerCurrencies(t *testing.T) {
+	// beancount v3's two currency rules (lexer.l): a letter, then any
+	// number of currency characters ending in a letter or digit; or a
+	// slash, then currency characters holding at least one letter and
+	// ending in a letter or digit. flex takes the longest match, so a
+	// trailing special character is left for the next token.
+	long := strings.Repeat("ABCDEFGHIJKLMNOPQRSTUVWXYZ", 12)
+	tests := []struct {
+		input string
+		want  []TokenType
+		first string
+	}{
+		{"ABCDEFGHIJKLMNOPQRSTUVWX", []TokenType{IDENT, EOF}, ""},
+		{"ABCDEFGHIJKLMNOPQRSTUVWXY", []TokenType{IDENT, EOF}, ""},
+		{"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF", []TokenType{IDENT, EOF}, ""},
+		{long, []TokenType{IDENT, EOF}, ""},
+		{"A'._-B'._-C'._-D'._-E'._-F'._-G9", []TokenType{IDENT, EOF}, ""},
+		{"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF.", []TokenType{ILLEGAL, EOF}, ""},
+
+		{"/ESZ24", []TokenType{IDENT, EOF}, ""},
+		{"/E", []TokenType{IDENT, EOF}, ""},
+		{"/6J", []TokenType{IDENT, EOF}, ""},
+		{"/.E", []TokenType{IDENT, EOF}, ""},
+		{"/-E", []TokenType{IDENT, EOF}, ""},
+		{"/6.3E", []TokenType{IDENT, EOF}, ""},
+		{"/NQH21_QNEG21C13100", []TokenType{IDENT, EOF}, ""},
+		{"/" + long, []TokenType{IDENT, EOF}, ""},
+		{"/ESZ24 USD", []TokenType{IDENT, IDENT, EOF}, "/ESZ24"},
+		{"/ESZ24.", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
+		{"/ESZ24-", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
+		{"/ESZ24_", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
+		{"/ESZ24'", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
+		{"/ES/Z24", []TokenType{IDENT, IDENT, EOF}, "/ES"},
+		{"/ESz24", []TokenType{IDENT, ILLEGAL, EOF}, "/ES"},
+
+		// Without a letter the slash is division.
+		{"/", []TokenType{ILLEGAL, EOF}, "/"},
+		{"/63", []TokenType{ILLEGAL, NUMBER, EOF}, "/"},
+		{"/6.3", []TokenType{ILLEGAL, NUMBER, EOF}, "/"},
+		{"/ USD", []TokenType{ILLEGAL, IDENT, EOF}, "/"},
+		{"//ES", []TokenType{ILLEGAL, IDENT, EOF}, "/"},
+		{"/esz24", []TokenType{ILLEGAL, ILLEGAL, EOF}, "/"},
+
+		{"1 / 2 USD", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
+		{"1 /2 USD", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
+		{"1/2 USD", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
+		{"10 /ESZ24", []TokenType{NUMBER, IDENT, EOF}, ""},
+		{"10/ESZ24", []TokenType{NUMBER, IDENT, EOF}, ""},
+		{"10 /6J", []TokenType{NUMBER, IDENT, EOF}, ""},
+		{"2 / 3 /ESZ24", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
+		{"(1 + 2)/ESZ24", []TokenType{EXPRESSION, IDENT, EOF}, ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			source := []byte(tt.input + "\n")
+			tokens, err := NewLexer(source, "test").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, tokenTypes(tokens))
+			if tt.first != "" {
+				assert.Equal(t, tt.first, tokens[0].String(source))
+			}
+		})
+	}
+
+	// A slash currency keeps its position and owns its line's newline.
+	source := []byte("  Assets:Cash  10 /ESZ24\n\n/6J")
+	tokens, err := NewLexer(source, "test").ScanAll()
+	assert.NoError(t, err)
+	assert.Equal(t, []TokenType{ACCOUNT, NUMBER, IDENT, NEWLINE, IDENT, EOF}, tokenTypes(tokens))
+	assert.Equal(t, "/ESZ24", tokens[2].String(source))
+	assert.Equal(t, 1, tokens[2].Line)
+	assert.Equal(t, 19, tokens[2].Column)
+	assert.Equal(t, 3, tokens[4].Line)
+	assert.Equal(t, 1, tokens[4].Column)
+}
+
+func TestColumnOneLongCurrency(t *testing.T) {
+	// A currency of any length wins over the skipped-line rule.
+	line := "P" + strings.Repeat("-", 30) + "X rest\n"
+	tokens, err := NewLexer([]byte(line), "test").ScanAll()
+	assert.NoError(t, err)
+	assert.Equal(t, []TokenType{IDENT, ILLEGAL, EOF}, tokenTypes(tokens))
 }

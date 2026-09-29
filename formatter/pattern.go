@@ -53,9 +53,14 @@ func plainLayout(line string, owned bool) lineLayout {
 }
 
 // alignedNumber is how bean-format's line pattern spells a number it
-// aligns: an optional sign, digits with thousands commas, and an optional
-// fraction. Expressions, repeated signs and parentheses do not match.
-var alignedNumber = regexp.MustCompile(`^[-+]?\s*[\d,]+(?:\.\d*)?$`)
+// aligns (NUMBER_RE and PARENTHESIZED_BINARY_OP_RE): an optional sign,
+// digits with thousands commas and an optional fraction, or two such
+// numbers and one operator in parentheses. Any other expression, repeated
+// signs and nested parentheses do not match.
+var alignedNumber = regexp.MustCompile(`^(?:\(` + numberPattern + `\s*[-+*/]\s*` + numberPattern + `\)|` + numberPattern + `)$`)
+
+// numberPattern is bean-format's NUMBER_RE.
+const numberPattern = `[-+]?\s*[\d,]+(?:\.\d*)?`
 
 // numberText returns an amount's number as the source spells it.
 func numberText(amount *ast.Amount) string {

@@ -360,12 +360,8 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		return nil, err
 	}
 
-	key, err := p.parseIdent()
+	key, err := p.parseMetadataKey()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := p.consume(COLON, "expected ':'"); err != nil {
 		return nil, err
 	}
 
@@ -397,12 +393,8 @@ func (p *Parser) parsePopmeta() (*ast.Popmeta, error) {
 		return nil, err
 	}
 
-	key, err := p.parseIdent()
+	key, err := p.parseMetadataKey()
 	if err != nil {
-		return nil, err
-	}
-
-	if err := p.consume(COLON, "expected ':'"); err != nil {
 		return nil, err
 	}
 

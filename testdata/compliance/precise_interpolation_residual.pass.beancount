@@ -1,0 +1,13 @@
+; use_precise_interpolation changes the rounding of interpolated numbers
+; only: a transaction still balances within the largest tolerance its
+; numbers imply, 0.05 USD here, where the smallest is 0.000005 USD.
+option "use_precise_interpolation" "TRUE"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "Off by 0.03655 USD"
+  Assets:A  10.12345 USD
+  Assets:B  -3.1 USD
+  Assets:C  -7.06 USD

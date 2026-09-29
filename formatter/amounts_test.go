@@ -63,13 +63,18 @@ func TestDatedAmountLayout(t *testing.T) {
 		"50 + 50":       {"H 50", "+ 50"},
 		"2 * 3":         {"H 2 *", "3"},
 		"0*  0":         {"H 0*", "0"},
+		"(2 * 3)":       {"H", "(2 * 3)"},
+		"(-1-2)":        {"H", "(-1-2)"},
 	} {
 		prefix, number, ok := datedAmountLayout("H", text)
 		assert.True(t, ok, text)
 		assert.Equal(t, want, [2]string{prefix, number}, text)
 	}
-	_, _, ok := datedAmountLayout("H", "(2 * 3)")
-	assert.False(t, ok)
+	// Only one operator between two numbers, in one pair of parentheses.
+	for _, text := range []string{"((1 + 2) * 3)", "(1 + 2 + 3)", "( 1 * 2 )"} {
+		_, _, ok := datedAmountLayout("H", text)
+		assert.False(t, ok, text)
+	}
 }
 
 func TestFormatLeavesNumbersGluedToCurrenciesAsWritten(t *testing.T) {
@@ -80,7 +85,7 @@ func TestFormatLeavesNumbersGluedToCurrenciesAsWritten(t *testing.T) {
 		"  Assets:A 1USD\n" +
 		"  Assets:Longer  -1 USD\n" +
 		"2020-01-03 balance Assets:A 1USD\n" +
-		"2020-01-04 price HOOL (2 * 3)  EUR\n"
+		"2020-01-04 price HOOL (2 * 3 * 1)  EUR\n"
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 	var out bytes.Buffer

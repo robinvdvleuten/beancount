@@ -1,5 +1,7 @@
 package ast
 
+import "path/filepath"
+
 // Stateful indicates a directive affects graph nodes and can report which ones.
 // This enables semantic analysis without type switching or field inspection.
 type Stateful interface {
@@ -227,16 +229,20 @@ func (p *Pad) SetDate(date *Date) { p.date = date }
 // Note attaches a dated comment or note to an account, allowing you to record
 // important information about an account at a specific point in time. These notes
 // can be used to track customer service calls, account changes, or any other
-// significant events related to the account.
+// significant events related to the account. Like a document, a note takes
+// tags and links after its string.
 //
 // Example:
 //
 //	2014-07-09 note Assets:US:BofA:Checking "Called bank about pending direct deposit"
+//	2014-07-09 note Assets:US:BofA:Checking "Called bank about the rebate" #rebate ^call-1
 type Note struct {
 	pos         Position
 	date        *Date
 	Account     Account
 	Description RawString
+	Tags        []Tag
+	Links       []Link
 
 	withComment
 	withMetadata
@@ -288,6 +294,23 @@ func (d *Document) Date() *Date         { return d.date }
 func (d *Document) Kind() DirectiveKind { return KindDocument }
 func (d *Document) AffectedNodes() []string {
 	return []string{string(d.Account)}
+}
+
+// ResolvedPath returns the document's path as beancount holds it: an
+// absolute path as written, any other resolved against the directory of
+// the file the document is in. A source without a directory ("<stdin>",
+// like beancount's "<string>") resolves against the working directory, and
+// a document without a source, built in code, keeps its path as written.
+func (d *Document) ResolvedPath() string {
+	path := d.PathToDocument.Value
+	if filepath.IsAbs(path) || d.pos.Filename == "" {
+		return path
+	}
+	abs, err := filepath.Abs(filepath.Join(filepath.Dir(d.pos.Filename), path))
+	if err != nil {
+		return path
+	}
+	return abs
 }
 
 // Accounts returns the account the document is attached to.

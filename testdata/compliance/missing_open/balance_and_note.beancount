@@ -1,5 +1,5 @@
-; The example from #481. Loading removes the balance on an unknown account,
-; so it is no use; the note is one.
+; The example from #481. The note is a use of its account, and so is the
+; balance on an unknown account, which beancount v3 keeps loaded.
 2024-01-01 open Assets:Bank EUR
 2024-01-05 * "Coffee"
   Assets:Bank  -3.50 EUR

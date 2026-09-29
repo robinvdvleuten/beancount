@@ -81,7 +81,7 @@ func TestErrorKinds(t *testing.T) {
 		{NewAmbiguousBookingError(txn, account, details), "AmbiguousBookingError", 10, txn},
 		{NewCurrencyConstraintError(txn, account, "EUR", []string{"USD"}), "CurrencyConstraintError", 10, txn},
 		{NewUnusedPadWarning(pad), "UnusedPadWarning", 10, pad},
-		{NewDocumentFileError(document, "/x/a.pdf"), "DocumentFileError", 10, document},
+		{NewDocumentFileError(document), "DocumentFileError", 10, document},
 		{NewInvalidDirectivePriceError("price currency cannot be empty", price), "InvalidDirectivePriceError", 10, price},
 		{NewPluginConfigError(plugin), "PluginConfigError", 10, nil},
 		{NewPluginImportError(plugin), "PluginImportError", 10, nil},

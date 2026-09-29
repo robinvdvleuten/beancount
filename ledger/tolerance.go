@@ -8,11 +8,11 @@ import (
 )
 
 // tolerances answers every tolerance question the ledger asks, from the
-// tolerance options (inferred_tolerance_default,
-// inferred_tolerance_multiplier, infer_tolerance_from_cost): a
-// transaction's tolerance per currency as Booking sees it before booking
-// (spec) and after (booked), and a balance assertion's tolerance. The
-// Ledger builds one per Process.
+// tolerance options (inferred_tolerance_default, tolerance_multiplier,
+// infer_tolerance_from_cost, use_precise_interpolation): a transaction's
+// tolerance per currency as Booking sees it before booking (spec) and after
+// (booked), and a balance assertion's tolerance. The Ledger builds one per
+// Process.
 type tolerances struct {
 	options *sharedconfig.Tolerance
 }
@@ -47,12 +47,16 @@ func (t tolerances) ofNumber(number decimal.Decimal) (decimal.Decimal, bool) {
 // spec returns a transaction's tolerances as beancount sees its postings
 // before booking, when it rounds interpolated numbers: from the units
 // numbers written in full and, under infer_tolerance_from_cost, the numbers
-// cost specs state.
+// cost specs state. A currency's default counts when a posting names the
+// currency, and under use_precise_interpolation the finest tolerance of a
+// currency wins, not the coarsest.
 func (t tolerances) spec(postings []*ast.Posting) transactionTolerances {
 	return transactionTolerances{
 		tolerances: t,
 		units:      statedUnits(postings),
+		defaults:   t.defaultsNamedBy(postings),
 		fromCost:   t.fromCost(specToleranceShares(postings)),
+		finest:     t.options.PreciseInterpolation,
 	}
 }
 
@@ -64,7 +68,11 @@ func (t tolerances) booked(postings []*ast.Posting, delta *TransactionDelta, red
 	return transactionTolerances{
 		tolerances: t,
 		units:      bookedUnits(postings, delta),
-		fromCost:   t.fromCost(bookedToleranceShares(postings, delta, reducedPositions)),
+		// Every default, not only those of named currencies: once booked,
+		// a currency with a residual is named by a units, cost or price
+		// amount, so the two agree.
+		defaults: t.options.Defaults,
+		fromCost: t.fromCost(bookedToleranceShares(postings, delta, reducedPositions)),
 	}
 }
 
@@ -87,26 +95,34 @@ func (t tolerances) balance(balance *ast.Balance) (decimal.Decimal, error) {
 	return pydecimal.Mul(tolerance, decimal.NewFromInt(2)), nil
 }
 
-// inferred returns the tolerance for currency inferred from its units
-// numbers, like beancount's infer_tolerances: the coarsest precision wins,
-// and the currency's configured default joins the maximum. Without a
-// fractional number, it is the configured default, falling back to "*".
-func (t tolerances) inferred(currency string, numbers []decimal.Decimal) decimal.Decimal {
-	inferred := decimal.Zero
-	found := false
-	for _, number := range numbers {
-		if tolerance, ok := t.ofNumber(number); ok && (!found || tolerance.GreaterThan(inferred)) {
-			inferred = tolerance
-			found = true
+// defaultsNamedBy returns the configured defaults that count for postings
+// before booking, like beancount's infer_tolerances: "*", and those of the
+// currencies the postings name in their units, cost or price. A currency
+// Booking fills in, such as the cost currency of a reduction with {}, has
+// none.
+func (t tolerances) defaultsNamedBy(postings []*ast.Posting) map[string]decimal.Decimal {
+	if len(t.options.Defaults) == 0 {
+		return nil
+	}
+	named := make(map[string]decimal.Decimal, len(t.options.Defaults))
+	name := func(currency string) {
+		if def, ok := t.options.Defaults[currency]; ok {
+			named[currency] = def
 		}
 	}
-	if !found {
-		return t.options.GetDefault(currency)
+	name("*")
+	for _, posting := range postings {
+		if posting.Amount != nil {
+			name(posting.Amount.Currency)
+		}
+		if posting.Cost != nil {
+			name(costCurrency(posting.Cost))
+		}
+		if posting.Price != nil {
+			name(posting.Price.Currency)
+		}
 	}
-	if def, ok := t.options.Defaults[currency]; ok && def.GreaterThan(inferred) {
-		return def
-	}
-	return inferred
+	return named
 }
 
 // fromCost returns what postings held at cost or price add to a
@@ -146,15 +162,43 @@ func (t tolerances) fromCost(shares []toleranceShare) map[string]decimal.Decimal
 type transactionTolerances struct {
 	tolerances tolerances
 	units      map[string][]decimal.Decimal
+	defaults   map[string]decimal.Decimal // the configured defaults that count
 	fromCost   map[string]decimal.Decimal
+	finest     bool // the finest tolerance of a currency wins, not the coarsest
 }
 
-// of returns the transaction's tolerance for currency: the one inferred
-// from its units numbers, widened by what postings at cost or price add
-// under infer_tolerance_from_cost.
+// wins reports whether tolerance replaces current as a currency's tolerance.
+func (tt transactionTolerances) wins(tolerance, current decimal.Decimal) bool {
+	if tt.finest {
+		return tolerance.LessThan(current)
+	}
+	return tolerance.GreaterThan(current)
+}
+
+// of returns the transaction's tolerance for currency, like beancount's
+// infer_tolerances: the coarsest of the currency's default, what the
+// precision of each of its units numbers implies and what postings at cost
+// or price add under infer_tolerance_from_cost, or the finest of them for
+// the finest tolerance. A currency with none of these has the "*" default.
 func (tt transactionTolerances) of(currency string) decimal.Decimal {
-	tolerance := tt.tolerances.inferred(currency, tt.units[currency])
-	if fromCost, ok := tt.fromCost[currency]; ok && fromCost.GreaterThan(tolerance) {
+	tolerance, found := tt.defaults[currency]
+	for _, number := range tt.units[currency] {
+		if inferred, ok := tt.tolerances.ofNumber(number); ok && (!found || tt.wins(inferred, tolerance)) {
+			tolerance = inferred
+			found = true
+		}
+	}
+	if !found {
+		tolerance = tt.defaults["*"]
+	}
+	fromCost, ok := tt.fromCost[currency]
+	switch {
+	case !ok:
+		return tolerance
+	case !found:
+		// Like beancount, what costs add replaces the "*" default.
+		return fromCost
+	case tt.wins(fromCost, tolerance):
 		return fromCost
 	}
 	return tolerance
@@ -184,10 +228,7 @@ func (tt transactionTolerances) round(currency string, number decimal.Decimal) d
 func statedUnits(postings []*ast.Posting) map[string][]decimal.Decimal {
 	stated := make(map[string][]decimal.Decimal)
 	for _, posting := range postings {
-		if posting.Amount == nil || posting.Amount.Value == "" || posting.Amount.Currency == "" {
-			continue
-		}
-		if number, err := ParseAmount(posting.Amount); err == nil {
+		if number, ok := statedUnitsNumber(posting); ok {
 			stated[posting.Amount.Currency] = append(stated[posting.Amount.Currency], number)
 		}
 	}

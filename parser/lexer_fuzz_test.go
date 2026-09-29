@@ -43,6 +43,7 @@ func FuzzLexer(f *testing.F) {
 
 		// Currencies
 		"USD", "EUR", "GBP", "JPY", "BTC", "ETH",
+		"/ESZ24", "/6J", "/6.3", "10/ESZ24", "2 / 4 /ESZ24", "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF",
 
 		// Comments
 		"; comment",

@@ -58,8 +58,14 @@ func FuzzParser(f *testing.F) {
 		// Price directive
 		"2014-07-09 price HOOL 579.18 USD",
 
+		// Currencies starting with a slash, and longer than 24 characters
+		"2014-07-09 price /ESZ24 5000 / 2 USD",
+		"2014-05-05 * \"Futures\"\n  Assets:Cash  10/ESZ24 {2 / 4 /6J}\n  Assets:Cash  2 / 4 /ESZ24 @ 1 /6J\n  Assets:Cash",
+		"2014-01-01 open Assets:Cash /ESZ24, ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF",
+
 		// Note directive
 		"2014-07-09 note Assets:Checking \"Called about rebate\"",
+		"2014-07-09 note Assets:Checking \"Called about rebate\" #rebate ^call-1",
 
 		// Document directive
 		"2014-07-09 document Assets:Checking \"/path/to/statement.pdf\"",

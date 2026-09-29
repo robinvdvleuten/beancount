@@ -1,0 +1,14 @@
+; A note takes tags and links after its string, in any order, and the
+; tags pushed around it.
+2020-01-01 open Assets:Cash
+
+pushtag #pushed
+
+2020-01-02 note Assets:Cash "hello" #trip ^link1
+2020-01-03 note Assets:Cash "links first" ^b-link #z-tag ^a-link #a-tag
+2020-01-04 note Assets:Cash "repeated" #trip #trip ^link1 ^link1 ; comment
+  key: "value"
+
+poptag #pushed
+
+2020-01-05 note Assets:Cash "plain"

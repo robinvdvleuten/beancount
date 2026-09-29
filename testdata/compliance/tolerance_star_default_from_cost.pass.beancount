@@ -1,0 +1,15 @@
+; Under infer_tolerance_from_cost, what a cost adds replaces the "*"
+; default for a currency with no tolerance of its own, even when it is
+; finer: 1.1 HOOL at 3.33 USD adds 0.05 × 3.33 USD, so -3.663 USD is kept
+; rather than rounded to the 1 USD step "*:0.5" implies.
+option "inferred_tolerance_default" "*:0.5"
+option "infer_tolerance_from_cost" "TRUE"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:C
+
+2020-01-02 * "At cost"
+  Assets:A  1.1 HOOL {3.33 USD}
+  Assets:C
+
+2020-01-03 balance Assets:C  -3.663 USD

@@ -1,0 +1,13 @@
+2020-01-01 open Assets:Cash
+
+pushtag #pushed
+
+2020-01-02 note Assets:Cash "hello" #trip ^link1
+2020-01-03   note   Assets:Cash   "spaced"   ^b-link   #z-tag ^a-link	#a-tag
+2020-01-04 note Assets:Cash "commented" #trip #trip ^link1;comment
+    key:   "value"
+
+poptag #pushed
+
+2020-01-05 note Assets:Cash "multi
+line" #trip ^link1 ; comment

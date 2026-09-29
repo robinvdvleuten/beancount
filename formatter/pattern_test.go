@@ -72,9 +72,17 @@ func TestLinePattern(t *testing.T) {
 			want:   lineLayout{kind: copyLine, text: "  ! Assets:Cash  10 USD"},
 		},
 		{
-			name:   "expression amount",
+			name:   "parenthesised binary expression",
 			layout: postingLine("  Assets:Cash  (5 + 5) USD"),
-			want:   lineLayout{kind: copyLine, text: "    Assets:Cash  (5 + 5) USD"},
+			want: lineLayout{
+				kind: alignLine, prefix: "    Assets:Cash", number: "(5 + 5)", currency: "USD", rest: "USD",
+				prefixWidth: 13, numberWidth: 7,
+			},
+		},
+		{
+			name:   "longer expression",
+			layout: postingLine("  Assets:Cash  (5 + 5 + 1) USD"),
+			want:   lineLayout{kind: copyLine, text: "    Assets:Cash  (5 + 5 + 1) USD"},
 		},
 		{
 			name:   "posting without an amount",

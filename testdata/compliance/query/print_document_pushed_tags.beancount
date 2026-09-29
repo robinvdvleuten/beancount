@@ -1,0 +1,13 @@
+; A document takes the tags pushed around it, like a transaction, and
+; prints its path resolved against its file's directory.
+2020-01-01 open Assets:Checking
+
+pushtag #pushed
+
+2020-03-14 document Assets:Checking "../docs/Assets/Checking/2020-03-14.statement.pdf" #own ^stmt-1
+2020-03-15 document Assets:Checking "../docs/Assets/Checking/2020-03-14.statement.pdf"
+2020-03-16 document Assets:Checking "../docs/Assets/Checking/2020-03-14.statement.pdf" #pushed
+
+poptag #pushed
+
+2020-03-17 document Assets:Checking "../docs/Assets/Checking/2020-03-14.statement.pdf" #after

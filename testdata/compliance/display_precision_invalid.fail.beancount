@@ -1,0 +1,8 @@
+; Like beancount's options_validate_tolerance_map, a display_precision is
+; CURRENCY:NUMBER where the number is digits and dots: a missing number,
+; a sign, spaces around the colon and a number with two dots are errors.
+option "display_precision" "USD"
+option "display_precision" "USD:"
+option "display_precision" "USD:-0.01"
+option "display_precision" " USD : 0.01"
+option "display_precision" "USD:0.0.1"

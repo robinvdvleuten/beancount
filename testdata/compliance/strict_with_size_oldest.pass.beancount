@@ -1,0 +1,21 @@
+; Of several lots of the reduction's size, STRICT_WITH_SIZE books the one
+; with the oldest cost date: the later sale finds the 2 USD lot, bought
+; last, still there.
+2020-01-01 open Assets:Stock "STRICT_WITH_SIZE"
+2020-01-01 open Assets:Cash
+
+2020-01-03 * "Buy later, at a lower cost"
+  Assets:Stock  5 HOOL {1 USD, 2020-01-03}
+  Assets:Cash  -5 USD
+
+2020-01-03 * "Buy"
+  Assets:Stock  5 HOOL {2 USD, 2020-01-02}
+  Assets:Cash  -10 USD
+
+2020-01-04 * "Sell a lot of five"
+  Assets:Stock  -5 HOOL {}
+  Assets:Cash   10 USD
+
+2020-01-05 * "Sell the lot bought first"
+  Assets:Stock  -5 HOOL {1 USD}
+  Assets:Cash    5 USD

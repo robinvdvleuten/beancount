@@ -1,0 +1,16 @@
+; With no lot of the reduction's size, STRICT_WITH_SIZE reports STRICT's
+; ambiguous match.
+2020-01-01 open Assets:Stock "STRICT_WITH_SIZE"
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock  10 HOOL {1 USD}
+  Assets:Cash  -10 USD
+
+2020-01-03 * "Buy"
+  Assets:Stock  5 HOOL {2 USD}
+  Assets:Cash  -10 USD
+
+2020-01-04 * "Sell a size no lot has"
+  Assets:Stock  -3 HOOL {}
+  Assets:Cash    3 USD

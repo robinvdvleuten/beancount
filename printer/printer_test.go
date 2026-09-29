@@ -2,6 +2,7 @@ package printer
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -85,6 +86,12 @@ func TestSprintDirectiveKinds(t *testing.T) {
 			name:   "NoteIsNotEscaped",
 			source: "2020-01-05 note Assets:Cash \"a \\\"b\\\" c\"\n",
 			want:   "2020-01-05 note Assets:Cash \"a \"b\" c\"\n",
+		},
+		{
+			// beancount v3's printer; bean-query 2.3.6 rejects the syntax.
+			name:   "NoteSortsTagsThenLinks",
+			source: "2020-01-05 note Assets:Cash \"hello\" ^l2 #t2 ^l1 #t1 #t2\n  key: \"value\"\n",
+			want:   "2020-01-05 note Assets:Cash \"hello\" #t1 #t2 ^l1 ^l2\n  key: \"value\"\n",
 		},
 		{
 			name:   "DocumentSortsTagsAndLinksWithoutSpaces",
@@ -171,6 +178,27 @@ func TestSprintDirectiveKinds(t *testing.T) {
 			assert.Equal(t, tt.want, Sprint(parseOne(t, tt.source)))
 		})
 	}
+}
+
+// Like beancount, which resolves it when parsing, a document's relative
+// path prints resolved against the directory of the file it is in.
+func TestSprintDocumentResolvesRelativePath(t *testing.T) {
+	dir := t.TempDir()
+	tree, err := parser.ParseBytesWithFilename(context.Background(), filepath.Join(dir, "sub", "main.beancount"),
+		[]byte("2020-01-06 document Assets:Cash \"../docs/x.pdf\" #t1\n"))
+	assert.NoError(t, err)
+
+	want := "2020-01-06 document Assets:Cash \"" + filepath.Join(dir, "docs", "x.pdf") + "\" #t1\n"
+	assert.Equal(t, want, Sprint(tree.Directives[0]))
+}
+
+// A document built in code has no file to resolve its path against.
+func TestSprintDocumentWithoutSourceKeepsItsPath(t *testing.T) {
+	date, err := ast.NewDate("2020-01-06")
+	assert.NoError(t, err)
+	doc := ast.NewDocument(date, "Assets:Cash", "docs/x.pdf")
+
+	assert.Equal(t, "2020-01-06 document Assets:Cash \"docs/x.pdf\"\n", Sprint(doc))
 }
 
 func TestSprintMetadata(t *testing.T) {

@@ -30,8 +30,13 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       # The compliance suites run against the official tools when they are on PATH.
+      # beancount 3 ships no bean-query, so the query suite runs against 2.3.6's (#562).
       - if: matrix.compliance-check
-        run: pipx install beancount==2.3.6
+        run: |
+          pipx install beancount==3.2.3
+          python3 -m venv "$RUNNER_TEMP/beancount2"
+          "$RUNNER_TEMP/beancount2/bin/pip" install beancount==2.3.6
+          ln -s "$RUNNER_TEMP/beancount2/bin/bean-query" "$(dirname "$(command -v bean-check)")"
       - run: go test -tags=dev ./...
 
   importer:

@@ -1,0 +1,17 @@
+; Under use_precise_interpolation, what infer_tolerance_from_cost adds
+; joins the minimum as well: the price allows 0.01548 USD and the units
+; 0.00005 USD, so the interpolated number has four digits. Without the
+; option it keeps all five.
+option "use_precise_interpolation" "TRUE"
+option "infer_tolerance_from_cost" "TRUE"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "Interpolated to four digits"
+  Assets:A  18.572 VWELX @ 30.96 USD
+  Assets:B  1.1234 USD
+  Assets:C
+
+2020-01-03 balance Assets:C  -576.1125 USD

@@ -115,8 +115,13 @@ func stableFormatterSeeds() []string {
 		// Price directive
 		"2014-07-09 price HOOL 579.18 USD",
 
+		// Currencies starting with a slash, and longer than 24 characters
+		"2014-07-09 price /ESZ24 5000 USD",
+		"2014-05-05 * \"Futures\"\n  Assets:Cash  10 /ESZ24 {2 /6J}\n  Assets:Cash  -10 ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF",
+
 		// Note directive
 		"2014-07-09 note Assets:Checking \"Called about rebate\"",
+		"2014-07-09 note Assets:Checking \"Called about rebate\" #rebate ^call-1",
 
 		// Event directive
 		"2014-07-09 event \"location\" \"New York, USA\"",

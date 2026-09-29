@@ -2,11 +2,14 @@
 package config
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/shopspring/decimal"
 )
 
@@ -24,6 +27,11 @@ type Tolerance struct {
 	Defaults      map[string]decimal.Decimal
 	Multiplier    decimal.Decimal
 	InferFromCost bool
+
+	// PreciseInterpolation is use_precise_interpolation: interpolated
+	// numbers are rounded to the finest tolerance a transaction's numbers
+	// imply, not the coarsest.
+	PreciseInterpolation bool
 }
 
 // NewTolerance returns the official default tolerance configuration.
@@ -32,17 +40,6 @@ func NewTolerance() *Tolerance {
 		Defaults:   make(map[string]decimal.Decimal),
 		Multiplier: decimal.NewFromFloat(0.5),
 	}
-}
-
-// GetDefault returns the configured currency tolerance, falling back to "*".
-func (c *Tolerance) GetDefault(currency string) decimal.Decimal {
-	if c == nil {
-		return decimal.Zero
-	}
-	if value, ok := c.Defaults[currency]; ok {
-		return value
-	}
-	return c.Defaults["*"]
 }
 
 // Config holds the options consumed while processing a ledger.
@@ -58,6 +55,15 @@ type Config struct {
 	// declaration order, matching beancount's list semantics (the option
 	// may be declared multiple times; duplicates are preserved).
 	OperatingCurrencies []string
+
+	// DisplayPrecision maps a currency to the display_precision number
+	// whose exponent fixes its fractional digits. Nothing reads it yet
+	// (#562).
+	DisplayPrecision map[string]decimal.Decimal
+
+	// AccountUnrealizedGains is the leaf account unrealized gains post
+	// to, under the income root. Nothing reads it yet.
+	AccountUnrealizedGains string
 }
 
 // New returns configuration populated with official defaults.
@@ -66,6 +72,9 @@ func New() *Config {
 		Tolerance:     NewTolerance(),
 		BookingMethod: "STRICT",
 		Title:         "Beancount",
+		// Like beancount's default for account_unrealized_gains.
+		AccountUnrealizedGains: "Earnings:Unrealized",
+		DisplayPrecision:       make(map[string]decimal.Decimal),
 		AccountNames: &AccountNames{
 			Assets:      "Assets",
 			Liabilities: "Liabilities",
@@ -79,7 +88,9 @@ func New() *Config {
 // ParseOptions builds the configuration from an AST's option directives.
 // Like beancount, each option is applied on its own, in order: a scalar
 // option's last valid value wins, and an unknown name or invalid value is
-// reported at its directive while every other option still applies.
+// reported at its directive while every other option still applies. An
+// option written under a name beancount renamed is reported and still
+// applied, under its current name.
 func ParseOptions(tree *ast.AST) (*Config, []error) {
 	cfg := New()
 	var errs []error
@@ -88,7 +99,12 @@ func ParseOptions(tree *ast.AST) (*Config, []error) {
 			errs = append(errs, err)
 			continue
 		}
-		if err := cfg.apply(option.Name.Value, option.Value.Value); err != nil {
+		name := option.Name.Value
+		if current, renamed := renamedOptions[name]; renamed {
+			errs = append(errs, &RenamedOptionError{Option: option})
+			name = current
+		}
+		if err := cfg.apply(name, option.Value.Value); err != nil {
 			errs = append(errs, &OptionValueError{Option: option, Err: err})
 		}
 	}
@@ -103,7 +119,7 @@ func FromAST(tree *ast.AST) (*Config, error) {
 	return cfg, errors.Join(errs...)
 }
 
-// knownOptions are the user-settable option names of official beancount v2
+// knownOptions are the user-settable option names of official beancount
 // (transcribed from beancount/parser/options.py). Options in this set that we
 // do not consume are accepted and ignored, exactly like official beancount.
 var knownOptions = map[string]bool{
@@ -121,8 +137,12 @@ var knownOptions = map[string]bool{
 	"account_rounding":                         true,
 	"conversion_currency":                      true,
 	"inferred_tolerance_default":               true,
+	"tolerance_multiplier":                     true,
 	"inferred_tolerance_multiplier":            true,
 	"infer_tolerance_from_cost":                true,
+	"use_precise_interpolation":                true,
+	"display_precision":                        true,
+	"account_unrealized_gains":                 true,
 	"documents":                                true,
 	"operating_currency":                       true,
 	"render_commas":                            true,
@@ -145,6 +165,40 @@ var reservedOptions = map[string]bool{
 	"plugin":      true,
 }
 
+// renamedOptions maps an option name beancount has renamed to its current
+// name (the alias of its descriptor in beancount/parser/options.py).
+var renamedOptions = map[string]string{
+	"inferred_tolerance_multiplier": "tolerance_multiplier",
+}
+
+// currentName returns the name an option goes by: the one it was renamed
+// to, or its own.
+func currentName(name string) string {
+	if renamed, ok := renamedOptions[name]; ok {
+		return renamed
+	}
+	return name
+}
+
+// RenamedOptionError reports an option directive written under a name
+// beancount has renamed. The option still applies.
+type RenamedOptionError struct {
+	Option *ast.Option
+}
+
+func (e *RenamedOptionError) Error() string {
+	pos := e.Option.Position()
+	return fmt.Sprintf("%s:%d: Renamed to '%s'.", pos.Filename, pos.Line, currentName(e.Option.Name.Value))
+}
+
+// GetPosition returns the source position of the renamed option directive.
+func (e *RenamedOptionError) GetPosition() ast.Position { return e.Option.Position() }
+
+// MarshalJSON renders the error for the web API.
+func (e *RenamedOptionError) MarshalJSON() ([]byte, error) {
+	return marshalOptionError("RenamedOptionError", e, e.Option)
+}
+
 // InvalidOptionError reports an option directive official beancount rejects.
 type InvalidOptionError struct {
 	Option   *ast.Option
@@ -162,6 +216,11 @@ func (e *InvalidOptionError) Error() string {
 // GetPosition returns the source position of the offending option directive.
 func (e *InvalidOptionError) GetPosition() ast.Position { return e.Option.Position() }
 
+// MarshalJSON renders the error for the web API.
+func (e *InvalidOptionError) MarshalJSON() ([]byte, error) {
+	return marshalOptionError("InvalidOptionError", e, e.Option)
+}
+
 func validateOptionName(option *ast.Option) error {
 	name := option.Name.Value
 	if knownOptions[name] {
@@ -171,12 +230,12 @@ func validateOptionName(option *ast.Option) error {
 }
 
 // FromOptions builds the configuration from option values by name, failing
-// on the first invalid value.
+// on the first invalid value. A renamed option sets its current name's value.
 func FromOptions(options map[string][]string) (*Config, error) {
 	cfg := New()
 	for name, values := range options {
 		for _, value := range values {
-			if err := cfg.apply(name, value); err != nil {
+			if err := cfg.apply(currentName(name), value); err != nil {
 				return nil, err
 			}
 		}
@@ -184,7 +243,8 @@ func FromOptions(options map[string][]string) (*Config, error) {
 	return cfg, nil
 }
 
-// OptionValueError reports an option directive whose value is invalid.
+// OptionValueError reports an option directive whose value is invalid. Like
+// beancount, it names a renamed option by its current name.
 type OptionValueError struct {
 	Option *ast.Option
 	Err    error
@@ -192,7 +252,7 @@ type OptionValueError struct {
 
 func (e *OptionValueError) Error() string {
 	pos := e.Option.Position()
-	return fmt.Sprintf("%s:%d: Error for option '%s': %v", pos.Filename, pos.Line, e.Option.Name.Value, e.Err)
+	return fmt.Sprintf("%s:%d: Error for option '%s': %v", pos.Filename, pos.Line, currentName(e.Option.Name.Value), e.Err)
 }
 
 func (e *OptionValueError) Unwrap() error { return e.Err }
@@ -200,13 +260,30 @@ func (e *OptionValueError) Unwrap() error { return e.Err }
 // GetPosition returns the source position of the offending option directive.
 func (e *OptionValueError) GetPosition() ast.Position { return e.Option.Position() }
 
-// apply sets one option value. Scalar options take the latest value, list
-// options accumulate; options this implementation does not use are ignored.
+// MarshalJSON renders the error for the web API.
+func (e *OptionValueError) MarshalJSON() ([]byte, error) {
+	return marshalOptionError("OptionValueError", e, e.Option)
+}
+
+// marshalOptionError renders an option error in the shape the web API
+// gives every positioned error: its type, message and position.
+func marshalOptionError(kind string, err error, option *ast.Option) ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     kind,
+		"message":  err.Error(),
+		"position": option.Position(),
+	})
+}
+
+// apply sets one option value, by the option's current name. Scalar
+// options take the latest value, list options accumulate; options this
+// implementation does not use are ignored.
 func (c *Config) apply(name, value string) error {
 	switch name {
 	case "booking_method":
 		if !IsBookingMethod(value) {
-			return fmt.Errorf("invalid booking_method %q, expected STRICT, NONE, FIFO, LIFO, HIFO, or AVERAGE", value)
+			// Like beancount, which quotes the KeyError from its Booking enum.
+			return beancountError(pyrepr.String(value))
 		}
 		c.BookingMethod = value
 	case "title":
@@ -223,26 +300,83 @@ func (c *Config) apply(name, value string) error {
 		c.AccountNames.Expenses = value
 	case "operating_currency":
 		c.OperatingCurrencies = append(c.OperatingCurrencies, value)
-	case "inferred_tolerance_multiplier":
+	case "tolerance_multiplier":
 		multiplier, err := decimal.NewFromString(value)
 		if err != nil {
-			return fmt.Errorf("invalid inferred_tolerance_multiplier %q: %w", value, err)
+			return fmt.Errorf("invalid tolerance_multiplier %q: %w", value, err)
 		}
 		c.Tolerance.Multiplier = multiplier
 	case "inferred_tolerance_default":
-		parts := strings.SplitN(value, ":", 2)
-		if len(parts) != 2 {
-			return fmt.Errorf("invalid inferred_tolerance_default format %q, expected CURRENCY:TOLERANCE", value)
-		}
-		tolerance, err := decimal.NewFromString(strings.TrimSpace(parts[1]))
+		currency, tolerance, err := parseCurrencyNumber(value)
 		if err != nil {
-			return fmt.Errorf("invalid tolerance value in %q: %w", value, err)
+			return err
 		}
-		c.Tolerance.Defaults[strings.TrimSpace(parts[0])] = tolerance
+		c.Tolerance.Defaults[currency] = tolerance
+	case "display_precision":
+		currency, example, err := parseCurrencyNumber(value)
+		if err != nil {
+			return err
+		}
+		c.DisplayPrecision[currency] = example
+	case "account_unrealized_gains":
+		if !isValidLeafAccount(value) {
+			return beancountError("Invalid leaf account name: " + pyrepr.String(value))
+		}
+		c.AccountUnrealizedGains = value
 	case "infer_tolerance_from_cost":
-		c.Tolerance.InferFromCost = strings.ToUpper(value) == "TRUE"
+		// Like beancount's boolean options without a converter.
+		lower := strings.ToLower(value)
+		c.Tolerance.InferFromCost = lower == "true" || lower == "on" || value == "1"
+	case "use_precise_interpolation":
+		// Like beancount's options_validate_boolean, which takes any value.
+		switch strings.ToLower(value) {
+		case "1", "true", "yes":
+			c.Tolerance.PreciseInterpolation = true
+		default:
+			c.Tolerance.PreciseInterpolation = false
+		}
 	}
 	return nil
+}
+
+// beancountError is an option error in beancount's own words, which start
+// with a capital.
+type beancountError string
+
+func (e beancountError) Error() string { return string(e) }
+
+// currencyNumberRegex is beancount's options_validate_tolerance_map
+// pattern. Like Python's re.match it anchors at the start only, and its
+// greedy currency splits the value at the last colon a number follows.
+var currencyNumberRegex = regexp.MustCompile(`^(.*):([\d.]+)`)
+
+// parseCurrencyNumber reads a CURRENCY:NUMBER option value, with
+// beancount's error messages.
+func parseCurrencyNumber(value string) (string, decimal.Decimal, error) {
+	match := currencyNumberRegex.FindStringSubmatch(value)
+	if match == nil {
+		return "", decimal.Decimal{}, beancountError("Invalid value '" + value + "'")
+	}
+	number, err := decimal.NewFromString(match[2])
+	if err != nil {
+		return "", decimal.Decimal{}, beancountError("Impossible to create Decimal instance from " + match[2] + ": [<class 'decimal.ConversionSyntax'>]")
+	}
+	return match[1], number, nil
+}
+
+// leafComponentRegex is beancount's ACC_COMP_NAME_RE. Unlike an account
+// in a directive, a component may not start with a letter without case.
+var leafComponentRegex = regexp.MustCompile(`^[\p{Lu}\p{Nd}][\p{L}\p{Nd}-]*$`)
+
+// isValidLeafAccount reports whether value is a leaf account name, as
+// beancount's account.is_valid_leaf checks it: colon-separated components.
+func isValidLeafAccount(value string) bool {
+	for component := range strings.SplitSeq(value, ":") {
+		if !leafComponentRegex.MatchString(component) {
+			return false
+		}
+	}
+	return true
 }
 
 // IsValidAccountName reports whether an account starts with a configured root.
@@ -289,10 +423,11 @@ func (c *Config) GetAccountTypeFromName(name string) (ast.AccountType, bool) {
 }
 
 // IsBookingMethod reports whether name is one of beancount's booking method
-// names, which are case-sensitive: STRICT, NONE, FIFO, LIFO, HIFO, AVERAGE.
+// names, which are case-sensitive: STRICT, STRICT_WITH_SIZE, NONE, FIFO,
+// LIFO, HIFO, AVERAGE.
 func IsBookingMethod(name string) bool {
 	switch name {
-	case "STRICT", "NONE", "FIFO", "LIFO", "HIFO", "AVERAGE":
+	case "STRICT", "STRICT_WITH_SIZE", "NONE", "FIFO", "LIFO", "HIFO", "AVERAGE":
 		return true
 	}
 	return false
