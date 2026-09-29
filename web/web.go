@@ -22,6 +22,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
@@ -39,6 +40,7 @@ type Server struct {
 	mu           sync.RWMutex
 	ledger       *ledger.Ledger
 	config       *config.Config // Options of the loaded ledger
+	ast          *ast.AST       // Directives the ledger processed, booked; nil until a load succeeds
 	rootFile     string         // Absolute path of the root ledger file
 	includeFiles []string       // Absolute paths of included files
 	reloadErr    error          // Last load or parse error, if the current files are invalid
@@ -181,6 +183,7 @@ func (s *Server) setupRouter() (*http.ServeMux, error) {
 	mux.HandleFunc("PUT /api/source", s.requireWritable(s.handlePutSource))
 	mux.HandleFunc("GET /api/accounts", s.handleGetAccounts)
 	mux.HandleFunc("GET /api/balances", s.handleGetBalances)
+	mux.HandleFunc("POST /api/query", s.handleQuery)
 	mux.HandleFunc("GET /api/events", s.handleSSE)
 
 	// Asset routes (prod: serves embedded files with template vars replaced, dev: no-op)
@@ -226,6 +229,7 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 	oldIncludes = s.includeFiles
 	s.ledger = l
 	s.config = cfg
+	s.ast = result.AST
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes
 	s.reloadErr = nil

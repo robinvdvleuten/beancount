@@ -2,6 +2,7 @@ import { Navigate } from "@solidjs/router";
 import BalanceSheet from "./routes/balance-sheet";
 import Editor from "./routes/editor";
 import IncomeStatement from "./routes/income-statement";
+import Query from "./routes/query";
 import TrialBalance from "./routes/trial-balance";
 
 const routes = [
@@ -28,6 +29,13 @@ const routes = [
     component: TrialBalance,
     info: {
       title: "Trial Balance",
+    },
+  },
+  {
+    path: "/query",
+    component: Query,
+    info: {
+      title: "Query",
     },
   },
   {
