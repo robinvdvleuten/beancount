@@ -71,3 +71,9 @@ _Avoid_: precision, epsilon, rounding error
 **Error line**:
 The file and line an error blames, printed as `path:line:` at the start of the message so editors can jump to it.
 _Avoid_: position (a Beancount position is units held at a cost), location
+
+### Reporting
+
+**Valuation**:
+How a report states the balances it shows: in Units, At cost, At market value, or Converted to one of the ledger's operating currencies. Every report shows the same Valuation, At cost unless the user picks another.
+_Avoid_: conversion (beancount's conversions are the `Conversions:Current` account and the entries `CLOSE` adds), display mode
