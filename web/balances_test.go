@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -337,4 +338,31 @@ func TestAPIBalances(t *testing.T) {
 		assert.Equal(t, 1, len(response.Roots))
 		assert.Equal(t, "0.123456789012345678", response.Roots[0].Balance["BTC"])
 	})
+}
+
+func TestAPIBalancesOperatingCurrencies(t *testing.T) {
+	ledgerFile := filepath.Join(t.TempDir(), "main.beancount")
+	err := os.WriteFile(ledgerFile, []byte(`option "operating_currency" "EUR"
+option "operating_currency" "USD"
+option "operating_currency" "EUR"
+
+2024-01-01 open Assets:Checking
+2024-01-01 open Equity:Opening
+`), 0600)
+	assert.NoError(t, err)
+
+	server := New(8080, ledgerFile)
+	_, err = server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/balances", nil)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var response BalancesResponse
+	assert.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
+	assert.Equal(t, []string{"EUR", "USD"}, response.OperatingCurrencies)
 }

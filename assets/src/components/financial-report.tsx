@@ -16,6 +16,7 @@ interface ErrorProps {
 interface TableProps {
   section: BalanceNode;
   currencies: string[];
+  operatingCurrencies?: string[];
 }
 
 const flattenNode = (node: BalanceNode, depth = 0): FlatRow[] => {
@@ -59,11 +60,17 @@ const displayName = (row: FlatRow): string => {
   return row.name.split(":").pop() ?? row.name;
 };
 
-const primaryCurrency = (currencies: string[]): string | undefined =>
-  currencies.includes("USD") ? "USD" : currencies[0];
+// Like fava, each operating currency gets a column of its own; without any,
+// the ledger's USD or else its first currency does.
+const mainCurrencies = (currencies: string[], operating: string[] = []): string[] => {
+  if (operating.length > 0) return operating;
 
-const otherCurrencies = (currencies: string[], primary: string | undefined): string[] =>
-  currencies.filter((currency) => currency !== primary);
+  const fallback = currencies.includes("USD") ? "USD" : currencies[0];
+  return fallback ? [fallback] : [];
+};
+
+const otherCurrencies = (currencies: string[], main: string[]): string[] =>
+  currencies.filter((currency) => !main.includes(currency));
 
 const formatAmountWithCurrency = (amount: string | undefined, currency: string): string =>
   `${formatAmount(amount)} ${currency}`;
@@ -103,8 +110,8 @@ const Grid: ParentComponent = (props) => (
 const Column: ParentComponent = (props) => <div class="flex flex-col gap-4">{props.children}</div>;
 
 const Table = (props: TableProps) => {
-  const primary = () => primaryCurrency(props.currencies);
-  const secondary = () => otherCurrencies(props.currencies, primary());
+  const main = () => mainCurrencies(props.currencies, props.operatingCurrencies);
+  const secondary = () => otherCurrencies(props.currencies, main());
 
   return (
     <div class="overflow-x-auto">
@@ -112,7 +119,9 @@ const Table = (props: TableProps) => {
         <thead>
           <tr class="bg-base-200">
             <th aria-label="Account" />
-            <th class="text-right font-mono">{primary()}</th>
+            <For each={main()}>
+              {(currency) => <th class="text-right font-mono">{currency}</th>}
+            </For>
             <th class="text-right font-mono">Other</th>
           </tr>
         </thead>
@@ -128,9 +137,13 @@ const Table = (props: TableProps) => {
                 >
                   {displayName(row)}
                 </td>
-                <td class={`text-right align-top font-mono tabular-nums ${valueClass(row)}`}>
-                  {formatAmount(primary() ? row.balance[primary() as string] : undefined)}
-                </td>
+                <For each={main()}>
+                  {(currency) => (
+                    <td class={`text-right align-top font-mono tabular-nums ${valueClass(row)}`}>
+                      {formatAmount(row.balance[currency])}
+                    </td>
+                  )}
+                </For>
                 <td class={`text-right align-top font-mono tabular-nums ${valueClass(row)}`}>
                   <For each={secondary().filter((currency) => row.balance[currency])}>
                     {(currency) => (

@@ -81,6 +81,32 @@ test.describe("Balance Sheet", () => {
     await expectBalanceSheetRow(page, "Assets", "Assets");
   });
 
+  test("gives each operating currency a column", async ({ page }) => {
+    await page.route("**/api/balances**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          roots: [
+            {
+              name: "Assets",
+              depth: 0,
+              balance: { EUR: "10", USD: "20", GBP: "30" },
+            },
+          ],
+          currencies: ["EUR", "GBP", "USD"],
+          operatingCurrencies: ["EUR", "USD"],
+        }),
+      }),
+    );
+
+    await page.goto("/balance-sheet", { waitUntil: "networkidle" });
+
+    const headers = page.getByRole("table", { name: "Assets" }).getByRole("columnheader");
+    await expect(headers).toHaveText(["", "EUR", "USD", "Other"]);
+    await expectBalanceSheetRow(page, "Assets", "Assets", ["10.00", "20.00", "30.00 GBP"]);
+  });
+
   test("shows empty state when API returns no rows", async ({ page }) => {
     await page.route("**/api/balances**", (route) =>
       route.fulfill({

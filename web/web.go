@@ -22,6 +22,7 @@ import (
 
 	"github.com/fsnotify/fsnotify"
 
+	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -37,9 +38,10 @@ type Server struct {
 
 	mu           sync.RWMutex
 	ledger       *ledger.Ledger
-	rootFile     string   // Absolute path of the root ledger file
-	includeFiles []string // Absolute paths of included files
-	reloadErr    error    // Last load or parse error, if the current files are invalid
+	config       *config.Config // Options of the loaded ledger
+	rootFile     string         // Absolute path of the root ledger file
+	includeFiles []string       // Absolute paths of included files
+	reloadErr    error          // Last load or parse error, if the current files are invalid
 
 	// inputFile is the file path passed to New(), used only for initial loading.
 	// After loading, rootFile contains the resolved absolute path.
@@ -61,6 +63,7 @@ func NewWithVersion(port int, ledgerFile, version, commitSHA string) *Server {
 		Version:   version,
 		CommitSHA: commitSHA,
 		ledger:    ledger.New(),
+		config:    config.New(),
 		inputFile: ledgerFile,
 	}
 }
@@ -216,10 +219,13 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 
 	l := ledger.New()
 	_ = l.Process(ctx, result.AST) // Validation errors in l.Errors()
+	// Invalid options were reported by the ledger above.
+	cfg, _ := config.ParseOptions(result.AST)
 
 	s.mu.Lock()
 	oldIncludes = s.includeFiles
 	s.ledger = l
+	s.config = cfg
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes
 	s.reloadErr = nil

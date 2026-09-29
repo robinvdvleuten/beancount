@@ -2,9 +2,11 @@ package web
 
 import (
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 )
 
@@ -12,8 +14,11 @@ import (
 type BalancesResponse struct {
 	Roots      []*BalanceNodeResponse `json:"roots"`
 	Currencies []string               `json:"currencies"`
-	StartDate  *string                `json:"startDate,omitempty"`
-	EndDate    *string                `json:"endDate,omitempty"`
+	// OperatingCurrencies lists the ledger's operating_currency options in
+	// declaration order, without duplicates.
+	OperatingCurrencies []string `json:"operatingCurrencies"`
+	StartDate           *string  `json:"startDate,omitempty"`
+	EndDate             *string  `json:"endDate,omitempty"`
 }
 
 // BalanceNodeResponse represents a node in the balance tree for JSON serialization.
@@ -94,6 +99,7 @@ func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 
 	// Convert to response format
 	response := convertBalanceTree(tree)
+	response.OperatingCurrencies = operatingCurrencies(s.config)
 	writeJSONResponse(w, response)
 }
 
@@ -110,6 +116,18 @@ func convertBalanceTree(tree *ledger.BalanceTree) *BalancesResponse {
 		StartDate:  tree.StartDate,
 		EndDate:    tree.EndDate,
 	}
+}
+
+// operatingCurrencies returns cfg's operating currencies once each, since
+// beancount keeps an operating_currency declared twice twice.
+func operatingCurrencies(cfg *config.Config) []string {
+	currencies := make([]string, 0, len(cfg.OperatingCurrencies))
+	for _, currency := range cfg.OperatingCurrencies {
+		if !slices.Contains(currencies, currency) {
+			currencies = append(currencies, currency)
+		}
+	}
+	return currencies
 }
 
 // convertBalanceNode recursively converts a ledger.BalanceNode to a BalanceNodeResponse.

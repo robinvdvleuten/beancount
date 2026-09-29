@@ -24,6 +24,7 @@ export interface BalanceNode {
 export interface BalancesResponse {
   roots: BalanceNode[];
   currencies: string[];
+  operatingCurrencies?: string[];
   startDate?: string;
   endDate?: string;
 }

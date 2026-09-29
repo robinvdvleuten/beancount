@@ -44,14 +44,22 @@ const IncomeStatement: Component = () => {
                   <FinancialReport.Column>
                     <For each={incomeSections()}>
                       {(section) => (
-                        <FinancialReport.Table section={section} currencies={report().currencies} />
+                        <FinancialReport.Table
+                          section={section}
+                          currencies={report().currencies}
+                          operatingCurrencies={report().operatingCurrencies}
+                        />
                       )}
                     </For>
                   </FinancialReport.Column>
                   <FinancialReport.Column>
                     <For each={expenseSections()}>
                       {(section) => (
-                        <FinancialReport.Table section={section} currencies={report().currencies} />
+                        <FinancialReport.Table
+                          section={section}
+                          currencies={report().currencies}
+                          operatingCurrencies={report().operatingCurrencies}
+                        />
                       )}
                     </For>
                   </FinancialReport.Column>
