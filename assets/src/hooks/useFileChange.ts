@@ -50,7 +50,12 @@ export function useFileChange(options: UseFileChangeOptions) {
 
     const eventSource = new EventSource("/api/events");
 
-    eventSource.onmessage = () => {
+    eventSource.onmessage = (event: MessageEvent<string>) => {
+      // The server greets each connection with "connected"; only "reload" means a change
+      if (event.data !== "reload") {
+        return;
+      }
+
       // Skip if this is our own save (fingerprint will match)
       const currentFingerprint = options.getLastFingerprint();
       if (lastSavedFingerprint && lastSavedFingerprint === currentFingerprint) {
