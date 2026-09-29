@@ -239,10 +239,10 @@ func NewTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) 
 
 // NewCurrencyGroupError creates an error for a posting that Booking cannot
 // sort into a Currency group, or whose group's missing numbers it cannot
-// complete. Like beancount, it blames the posting's line.
+// complete. Like beancount, it blames the posting's line and prints the
+// message alone.
 func NewCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
-	return newError("CurrencyGroupError", txn, posting.Account,
-		"%s (account %s)", message, posting.Account).atPosting(posting)
+	return newError("CurrencyGroupError", txn, posting.Account, "%s", message).atPosting(posting)
 }
 
 // NewInvalidBookingMethodError creates an error for an open directive with an

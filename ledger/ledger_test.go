@@ -1289,6 +1289,48 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 	})
 }
 
+func TestLedger_CurrencyGroupErrorsReadAsBeancounts(t *testing.T) {
+	// Like beancount's categorization and interpolation errors, the
+	// messages carry no account; the diagnostics still do.
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+2020-01-01 open Assets:D
+2020-01-01 open Income:G
+
+2020-02-01 * "uncategorized"
+  Assets:I  1 GOOG {7}
+  Assets:C  -7 USD
+  Assets:C  -1 EUR
+  Income:G  1 EUR
+
+2020-02-02 * "two autos"
+  Assets:C  -7 USD
+  Assets:D
+  Income:G
+
+2020-02-03 * "too many missing"
+  Assets:I  1 GOOG {}
+  Assets:C  -7 USD
+  Assets:D
+`)
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(New().Process(context.Background(), tree), &validationErrors))
+
+	var messages []string
+	for _, err := range validationErrors.Errors {
+		diagnostic := err.(*Diagnostic)
+		assert.Equal(t, "CurrencyGroupError", diagnostic.kind)
+		assert.NotZero(t, diagnostic.account)
+		messages = append(messages, diagnostic.message)
+	}
+	assert.Equal(t, []string{
+		"Failed to categorize posting 1",
+		"You may not have more than one auto-posting per currency",
+		"Too many missing numbers for currency group 'USD'",
+	}, messages)
+}
+
 func TestLedger_CostNumberWithoutCurrency(t *testing.T) {
 	// Like beancount's replace_currencies, a cost that states its number
 	// but not its currency takes its Currency group's, so it is booked in
