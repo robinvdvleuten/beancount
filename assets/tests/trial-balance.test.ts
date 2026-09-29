@@ -44,6 +44,14 @@ test.describe("Trial Balance", () => {
       "aria-current",
       "page",
     );
+
+    // The current page's link keeps the text color of the others. The tests
+    // compile without the DOM lib, so the page evaluates these as strings.
+    const linkColor = (current: boolean) =>
+      page.evaluate(
+        `getComputedStyle(document.querySelector('aside a${current ? "[aria-current=page]" : ":not([aria-current])"}')).color`,
+      );
+    expect(await linkColor(true)).toEqual(await linkColor(false));
   });
 
   test("totals match the balance sheet and income statement", async ({ page }) => {

@@ -10,7 +10,7 @@ interface MenuItemProps {
 const MenuItem: ParentComponent<MenuItemProps> = (props) => {
   return (
     <li>
-      <A href={props.href} class="rounded-none" activeClass="bg-base-300" end>
+      <A href={props.href} class="rounded-none" end>
         {props.children}
       </A>
     </li>
@@ -48,7 +48,7 @@ const Root: ParentComponent = (props) => {
 
       <div class="flex flex-1 overflow-hidden">
         <aside class="w-56 border-r border-base-300 bg-base-200">
-          <ul class="menu w-full px-0">
+          <ul class="menu w-full px-0 [--menu-active-bg:var(--color-base-300)] [--menu-active-fg:var(--color-base-content)]">
             <MenuItem href="/income-statement">Income Statement</MenuItem>
             <MenuItem href="/balance-sheet">Balance Sheet</MenuItem>
             <MenuItem href="/trial-balance">Trial Balance</MenuItem>
