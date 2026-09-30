@@ -27,6 +27,24 @@ func TestParseSelectTargets(t *testing.T) {
 	assert.Equal(t, "pos", sel.Targets[2].As)
 }
 
+// TestParseTargetText checks the source text and alias each target keeps,
+// which name its column as in beanquery: a parenthesized expression's text
+// leaves out its parentheses, a number's its plus sign, and a double-quoted
+// alias keeps its case.
+func TestParseTargetText(t *testing.T) {
+	stmt, err := Parse("SELECT sum( number ), (number + 1) * 2, (number * 2), NOT (TRUE), -1.5, +3, account AS Acc, number AS \"Q A\"")
+	assert.NoError(t, err)
+
+	sel := stmt.(*Select)
+	var texts, aliases []string
+	for _, target := range sel.Targets {
+		texts = append(texts, target.Text)
+		aliases = append(aliases, target.As)
+	}
+	assert.Equal(t, []string{"sum( number )", "(number + 1) * 2", "number * 2", "NOT (TRUE)", "-1.5", "3", "account", "number"}, texts)
+	assert.Equal(t, []string{"", "", "", "", "", "", "acc", "Q A"}, aliases)
+}
+
 func TestParseSelectDistinct(t *testing.T) {
 	stmt, err := Parse("SELECT DISTINCT account")
 	assert.NoError(t, err)

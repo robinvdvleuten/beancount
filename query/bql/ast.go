@@ -12,14 +12,22 @@ import (
 // Node is implemented by all BQL AST nodes.
 type Node interface {
 	Pos() ast.Position
+	Span() (start, end int)
 }
 
-// position provides the Pos accessor for embedding in AST nodes.
+// position provides the Pos and Span accessors for embedding in AST nodes.
 type position struct {
-	pos ast.Position
+	pos        ast.Position
+	start, end int
 }
 
+// Pos returns the position errors about the node point at.
 func (p position) Pos() ast.Position { return p.pos }
+
+// Span returns the byte offsets of the node's source text, from its first
+// token to the end of its last. A parenthesized expression's span leaves
+// out its parentheses, as bean-query's parse tree does.
+func (p position) Span() (start, end int) { return p.start, p.end }
 
 // Statement is a complete BQL statement.
 type Statement interface {
@@ -54,7 +62,12 @@ func (*Select) stmt() {}
 // Target is a single SELECT target: an expression with an optional alias.
 type Target struct {
 	Expr Expr
-	As   string
+	// As is the alias, lowercased unless it was double-quoted, as
+	// bean-query keeps it.
+	As string
+	// Text is the expression's source text, which names an unaliased
+	// target that is not a bare column.
+	Text string
 }
 
 // From is the FROM clause: an optional entry-level filter expression plus

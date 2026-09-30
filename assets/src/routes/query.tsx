@@ -97,6 +97,11 @@ const Query: Component = () => {
             {(error) => <FinancialReport.Error error={error()} />}
           </Match>
 
+          {/* An empty result prints nothing as text, like bean-query */}
+          <Match when={result() === ""}>
+            <p class="text-sm text-base-content/50">No rows.</p>
+          </Match>
+
           <Match when={result() !== undefined}>
             <pre
               aria-label="Query output"

@@ -1418,8 +1418,8 @@ func TestLedger_CompoundCostMissingNumber(t *testing.T) {
 
 func TestLedger_PreciseInterpolation(t *testing.T) {
 	// Interpolated numbers as beancount 3.2.3 books them, at the precision
-	// it holds them. bean-query 2.3.6 rejects the option, so no query
-	// fixture can pin them.
+	// it holds them; query/interpolation_precise.bql pins them against
+	// beanquery.
 	const transactions = `
 2020-01-01 open Assets:A
 2020-01-01 open Assets:B

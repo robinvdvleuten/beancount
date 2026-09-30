@@ -55,7 +55,71 @@ func FuzzParseQuery(f *testing.F) {
 				t.Errorf("parser panicked on input %q: %v", query, r)
 			}
 		}()
-		// The parser must never panic; errors are fine.
-		_, _ = Parse(query)
+		// The parser must never panic; errors are fine. What it parses
+		// spans the query text.
+		stmt, err := Parse(query)
+		if err != nil {
+			return
+		}
+		walkNodes(stmt, func(node Node) {
+			if start, end := node.Span(); start < 0 || start > end || end > len(query) {
+				t.Errorf("%T spans [%d, %d) of %q", node, start, end, query)
+			}
+		})
 	})
+}
+
+// walkNodes calls fn for stmt and every node below it.
+func walkNodes(stmt Statement, fn func(Node)) {
+	var expr func(Expr)
+	expr = func(e Expr) {
+		if e == nil {
+			return
+		}
+		fn(e)
+		switch node := e.(type) {
+		case *Call:
+			for _, arg := range node.Args {
+				expr(arg)
+			}
+		case *Unary:
+			expr(node.X)
+		case *Binary:
+			expr(node.L)
+			expr(node.R)
+		}
+	}
+	from := func(f *From) {
+		if f != nil {
+			fn(f)
+			expr(f.Expr)
+		}
+	}
+
+	fn(stmt)
+	switch node := stmt.(type) {
+	case *Select:
+		for _, target := range node.Targets {
+			expr(target.Expr)
+		}
+		from(node.From)
+		expr(node.Where)
+		for _, e := range node.GroupBy {
+			expr(e)
+		}
+		expr(node.Having)
+		for _, e := range node.OrderBy {
+			expr(e)
+		}
+		for _, ident := range node.PivotBy {
+			expr(ident)
+		}
+	case *Balances:
+		from(node.From)
+		expr(node.Where)
+	case *Journal:
+		from(node.From)
+	case *Print:
+		from(node.From)
+	}
 }

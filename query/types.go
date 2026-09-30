@@ -20,7 +20,8 @@ import (
 // function overload resolution at compile time and column formatting in the
 // renderers. Runtime values are Go values: bool, int64, decimal.Decimal,
 // string, *ast.Date, setValue, *amountValue, *positionValue and
-// *inventoryValue; NULL is nil.
+// *inventoryValue; NULL is nil. Only numberify's output holds a
+// negativeZero, for the renderers.
 type dtype uint8
 
 const (

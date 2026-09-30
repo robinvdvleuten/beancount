@@ -38,6 +38,9 @@ type parser struct {
 	source []byte
 	lexer  *Lexer
 	cur    Token
+	// prevEnd is the end offset of the last consumed token, where the
+	// node being built ends.
+	prevEnd int
 }
 
 func newParser(source []byte) *parser {
@@ -47,6 +50,7 @@ func newParser(source []byte) *parser {
 }
 
 func (p *parser) next() {
+	p.prevEnd = p.cur.End
 	p.cur = p.lexer.Next()
 }
 
@@ -72,6 +76,12 @@ func (p *parser) accept(t TokenType) bool {
 
 func (p *parser) pos(tok Token) ast.Position {
 	return ast.Position{Filename: queryFilename, Offset: tok.Start, Line: tok.Line, Column: tok.Column}
+}
+
+// node positions a node at tok whose source text runs from start to the end
+// of the last consumed token.
+func (p *parser) node(tok Token, start int) position {
+	return position{pos: p.pos(tok), start: start, end: p.prevEnd}
 }
 
 func (p *parser) errorf(tok Token, format string, args ...any) *ParseError {
@@ -143,7 +153,7 @@ func (p *parser) parseSelect() (*Select, error) {
 	tok := p.cur
 	p.next() // SELECT
 
-	sel := &Select{position: position{p.pos(tok)}}
+	sel := &Select{position: position{pos: p.pos(tok), start: tok.Start}}
 	sel.Distinct = p.accept(DISTINCT)
 
 	if p.accept(ASTERISK) {
@@ -224,7 +234,7 @@ func (p *parser) parseSelect() (*Select, error) {
 			if err != nil {
 				return nil, err
 			}
-			sel.PivotBy = append(sel.PivotBy, &Ident{position: position{p.pos(tok)}, Name: strings.ToLower(tok.String(p.source))})
+			sel.PivotBy = append(sel.PivotBy, &Ident{position: p.node(tok, tok.Start), Name: strings.ToLower(tok.String(p.source))})
 			if !p.accept(COMMA) {
 				break
 			}
@@ -244,6 +254,7 @@ func (p *parser) parseSelect() (*Select, error) {
 		sel.Limit = &limit
 	}
 
+	sel.end = p.prevEnd
 	return sel, nil
 }
 
@@ -252,8 +263,16 @@ func (p *parser) parseTarget() (Target, error) {
 	if err != nil {
 		return Target{}, err
 	}
-	target := Target{Expr: expr}
+	start, end := expr.Span()
+	target := Target{Expr: expr, Text: strings.TrimSpace(string(p.source[start:end]))}
 	if p.accept(AS) {
+		// Like bean-query, a double-quoted alias is kept as written and
+		// any other is lowercased.
+		if p.cur.Type == STRING && p.source[p.cur.Start] == '"' {
+			target.As = stripQuotes(p.cur.String(p.source))
+			p.next()
+			return target, nil
+		}
 		tok, err := p.expect(IDENT, "target alias")
 		if err != nil {
 			return Target{}, err
@@ -270,7 +289,7 @@ func (p *parser) parseFrom() (*From, error) {
 	tok := p.cur
 	p.next() // FROM
 
-	from := &From{position: position{p.pos(tok)}}
+	from := &From{position: position{pos: p.pos(tok), start: tok.Start}}
 
 	if p.startsExpr() {
 		expr, err := p.parseExpr()
@@ -320,6 +339,7 @@ func (p *parser) parseFrom() (*From, error) {
 		return nil, err
 	}
 
+	from.end = p.prevEnd
 	return from, nil
 }
 
@@ -327,7 +347,7 @@ func (p *parser) parseBalances() (*Balances, error) {
 	tok := p.cur
 	p.next() // BALANCES
 
-	stmt := &Balances{position: position{p.pos(tok)}}
+	stmt := &Balances{position: position{pos: p.pos(tok), start: tok.Start}}
 	summary, err := p.parseAtSummary()
 	if err != nil {
 		return nil, err
@@ -350,6 +370,7 @@ func (p *parser) parseBalances() (*Balances, error) {
 		}
 		stmt.Where = expr
 	}
+	stmt.end = p.prevEnd
 	return stmt, nil
 }
 
@@ -357,7 +378,7 @@ func (p *parser) parseJournal() (*Journal, error) {
 	tok := p.cur
 	p.next() // JOURNAL
 
-	stmt := &Journal{position: position{p.pos(tok)}}
+	stmt := &Journal{position: position{pos: p.pos(tok), start: tok.Start}}
 	if p.cur.Type == STRING {
 		stmt.Account = stripQuotes(p.cur.String(p.source))
 		p.next()
@@ -376,6 +397,7 @@ func (p *parser) parseJournal() (*Journal, error) {
 		}
 		stmt.From = from
 	}
+	stmt.end = p.prevEnd
 	return stmt, nil
 }
 
@@ -383,7 +405,7 @@ func (p *parser) parsePrint() (*Print, error) {
 	tok := p.cur
 	p.next() // PRINT
 
-	stmt := &Print{position: position{p.pos(tok)}}
+	stmt := &Print{position: position{pos: p.pos(tok), start: tok.Start}}
 	if p.cur.Type == FROM {
 		from, err := p.parseFrom()
 		if err != nil {
@@ -391,6 +413,7 @@ func (p *parser) parsePrint() (*Print, error) {
 		}
 		stmt.From = from
 	}
+	stmt.end = p.prevEnd
 	return stmt, nil
 }
 
@@ -428,6 +451,7 @@ func (p *parser) parseExpr() (Expr, error) {
 }
 
 func (p *parser) parseOr() (Expr, error) {
+	start := p.cur.Start
 	left, err := p.parseAnd()
 	if err != nil {
 		return nil, err
@@ -439,12 +463,13 @@ func (p *parser) parseOr() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: position{p.pos(tok)}, Op: OR, L: left, R: right}
+		left = &Binary{position: p.node(tok, start), Op: OR, L: left, R: right}
 	}
 	return left, nil
 }
 
 func (p *parser) parseAnd() (Expr, error) {
+	start := p.cur.Start
 	left, err := p.parseNot()
 	if err != nil {
 		return nil, err
@@ -456,7 +481,7 @@ func (p *parser) parseAnd() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: position{p.pos(tok)}, Op: AND, L: left, R: right}
+		left = &Binary{position: p.node(tok, start), Op: AND, L: left, R: right}
 	}
 	return left, nil
 }
@@ -469,7 +494,7 @@ func (p *parser) parseNot() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Unary{position: position{p.pos(tok)}, Op: NOT, X: x}, nil
+		return &Unary{position: p.node(tok, tok.Start), Op: NOT, X: x}, nil
 	}
 	return p.parseComparison()
 }
@@ -477,6 +502,7 @@ func (p *parser) parseNot() (Expr, error) {
 // parseComparison parses a non-associative comparison: at most one comparison
 // operator between two additive expressions.
 func (p *parser) parseComparison() (Expr, error) {
+	start := p.cur.Start
 	left, err := p.parseAdditive()
 	if err != nil {
 		return nil, err
@@ -489,12 +515,13 @@ func (p *parser) parseComparison() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Binary{position: position{p.pos(tok)}, Op: tok.Type, L: left, R: right}, nil
+		return &Binary{position: p.node(tok, start), Op: tok.Type, L: left, R: right}, nil
 	}
 	return left, nil
 }
 
 func (p *parser) parseAdditive() (Expr, error) {
+	start := p.cur.Start
 	left, err := p.parseMultiplicative()
 	if err != nil {
 		return nil, err
@@ -506,12 +533,13 @@ func (p *parser) parseAdditive() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: position{p.pos(tok)}, Op: tok.Type, L: left, R: right}
+		left = &Binary{position: p.node(tok, start), Op: tok.Type, L: left, R: right}
 	}
 	return left, nil
 }
 
 func (p *parser) parseMultiplicative() (Expr, error) {
+	start := p.cur.Start
 	left, err := p.parsePrimary()
 	if err != nil {
 		return nil, err
@@ -523,7 +551,7 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: position{p.pos(tok)}, Op: tok.Type, L: left, R: right}
+		left = &Binary{position: p.node(tok, start), Op: tok.Type, L: left, R: right}
 	}
 	return left, nil
 }
@@ -544,7 +572,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 	case STRING:
 		p.next()
-		return &Str{position: position{p.pos(tok)}, Value: stripQuotes(tok.String(p.source))}, nil
+		return &Str{position: p.node(tok, tok.Start), Value: stripQuotes(tok.String(p.source))}, nil
 
 	case INTEGER:
 		p.next()
@@ -552,7 +580,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err != nil {
 			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
 		}
-		return &Int{position: position{p.pos(tok)}, Value: value}, nil
+		return &Int{position: p.node(tok, p.unsignedStart(tok)), Value: value}, nil
 
 	case DECIMAL:
 		p.next()
@@ -560,7 +588,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err != nil {
 			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
 		}
-		return &Dec{position: position{p.pos(tok)}, Value: value}, nil
+		return &Dec{position: p.node(tok, p.unsignedStart(tok)), Value: value}, nil
 
 	case DATE:
 		p.next()
@@ -568,25 +596,25 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err := date.Capture([]string{tok.String(p.source)}); err != nil {
 			return nil, p.errorf(tok, "invalid date %q", tok.String(p.source))
 		}
-		return &DateLit{position: position{p.pos(tok)}, Value: date}, nil
+		return &DateLit{position: p.node(tok, tok.Start), Value: date}, nil
 
 	case TRUE, FALSE:
 		p.next()
-		return &Bool{position: position{p.pos(tok)}, Value: tok.Type == TRUE}, nil
+		return &Bool{position: p.node(tok, tok.Start), Value: tok.Type == TRUE}, nil
 
 	case NULL:
 		p.next()
-		return &Null{position: position{p.pos(tok)}}, nil
+		return &Null{position: p.node(tok, tok.Start)}, nil
 
 	case IDENT:
 		p.next()
 		// Identifiers are case-insensitive: bean-query lower-cases them.
 		name := strings.ToLower(tok.String(p.source))
 		if p.cur.Type != LPAREN {
-			return &Ident{position: position{p.pos(tok)}, Name: name}, nil
+			return &Ident{position: p.node(tok, tok.Start), Name: name}, nil
 		}
 		p.next() // (
-		call := &Call{position: position{p.pos(tok)}, Func: name}
+		call := &Call{Func: name}
 		if p.cur.Type != RPAREN {
 			args, err := p.parseExprList()
 			if err != nil {
@@ -597,10 +625,20 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if _, err := p.expect(RPAREN, "function call"); err != nil {
 			return nil, err
 		}
+		call.position = p.node(tok, tok.Start)
 		return call, nil
 	}
 
 	return nil, p.errorf(tok, "expected expression, found %s", p.describe(tok))
+}
+
+// unsignedStart returns where a number's source text starts: past a plus
+// sign, which beanquery's grammar drops from the number it parses.
+func (p *parser) unsignedStart(tok Token) int {
+	if p.source[tok.Start] == '+' {
+		return tok.Start + 1
+	}
+	return tok.Start
 }
 
 // parseDate parses a DATE token into an ast.Date, validating its value.

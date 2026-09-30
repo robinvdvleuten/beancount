@@ -111,31 +111,39 @@ func TestRunErrorFixtures(t *testing.T) {
 	}
 }
 
-// TestRunEmptyResult checks that an empty result prints "(empty)" whatever
-// the format, like bean-query's shell.
+// TestRunEmptyResult checks that an empty result prints nothing as text
+// and its header as csv, like beanquery's shell, with or without
+// numberify, under which a position column with no rows has no currency
+// column.
 func TestRunEmptyResult(t *testing.T) {
 	text, qctx := loadFixture(t, "empty_result")
 
 	for _, tt := range []struct {
 		format    Format
 		numberify bool
-	}{{FormatText, false}, {FormatCSV, false}, {FormatCSV, true}} {
-		assert.Equal(t, "(empty)\n", run(t, qctx, text, tt.format, tt.numberify), "format %s, numberify %v", tt.format, tt.numberify)
+		want      string
+	}{
+		{FormatText, false, ""},
+		{FormatText, true, ""},
+		{FormatCSV, false, "date,account,position\r\n"},
+		{FormatCSV, true, "date,account\r\n"},
+	} {
+		assert.Equal(t, tt.want, run(t, qctx, text, tt.format, tt.numberify), "format %s, numberify %v", tt.format, tt.numberify)
 	}
 }
 
-// TestRunSelect checks Run's bytes against bean-query's for testLedger.
+// TestRunSelect checks Run's bytes against beanquery's for testLedger.
 func TestRunSelect(t *testing.T) {
 	qctx := newTestContext(t)
 
 	text := "SELECT account, sum(number) WHERE account ~ 'Assets' GROUP BY account ORDER BY account"
-	assert.Equal(t, "    account     sum_numb\n"+
-		"--------------- --------\n"+
-		"Assets:Checking -1504.50\n"+
-		"Assets:Invest      10   \n", run(t, qctx, text, FormatText, false))
-	assert.Equal(t, "account,sum_number\r\n"+
+	assert.Equal(t, "    account      sum(numb\n"+
+		"---------------  --------\n"+
+		"Assets:Checking  -1504.50\n"+
+		"Assets:Invest       10   \n", run(t, qctx, text, FormatText, false))
+	assert.Equal(t, "account,sum(number)\r\n"+
 		"Assets:Checking,-1504.50\r\n"+
-		"Assets:Invest  ,   10   \r\n", run(t, qctx, text, FormatCSV, false))
+		"Assets:Invest,   10   \r\n", run(t, qctx, text, FormatCSV, false))
 }
 
 // TestRunPrint checks that PRINT takes SELECT's FROM clause, filter and

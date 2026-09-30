@@ -112,20 +112,13 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 			targets[i] = bql.Target{Expr: &bql.Ident{Name: name}}
 		}
 	}
-	allocated := make(map[string]bool, len(targets))
 	for _, target := range targets {
 		expr, err := c.compileExpr(target.Expr)
 		if err != nil {
 			return nil, err
 		}
-		name := target.As
-		if name == "" {
-			name = deriveName(target.Expr)
-		}
-		name = uniqueName(name, allocated)
-		allocated[name] = true
 		compiled.Targets = append(compiled.Targets, compiledTarget{
-			Name:  name,
+			Name:  targetName(target),
 			Type:  expr.typ(),
 			IsAgg: c.isAggregate(target.Expr),
 			expr:  expr,
@@ -292,7 +285,6 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, cla
 		return 0, err
 	}
 	compiled.Targets = append(compiled.Targets, compiledTarget{
-		Name:   deriveName(item),
 		Type:   expr.typ(),
 		Hidden: true,
 		IsAgg:  c.isAggregate(item),
@@ -302,14 +294,17 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, cla
 	return len(compiled.Targets) - 1, nil
 }
 
-// uniqueName returns name, or name_1, name_2, … when it is allocated, like
-// bean-query's find_unique_name.
-func uniqueName(name string, allocated map[string]bool) string {
-	unique := name
-	for i := 1; allocated[unique]; i++ {
-		unique = fmt.Sprintf("%s_%d", name, i)
+// targetName names a target's column like beanquery's get_target_name: by
+// its alias, a bare column by its name, and any other expression by its
+// source text. Names may repeat.
+func targetName(target bql.Target) string {
+	if target.As != "" {
+		return target.As
 	}
-	return unique
+	if ident, ok := target.Expr.(*bql.Ident); ok {
+		return ident.Name
+	}
+	return target.Text
 }
 
 // targetIndex resolves a 1-based index into the visible targets.
@@ -520,72 +515,6 @@ func (c *compiler) compileBinary(node *bql.Binary) (cexpr, error) {
 	return &cBinary{op: node.Op, l: l, r: r, t: t}, nil
 }
 
-// deriveName builds the default column name for an unaliased target,
-// matching the official naming: columns keep their name, function calls
-// join the function and argument names with underscores, and constants get
-// a "c" prefix with punctuation replaced by underscores.
-func deriveName(e bql.Expr) string {
-	switch node := e.(type) {
-	case *bql.Ident:
-		return strings.ToLower(node.Name)
-	case *bql.Call:
-		parts := make([]string, 0, len(node.Args)+1)
-		parts = append(parts, strings.ToLower(node.Func))
-		for _, arg := range node.Args {
-			parts = append(parts, deriveName(arg))
-		}
-		return strings.Join(parts, "_")
-	case *bql.Str:
-		return "c" + sanitizeName(node.Value)
-	case *bql.Int:
-		return "c" + sanitizeName(strconv.FormatInt(node.Value, 10))
-	case *bql.Dec:
-		return "c" + sanitizeName(decimalLiteral(node.Value))
-	case *bql.DateLit:
-		return "c" + sanitizeName(node.Value.String())
-	case *bql.Bool:
-		// Python's str(True) is "True"; the sanitizer turns the capital
-		// into an underscore.
-		if node.Value {
-			return "c" + sanitizeName("True")
-		}
-		return "c" + sanitizeName("False")
-	case *bql.Null:
-		return "c" + sanitizeName("None")
-	case *bql.Unary:
-		return "not_" + deriveName(node.X)
-	case *bql.Binary:
-		return binaryOpNames[node.Op] + "_" + deriveName(node.L) + "_" + deriveName(node.R)
-	}
-	return "expr"
-}
-
-var binaryOpNames = map[bql.TokenType]string{
-	bql.PLUS:     "add",
-	bql.MINUS:    "sub",
-	bql.ASTERISK: "mul",
-	bql.SLASH:    "div",
-	bql.EQ:       "equal",
-	bql.NE:       "not_equal",
-	bql.LT:       "less",
-	bql.LTE:      "less_eq",
-	bql.GT:       "greater",
-	bql.GTE:      "greater_eq",
-	bql.TILDE:    "match",
-	bql.IN:       "contains",
-	bql.AND:      "and",
-	bql.OR:       "or",
-}
-
-// nameSanitizer collapses runs of characters outside [a-z0-9_] into a single
-// underscore, without lowercasing first — 'USD' becomes "_", matching the
-// official constant naming (verified against bean-query 2.3.6).
-var nameSanitizer = regexp.MustCompile(`[^a-z0-9_]+`)
-
-func sanitizeName(s string) string {
-	return nameSanitizer.ReplaceAllString(s, "_")
-}
-
 // decimalLiteral renders a decimal constant with the digits it was written
 // with, like Python's str(Decimal): 2500.00 stays "2500.00".
 func decimalLiteral(d decimal.Decimal) string {
@@ -658,7 +587,7 @@ func pyConstantRepr(e bql.Expr) string {
 // exprKey builds a canonical key for structural expression matching, used
 // to resolve GROUP-BY and ORDER-BY items against the targets list.
 func exprKey(e bql.Expr) string {
-	return deriveName(e)
+	return pyExprRepr(e)
 }
 
 // Compiled expression nodes.

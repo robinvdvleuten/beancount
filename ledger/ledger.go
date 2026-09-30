@@ -157,6 +157,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 	l.errors = append(l.errors, optionErrs...)
 	l.config = cfg
 	l.tolerances = newTolerances(cfg.Tolerance)
+	l.display.fixPrecisions(cfg.DisplayPrecision)
 
 	// Process directives in semantic date order.
 	processTimer := collector.StartStructured(telemetry.TimerConfig{

@@ -1,9 +1,9 @@
 # Known Compliance Gaps (beancount v3)
 
-Documented divergences from official beancount v3, probed against 3.2.3.
-BQL and the printer are the exception: beancount 3 ships no `bean-query`, so
-until BQL moves to beanquery (#562, and #560 for the printer) their entries
-are measured against `bean-query` 2.3.6.
+Documented divergences from official beancount v3, probed against 3.2.3,
+and for BQL against beanquery 0.2.0, v3's `bean-query`. The query fixtures
+that still differ are listed in `queryGaps` (`cli/query_compliance_test.go`)
+with the #562 topic or the issue that closes them.
 
 Fixtures prefixed `gap_` in this directory exercise open gaps: the
 differential suite verifies their expectations against `bean-check`, while
@@ -60,40 +60,9 @@ beancount has no tolerance at all, so it reports the 1E-27 USD an
 interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
-For BQL, `query/gap_integer_division.bql` diverges on integer division:
-bean-query divides two integer literals with Python's true division, so
-`SELECT 1 / 3` is a float and prints its exact binary value
-(`0.333333333333333314829616256247390992939472198486328125`), and the float
-carries through later arithmetic (`7 / 2 * 2` is `7.0`). We give a decimal
-rounded to 28 significant digits. Division with a decimal operand, which
-covers every column, matches (`query/division*.bql`).
-
-A currency beancount v3 added, one starting with `/` (`/ESZ24`) or longer
-than 24 characters, is a syntax error in `bean-query` 2.3.6, which drops
-its directive, and loads here. A slash, digits and a currency of two or
-more characters is no error there but a division: `10 /2USD` is `5 USD`
-in `bean-query` 2.3.6, and 10 units of `/2USD` here and in bean-check. So
-no `query/` fixture can hold such a currency until BQL moves to beanquery
-(#562).
-
-Interpolated numbers follow beancount v3, so three of them differ from
-`bean-query` 2.3.6's until BQL moves to beanquery (#562):
-- `option "tolerance_multiplier"` is an invalid option there, which keeps
-  the default 0.5; we apply it. With `"5"`, `10.00 USD` and
-  `3.33333 EUR @ 1.11111 USD` leave `-13.70 USD` there and `-13.7 USD`
-  here. Under the old name, `inferred_tolerance_multiplier`, stdout
-  matches, and we report the rename on stderr as bean-check does.
-- `option "use_precise_interpolation"` is an invalid option there:
-  `precise_interpolation.pass` interpolates `-7.0 USD` there and
-  `-7.02345 USD` here.
-- A currency's `inferred_tolerance_default` counts before booking only
-  when a posting names the currency, with no option involved:
-  `tolerance_default_unused_currency.pass` interpolates `33.3 USD` there,
-  which fails its balance assertion, and `33.333 USD` here.
-
 The printer (BQL `PRINT`, `import`, error context) follows beancount
-2.3.6's `printer.py`, with these known differences from `bean-query`'s
-`PRINT`:
+2.3.6's `printer.py` until #560, with these known differences from
+`bean-query`'s `PRINT`:
 
 - `PRINT` ignores `option "render_commas" "TRUE"`: bean-query prints
   `-1,000.50 USD`, we print `-1000.50 USD`.
@@ -102,16 +71,13 @@ The printer (BQL `PRINT`, `import`, error context) follows beancount
   kind.
 - A number in metadata prints in fixed notation (`0.0000001`), where
   Python's `str` gives `1E-7`.
-- A document's tags and links print 2.3.6's way (`#a#b^link1`) until the
-  printer follows v3 (#560). A note's print as beancount 3.2.3's
-  `printer.py` writes them (`"hello" #trip ^link1`): `bean-query` 2.3.6
-  rejects them, so no `print_*` fixture can hold them. A note between
-  `pushtag` and `poptag` therefore prints the pushed tag, where
-  `bean-query` 2.3.6, whose notes have no tags, prints none;
-  `query/gap_print_note_pushed_tag.bql` pins it until BQL moves to
-  beanquery (#562). Until then a note's tags and links, like a
-  document's, are not in the `tags` and `links` columns, which
-  `bean-query` fills for transactions only.
+- A document's tags and links print 2.3.6's way (`#a#b^link1`), where
+  bean-query spaces them (`#a #b ^link1`, `print_document_pushed_tags`).
+  A note's tags and links print as bean-query prints them (`"hello" #trip ^link1`,
+  `print_note_pushed_tag`).
+- The metadata the `implicit_prices` plugin adds to its prices
+  (`__implicit_prices__: "from_cost"`) prints; bean-query leaves it out
+  (`print_implicit_prices*`, `from_open_kept_entries`).
 - Like `printer.py`, the printer does not escape `note`, `event`, `query`,
   `document` and `custom` strings or cost labels. So `import` output with a
   `"` in one of them fails its re-parse.
@@ -134,10 +100,6 @@ limits:
 Probed against bean-check 3.2.3, each without a fixture until its issue
 lands:
 
-- #562: `option "display_precision"` is parsed and checked, not applied.
-  With `"USD:0.001"`, beancount v3's display context formats `1.5 USD` as
-  `1.500`; we render `1.5`, as `bean-query` 2.3.6 does, which reports the
-  option as invalid.
 - #565: a single capital letter followed by whitespace is bean-check's
   `CAPITAL` token, new in v3, which its grammar reads as a currency
   (`1 V`, `commodity V`, `price V 1 USD`) or as a transaction flag
@@ -209,60 +171,56 @@ compare the lines errors are on:
   fixtures prove both implementations leave the rounding account empty.
 
 - **BQL / bean-query** is implemented (`beancount query`) and pinned
-  byte-for-byte against `bean-query` 2.3.6 by the fixtures in `query/`
-  (text and csv, including numberify, shortcut statements, FROM
-  summarization, and error output). Notable pinned quirks we reproduce:
-  data-width columns with truncated centered headers, padded CSV cells
-  with Python QUOTE_MINIMAL and CRLF, display-context precision (each
-  currency's most common precision in the source, numbers cut to it),
-  constant names sanitized by collapsing invalid runs ('USD' → `c_`),
-  implicit GROUP BY, a single trailing ORDER BY direction, `ERROR:` lines
-  on stdout with exit status 0, and `The PIVOT BY clause is not supported
-  yet.` (a v2 limitation we mirror).
+  byte-for-byte against beanquery 0.2.0 by the fixtures in `query/` (text
+  and csv, including numberify, shortcut statements and FROM
+  summarization). Notable pinned quirks we reproduce: columns named by
+  their source text (`sum( number )`, `SUM((position))` for BALANCES),
+  data-width columns with truncated headers centred like Python's
+  `str.center`, a sign column in every amount, each currency's amounts
+  rounded half-even to its most common precision in the source or its
+  `display_precision`, inventories laid out in per-commodity
+  sub-columns, CSV with Python's QUOTE_MINIMAL and CRLF that pads number,
+  amount, position and inventory cells and leaves the others as they are,
+  numberify in text too, nothing printed for an empty text result, and
+  implicit GROUP BY. Still to follow beanquery (#562; `queryGaps` in
+  `cli/query_compliance_test.go` lists every fixture): errors on stderr
+  with exit status 1 in its words (ours are bean-query 2.3.6's `ERROR:`
+  lines on stdout); operator typing; grammar (`count(*)`, unary minus on
+  any expression, `number -1` as a subtraction, digits in identifiers);
+  per-term ORDER BY directions; `HAVING` and `PIVOT BY`; and functions
+  (every function NULL-strict, one-argument `root`, `has_account` in
+  WHERE, `balance` accumulated where it is evaluated).
 
 ## Deliberate deviations
 
 - **Negative zero** (#408): an interpolated amount rounded to zero from a
   negative residual is `-0.00` in beancount (Python decimal keeps the sign);
-  our decimals have no signed zero, so it books and renders as `0.00`, in
+  our decimals have no signed zero, so it books as `0.00` and renders so in
   BQL columns and in `print` alike. The value is the same; only the sign of
-  zero differs, and only on the booked posting: sums and `balances` match.
-  `query/gap_negative_zero.bql` pins it.
-
-- **BQL `str()` of numbers, dates and strings**: bean-query returns
-  Python's `repr` for these (`Decimal('200.00')`,
-  `datetime.date(2023, 1, 1)`, `'Assets:Cash'`), a v2 implementation
-  accident rather than a designed format. We print `200.00`, `2023-01-01`
-  and `Assets:Cash`, with every written digit kept. `query/gap_str_scalars.bql`
-  pins the difference; amounts, positions, inventories, NULL, integers,
-  booleans and sets match (`query/str_*.bql`).
+  that zero differs. `query/negative_zero.bql` shows it and is listed in
+  `queryGaps`. Arithmetic differs the same way: beanquery keeps the sign of
+  a negative number times zero (`number * 0` is `-0.00` for `-1.00`), and
+  we give `0.00`. A negative number that only rounds to zero when displayed
+  (`-0.001 USD` at USD's two digits) keeps its sign as in beanquery,
+  `-0.00 USD`, numberified too (`query/negative_dust.bql`,
+  `query/numberify_negative_dust.bql`).
 
 - **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
   Python's `bool` subclasses `int`, sums the values as integers and still
   types the column as boolean, so `sum(1 = 1)` over four rows renders
-  `TRUE`, `sum(false)` renders `FALS` (cut to the header's width) and
-  `sum(true) + 1` is `23`. We reject it: `ERROR: Invalid function
-  'sum(bool)' in targets/column context.` (#422).
+  `TRUE` and `sum(false)` renders `FALSE`. We reject it:
+  `ERROR: Invalid function 'sum(bool)' in targets/column context.` (#422).
 
-- **BQL numbers with a positive exponent** (#512): Python keeps a
-  quotient's exponent, so `100 / 5.0` is `2E+1`. bean-query sizes the
-  column for one digit and cuts the value to it, printing `2` for 20 and
-  a blank cell for `1000 / 5.0` (`2E+2`), which hides the value. We print
-  fixed notation (`20`, `200`); `query/gap_number_exponent_positive.bql`
-  pins it. A number whose adjusted exponent is below -6 matches: it keeps
-  Python's form (`1E-7`) in the width fixed notation would take
-  (`query/number_exponent_*.bql`).
-
-- **BQL ordering of mixed types**: `<`, `<=`, `>` and `>=` between a
-  number or date and a string (`year < '2024'`) raise Python's `TypeError`
-  in bean-query, which prints the traceback to stdout on the first row it
-  evaluates. We compare the two values' string forms instead, so
-  `query/gap_compare_mixed_types_ordering.bql` returns rows. `=` and `!=`
-  between numbers, dates, booleans and strings match: values of different
-  types are never equal, and a boolean equals the integer 1 or 0
-  (`query/compare_*.bql`, #514). An amount, position or inventory compared
-  with another type raises an `AttributeError` traceback in bean-query;
-  we return false.
+- **BQL comparisons of mixed types**: bean-query rejects a comparison
+  between types it has no operator for when it compiles the query
+  (`operator "less(int, str)" not supported` for `year < '2024'`, also
+  `=` and `!=`, and between an amount, position or inventory and another
+  type). We run the query instead: `=` and `!=` compare numbers and
+  booleans by value (`1.0 = 1` and `(1 = 1) = 1` are TRUE) and hold any
+  other values of different types unequal (`1 = '1'` is FALSE), and `<`,
+  `<=`, `>` and `>=` compare the two values' string forms (`year < '2024'`
+  is TRUE for 2023). The `query/compare_*.bql` fixtures are in `queryGaps`
+  until #562 types operators.
 
 - **Error lines**: the differential suite compares the lines errors are
   reported on, and we keep our line where beancount's is less precise
@@ -332,10 +290,10 @@ compare the lines errors are on:
 - **BQL `id` column digests**: ids are unique and stable but hash the
   source location, not the directive contents like `compare.hash_entry`,
   so the hex digests differ from official output.
-- **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives, and
-  shell settings (`set format ...`) are not implemented; nor are the
-  beanquery v3 extensions (`HAVING`, subqueries, `CREATE TABLE`, per-term
-  ORDER BY directions).
+- **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives,
+  shell settings (`set format ...`) and dot-commands are not implemented;
+  nor are beanquery's subqueries, `FROM #table` and `CREATE TABLE`.
+  `HAVING`, `PIVOT BY` and per-term ORDER BY directions are in #562.
 - **BQL dict-typed metadata functions**: `commodity_meta`, `currency_meta`,
   `open_meta`, and `getitem` (dict-typed values) are not implemented;
   `meta`, `entry_meta`, and `any_meta` cover scalar metadata lookups.

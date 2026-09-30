@@ -1,0 +1,13 @@
+option "display_precision" "USD:0.001"
+option "display_precision" "JPY:1"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Fixed precisions for USD and JPY, inferred for EUR"
+  Assets:A  1.5 USD
+  Assets:A  1234.5678 JPY
+  Assets:A  1.25 EUR
+  Assets:A  1.35 EUR
+  Assets:A  2.125 EUR
+  Assets:B

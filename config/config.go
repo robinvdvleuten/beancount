@@ -57,8 +57,8 @@ type Config struct {
 	OperatingCurrencies []string
 
 	// DisplayPrecision maps a currency to the display_precision number
-	// whose exponent fixes its fractional digits. Nothing reads it yet
-	// (#562).
+	// whose exponent fixes its fractional digits in the ledger's display
+	// context, which BQL renders amounts with.
 	DisplayPrecision map[string]decimal.Decimal
 
 	// AccountUnrealizedGains is the leaf account unrealized gains post

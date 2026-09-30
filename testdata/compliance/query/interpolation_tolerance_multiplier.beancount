@@ -1,0 +1,11 @@
+; tolerance_multiplier scales the tolerance interpolation rounds to: at 5,
+; the residual -13.7036963 USD rounds to one digit, not two.
+option "tolerance_multiplier" "5"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Interpolated at the multiplied tolerance"
+  Assets:A  10.00 USD
+  Assets:A  3.33333 EUR @ 1.11111 USD
+  Assets:B

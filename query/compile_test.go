@@ -91,6 +91,9 @@ func TestCompileWildcard(t *testing.T) {
 }
 
 func TestCompileTargetNaming(t *testing.T) {
+	// Like beanquery's get_target_name: an alias, lowercased unless
+	// double-quoted; a bare column's name; any other expression's source
+	// text, as written.
 	ctx := newTestContext(t)
 
 	for _, tt := range []struct {
@@ -98,21 +101,46 @@ func TestCompileTargetNaming(t *testing.T) {
 		name  string
 	}{
 		{"SELECT account", "account"},
-		{"SELECT account AS acc", "acc"},
-		{"SELECT sum(position)", "sum_position"},
-		{"SELECT sum(cost(position))", "sum_cost_position"},
-		{"SELECT year(date)", "year_date"},
-		{"SELECT 'lit'", "clit"},
-		{"SELECT 42", "c42"},
-		{"SELECT 3.14", "c3_14"},
-		{"SELECT number + 1", "add_number_c1"},
-		{"SELECT number - 1", "sub_number_c1"},
-		{"SELECT number * 2", "mul_number_c2"},
-		{"SELECT number / 2", "div_number_c2"},
-		{"SELECT str(2 = 2)", "str_equal_c2_c2"},
+		{"SELECT ACCOUNT", "account"},
+		{"SELECT (Account)", "account"},
+		{"SELECT account AS ACC", "acc"},
+		{`SELECT account AS "Q A"`, "Q A"},
+		{"SELECT sum( Position )", "sum( Position )"},
+		{"SELECT sum(cost(position))", "sum(cost(position))"},
+		{"SELECT 'lit'", "'lit'"},
+		{"SELECT 042", "042"},
+		{"SELECT +3", "3"},
+		{"SELECT (number   * 2)", "number   * 2"},
+		{"SELECT (number + 1) / 2", "(number + 1) / 2"},
+		{"SELECT NOT 2 = 2", "NOT 2 = 2"},
 	} {
 		compiled := mustCompile(t, ctx, tt.query)
 		assert.Equal(t, tt.name, compiled.Targets[0].Name, tt.query)
+	}
+}
+
+func TestCompileDesugaredTargetNaming(t *testing.T) {
+	// BALANCES and JOURNAL targets are named by the text beanquery
+	// expands them to.
+	ctx := newTestContext(t)
+
+	for _, tt := range []struct {
+		query string
+		names []string
+	}{
+		{"BALANCES", []string{"account", "SUM((position))"}},
+		{"BALANCES AT Cost", []string{"account", "SUM(cost(position))"}},
+		{"JOURNAL", []string{"date", "flag", "MAXWIDTH(payee, 48)", "MAXWIDTH(narration, 80)", "account", "position", "balance"}},
+		{"JOURNAL AT units", []string{"date", "flag", "MAXWIDTH(payee, 48)", "MAXWIDTH(narration, 80)", "account", "units(position)", "units(balance)"}},
+	} {
+		compiled := mustCompile(t, ctx, tt.query)
+		var names []string
+		for _, target := range compiled.Targets {
+			if !target.Hidden {
+				names = append(names, target.Name)
+			}
+		}
+		assert.Equal(t, tt.names, names, tt.query)
 	}
 }
 
@@ -308,17 +336,15 @@ func TestCompileFallbackClassErrors(t *testing.T) {
 	}
 }
 
-func TestCompileMakesTargetNamesUnique(t *testing.T) {
-	// Like bean-query's find_unique_name, a repeated name, derived or given
-	// with AS, gets _1, _2, … and ORDER BY a name finds its first column.
+func TestCompileKeepsRepeatedTargetNames(t *testing.T) {
+	// Like beanquery, a repeated name, given or with AS, stays as it is.
 	ctx := newTestContext(t)
-	compiled := mustCompile(t, ctx, "SELECT account, account, number AS n, date AS n, number AS n ORDER BY n")
+	compiled := mustCompile(t, ctx, "SELECT account, account, number AS n, date AS n, number AS n")
 	var names []string
 	for _, target := range compiled.Targets {
 		if !target.Hidden {
 			names = append(names, target.Name)
 		}
 	}
-	assert.Equal(t, []string{"account", "account_1", "n", "n_1", "n_2"}, names)
-	assert.Equal(t, []int{2}, compiled.OrderBy)
+	assert.Equal(t, []string{"account", "account", "n", "n", "n"}, names)
 }

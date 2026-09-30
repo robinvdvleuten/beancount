@@ -1,0 +1,14 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Opening"
+  Assets:A  1.00 USD
+  Assets:B  -1.00 USD
+
+2020-01-03 * "Transfer"
+  Assets:A  2.00 USD
+  Assets:B  -2.00 USD
+
+2020-01-04 * "Dust below USD's display precision"
+  Assets:A  0.001 USD
+  Assets:B  -0.001 USD

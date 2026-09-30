@@ -1,10 +1,10 @@
 package query
 
 import (
-	"fmt"
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
@@ -12,68 +12,88 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// renderText writes a result as bean-query's default text table: headers
-// centered and truncated to the data width, a dashed rule, and per-type
-// value alignment.
+// columnSeparator separates the columns of a text table; textListSep and
+// csvListSep separate the elements of a set, or the positions of an
+// inventory, in a text and a csv cell.
+const (
+	columnSeparator = "  "
+	textListSep     = "  "
+	csvListSep      = ","
+)
+
+// renderText writes a result as beanquery's default text table: each column
+// as wide as its values, its header cut to that width and centered over a
+// dashed rule, and cells padded to it. An empty result writes nothing.
 func renderText(result *table, w io.Writer) error {
-	renderers := prepareRenderers(result)
+	if len(result.Rows) == 0 {
+		return nil
+	}
+	renderers := prepareRenderers(result, textListSep)
+	widths := make([]int, len(renderers))
+	for i, r := range renderers {
+		widths[i] = max(1, r.width())
+	}
 
 	var b strings.Builder
+	cells := make([]string, len(result.Columns))
 	for i, col := range result.Columns {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		// Like bean-query, the header takes the column's content width,
-		// which may be 0 (all values empty), while cells take at least 1.
-		width := renderers[i].contentWidth()
-		b.WriteString(center(truncate(col.Name, width), width))
+		cells[i] = center(truncate(col.Name, widths[i]), widths[i])
 	}
-	b.WriteByte('\n')
-
-	for i := range result.Columns {
-		if i > 0 {
-			b.WriteByte(' ')
-		}
-		b.WriteString(strings.Repeat("-", renderers[i].width()))
+	writeTextRow(&b, cells)
+	for i, width := range widths {
+		cells[i] = strings.Repeat("-", width)
 	}
-	b.WriteByte('\n')
+	writeTextRow(&b, cells)
 
 	for _, row := range result.Rows {
 		for i, value := range row {
-			if i > 0 {
-				b.WriteByte(' ')
+			cell := ""
+			if value != nil {
+				cell = renderers[i].format(value)
 			}
-			// Cells are at least one character wide in text output.
-			b.WriteString(padRight(renderers[i].format(value), renderers[i].width()))
+			if renderers[i].rightAligned() {
+				cells[i] = padLeft(cell, widths[i])
+			} else {
+				cells[i] = padRight(cell, widths[i])
+			}
 		}
-		b.WriteByte('\n')
+		writeTextRow(&b, cells)
 	}
 
 	_, err := io.WriteString(w, b.String())
 	return err
 }
 
-// renderCSV writes a result as bean-query's CSV output: full column names in
-// the header, width-padded cells (an official quirk), and CRLF line endings.
-// With numberify, amount-bearing columns split into one numeric column per
-// currency.
-func renderCSV(result *table, w io.Writer, numberify bool) error {
-	if numberify {
-		result = numberifyResult(result)
+func writeTextRow(b *strings.Builder, cells []string) {
+	for i, cell := range cells {
+		if i > 0 {
+			b.WriteString(columnSeparator)
+		}
+		b.WriteString(cell)
 	}
-	renderers := prepareRenderers(result)
+	b.WriteByte('\n')
+}
+
+// renderCSV writes a result as beanquery's -f csv output: the full column
+// names, then one record per row. Cells are formatted as for text, so
+// number, amount, position and inventory cells keep the padding that aligns
+// them, while other cells and NULLs are written as they are.
+func renderCSV(result *table, w io.Writer) error {
+	renderers := prepareRenderers(result, csvListSep)
 
 	var b strings.Builder
-	header := make([]string, len(result.Columns))
-	for i, col := range result.Columns {
-		header[i] = col.Name
-	}
-	writeCSVRecord(&b, header)
-
 	record := make([]string, len(result.Columns))
+	for i, col := range result.Columns {
+		record[i] = col.Name
+	}
+	writeCSVRecord(&b, record)
+
 	for _, row := range result.Rows {
 		for i, value := range row {
-			record[i] = renderers[i].format(value)
+			record[i] = ""
+			if value != nil {
+				record[i] = renderers[i].format(value)
+			}
 		}
 		writeCSVRecord(&b, record)
 	}
@@ -81,11 +101,16 @@ func renderCSV(result *table, w io.Writer, numberify bool) error {
 	return err
 }
 
-// writeCSVRecord writes one CSV record with Python's QUOTE_MINIMAL rules:
-// fields are quoted only when they contain a separator, quote, or newline.
-// Go's encoding/csv also quotes leading spaces, which would break parity
-// with the official output's padded cells.
+// writeCSVRecord writes one CSV record like Python's csv.writer in its excel
+// dialect: a field is quoted only when it holds a separator, quote or line
+// break, and a record of one empty field is written as "" so it is not a
+// blank line. Go's encoding/csv also quotes leading spaces, which would
+// break parity with the padded cells.
 func writeCSVRecord(b *strings.Builder, fields []string) {
+	if len(fields) == 1 && fields[0] == "" {
+		b.WriteString("\"\"\r\n")
+		return
+	}
 	for i, field := range fields {
 		if i > 0 {
 			b.WriteByte(',')
@@ -101,233 +126,125 @@ func writeCSVRecord(b *strings.Builder, fields []string) {
 	b.WriteString("\r\n")
 }
 
-func prepareRenderers(result *table) []columnRenderer {
+// prepareRenderers builds a renderer per column and feeds it the column's
+// non-NULL values, as beanquery primes its renderers.
+func prepareRenderers(result *table, listSep string) []columnRenderer {
+	ctx := &renderContext{display: result.Display, listSep: listSep}
 	renderers := make([]columnRenderer, len(result.Columns))
 	for i, col := range result.Columns {
-		renderers[i] = newRenderer(col.Type, result.Display)
+		newRenderer, ok := columnRenderers[col.Type]
+		if !ok {
+			newRenderer = columnRenderers[tAny]
+		}
+		renderers[i] = newRenderer(ctx)
 	}
 	for _, row := range result.Rows {
 		for i, value := range row {
-			renderers[i].prepare(value)
+			if value != nil {
+				renderers[i].update(value)
+			}
 		}
+	}
+	for _, r := range renderers {
+		r.prepare()
 	}
 	return renderers
 }
 
-// numberifyResult splits amount, position, and inventory columns into one
-// decimal column per currency, named "column (CUR)", with currencies in
-// order of first appearance. Numbers are rounded to their currency's display
-// precision, like bean-query's numberify.
-func numberifyResult(result *table) *table {
-	type split struct {
-		column     int
-		currencies []string
-		index      map[string]int
-	}
-
-	var columns []tableColumn
-	splits := make(map[int]*split)
-	mapping := make([]int, 0, len(result.Columns)) // start index of each source column
-
-	for i, col := range result.Columns {
-		mapping = append(mapping, len(columns))
-		switch col.Type {
-		case tAmount, tPosition, tInventory:
-			s := &split{column: i, index: make(map[string]int)}
-			for _, row := range result.Rows {
-				for _, currency := range valueCurrencies(row[i]) {
-					if _, ok := s.index[currency]; !ok {
-						s.index[currency] = len(s.currencies)
-						s.currencies = append(s.currencies, currency)
-					}
-				}
-			}
-			splits[i] = s
-			for _, currency := range s.currencies {
-				columns = append(columns, tableColumn{
-					Name: fmt.Sprintf("%s (%s)", col.Name, currency),
-					Type: tDecimal,
-				})
-			}
-			if len(s.currencies) == 0 {
-				// Keep a single empty column so the header survives.
-				columns = append(columns, tableColumn{Name: col.Name, Type: tDecimal})
-			}
-		default:
-			columns = append(columns, col)
-		}
-	}
-
-	rows := make([][]any, len(result.Rows))
-	for r, row := range result.Rows {
-		values := make([]any, len(columns))
-		for i, value := range row {
-			if s, ok := splits[i]; ok {
-				for currency, offset := range s.index {
-					if number, ok := currencyNumber(value, currency); ok {
-						if result.Display != nil {
-							number = result.Display.Quantize(number, currency)
-						}
-						values[mapping[i]+offset] = number
-					}
-				}
-			} else {
-				values[mapping[i]] = value
-			}
-		}
-		rows[r] = values
-	}
-
-	return &table{Columns: columns, Rows: rows, Display: result.Display}
+// renderContext is what a column renderer is built with.
+type renderContext struct {
+	// display is the ledger's display context, which quantizes amounts;
+	// nil leaves them as they are.
+	display *ledger.DisplayContext
+	listSep string
 }
 
-// valueCurrencies lists the currencies present in an amount-bearing value.
-func valueCurrencies(v any) []string {
-	switch val := v.(type) {
-	case *amountValue:
-		return []string{val.Currency}
-	case *positionValue:
-		return []string{val.Units.Currency}
-	case *inventoryValue:
-		var currencies []string
-		seen := make(map[string]bool)
-		for _, p := range val.Positions() {
-			if !seen[p.Units.Currency] {
-				seen[p.Units.Currency] = true
-				currencies = append(currencies, p.Units.Currency)
-			}
-		}
-		return currencies
-	}
-	return nil
-}
-
-// currencyNumber extracts the units number of one currency from an
-// amount-bearing value, summing inventory lots.
-func currencyNumber(v any, currency string) (decimal.Decimal, bool) {
-	switch val := v.(type) {
-	case *amountValue:
-		if val.Currency == currency {
-			return val.Number, true
-		}
-	case *positionValue:
-		if val.Units.Currency == currency {
-			return val.Units.Number, true
-		}
-	case *inventoryValue:
-		total := decimal.Decimal{}
-		found := false
-		for _, p := range val.Positions() {
-			if p.Units.Currency == currency {
-				total = pydecimal.Add(total, p.Units.Number)
-				found = true
-			}
-		}
-		if found {
-			return total, true
-		}
-	}
-	return decimal.Decimal{}, false
-}
-
-// columnRenderer accumulates layout information over a column's values in
-// prepare, then formats each value padded to the column width.
+// columnRenderer renders one column like beanquery's ColumnRenderer: update
+// sees every non-NULL value, prepare sizes the column, and format renders a
+// non-NULL value, most renderers padded to width.
 type columnRenderer interface {
-	prepare(v any)
-	// contentWidth is the width the values need, 0 when all are empty;
-	// width is the cell width, at least 1.
-	contentWidth() int
+	update(v any)
+	prepare()
 	width() int
 	format(v any) string
+	rightAligned() bool
 }
 
-func newRenderer(t dtype, display *ledger.DisplayContext) columnRenderer {
-	switch t {
-	case tAny:
-		return &objectRenderer{}
-	case tSet:
-		return &setRenderer{}
-	case tDate:
-		return &dateRenderer{}
-	case tInt:
-		return &intRenderer{}
-	case tBool:
-		return &boolRenderer{}
-	case tDecimal:
-		return &decimalRenderer{numbers: newNumberField(display)}
-	case tAmount:
-		return &amountRenderer{amounts: amountField{numbers: newNumberField(display)}}
-	case tPosition, tInventory:
-		return &positionRenderer{
-			units: amountField{numbers: newNumberField(display)},
-			costs: amountField{numbers: newNumberField(display)},
-		}
-	default:
-		return &stringRenderer{}
-	}
+// columnRenderers maps each column type to its renderer, like beanquery's
+// RENDERERS.
+var columnRenderers = map[dtype]func(ctx *renderContext) columnRenderer{
+	tAny:       func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
+	tString:    func(*renderContext) columnRenderer { return &strRenderer{str: valueString} },
+	tInt:       func(*renderContext) columnRenderer { return &strRenderer{str: valueString, right: true} },
+	tBool:      func(*renderContext) columnRenderer { return &boolRenderer{} },
+	tDate:      func(*renderContext) columnRenderer { return &dateRenderer{} },
+	tSet:       func(ctx *renderContext) columnRenderer { return &setRenderer{sep: ctx.listSep} },
+	tDecimal:   func(*renderContext) columnRenderer { return &decimalRenderer{} },
+	tAmount:    func(ctx *renderContext) columnRenderer { return newAmountRenderer(ctx) },
+	tPosition:  func(ctx *renderContext) columnRenderer { return newPositionRenderer(ctx) },
+	tInventory: func(ctx *renderContext) columnRenderer { return newInventoryRenderer(ctx) },
 }
+
+// Python measures and pads strings in code points, so these helpers do too.
+
+func length(s string) int { return utf8.RuneCountInString(s) }
 
 func truncate(s string, width int) string {
-	if len(s) > width {
-		return s[:width]
+	if length(s) <= width {
+		return s
 	}
-	return s
+	return string([]rune(s)[:width])
 }
 
-// center pads s to width with the extra space on the right, like Python's
-// str.center used by the official renderer.
+// center pads s to width like Python's str.center: the extra space goes
+// right, unless both the padding and the width are odd.
 func center(s string, width int) string {
-	total := width - len(s)
+	total := width - length(s)
 	if total <= 0 {
 		return s
 	}
-	left := total / 2
+	left := total/2 + (total & width & 1)
 	return strings.Repeat(" ", left) + s + strings.Repeat(" ", total-left)
 }
 
 func padRight(s string, width int) string {
-	if len(s) >= width {
-		return s
+	if n := length(s); n < width {
+		return s + strings.Repeat(" ", width-n)
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s
 }
 
 func padLeft(s string, width int) string {
-	if len(s) >= width {
-		return s
+	if n := length(s); n < width {
+		return strings.Repeat(" ", width-n) + s
 	}
-	return strings.Repeat(" ", width-len(s)) + s
+	return s
 }
 
-// objectRenderer renders object-typed values (metadata lookups) like
-// bean-query's ObjectRenderer: each value as Python's str() prints it, the
-// column as wide as the last non-NULL value (the official renderer assigns
-// rather than maximizes), and cells unpadded, so csv cells stay raw.
-type objectRenderer struct {
-	w int
+// strRenderer renders a value as Python's str() spells it, like
+// beanquery's ObjectRenderer and its string and int kin: the column is as
+// wide as the widest value, and cells are not padded.
+type strRenderer struct {
+	str   func(any) string
+	right bool
+	w     int
 }
 
-func (r *objectRenderer) prepare(v any) {
-	if v != nil {
-		r.w = len(objectString(v))
-	}
-}
+func (r *strRenderer) update(v any)        { r.w = max(r.w, length(r.str(v))) }
+func (r *strRenderer) prepare()            {}
+func (r *strRenderer) width() int          { return r.w }
+func (r *strRenderer) format(v any) string { return r.str(v) }
+func (r *strRenderer) rightAligned() bool  { return r.right }
 
-func (r *objectRenderer) contentWidth() int { return r.w }
-func (r *objectRenderer) width() int        { return max(r.w, 1) }
+// leftAligned is embedded by the renderers whose text cells are padded on
+// the right, all but int columns'.
+type leftAligned struct{}
 
-func (r *objectRenderer) format(v any) string {
-	if v == nil {
-		return ""
-	}
-	return objectString(v)
-}
+func (leftAligned) rightAligned() bool { return false }
 
 // objectString renders a value like Python's str(), for object columns and
 // the str() function: numbers keep the digits they were written with (3.10,
-// 10.50 USD), and an inventory is parenthesized like beancount's. Unlike
-// bean-query, numbers, dates and strings are not spelled as Python's repr
-// (Decimal('3.10')); see KNOWN_GAPS.md.
+// 10.50 USD), and an inventory is parenthesized like beancount's.
 func objectString(v any) string {
 	switch val := v.(type) {
 	case nil:
@@ -344,386 +261,431 @@ func objectString(v any) string {
 	return valueString(v)
 }
 
-// setRenderer renders sets like bean-query's StringSetRenderer: the column is
-// as wide as its longest element, and a cell pads each element to that width
-// and joins them sorted with ", ", overflowing the column when it holds more
-// than one.
-type setRenderer struct {
+// boolRenderer renders TRUE and FALSE, the column 5 wide once it holds a
+// FALSE and 4 otherwise.
+type boolRenderer struct {
+	leftAligned
 	w int
 }
 
-func (r *setRenderer) prepare(v any) {
-	if set, ok := v.(setValue); ok {
-		for elem := range set {
-			r.w = max(r.w, len(elem))
-		}
+func (r *boolRenderer) update(v any) {
+	if b, _ := v.(bool); b {
+		r.w = max(r.w, 4)
+	} else {
+		r.w = max(r.w, 5)
 	}
 }
 
-func (r *setRenderer) contentWidth() int { return r.w }
-func (r *setRenderer) width() int        { return max(r.w, 1) }
+func (r *boolRenderer) prepare()   {}
+func (r *boolRenderer) width() int { return r.w }
 
-func (r *setRenderer) format(v any) string {
-	set, _ := v.(setValue)
-	if len(set) == 0 {
-		return strings.Repeat(" ", r.w)
+func (r *boolRenderer) format(v any) string {
+	if b, _ := v.(bool); b {
+		return "TRUE"
 	}
-	elems := make([]string, 0, len(set))
-	for elem := range set {
-		elems = append(elems, padRight(elem, r.w))
-	}
-	slices.Sort(elems)
-	return strings.Join(elems, ", ")
+	return "FALSE"
 }
 
-// stringRenderer renders strings left-aligned.
-type stringRenderer struct {
+type dateRenderer struct {
+	leftAligned
 	w int
 }
 
-func (r *stringRenderer) toString(v any) string {
-	if v == nil {
-		return ""
-	}
-	return valueString(v)
-}
-
-func (r *stringRenderer) prepare(v any) {
-	if n := len(r.toString(v)); n > r.w {
-		r.w = n
-	}
-}
-
-func (r *stringRenderer) contentWidth() int { return r.w }
-func (r *stringRenderer) width() int        { return max(r.w, 1) }
-
-func (r *stringRenderer) format(v any) string {
-	return padRight(r.toString(v), r.contentWidth())
-}
-
-type dateRenderer struct{}
-
-func (r *dateRenderer) prepare(any)       {}
-func (r *dateRenderer) contentWidth() int { return 10 }
-func (r *dateRenderer) width() int        { return 10 }
-
+func (r *dateRenderer) update(any) { r.w = 10 }
+func (r *dateRenderer) prepare()   {}
+func (r *dateRenderer) width() int { return r.w }
 func (r *dateRenderer) format(v any) string {
 	if date, ok := v.(*ast.Date); ok && date != nil {
 		return date.String()
 	}
-	return strings.Repeat(" ", 10)
+	return ""
 }
 
-// integralWidth sizes an integer field like bean-query: one sign column
-// when any value is negative, plus the most integer digits of any value.
-// Positive values are padded into the sign column, so 10 and -1 render as
-// " 10" and " -1".
-type integralWidth struct {
-	negative bool
-	digits   int
+// setRenderer joins a set's elements, sorted, with the list separator.
+type setRenderer struct {
+	leftAligned
+	sep string
+	w   int
 }
 
-// observe records the integer part of a formatted number, e.g. "-12".
-func (w *integralWidth) observe(intPart string) {
-	if digits, ok := strings.CutPrefix(intPart, "-"); ok {
-		w.negative = true
-		intPart = digits
+func (r *setRenderer) update(v any) {
+	set, _ := v.(setValue)
+	w := -length(r.sep)
+	for elem := range set {
+		w += length(elem) + length(r.sep)
 	}
-	w.digits = max(w.digits, len(intPart))
+	r.w = max(r.w, w)
 }
 
-func (w *integralWidth) width() int {
-	if w.negative {
-		return w.digits + 1
+func (r *setRenderer) prepare()   {}
+func (r *setRenderer) width() int { return r.w }
+
+func (r *setRenderer) format(v any) string {
+	set, _ := v.(setValue)
+	return strings.Join(set.Sorted(), r.sep)
+}
+
+// coefficientDigits counts the digits of d's coefficient, as Python's
+// Decimal.as_tuple() holds them.
+func coefficientDigits(d decimal.Decimal) int {
+	coefficient := d.Coefficient()
+	return len(coefficient.Abs(coefficient).String())
+}
+
+// numberParts is what Python's Decimal holds of a number cell: its sign, the
+// number of its coefficient's digits, its exponent, and its str().
+type numberParts struct {
+	sign, digits, exponent int
+	str                    string
+}
+
+// numberCell reads a number cell: an int, a decimal, or the negative zero
+// numberify gives a negative number that rounds to zero.
+func numberCell(v any) (numberParts, bool) {
+	negative := false
+	if zero, ok := v.(negativeZero); ok {
+		v, negative = zero.Decimal, true
 	}
-	return w.digits
-}
-
-type intRenderer struct {
-	integral integralWidth
-}
-
-func (r *intRenderer) prepare(v any) {
-	if n, ok := v.(int64); ok {
-		r.integral.observe(fmt.Sprintf("%d", n))
+	d, ok := asDecimal(v)
+	if !ok {
+		return numberParts{}, false
 	}
-}
-
-func (r *intRenderer) contentWidth() int { return r.integral.width() }
-func (r *intRenderer) width() int        { return max(r.integral.width(), 1) }
-
-func (r *intRenderer) format(v any) string {
-	if n, ok := v.(int64); ok {
-		return padLeft(fmt.Sprintf("%d", n), r.contentWidth())
+	n := numberParts{digits: coefficientDigits(d), exponent: int(d.Exponent()), str: pydecimal.String(d)}
+	if negative || d.Sign() < 0 {
+		n.sign = 1
+		if !strings.HasPrefix(n.str, "-") {
+			n.str = "-" + n.str
+		}
 	}
-	return strings.Repeat(" ", r.contentWidth())
+	return n, true
 }
 
-// boolRenderer renders TRUE/FALSE like bean-query's BoolRenderer: the column
-// is 5 wide if it holds a TRUE and 4 otherwise, so FALSE alone is cut to
-// "FALS", and a NULL renders as FALSE.
-type boolRenderer struct {
-	seenTrue bool
-}
-
-func (r *boolRenderer) prepare(v any) {
-	if b, ok := v.(bool); ok && b {
-		r.seenTrue = true
-	}
-}
-
-func (r *boolRenderer) contentWidth() int {
-	if r.seenTrue {
-		return 5
-	}
-	return 4
-}
-
-func (r *boolRenderer) width() int { return r.contentWidth() }
-
-func (r *boolRenderer) format(v any) string {
-	text := "FALSE"
-	if b, ok := v.(bool); ok && b {
-		text = "TRUE"
-	}
-	return padRight(truncate(text, r.contentWidth()), r.contentWidth())
-}
-
-// decimalRenderer renders a plain decimal column. Its numbers have no
-// currency, so they are laid out at their own precision.
+// decimalRenderer renders a number column like beanquery's DecimalRenderer:
+// every number as Python's str() spells it, never rounded, aligned on its
+// decimal point. A number with a positive exponent, which Python spells in
+// scientific notation (2E+1), is right-aligned before the point instead.
 type decimalRenderer struct {
-	numbers *numberField
+	leftAligned
+	integral   int // widest integer part, sign included
+	fractional int // widest fractional part
+	w          int
 }
 
-func (r *decimalRenderer) prepare(v any) {
-	if d, ok := v.(decimal.Decimal); ok {
-		r.numbers.observe(d, "")
+func (r *decimalRenderer) update(v any) {
+	n, ok := numberCell(v)
+	if !ok {
+		return
+	}
+	if n.exponent > 0 {
+		r.integral = max(r.integral, length(n.str))
+		return
+	}
+	r.integral = max(r.integral, max(1, n.digits+n.exponent)+n.sign)
+	r.fractional = max(r.fractional, -n.exponent)
+}
+
+func (r *decimalRenderer) prepare() {
+	r.w = r.integral + r.fractional
+	if r.fractional > 0 {
+		r.w++
 	}
 }
 
-func (r *decimalRenderer) contentWidth() int { return r.numbers.width() }
-
-func (r *decimalRenderer) width() int {
-	return max(r.numbers.width(), 1)
-}
+func (r *decimalRenderer) width() int { return r.w }
 
 func (r *decimalRenderer) format(v any) string {
-	d, ok := v.(decimal.Decimal)
+	n, ok := numberCell(v)
 	if !ok {
-		return strings.Repeat(" ", r.contentWidth())
+		return ""
 	}
-	return padRight(r.numbers.format(d), r.contentWidth())
-}
-
-func decimalParts(d decimal.Decimal) (string, string) {
-	scale := max(-d.Exponent(), 0)
-	s := d.StringFixed(scale)
-	if idx := strings.IndexByte(s, '.'); idx >= 0 {
-		return s[:idx], s[idx+1:]
+	if n.exponent > 0 {
+		return padRight(padLeft(n.str, r.integral), r.w)
 	}
-	return s, ""
+	left := r.integral - (max(1, n.digits+n.exponent) + n.sign)
+	return strings.Repeat(" ", max(left, 0)) + padRight(n.str, r.w-left)
 }
 
-// numberField lays out a column of numbers like bean-query's
-// DecimalRenderer. Each number is quantized to its currency's display
-// precision only to size the field: a sign column when any value is
-// negative, the most integer digits, and the widest per-currency most common
-// count of fractional digits. Numbers then print as written, aligned at the
-// decimal point and cut to the field width, so 2500.00 in a column of whole
-// numbers renders as 2500.
-type numberField struct {
-	display  *ledger.DisplayContext
-	integral integralWidth
-	digits   map[string]map[int32]int // currency -> fractional digits -> count
-	fracW    int                      // widest fraction incl. the dot
-	finished bool
+// amountRenderer renders an amount column like beanquery's AmountRenderer:
+// each number is quantized with the ledger's display context, then laid
+// out by a display context of the column's own, as beancount builds it with
+// dot alignment: a sign column that is always there, the widest integer
+// part, and per currency the most common number of fractional digits,
+// padded to the widest so the currencies line up.
+type amountRenderer struct {
+	leftAligned
+	display   *ledger.DisplayContext
+	integral  int                      // widest integer part
+	fractions map[string]map[int32]int // currency -> fractional digits -> count
+	currencyW int
+
+	numberW   int            // the number's width, sign and padding included
+	digits    map[string]int // currency -> fractional digits
+	maxDigits int
+	w         int
 }
 
-func newNumberField(display *ledger.DisplayContext) *numberField {
-	return &numberField{display: display, digits: make(map[string]map[int32]int)}
+func newAmountRenderer(ctx *renderContext) *amountRenderer {
+	return &amountRenderer{display: ctx.display, integral: 1, fractions: make(map[string]map[int32]int)}
 }
 
-// observe records a number of the given currency ("" for plain decimals).
-func (f *numberField) observe(number decimal.Decimal, currency string) {
-	if f.display != nil {
-		number = f.display.Quantize(number, currency)
+func (r *amountRenderer) observe(number decimal.Decimal, currency string) {
+	if r.display != nil {
+		number = r.display.Quantize(number, currency)
 	}
-	intPart, _ := decimalParts(number)
-	f.integral.observe(intPart)
+	exponent := int(number.Exponent())
+	r.integral = max(r.integral, coefficientDigits(number)+exponent)
 
-	counts, ok := f.digits[currency]
+	counts, ok := r.fractions[currency]
 	if !ok {
 		counts = make(map[int32]int)
-		f.digits[currency] = counts
+		r.fractions[currency] = counts
 	}
-	counts[max(-number.Exponent(), 0)]++
+	counts[int32(max(-exponent, 0))]++
+	r.currencyW = max(r.currencyW, length(currency))
 }
 
-func (f *numberField) width() int {
-	if !f.finished {
-		for _, counts := range f.digits {
-			if digits := int(mostCommonDigits(counts)); digits > 0 {
-				f.fracW = max(f.fracW, 1+digits)
-			}
-		}
-		f.finished = true
-	}
-	return f.integral.width() + f.fracW
-}
-
-func (f *numberField) format(number decimal.Decimal) string {
-	if s := pydecimal.String(number); strings.Contains(s, "E-") {
-		// Like bean-query, a number Python prints in exponent form (an
-		// adjusted exponent below -6) keeps that form, in the field the
-		// fixed notation sizes: 1E-7 fills 0.0000001's width. It aligns
-		// on its point, or its end without one, behind a sign column.
-		// A positive exponent keeps fixed notation, where bean-query
-		// prints a wrong or blank cell (KNOWN_GAPS.md).
-		if f.integral.negative && number.Sign() >= 0 {
-			s = " " + s
-		}
-		point := strings.IndexByte(s, '.')
-		if point < 0 {
-			point = len(s)
-		}
-		s = strings.Repeat(" ", max(f.integral.width()-point, 0)) + s
-		return padRight(truncate(s, f.width()), f.width())
-	}
-
-	intPart, fracPart := decimalParts(number)
-	s := padLeft(intPart, f.integral.width())
-	if fracPart != "" {
-		s += "." + fracPart
-	}
-	return padRight(truncate(s, f.width()), f.width())
-}
-
-// mostCommonDigits returns the most frequent fractional digit count,
-// preferring more digits on a tie, like beancount's Distribution.mode.
-func mostCommonDigits(counts map[int32]int) int32 {
-	var digits int32
-	best := 0
-	for d, count := range counts {
-		if count > best || (count == best && d > digits) {
-			digits, best = d, count
-		}
-	}
-	return digits
-}
-
-// amountField renders "number CURRENCY" with the numbers aligned and the
-// currencies padded, like bean-query's AmountRenderer.
-type amountField struct {
-	numbers *numberField
-	curW    int
-}
-
-func (a *amountField) observe(number decimal.Decimal, currency string) {
-	a.numbers.observe(number, currency)
-	a.curW = max(a.curW, len(currency))
-}
-
-// width is 0 when no amount was observed.
-func (a *amountField) width() int {
-	if a.curW == 0 {
-		return 0
-	}
-	return a.numbers.width() + 1 + a.curW
-}
-
-func (a *amountField) format(number decimal.Decimal, currency string) string {
-	return a.numbers.format(number) + " " + padRight(currency, a.curW)
-}
-
-// amountRenderer renders amount columns.
-type amountRenderer struct {
-	amounts amountField
-}
-
-func (r *amountRenderer) prepare(v any) {
+func (r *amountRenderer) update(v any) {
 	if a, ok := v.(*amountValue); ok && a != nil {
-		r.amounts.observe(a.Number, a.Currency)
+		r.observe(a.Number, a.Currency)
 	}
 }
 
-func (r *amountRenderer) contentWidth() int { return r.amounts.width() }
+func (r *amountRenderer) prepare() {
+	r.digits = make(map[string]int, len(r.fractions))
+	r.maxDigits = -1
+	period := 0
+	for currency, counts := range r.fractions {
+		digits := int(ledger.MostCommonDigits(counts))
+		r.digits[currency] = digits
+		r.maxDigits = max(r.maxDigits, digits)
+		if digits > 0 {
+			period = 1
+		}
+	}
+	if r.maxDigits < 0 {
+		return // no amounts: the column is empty
+	}
+	r.numberW = 1 + r.integral + period + r.maxDigits
+	r.w = r.numberW + 1 + r.currencyW
+}
 
-func (r *amountRenderer) width() int {
-	return max(r.amounts.width(), 1)
+func (r *amountRenderer) width() int { return r.w }
+
+// formatNumber renders number like the column's formatter for currency,
+// "{: W.Nf}" followed by the padding that lines the currencies up.
+func (r *amountRenderer) formatNumber(number decimal.Decimal, currency string) string {
+	digits, ok := r.digits[currency]
+	if !ok {
+		digits = r.maxDigits
+	}
+	padding := r.maxDigits - digits
+	if r.maxDigits > 0 && digits == 0 {
+		padding++
+	}
+	// Python keeps the sign of a negative number that rounds to zero
+	// (-0.001 is -0.00), which the rounded decimal has lost.
+	s := number.RoundBank(int32(digits)).StringFixed(int32(digits))
+	switch {
+	case strings.HasPrefix(s, "-"):
+	case number.Sign() < 0:
+		s = "-" + s
+	default:
+		s = " " + s
+	}
+	return padLeft(s, r.numberW-padding) + strings.Repeat(" ", padding)
+}
+
+func (r *amountRenderer) formatAmount(number decimal.Decimal, currency string) string {
+	return r.formatNumber(number, currency) + " " + padRight(currency, r.currencyW)
 }
 
 func (r *amountRenderer) format(v any) string {
 	a, ok := v.(*amountValue)
 	if !ok || a == nil {
-		return strings.Repeat(" ", r.contentWidth())
+		return ""
 	}
-	return padRight(r.amounts.format(a.Number, a.Currency), r.contentWidth())
+	return r.formatAmount(a.Number, a.Currency)
 }
 
-// positionRenderer renders positions and inventories like bean-query's
-// PositionRenderer: aligned units, then the cost as a second aligned amount
-// in braces (its date and label are not shown). Inventories join their
-// positions with ", ".
+// positionRenderer renders a position column like beanquery's
+// PositionRenderer: the units, aligned, and a cost as a second aligned
+// amount in braces, without its date or label.
 type positionRenderer struct {
-	units amountField
-	costs amountField
+	leftAligned
+	units *amountRenderer
+	costs *amountRenderer
+	w     int
 }
 
-func (r *positionRenderer) positions(v any) []*positionValue {
-	switch val := v.(type) {
-	case *positionValue:
-		if val != nil {
-			return []*positionValue{val}
-		}
-	case *inventoryValue:
-		if val != nil {
-			return val.Positions()
-		}
-	}
-	return nil
+func newPositionRenderer(ctx *renderContext) *positionRenderer {
+	return &positionRenderer{units: newAmountRenderer(ctx), costs: newAmountRenderer(ctx)}
 }
 
-func (r *positionRenderer) prepare(v any) {
-	for _, p := range r.positions(v) {
-		r.units.observe(p.Units.Number, p.Units.Currency)
-		if p.Cost != nil {
-			r.costs.observe(p.Cost.Number, p.Cost.Currency)
-		}
+func (r *positionRenderer) observe(p *positionValue) {
+	r.units.observe(p.Units.Number, p.Units.Currency)
+	if p.Cost != nil {
+		r.costs.observe(p.Cost.Number, p.Cost.Currency)
 	}
 }
 
-// subWidth is the fixed width of one rendered position.
-func (r *positionRenderer) subWidth() int {
-	w := r.units.width()
-	if costW := r.costs.width(); costW > 0 {
-		w += 1 + costW + 2
+func (r *positionRenderer) update(v any) {
+	if p, ok := v.(*positionValue); ok && p != nil {
+		r.observe(p)
 	}
-	return w
 }
 
-func (r *positionRenderer) contentWidth() int { return r.subWidth() }
-
-func (r *positionRenderer) width() int {
-	return max(r.subWidth(), 1)
+func (r *positionRenderer) prepare() {
+	r.units.prepare()
+	r.costs.prepare()
+	r.w = r.units.width() + r.costs.width()
+	if r.costs.width() > 0 {
+		r.w += 3
+	}
 }
+
+func (r *positionRenderer) width() int { return r.w }
 
 func (r *positionRenderer) formatPosition(p *positionValue) string {
-	s := r.units.format(p.Units.Number, p.Units.Currency)
-	if p.Cost != nil {
-		s += " {" + r.costs.format(p.Cost.Number, p.Cost.Currency) + "}"
+	units := r.units.formatAmount(p.Units.Number, p.Units.Currency)
+	if p.Cost == nil {
+		return padRight(units, r.w)
 	}
-	return padRight(s, r.subWidth())
+	return units + " {" + r.costs.formatAmount(p.Cost.Number, p.Cost.Currency) + "}"
 }
 
 func (r *positionRenderer) format(v any) string {
-	width := r.contentWidth()
-	positions := r.positions(v)
-	if len(positions) == 0 {
-		return strings.Repeat(" ", width)
+	p, ok := v.(*positionValue)
+	if !ok || p == nil {
+		return ""
 	}
-	parts := make([]string, len(positions))
-	for i, p := range positions {
-		parts[i] = r.formatPosition(p)
+	return r.formatPosition(p)
+}
+
+// maxTabularLots is the most lots an inventory column lays out as a table.
+const maxTabularLots = 5
+
+// inventoryRenderer renders an inventory column like beanquery's
+// InventoryRenderer without row expansion. Each commodity has a position
+// renderer of its own and as many slots as it has lots in any one row;
+// cells list the commodities sorted, their lots in slots, and blanks for
+// the slots a row leaves empty. A column needing more than five slots lists
+// each cell's lots instead.
+type inventoryRenderer struct {
+	leftAligned
+	ctx         *renderContext
+	renderers   map[string]*positionRenderer
+	counts      map[string]int // commodity -> most lots in one row
+	commodities []string       // sorted, once prepared
+	slots       int
+	w           int
+}
+
+func newInventoryRenderer(ctx *renderContext) *inventoryRenderer {
+	return &inventoryRenderer{ctx: ctx, renderers: make(map[string]*positionRenderer), counts: make(map[string]int)}
+}
+
+func (r *inventoryRenderer) update(v any) {
+	inv, ok := v.(*inventoryValue)
+	if !ok || inv == nil {
+		return
 	}
-	return padRight(strings.Join(parts, ", "), width)
+	counts := make(map[string]int)
+	for _, p := range inv.Positions() {
+		currency := p.Units.Currency
+		renderer, ok := r.renderers[currency]
+		if !ok {
+			renderer = newPositionRenderer(r.ctx)
+			r.renderers[currency] = renderer
+		}
+		renderer.observe(p)
+		counts[currency]++
+	}
+	for currency, count := range counts {
+		r.counts[currency] = max(r.counts[currency], count)
+	}
+}
+
+func (r *inventoryRenderer) prepare() {
+	sep := length(r.ctx.listSep)
+	r.commodities = make([]string, 0, len(r.renderers))
+	for currency, renderer := range r.renderers {
+		renderer.prepare()
+		r.commodities = append(r.commodities, currency)
+		r.slots += r.counts[currency]
+		r.w += r.counts[currency] * (renderer.width() + sep)
+	}
+	slices.Sort(r.commodities)
+	r.w -= sep
+}
+
+func (r *inventoryRenderer) width() int { return r.w }
+
+func (r *inventoryRenderer) format(v any) string {
+	inv, ok := v.(*inventoryValue)
+	if !ok || inv == nil {
+		return ""
+	}
+	positions := inv.Positions()
+	slices.SortStableFunc(positions, comparePositionsForDisplay)
+
+	if r.slots > maxTabularLots {
+		parts := make([]string, len(positions))
+		for i, p := range positions {
+			parts[i] = r.renderers[p.Units.Currency].formatPosition(p)
+		}
+		return padRight(strings.Join(parts, r.ctx.listSep), r.w)
+	}
+
+	// The positions are sorted by currency, like the commodities, so each
+	// commodity's lots are the next run of them.
+	parts := make([]string, 0, r.slots)
+	next := 0
+	for _, currency := range r.commodities {
+		renderer := r.renderers[currency]
+		lots := 0
+		for ; next < len(positions) && positions[next].Units.Currency == currency; next++ {
+			parts = append(parts, renderer.formatPosition(positions[next]))
+			lots++
+		}
+		for range r.counts[currency] - lots {
+			parts = append(parts, strings.Repeat(" ", renderer.width()))
+		}
+	}
+	return strings.Join(parts, r.ctx.listSep)
+}
+
+// comparePositionsForDisplay orders positions like beanquery's
+// positionsortkey: by currency, then the most units first, then positions
+// without cost before those with, by cost currency, the highest cost
+// first, and the earliest lot date.
+func comparePositionsForDisplay(a, b *positionValue) int {
+	if c := strings.Compare(a.Units.Currency, b.Units.Currency); c != 0 {
+		return c
+	}
+	if c := b.Units.Number.Cmp(a.Units.Number); c != 0 {
+		return c
+	}
+	switch {
+	case a.Cost == nil && b.Cost == nil:
+		return 0
+	case a.Cost == nil:
+		return -1
+	case b.Cost == nil:
+		return 1
+	}
+	if c := strings.Compare(a.Cost.Currency, b.Cost.Currency); c != 0 {
+		return c
+	}
+	if c := b.Cost.Number.Cmp(a.Cost.Number); c != 0 {
+		return c
+	}
+	switch {
+	case a.Cost.Date == nil && b.Cost.Date == nil:
+		return 0
+	case a.Cost.Date == nil:
+		return -1
+	case b.Cost.Date == nil:
+		return 1
+	}
+	return a.Cost.Date.Compare(b.Cost.Date.Time)
 }

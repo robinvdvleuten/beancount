@@ -61,6 +61,16 @@ test.describe("Query", () => {
     expect(await output(page).textContent()).toBe(cli("select count(*)"));
   });
 
+  test("says so when a query has no rows", async ({ page }) => {
+    const statement = "select account where account = 'Nope'";
+
+    await waitForQuery(page, () => page.goto(`/query?q=${encodeURIComponent(statement)}`));
+
+    expect(cli(statement)).toBe("");
+    await expect(page.getByText("No rows.")).toBeVisible();
+    await expect(output(page)).toHaveCount(0);
+  });
+
   test("shows bean-query's error for a statement that does not compile", async ({ page }) => {
     await waitForQuery(page, () => page.goto("/query?q=select%20nosuchcolumn"));
 

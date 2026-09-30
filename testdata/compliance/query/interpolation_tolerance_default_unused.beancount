@@ -1,0 +1,16 @@
+; A currency's inferred_tolerance_default counts in a transaction that
+; names the currency. The sale names none, so its interpolated proceeds
+; are not rounded to the 0.1 USD the default implies: 33.333 USD.
+option "inferred_tolerance_default" "USD:0.05"
+
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Proceeds
+
+2020-01-02 * "Buy"
+  Assets:Stock   3 HOOL {33.333 USD}
+  Assets:Cash  -99.999 USD
+
+2020-01-03 * "Sell"
+  Assets:Stock  -1 HOOL {}
+  Assets:Proceeds

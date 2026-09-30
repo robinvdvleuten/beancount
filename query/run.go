@@ -17,20 +17,18 @@ import (
 type Format string
 
 const (
-	// FormatText renders bean-query's default text table: headers centered
-	// and truncated to the data width over a dashed rule. numberify has no
-	// effect on it, as in bean-query.
+	// FormatText renders beanquery's default text table: headers centered
+	// and truncated to the data width over a dashed rule, nothing for an
+	// empty result.
 	FormatText Format = "text"
-	// FormatCSV renders bean-query's -f csv output: full column names,
-	// width-padded cells and CRLF line endings. With numberify, amount
-	// columns split into one number column per currency.
+	// FormatCSV renders beanquery's -f csv output: full column names,
+	// cells as the text table formats them, and CRLF line endings.
 	FormatCSV Format = "csv"
 )
 
-// renderers maps each Format to its renderer. numberify applies to csv only,
-// like bean-query's.
-var renderers = map[Format]func(result *table, w io.Writer, numberify bool) error{
-	FormatText: func(result *table, w io.Writer, _ bool) error { return renderText(result, w) },
+// renderers maps each Format to its renderer.
+var renderers = map[Format]func(result *table, w io.Writer) error{
+	FormatText: renderText,
 	FormatCSV:  renderCSV,
 }
 
@@ -46,9 +44,10 @@ type statement interface {
 	run(ctx context.Context, qctx *Context, out output) error
 }
 
-// Run runs one BQL statement against qctx and writes what bean-query writes
-// for it: a SELECT, BALANCES or JOURNAL result table in format, or
-// "(empty)" when it has no rows, and PRINT's directives as beancount text.
+// Run runs one BQL statement against qctx and writes what beanquery writes
+// for it: a SELECT, BALANCES or JOURNAL result table in format, with every
+// amount column split into a number column per currency when numberify is
+// set, and PRINT's directives as beancount text.
 // A statement that does not parse or compile is reported on w in
 // bean-query's words, and Run returns nil. Run returns an error only for an
 // unknown format, a qctx without an AST, a cancelled ctx, or a failed write.
@@ -74,19 +73,17 @@ func Run(ctx context.Context, qctx *Context, text string, format Format, numberi
 	return stmt.run(ctx, qctx, output{w: w, format: format, numberify: numberify})
 }
 
-// run executes a compiled SELECT and renders its result. Like bean-query's
-// shell, an empty result is reported before any renderer runs, whatever the
-// output format.
+// run executes a compiled SELECT and renders its result. Like beanquery's
+// shell, numberify applies before the format is chosen.
 func (c *compiledSelect) run(ctx context.Context, qctx *Context, out output) error {
 	result, err := execute(ctx, qctx, c)
 	if err != nil {
 		return err
 	}
-	if len(result.Rows) == 0 {
-		_, err := io.WriteString(out.w, "(empty)\n")
-		return err
+	if out.numberify {
+		result = numberify(result)
 	}
-	return renderers[out.format](result, out.w, out.numberify)
+	return renderers[out.format](result, out.w)
 }
 
 // writeError reports a query error like bean-query: parse errors verbatim as

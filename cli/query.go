@@ -24,7 +24,7 @@ import (
 type QueryCmd struct {
 	Format    string      `short:"f" default:"text" enum:"text,csv" help:"Output format: text or csv."`
 	Output    string      `short:"o" placeholder:"FILE" help:"Write output to FILE instead of stdout."`
-	Numberify bool        `short:"m" help:"Split amounts into per-currency number columns (csv only)."`
+	Numberify bool        `short:"m" help:"Split amounts into per-currency number columns."`
 	File      FileOrStdin `help:"Beancount input filename (use '-' for stdin)." arg:""`
 	Query     []string    `help:"BQL query to run." arg:"" optional:""`
 }

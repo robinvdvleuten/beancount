@@ -1,6 +1,6 @@
 # Beancount
 
-A Go implementation of Beancount's tools, held to the behavior of the official Beancount v3 tools (BQL to `bean-query` 2.3.6 until it moves to beanquery), for bookkeeping by people and AI agents.
+A Go implementation of Beancount's tools, held to the behavior of the official Beancount v3 tools and beanquery (BQL's errors, typing and some clauses still differ, #562), for bookkeeping by people and AI agents.
 
 ## Language
 

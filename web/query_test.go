@@ -50,18 +50,17 @@ func TestAPIQuery(t *testing.T) {
 	t.Run("Text", func(t *testing.T) {
 		code, output := run(t, `{"query": " select account, sum(position) group by account order by account "}`)
 		assert.Equal(t, http.StatusOK, code)
-		// beancount query's bytes, which match bean-query's
-		assert.Equal(t, "    account     sum_position\n"+
-			"--------------- ------------\n"+
-			"Assets:Checking  1000.00 USD\n"+
-			"Equity:Opening  -1000.00 USD\n", output)
+		// beancount query's bytes, which match beanquery's
+		assert.Equal(t, "    account      sum(position\n"+
+			"---------------  ------------\n"+
+			"Assets:Checking   1000.00 USD\n"+
+			"Equity:Opening   -1000.00 USD\n", output)
 	})
 
 	t.Run("CSV", func(t *testing.T) {
 		code, output := run(t, `{"query": "select account order by account", "format": "csv"}`)
 		assert.Equal(t, http.StatusOK, code)
-		// bean-query pads csv cells to the column's width
-		assert.Equal(t, "account\r\nAssets:Checking\r\nEquity:Opening \r\n", output)
+		assert.Equal(t, "account\r\nAssets:Checking\r\nEquity:Opening\r\n", output)
 	})
 
 	t.Run("BQLErrorIsOutput", func(t *testing.T) {

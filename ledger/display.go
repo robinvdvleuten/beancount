@@ -6,25 +6,39 @@ import (
 )
 
 // DisplayContext records how many fractional digits the ledger's source
-// amounts use per currency, like beancount's display context: bean-query
-// renders numbers at each currency's most common precision. Only amounts
-// written in the source count, not interpolated ones.
+// amounts use per currency, like beancount's display context: beanquery
+// renders amounts at each currency's most common precision. Only amounts
+// written in the source count, not interpolated ones, and a currency's
+// display_precision option fixes its precision whatever they use.
 type DisplayContext struct {
 	fractional map[string]map[int32]int // currency -> fractional digits -> count
+	fixed      map[string]int32         // currency -> fractional digits
 }
 
 func newDisplayContext() *DisplayContext {
-	return &DisplayContext{fractional: make(map[string]map[int32]int)}
+	return &DisplayContext{fractional: make(map[string]map[int32]int), fixed: make(map[string]int32)}
 }
 
-// Precision returns the most common number of fractional digits among the
-// source amounts in currency, preferring more digits on a tie, and false
-// when the source has no amount in that currency.
+// Precision returns the fractional digits display_precision fixes for
+// currency, or else the most common number of them among the source
+// amounts in currency, preferring more digits on a tie, and false when
+// neither gives currency one.
 func (dc *DisplayContext) Precision(currency string) (int32, bool) {
+	if digits, ok := dc.fixed[currency]; ok {
+		return digits, true
+	}
 	counts, ok := dc.fractional[currency]
 	if !ok {
 		return 0, false
 	}
+	return MostCommonDigits(counts), true
+}
+
+// MostCommonDigits returns the most frequent number of fractional digits
+// in counts (digits -> count), preferring more digits on a tie, like
+// beancount's Distribution.mode, which picks a display context's
+// precision.
+func MostCommonDigits(counts map[int32]int) int32 {
 	var digits int32
 	best := 0
 	for d, count := range counts {
@@ -32,7 +46,7 @@ func (dc *DisplayContext) Precision(currency string) (int32, bool) {
 			digits, best = d, count
 		}
 	}
-	return digits, true
+	return digits
 }
 
 // Quantize rounds number half-to-even to currency's precision, leaving it
@@ -43,6 +57,15 @@ func (dc *DisplayContext) Quantize(number decimal.Decimal, currency string) deci
 		return number
 	}
 	return number.RoundBank(digits)
+}
+
+// fixPrecisions applies the display_precision options, each mapping a
+// currency to an example number whose exponent fixes its fractional
+// digits, like beancount's set_fixed_precision.
+func (dc *DisplayContext) fixPrecisions(examples map[string]decimal.Decimal) {
+	for currency, example := range examples {
+		dc.fixed[currency] = -example.Exponent()
+	}
 }
 
 // update records a source amount. Amounts missing their number or currency

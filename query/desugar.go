@@ -1,6 +1,8 @@
 package query
 
 import (
+	"strings"
+
 	"github.com/robinvdvleuten/beancount/query/bql"
 )
 
@@ -19,14 +21,20 @@ func desugar(stmt bql.Statement) bql.Statement {
 
 // desugarBalances expands BALANCES [AT fn] [FROM ...] [WHERE ...] into
 //
-//	SELECT account, sum([fn(]position[)]) [FROM ...] [WHERE ...]
+//	SELECT account, SUM([fn](position)) [FROM ...] [WHERE ...]
 //	GROUP BY account ORDER BY account_sortkey(account)
+//
+// Its targets carry the text beanquery parses them from, which names them.
 func desugarBalances(b *bql.Balances) *bql.Select {
 	account := &bql.Ident{Name: "account"}
+	summary := strings.ToLower(b.Summary)
 	return &bql.Select{
 		Targets: []bql.Target{
 			{Expr: account},
-			{Expr: call("sum", summarize(b.Summary, &bql.Ident{Name: "position"}))},
+			{
+				Expr: call("sum", summarize(summary, &bql.Ident{Name: "position"})),
+				Text: "SUM(" + summary + "(position))",
+			},
 		},
 		From:    b.From,
 		Where:   b.Where,
@@ -37,19 +45,22 @@ func desugarBalances(b *bql.Balances) *bql.Select {
 
 // desugarJournal expands JOURNAL [account] [AT fn] into
 //
-//	SELECT date, flag, maxwidth(payee, 48), maxwidth(narration, 80),
-//	       account, [fn(]position[)], [fn(]balance[)]
+//	SELECT date, flag, MAXWIDTH(payee, 48), MAXWIDTH(narration, 80),
+//	       account, [fn](position), [fn](balance)
 //	[WHERE account ~ "<account>"]
+//
+// Its targets carry the text beanquery parses them from, which names them.
 func desugarJournal(j *bql.Journal) *bql.Select {
+	summary := strings.ToLower(j.Summary)
 	sel := &bql.Select{
 		Targets: []bql.Target{
 			{Expr: &bql.Ident{Name: "date"}},
 			{Expr: &bql.Ident{Name: "flag"}},
-			{Expr: call("maxwidth", &bql.Ident{Name: "payee"}, &bql.Int{Value: 48})},
-			{Expr: call("maxwidth", &bql.Ident{Name: "narration"}, &bql.Int{Value: 80})},
+			{Expr: call("maxwidth", &bql.Ident{Name: "payee"}, &bql.Int{Value: 48}), Text: "MAXWIDTH(payee, 48)"},
+			{Expr: call("maxwidth", &bql.Ident{Name: "narration"}, &bql.Int{Value: 80}), Text: "MAXWIDTH(narration, 80)"},
 			{Expr: &bql.Ident{Name: "account"}},
-			{Expr: summarize(j.Summary, &bql.Ident{Name: "position"})},
-			{Expr: summarize(j.Summary, &bql.Ident{Name: "balance"})},
+			{Expr: summarize(summary, &bql.Ident{Name: "position"}), Text: summary + "(position)"},
+			{Expr: summarize(summary, &bql.Ident{Name: "balance"}), Text: summary + "(balance)"},
 		},
 		From: j.From,
 	}
