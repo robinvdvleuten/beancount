@@ -11,18 +11,13 @@ import (
 
 // Node is implemented by all BQL AST nodes.
 type Node interface {
-	Pos() ast.Position
 	Span() (start, end int)
 }
 
-// position provides the Pos and Span accessors for embedding in AST nodes.
+// position provides the Span accessor for embedding in AST nodes.
 type position struct {
-	pos        ast.Position
 	start, end int
 }
-
-// Pos returns the position errors about the node point at.
-func (p position) Pos() ast.Position { return p.pos }
 
 // Span returns the byte offsets of the node's source text, from its first
 // token to the end of its last. A parenthesized expression's span leaves

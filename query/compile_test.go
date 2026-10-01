@@ -3,7 +3,6 @@ package query
 import (
 	"context"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -175,13 +174,13 @@ func TestCompileTargetTypes(t *testing.T) {
 func TestCompileInvalidColumn(t *testing.T) {
 	ctx := newTestContext(t)
 	err := compileFails(t, ctx, "SELECT bogus")
-	assert.Equal(t, "Invalid column name 'bogus' in targets/column context.", err.Error())
+	assert.Equal(t, `column "bogus" not found in table "postings"`, err.Error())
 }
 
 func TestCompileInvalidFunction(t *testing.T) {
 	ctx := newTestContext(t)
 	err := compileFails(t, ctx, "SELECT bogusfn(date)")
-	assert.Equal(t, "Invalid function 'bogusfn(date)' in targets/column context.", err.Error())
+	assert.Equal(t, `no function matches "bogusfn(date)" name and argument types`, err.Error())
 }
 
 func TestCompileImplicitGroupBy(t *testing.T) {
@@ -198,7 +197,7 @@ func TestCompileGroupByCoverage(t *testing.T) {
 	ctx := newTestContext(t)
 	err := compileFails(t, ctx, "SELECT date GROUP BY narration")
 	assert.Equal(t,
-		`All non-aggregates must be covered by GROUP-BY clause in aggregate query; the following targets are missing: "date".`,
+		`all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "date"`,
 		err.Error())
 }
 
@@ -218,13 +217,13 @@ func TestCompileGroupByIndexAndAlias(t *testing.T) {
 func TestCompileGroupByIndexOutOfRange(t *testing.T) {
 	ctx := newTestContext(t)
 	err := compileFails(t, ctx, "SELECT account, sum(position) GROUP BY 5")
-	assert.Contains(t, err.Error(), "Invalid GROUP-BY column index 5")
+	assert.Equal(t, "invalid GROUP-BY column index 5", err.Error())
 }
 
 func TestCompileGroupByAggregate(t *testing.T) {
 	ctx := newTestContext(t)
 	err := compileFails(t, ctx, "SELECT account, sum(position) GROUP BY 2")
-	assert.Equal(t, "GROUP-BY expressions may not reference aggregates: '2'.", err.Error())
+	assert.Equal(t, `GROUP-BY expressions may not reference aggregates: "2"`, err.Error())
 }
 
 func TestCompileOrderByHiddenTarget(t *testing.T) {
@@ -247,23 +246,28 @@ func TestCompileOrderByMatchesTarget(t *testing.T) {
 }
 
 func TestCompileClauseEnvironments(t *testing.T) {
-	// Like bean-query, each clause compiles in its own environment: only
-	// targets have aggregates, only FROM has has_account, and errors name
-	// the clause.
+	// Like beanquery, every clause registers the aggregates and rejects
+	// them outside the targets once the clause compiles; only FROM has
+	// has_account; and errors name the table.
 	ctx := newTestContext(t)
 	for query, want := range map[string]string{
-		"SELECT account WHERE sum(number) > 0":                  "Invalid function 'sum(Decimal)' in WHERE clause context.",
-		"SELECT account WHERE has_account('x')":                 "Invalid function 'has_account(str)' in WHERE clause context.",
-		"SELECT account WHERE bogus":                            "Invalid column name 'bogus' in WHERE clause context.",
-		"SELECT account FROM bogus":                             "Invalid column name 'bogus' in FROM clause context.",
-		"SELECT account FROM count(date) > 0":                   "Invalid function 'count(date)' in FROM clause context.",
-		"SELECT sum(sum(number))":                               "Aggregates of aggregates are not allowed.",
-		"SELECT sum(number) + number":                           "Mixed aggregates and non-aggregates are not allowed.",
-		"SELECT account GROUP BY sum(number) != 1.50":           "GROUP-BY expressions may not be aggregates: 'Not(operand=Equal(left=Function(fname='sum', operands=[Column(name='number')]), right=Constant(value=Decimal('1.50'))))'.",
-		"SELECT sum(number) AS s GROUP BY s":                    "GROUP-BY expressions may not reference aggregates: 'Column(name='s')'.",
-		"SELECT account, balance GROUP BY account, balance":     "GROUP-BY a non-hashable type is not supported: 'Column(name='balance')'.",
-		"SELECT account ORDER BY 5":                             "Invalid ORDER-BY column index 5.",
-		"SELECT account GROUP BY count(date) = 2014-01-02 OR 1": "GROUP-BY expressions may not be aggregates: 'Or(left=Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=datetime.date(2014, 1, 2))), right=Constant(value=1))'.",
+		"SELECT account WHERE sum(number) > 0":                       "aggregates are not allowed in WHERE clause",
+		"SELECT account WHERE sum(account) > 0":                      `no function matches "sum(str)" name and argument types`,
+		"SELECT account WHERE has_account('x')":                      `no function matches "has_account(str)" name and argument types`,
+		"SELECT account WHERE bogus":                                 `column "bogus" not found in table "postings"`,
+		"SELECT account FROM bogus":                                  `column "bogus" not found in table "postings"`,
+		"PRINT FROM bogus":                                           `column "bogus" not found in table "entries"`,
+		"SELECT account FROM count(date) > 0":                        "aggregates are not allowed in FROM clause",
+		"SELECT sum(sum(number))":                                    "aggregates of aggregates are not allowed",
+		"SELECT sum(number) + number":                                "mixed aggregates and non-aggregates are not allowed",
+		"SELECT sum(number) + number, bogus":                         "mixed aggregates and non-aggregates are not allowed",
+		"SELECT account GROUP BY sum(number) != 1.50":                `GROUP-BY expressions may not be aggregates: "NotEqual(left=Function(fname='sum', operands=[Column(name='number')]), right=Constant(value=Decimal('1.50')))"`,
+		"SELECT sum(number) AS s GROUP BY s":                         `GROUP-BY expressions may not reference aggregates: "Column(name='s')"`,
+		"SELECT account, balance GROUP BY account, balance":          `GROUP-BY a non-hashable type is not supported: "Column(name='balance')"`,
+		"SELECT account ORDER BY 5":                                  "invalid ORDER-BY column index 5",
+		"SELECT account GROUP BY count(date) = 1 OR TRUE OR FALSE":   `GROUP-BY expressions may not be aggregates: "Or(args=[Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=1)), Constant(value=True), Constant(value=False)])"`,
+		"SELECT account GROUP BY (count(date) = 1 OR TRUE) OR FALSE": `GROUP-BY expressions may not be aggregates: "Or(args=[Or(args=[Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=1)), Constant(value=True)]), Constant(value=False)])"`,
+		"SELECT account GROUP BY first(account) IN tags":             `GROUP-BY expressions may not be aggregates: "In(left=Function(fname='first', operands=[Column(name='account')]), right=Column(name='tags'))"`,
 	} {
 		assert.Equal(t, want, compileFails(t, ctx, query).Error(), query)
 	}
@@ -273,9 +277,10 @@ func TestCompileClauseEnvironments(t *testing.T) {
 func TestCompileFromUsesEntryEnvironment(t *testing.T) {
 	ctx := newTestContext(t)
 
-	// account is a posting column, not available in the FROM filter.
+	// account is a posting column, not available in the FROM filter
+	// (beanquery's is; KNOWN_GAPS.md).
 	err := compileFails(t, ctx, "SELECT date FROM account ~ 'Assets'")
-	assert.Contains(t, err.Error(), "Invalid column name 'account'")
+	assert.Equal(t, `column "account" is not supported in FROM clause`, err.Error())
 
 	// has_account is the FROM-environment predicate for that.
 	mustCompile(t, ctx, "SELECT date FROM has_account('Assets')")
@@ -293,7 +298,7 @@ func TestCompileFunctionOverloads(t *testing.T) {
 func TestCompileInvalidOverload(t *testing.T) {
 	ctx := newTestContext(t)
 	err := compileFails(t, ctx, "SELECT units(account)")
-	assert.True(t, strings.HasPrefix(err.Error(), "Invalid function 'units(str)'"), err.Error())
+	assert.Equal(t, `no function matches "units(str)" name and argument types`, err.Error())
 }
 
 func TestCompileDistinctAndLimit(t *testing.T) {
@@ -303,23 +308,22 @@ func TestCompileDistinctAndLimit(t *testing.T) {
 	assert.Equal(t, int64(5), *compiled.Limit)
 }
 
-func TestCompileFallbackClassErrors(t *testing.T) {
-	// With no matching signature, bean-query instantiates the function's
-	// by-name class, whose constructor names the class and Python types.
+func TestCompileNoMatchingFunction(t *testing.T) {
+	// Like beanquery, a call no signature matches names the function and
+	// its arguments' lower-cased Python types; an empty want compiles.
 	for query, want := range map[string]string{
-		"SELECT root(account)":            "Invalid number of arguments for Root: found 1 expected 2.",
-		"SELECT sum(number, 1)":           "Invalid number of arguments for Sum: found 2 expected 1.",
-		"SELECT today(1)":                 "Invalid number of arguments for Today: found 1 expected 0.",
-		"SELECT year(account)":            "Invalid type for argument 0 of Year: found <class 'str'> expected <class 'datetime.date'>.",
-		"SELECT year(NULL)":               "Invalid type for argument 0 of Year: found <class 'NoneType'> expected <class 'datetime.date'>.",
-		"SELECT year(entry_meta('x'))":    "Invalid type for argument 0 of Year: found <class 'object'> expected <class 'datetime.date'>.",
-		"SELECT length(number)":           "Invalid type for argument 0 of Length: found <class 'decimal.Decimal'> expected (<class 'list'>, <class 'set'>, <class 'str'>).",
-		"SELECT only('USD', number)":      "Invalid type for argument 1 of OnlyInventory: found <class 'decimal.Decimal'> expected <class 'beancount.core.inventory.Inventory'>.",
-		"SELECT sum(account)":             "Invalid type for argument 0 of Sum: found <class 'str'> expected (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>).",
-		"SELECT units(account)":           "Invalid function 'units(str)' in targets/column context.",
-		"SELECT coalesce(account, NULL)":  "",
+		"SELECT sum(number, 1)":           "sum(decimal, int)",
+		"SELECT sum(account)":             "sum(str)",
+		"SELECT today(1)":                 "today(int)",
+		"SELECT year(account)":            "year(str)",
+		"SELECT year(NULL)":               "year(nonetype)",
+		"SELECT year(entry_meta('x'))":    "year(object)",
+		"SELECT length(number)":           "length(decimal)",
+		"SELECT only('USD', number)":      "only(str, decimal)",
+		"SELECT units(account)":           "units(str)",
 		"SELECT count(entry_meta('x'))":   "",
 		"SELECT str(entry_meta('x'))":     "",
+		"SELECT coalesce(account, NULL)":  "",
 		"SELECT maxwidth(account, 1 + 1)": "",
 	} {
 		ctx := newTestContext(t)
@@ -330,9 +334,9 @@ func TestCompileFallbackClassErrors(t *testing.T) {
 			assert.NoError(t, err, query)
 			continue
 		}
-		var compileErr *compileError
-		assert.True(t, errors.As(err, &compileErr), query)
-		assert.Equal(t, want, compileErr.Message, query)
+		var queryErr *Error
+		assert.True(t, errors.As(err, &queryErr), query)
+		assert.Equal(t, `no function matches "`+want+`" name and argument types`, queryErr.Error(), query)
 	}
 }
 

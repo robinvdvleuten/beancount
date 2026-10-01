@@ -78,49 +78,34 @@ func (p *parser) pos(tok Token) ast.Position {
 	return ast.Position{Filename: queryFilename, Offset: tok.Start, Line: tok.Line, Column: tok.Column}
 }
 
-// node positions a node at tok whose source text runs from start to the end
-// of the last consumed token.
-func (p *parser) node(tok Token, start int) position {
-	return position{pos: p.pos(tok), start: start, end: p.prevEnd}
+// node positions a node whose source text runs from start to the end of
+// the last consumed token.
+func (p *parser) node(start int) position {
+	return position{start: start, end: p.prevEnd}
 }
 
 func (p *parser) errorf(tok Token, format string, args ...any) *ParseError {
-	err := &ParseError{
-		Pos:     p.pos(tok),
-		Message: fmt.Sprintf(format, args...),
-		Near:    p.tokenValue(tok),
-	}
-	switch tok.Type {
-	case EOF:
-		err.Kind = ErrUnterminated
-	case ILLEGAL:
-		err.Kind = ErrUnknownToken
+	return &ParseError{Pos: p.pos(tok), Message: fmt.Sprintf(format, args...)}
+}
+
+// nameErrorf reports tok where a name or an expression was expected.
+// beanquery's parser reads a reserved keyword there as a name before
+// rejecting it, so it fails after the keyword. AT, OPEN, CLOSE, CLEAR and
+// ON are not reserved in beanquery (KNOWN_GAPS.md).
+func (p *parser) nameErrorf(tok Token, format string, args ...any) *ParseError {
+	err := p.errorf(tok, format, args...)
+	if _, ok := keywordTypes[tok.Type]; ok {
+		err.Pos.Offset = tok.End
+		err.Pos.Column += tok.End - tok.Start
 	}
 	return err
 }
 
-// tokenValue renders a token's value like bean-query's lexer, which names
-// the offending token in syntax errors.
-func (p *parser) tokenValue(tok Token) string {
-	text := tok.String(p.source)
-	switch tok.Type {
-	case IDENT:
-		return strings.ToLower(text)
-	case STRING:
-		return text[1 : len(text)-1]
-	case INTEGER:
-		if n, err := strconv.ParseInt(numberText(text), 10, 64); err == nil {
-			return strconv.FormatInt(n, 10)
-		}
-	case DECIMAL:
-		if d, err := decimal.NewFromString(numberText(text)); err == nil {
-			return d.StringFixed(max(-d.Exponent(), 0))
-		}
-	}
-	if _, ok := keywords[strings.ToUpper(text)]; ok {
-		return strings.ToUpper(text)
-	}
-	return text
+// clauseErrorf reports a clause, starting at the keyword clause, that
+// cannot be finished. beanquery's parser backs out of such a clause and
+// fails at its first keyword.
+func (p *parser) clauseErrorf(clause Token, name string) *ParseError {
+	return p.errorf(clause, "incomplete %s clause, found %s", name, p.describe(p.cur))
 }
 
 func (p *parser) describe(tok Token) string {
@@ -153,7 +138,7 @@ func (p *parser) parseSelect() (*Select, error) {
 	tok := p.cur
 	p.next() // SELECT
 
-	sel := &Select{position: position{pos: p.pos(tok), start: tok.Start}}
+	sel := &Select{position: position{start: tok.Start}}
 	sel.Distinct = p.accept(DISTINCT)
 
 	if p.accept(ASTERISK) {
@@ -188,9 +173,10 @@ func (p *parser) parseSelect() (*Select, error) {
 	}
 
 	if p.cur.Type == GROUP {
+		clause := p.cur
 		p.next()
-		if _, err := p.expect(BY, "GROUP BY"); err != nil {
-			return nil, err
+		if !p.accept(BY) {
+			return nil, p.clauseErrorf(clause, "GROUP BY")
 		}
 		exprs, err := p.parseExprList()
 		if err != nil {
@@ -207,9 +193,10 @@ func (p *parser) parseSelect() (*Select, error) {
 	}
 
 	if p.cur.Type == ORDER {
+		clause := p.cur
 		p.next()
-		if _, err := p.expect(BY, "ORDER BY"); err != nil {
-			return nil, err
+		if !p.accept(BY) {
+			return nil, p.clauseErrorf(clause, "ORDER BY")
 		}
 		exprs, err := p.parseExprList()
 		if err != nil {
@@ -224,9 +211,10 @@ func (p *parser) parseSelect() (*Select, error) {
 	}
 
 	if p.cur.Type == PIVOT {
+		clause := p.cur
 		p.next()
-		if _, err := p.expect(BY, "PIVOT BY"); err != nil {
-			return nil, err
+		if !p.accept(BY) {
+			return nil, p.clauseErrorf(clause, "PIVOT BY")
 		}
 		// Like bean-query's grammar, PIVOT BY lists column names only.
 		for {
@@ -234,7 +222,7 @@ func (p *parser) parseSelect() (*Select, error) {
 			if err != nil {
 				return nil, err
 			}
-			sel.PivotBy = append(sel.PivotBy, &Ident{position: p.node(tok, tok.Start), Name: strings.ToLower(tok.String(p.source))})
+			sel.PivotBy = append(sel.PivotBy, &Ident{position: p.node(tok.Start), Name: strings.ToLower(tok.String(p.source))})
 			if !p.accept(COMMA) {
 				break
 			}
@@ -242,11 +230,15 @@ func (p *parser) parseSelect() (*Select, error) {
 	}
 
 	if p.cur.Type == LIMIT {
+		clause := p.cur
 		p.next()
-		tok, err := p.expect(INTEGER, "LIMIT")
-		if err != nil {
-			return nil, err
+		// beanquery's LIMIT takes digits alone, never a signed number,
+		// which also keeps a negative limit from reaching the executor.
+		tok := p.cur
+		if tok.Type != INTEGER || p.source[tok.Start] == '-' || p.source[tok.Start] == '+' {
+			return nil, p.clauseErrorf(clause, "LIMIT")
 		}
+		p.next()
 		limit, err := strconv.ParseInt(tok.String(p.source), 10, 64)
 		if err != nil {
 			return nil, p.errorf(tok, "invalid LIMIT value %q", tok.String(p.source))
@@ -273,9 +265,9 @@ func (p *parser) parseTarget() (Target, error) {
 			p.next()
 			return target, nil
 		}
-		tok, err := p.expect(IDENT, "target alias")
-		if err != nil {
-			return Target{}, err
+		tok := p.cur
+		if !p.accept(IDENT) {
+			return Target{}, p.nameErrorf(tok, "expected target alias, found %s", p.describe(tok))
 		}
 		target.As = strings.ToLower(tok.String(p.source))
 	}
@@ -289,7 +281,7 @@ func (p *parser) parseFrom() (*From, error) {
 	tok := p.cur
 	p.next() // FROM
 
-	from := &From{position: position{pos: p.pos(tok), start: tok.Start}}
+	from := &From{position: position{start: tok.Start}}
 
 	if p.startsExpr() {
 		expr, err := p.parseExpr()
@@ -300,9 +292,15 @@ func (p *parser) parseFrom() (*From, error) {
 	}
 
 	if p.cur.Type == OPEN {
+		clause := p.cur
 		p.next()
-		if _, err := p.expect(ON, "FROM ... OPEN"); err != nil {
-			return nil, err
+		if !p.accept(ON) || p.cur.Type != DATE {
+			// With no expression before it, beanquery reads OPEN as a
+			// column name and fails at what follows it.
+			if from.Expr == nil {
+				return nil, p.errorf(p.cur, "expected ON and a date after OPEN, found %s", p.describe(p.cur))
+			}
+			return nil, p.clauseErrorf(clause, "OPEN ON")
 		}
 		date, err := p.parseDate()
 		if err != nil {
@@ -314,7 +312,12 @@ func (p *parser) parseFrom() (*From, error) {
 	if p.cur.Type == CLOSE {
 		p.next()
 		from.Close = true
-		if p.accept(ON) {
+		if p.cur.Type == ON {
+			clause := p.cur
+			p.next()
+			if p.cur.Type != DATE {
+				return nil, p.clauseErrorf(clause, "CLOSE ON")
+			}
 			date, err := p.parseDate()
 			if err != nil {
 				return nil, err
@@ -329,14 +332,7 @@ func (p *parser) parseFrom() (*From, error) {
 	}
 
 	if from.Expr == nil && from.OpenOn == nil && !from.Close && !from.Clear {
-		err := p.errorf(p.cur, "expected expression, OPEN, CLOSE or CLEAR after FROM, found %s", p.describe(p.cur))
-		// bean-query accepts an empty FROM grammatically and rejects it
-		// once the clause ends; any other token is a plain syntax error.
-		switch p.cur.Type {
-		case EOF, SEMICOLON, RPAREN, WHERE, GROUP, ORDER, PIVOT, LIMIT:
-			err.Kind = ErrEmptyFrom
-		}
-		return nil, err
+		return nil, p.nameErrorf(p.cur, "expected expression, OPEN, CLOSE or CLEAR after FROM, found %s", p.describe(p.cur))
 	}
 
 	from.end = p.prevEnd
@@ -347,7 +343,7 @@ func (p *parser) parseBalances() (*Balances, error) {
 	tok := p.cur
 	p.next() // BALANCES
 
-	stmt := &Balances{position: position{pos: p.pos(tok), start: tok.Start}}
+	stmt := &Balances{position: position{start: tok.Start}}
 	summary, err := p.parseAtSummary()
 	if err != nil {
 		return nil, err
@@ -378,7 +374,7 @@ func (p *parser) parseJournal() (*Journal, error) {
 	tok := p.cur
 	p.next() // JOURNAL
 
-	stmt := &Journal{position: position{pos: p.pos(tok), start: tok.Start}}
+	stmt := &Journal{position: position{start: tok.Start}}
 	if p.cur.Type == STRING {
 		stmt.Account = stripQuotes(p.cur.String(p.source))
 		p.next()
@@ -405,7 +401,7 @@ func (p *parser) parsePrint() (*Print, error) {
 	tok := p.cur
 	p.next() // PRINT
 
-	stmt := &Print{position: position{pos: p.pos(tok), start: tok.Start}}
+	stmt := &Print{position: position{start: tok.Start}}
 	if p.cur.Type == FROM {
 		from, err := p.parseFrom()
 		if err != nil {
@@ -457,13 +453,12 @@ func (p *parser) parseOr() (Expr, error) {
 		return nil, err
 	}
 	for p.cur.Type == OR {
-		tok := p.cur
 		p.next()
 		right, err := p.parseAnd()
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: p.node(tok, start), Op: OR, L: left, R: right}
+		left = &Binary{position: p.node(start), Op: OR, L: left, R: right}
 	}
 	return left, nil
 }
@@ -475,13 +470,12 @@ func (p *parser) parseAnd() (Expr, error) {
 		return nil, err
 	}
 	for p.cur.Type == AND {
-		tok := p.cur
 		p.next()
 		right, err := p.parseNot()
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: p.node(tok, start), Op: AND, L: left, R: right}
+		left = &Binary{position: p.node(start), Op: AND, L: left, R: right}
 	}
 	return left, nil
 }
@@ -494,7 +488,7 @@ func (p *parser) parseNot() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Unary{position: p.node(tok, tok.Start), Op: NOT, X: x}, nil
+		return &Unary{position: p.node(tok.Start), Op: NOT, X: x}, nil
 	}
 	return p.parseComparison()
 }
@@ -515,7 +509,7 @@ func (p *parser) parseComparison() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Binary{position: p.node(tok, start), Op: tok.Type, L: left, R: right}, nil
+		return &Binary{position: p.node(start), Op: tok.Type, L: left, R: right}, nil
 	}
 	return left, nil
 }
@@ -533,7 +527,7 @@ func (p *parser) parseAdditive() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: p.node(tok, start), Op: tok.Type, L: left, R: right}
+		left = &Binary{position: p.node(start), Op: tok.Type, L: left, R: right}
 	}
 	return left, nil
 }
@@ -551,7 +545,7 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &Binary{position: p.node(tok, start), Op: tok.Type, L: left, R: right}
+		left = &Binary{position: p.node(start), Op: tok.Type, L: left, R: right}
 	}
 	return left, nil
 }
@@ -572,7 +566,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 	case STRING:
 		p.next()
-		return &Str{position: p.node(tok, tok.Start), Value: stripQuotes(tok.String(p.source))}, nil
+		return &Str{position: p.node(tok.Start), Value: stripQuotes(tok.String(p.source))}, nil
 
 	case INTEGER:
 		p.next()
@@ -580,7 +574,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err != nil {
 			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
 		}
-		return &Int{position: p.node(tok, p.unsignedStart(tok)), Value: value}, nil
+		return &Int{position: p.node(p.unsignedStart(tok)), Value: value}, nil
 
 	case DECIMAL:
 		p.next()
@@ -588,7 +582,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err != nil {
 			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
 		}
-		return &Dec{position: p.node(tok, p.unsignedStart(tok)), Value: value}, nil
+		return &Dec{position: p.node(p.unsignedStart(tok)), Value: value}, nil
 
 	case DATE:
 		p.next()
@@ -596,22 +590,22 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err := date.Capture([]string{tok.String(p.source)}); err != nil {
 			return nil, p.errorf(tok, "invalid date %q", tok.String(p.source))
 		}
-		return &DateLit{position: p.node(tok, tok.Start), Value: date}, nil
+		return &DateLit{position: p.node(tok.Start), Value: date}, nil
 
 	case TRUE, FALSE:
 		p.next()
-		return &Bool{position: p.node(tok, tok.Start), Value: tok.Type == TRUE}, nil
+		return &Bool{position: p.node(tok.Start), Value: tok.Type == TRUE}, nil
 
 	case NULL:
 		p.next()
-		return &Null{position: p.node(tok, tok.Start)}, nil
+		return &Null{position: p.node(tok.Start)}, nil
 
 	case IDENT:
 		p.next()
 		// Identifiers are case-insensitive: bean-query lower-cases them.
 		name := strings.ToLower(tok.String(p.source))
 		if p.cur.Type != LPAREN {
-			return &Ident{position: p.node(tok, tok.Start), Name: name}, nil
+			return &Ident{position: p.node(tok.Start), Name: name}, nil
 		}
 		p.next() // (
 		call := &Call{Func: name}
@@ -625,11 +619,11 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if _, err := p.expect(RPAREN, "function call"); err != nil {
 			return nil, err
 		}
-		call.position = p.node(tok, tok.Start)
+		call.position = p.node(tok.Start)
 		return call, nil
 	}
 
-	return nil, p.errorf(tok, "expected expression, found %s", p.describe(tok))
+	return nil, p.nameErrorf(tok, "expected expression, found %s", p.describe(tok))
 }
 
 // unsignedStart returns where a number's source text starts: past a plus

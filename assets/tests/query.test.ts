@@ -1,4 +1,4 @@
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { test, expect, type Page } from "@playwright/test";
 
@@ -50,15 +50,15 @@ test.describe("Query", () => {
     const input = page.getByLabel("Query", { exact: true });
 
     await page.goto("/query");
-    await input.fill("select count(*)");
+    await input.fill("select count(date)");
     await waitForQuery(page, () => input.press("ControlOrMeta+Enter"));
 
     await expect(page).toHaveURL(/\?q=select(\+|%20)count/);
-    expect(await output(page).textContent()).toBe(cli("select count(*)"));
+    expect(await output(page).textContent()).toBe(cli("select count(date)"));
 
     await waitForQuery(page, () => page.reload());
-    await expect(input).toHaveValue("select count(*)");
-    expect(await output(page).textContent()).toBe(cli("select count(*)"));
+    await expect(input).toHaveValue("select count(date)");
+    expect(await output(page).textContent()).toBe(cli("select count(date)"));
   });
 
   test("says so when a query has no rows", async ({ page }) => {
@@ -71,12 +71,20 @@ test.describe("Query", () => {
     await expect(output(page)).toHaveCount(0);
   });
 
-  test("shows bean-query's error for a statement that does not compile", async ({ page }) => {
+  test("shows the error beancount query prints for a statement that does not compile", async ({
+    page,
+  }) => {
     await waitForQuery(page, () => page.goto("/query?q=select%20nosuchcolumn"));
 
-    expect(await output(page).textContent()).toBe(cli("select nosuchcolumn"));
+    // beancount query prints it on stderr and exits 1, like bean-query
+    const failed = spawnSync(binary, ["query", ledger, "select nosuchcolumn"], {
+      encoding: "utf8",
+    });
+    expect(failed.status).toBe(1);
+    expect(failed.stdout).toBe("");
+    expect(await output(page).textContent()).toBe(failed.stderr);
     await expect(output(page)).toContainText(
-      "ERROR: Invalid column name 'nosuchcolumn' in targets/column context.",
+      'error: column "nosuchcolumn" not found in table "postings"',
     );
   });
 

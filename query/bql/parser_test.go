@@ -356,30 +356,54 @@ func TestParseErrorHasPosition(t *testing.T) {
 	assert.NotZero(t, parseErr.GetPosition())
 }
 
-func TestParseErrorKindAndNear(t *testing.T) {
-	// Near is the offending token's value as bean-query's lexer yields it.
+// TestParseErrorOffset checks that a syntax error is placed where
+// beanquery's parser fails, the offsets its shell puts the caret at
+// (pinned with its shell).
+func TestParseErrorOffset(t *testing.T) {
 	for _, tc := range []struct {
 		query  string
-		kind   ErrorKind
-		near   string
 		offset int
 	}{
-		{"SELECT count(*)", ErrSyntax, "*", 13},
-		{"SELECT a WHERE b Where", ErrSyntax, "WHERE", 17},
-		{"SELECT a WHERE b Foo", ErrSyntax, "foo", 17},
-		{"SELECT a WHERE b 'x'", ErrSyntax, "x", 17},
-		{"SELECT a WHERE b 007", ErrSyntax, "7", 17},
-		{"SELECT a WHERE b 1.50", ErrSyntax, "1.50", 17},
-		{"SELECT a WHERE", ErrUnterminated, "", 14},
-		{"SELECT 'abc", ErrUnknownToken, "'abc", 7},
-		{"SELECT a FROM LIMIT 1", ErrEmptyFrom, "LIMIT", 14},
-		{"SELECT a FROM , b", ErrSyntax, ",", 14},
+		{"SELECT , account", 7},
+		{"SELECT account account", 15},
+		{"SELECT account WHERE account = )", 31},
+		{"SELECT account WHERE account = 'x' SELECT", 35},
+		{"SELECT account PIVOT BY foo(1)", 27},
+		{"SELECT 'abc", 7},
+		{"SELECT account WHERE", 20},
+		{"SELECT sum(", 11},
+		// A keyword where an expression was expected: after it.
+		{"SELECT FROM", 11},
+		{"SELECT account, FROM", 20},
+		{"SELECT account WHERE ORDER BY x", 26},
+		{"SELECT account GROUP BY WHERE", 29},
+		{"SELECT account FROM WHERE account ~ 'Assets'", 25},
+		{"SELECT account FROM LIMIT 1", 25},
+		{"BALANCES FROM", 13},
+		{"SELECT account AS WHERE", 23},
+		{"SELECT account AS 1", 18},
+		// A clause that cannot be finished: at its first keyword.
+		{"SELECT account LIMIT x", 15},
+		{"SELECT account LIMIT", 15},
+		{"SELECT account LIMIT -1", 15},
+		{"SELECT account LIMIT +1", 15},
+		{"SELECT account ORDER BY account ASC LIMIT x", 36},
+		{"SELECT account GROUP account", 15},
+		{"SELECT account ORDER", 15},
+		{"SELECT account PIVOT account", 15},
+		{"SELECT account WHERE account ~ 'x' GROUP", 35},
+		{"SELECT account FROM year = 2023 OPEN ON", 32},
+		{"SELECT account FROM year = 2023 OPEN x", 32},
+		{"PRINT FROM year = 2023 OPEN ON", 23},
+		{"SELECT account FROM year = 2023 CLOSE ON", 38},
+		{"SELECT account FROM CLOSE ON x", 26},
+		// Without an expression, beanquery reads OPEN as a column name.
+		{"SELECT account FROM OPEN ON x", 28},
+		{"SELECT account FROM OPEN x", 25},
 	} {
 		_, err := Parse(tc.query)
 		parseErr, ok := err.(*ParseError)
 		assert.True(t, ok, tc.query)
-		assert.Equal(t, tc.kind, parseErr.Kind, tc.query)
-		assert.Equal(t, tc.near, parseErr.Near, tc.query)
 		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
 	}
 }

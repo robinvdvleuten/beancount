@@ -168,6 +168,15 @@ var keywords = map[string]TokenType{
 	"NULL":     NULL,
 }
 
+// keywordTypes holds the keyword token types.
+var keywordTypes = func() map[TokenType]struct{} {
+	types := make(map[TokenType]struct{}, len(keywords))
+	for _, t := range keywords {
+		types[t] = struct{}{}
+	}
+	return types
+}()
+
 // Token represents a lexical token with zero-copy semantics. Like the core
 // beancount parser, tokens store byte offsets into the source buffer instead
 // of materialized strings.

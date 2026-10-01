@@ -118,37 +118,29 @@ var postingColumns = map[string]*columnDef{
 	"links":       {tSet, func(row *evalRow) any { return linkSet(row.Txn) }},
 }
 
-// environment is what one clause compiles against, like bean-query's
-// compilation environments: its columns, which functions it registers, and
-// the context named in its error messages.
+// environment is what one clause compiles against, like one of
+// beanquery's tables: its columns, the table name its errors quote, and
+// whether it registers the entry filters.
 type environment struct {
 	columns map[string]*columnDef
-	context string
-	// withAggregates registers the aggregate functions (targets only).
-	withAggregates bool
+	table   string
 	// withEntryFilters registers has_account (FROM only).
 	withEntryFilters bool
 }
 
 var (
-	// targetsEnv compiles SELECT targets, GROUP BY, ORDER BY and PIVOT BY.
-	targetsEnv = &environment{columns: postingColumns, context: "targets/column context", withAggregates: true}
-	// whereEnv compiles the WHERE clause, over postings.
-	whereEnv = &environment{columns: postingColumns, context: "WHERE clause context"}
-	// fromEnv compiles the FROM clause, over entries.
-	fromEnv = &environment{columns: entryColumns, context: "FROM clause context", withEntryFilters: true}
+	// targetsEnv compiles SELECT targets, WHERE, GROUP BY, ORDER BY and
+	// PIVOT BY.
+	targetsEnv = &environment{columns: postingColumns, table: "postings"}
+	// fromEnv compiles a SELECT's FROM clause, over entries; beanquery's
+	// errors name the postings table there.
+	fromEnv = &environment{columns: entryColumns, table: "postings", withEntryFilters: true}
+	// printFromEnv compiles PRINT's FROM clause, over entries.
+	printFromEnv = &environment{columns: entryColumns, table: "entries", withEntryFilters: true}
 )
 
 // entryFilters are the functions only the FROM environment registers.
 var entryFilters = map[string]bool{"has_account": true}
-
-// aggregate returns the aggregate function registered under name, if any.
-func (e *environment) aggregate(name string) *aggDef {
-	if !e.withAggregates {
-		return nil
-	}
-	return aggregates[name]
-}
 
 // function returns the simple function registered under name, if any.
 func (e *environment) function(name string) *funcDef {
@@ -156,15 +148,6 @@ func (e *environment) function(name string) *funcDef {
 		return nil
 	}
 	return functions[name]
-}
-
-// fallback returns the by-name class bean-query registers for name in
-// this environment, if any.
-func (e *environment) fallback(name string) *fallbackClass {
-	if aggregates[name] != nil && !e.withAggregates || entryFilters[name] && !e.withEntryFilters {
-		return nil
-	}
-	return fallbackClasses[name]
 }
 
 // txnColumn wraps a transaction accessor into an entry-environment column

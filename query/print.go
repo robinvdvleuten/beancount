@@ -18,7 +18,7 @@ type compiledPrint struct {
 }
 
 func (c *compiler) compilePrint(p *bql.Print) (*compiledPrint, error) {
-	from, err := c.compileFrom(p.From)
+	from, err := c.compileFrom(p.From, printFromEnv)
 	if err != nil {
 		return nil, err
 	}

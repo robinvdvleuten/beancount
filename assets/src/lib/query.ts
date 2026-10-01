@@ -1,7 +1,8 @@
 export type QueryFormat = "text" | "csv";
 
 // runQuery runs one BQL statement on the server and returns what
-// `beancount query` prints for it, bean-query's error messages included.
+// `beancount query` prints for it, including the error it prints on stderr
+// for a statement that does not parse or compile.
 export const runQuery = async (query: string, format: QueryFormat): Promise<string> => {
   const response = await fetch("/api/query", {
     method: "POST",

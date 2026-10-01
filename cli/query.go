@@ -78,7 +78,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// piped stdin is read as a single query, like bean-query.
 	if queryText == "" {
 		if cmd.File.Filename != "<stdin>" && term.IsTerminal(int(os.Stdin.Fd())) {
-			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, validationErrors, loadResult.Sources)
+			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, ctx.Stderr, validationErrors, loadResult.Sources)
 		}
 		piped, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -90,26 +90,59 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 		}
 	}
 
-	out := io.Writer(ctx.Stdout)
 	if cmd.Output != "" {
-		file, err := os.Create(cmd.Output)
-		if err != nil {
-			return fmt.Errorf("failed to create output file %s: %w", cmd.Output, err)
+		file := &lazyFile{path: cmd.Output}
+		runErr := query.Run(runCtx, qctx, queryText, format, cmd.Numberify, file)
+		if closeErr := file.Close(); runErr == nil {
+			runErr = closeErr
 		}
-		out = file
-		if runErr := query.Run(runCtx, qctx, queryText, format, cmd.Numberify, out); runErr != nil {
-			_ = file.Close()
-			return runErr
-		}
-		return file.Close()
+		return reportQueryError(ctx.Stderr, runErr)
 	}
 
-	return query.Run(runCtx, qctx, queryText, format, cmd.Numberify, out)
+	return reportQueryError(ctx.Stderr, query.Run(runCtx, qctx, queryText, format, cmd.Numberify, ctx.Stdout))
+}
+
+// lazyFile creates its file on the first write, like the lazy file behind
+// bean-query's -o, so a query that fails or prints nothing leaves none.
+type lazyFile struct {
+	path string
+	file *os.File
+}
+
+func (f *lazyFile) Write(p []byte) (int, error) {
+	if f.file == nil {
+		file, err := os.Create(f.path)
+		if err != nil {
+			return 0, fmt.Errorf("failed to create output file %s: %w", f.path, err)
+		}
+		f.file = file
+	}
+	return f.file.Write(p)
+}
+
+// Close closes the file, if the first write created it.
+func (f *lazyFile) Close() error {
+	if f.file == nil {
+		return nil
+	}
+	return f.file.Close()
+}
+
+// reportQueryError prints a statement that does not parse or compile like
+// beanquery's shell, on stderr, and fails with exit status 1, as bean-query
+// does. Any other error is returned as it is.
+func reportQueryError(stderr io.Writer, err error) error {
+	var queryErr *query.Error
+	if !stdErrors.As(err, &queryErr) {
+		return err
+	}
+	_, _ = fmt.Fprintln(stderr, queryErr.Report())
+	return NewCommandError(1)
 }
 
 // runShell is the interactive query REPL: one query per line, with help,
 // errors, and exit commands.
-func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out io.Writer, validationErrors *ledger.ValidationErrors, sources map[string][]byte) error {
+func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out, errOut io.Writer, validationErrors *ledger.ValidationErrors, sources map[string][]byte) error {
 	printShellBanner(out, qctx.AST)
 
 	scanner := bufio.NewScanner(in)
@@ -139,8 +172,14 @@ func runShell(ctx context.Context, qctx *query.Context, format query.Format, num
 			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors.Errors))
 			continue
 		}
+		// Like beanquery's shell, report a failed statement on stderr and
+		// go on.
 		if err := query.Run(ctx, qctx, line, format, numberify, out); err != nil {
-			return err
+			var queryErr *query.Error
+			if !stdErrors.As(err, &queryErr) {
+				return err
+			}
+			_, _ = fmt.Fprintln(errOut, queryErr.Report())
 		}
 	}
 }

@@ -17,9 +17,9 @@ type compiledFrom struct {
 	Clear   bool
 }
 
-// compileFrom compiles a FROM clause, whose expression sees the entry
+// compileFrom compiles a FROM clause, whose expression sees env, an entry
 // environment. A statement without one compiles to nil.
-func (c *compiler) compileFrom(from *bql.From) (*compiledFrom, error) {
+func (c *compiler) compileFrom(from *bql.From, env *environment) (*compiledFrom, error) {
 	if from == nil {
 		return nil, nil
 	}
@@ -30,17 +30,20 @@ func (c *compiler) compileFrom(from *bql.From) (*compiledFrom, error) {
 		Clear:   from.Clear,
 	}
 	if from.Expr != nil {
-		env := c.env
-		c.env = fromEnv
-		expr, err := c.compileExpr(from.Expr)
+		outer := c.env
 		c.env = env
+		defer func() { c.env = outer }()
+		expr, err := c.compileExpr(from.Expr)
 		if err != nil {
 			return nil, err
+		}
+		if c.isAggregate(from.Expr) {
+			return nil, statementErrorf("aggregates are not allowed in FROM clause")
 		}
 		compiled.Expr = expr
 	}
 	if from.OpenOn != nil && from.CloseOn != nil && from.OpenOn.After(from.CloseOn.Time) {
-		return nil, compileErrorf(from, "Invalid dates: CLOSE date must follow OPEN date.")
+		return nil, statementErrorf("CLOSE date must follow OPEN date")
 	}
 	return compiled, nil
 }

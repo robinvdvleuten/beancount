@@ -16,42 +16,86 @@ import (
 
 const fixtureDir = "../testdata/compliance/query"
 
-// errorFixtures holds bean-query 2.3.6's output for every err_ fixture,
-// which is the same in text and csv.
+// errorFixtures holds what Run reports for every err_ fixture
+// (Error.Report), the same in text and csv: beanquery's shell text, or ours
+// for a fixture listed in queryGaps (cli/query_compliance_test.go) until
+// its gap closes.
 var errorFixtures = map[string]string{
-	"err_aggregate_arg_count":    "ERROR: Invalid number of arguments for Sum: found 2 expected 1.\n",
-	"err_aggregate_arg_type":     "ERROR: Invalid type for argument 0 of Sum: found <class 'str'> expected (<class 'int'>, <class 'float'>, <class 'decimal.Decimal'>).\n",
-	"err_bad_column":             "ERROR: Invalid column name 'bogus' in targets/column context.\n",
-	"err_bad_function":           "ERROR: Invalid function 'bogusfn(date)' in targets/column context.\n",
-	"err_empty_from":             "Empty FROM expression is not allowed\n",
-	"err_from_context":           "ERROR: Invalid column name 'bogus' in FROM clause context.\n",
-	"err_from_close_before_open": "ERROR: Invalid dates: CLOSE date must follow OPEN date.\n",
-	"err_function_arg_count":     "ERROR: Invalid number of arguments for Root: found 1 expected 2.\n",
-	"err_function_arg_type":      "ERROR: Invalid type for argument 2 of GrepN: found <class 'str'> expected <class 'int'>.\n",
-	"err_function_arg_types":     "ERROR: Invalid function 'bogusfn(date, Position, Amount, set, Decimal, bool, NoneType)' in targets/column context.\n",
-	"err_group_by_aggregate_expr": "ERROR: GROUP-BY expressions may not be aggregates: " +
-		"'Not(operand=Equal(left=Function(fname='count', operands=[Constant(value='x')]), right=Constant(value=datetime.date(2014, 1, 1))))'.\n",
-	"err_group_by_inventory": "ERROR: GROUP-BY a non-hashable type is not supported: 'Column(name='balance')'.\n",
-	"err_group_coverage": "ERROR: All non-aggregates must be covered by GROUP-BY clause in aggregate query; " +
-		"the following targets are missing: \"date\".\n",
-	"err_having":                      "ERROR: The HAVING clause is not supported yet.\n",
-	"err_identifier_digits":           "ERROR: Syntax error near '2' (at 14)\n  SELECT account2\n                ^\n",
-	"err_mixed_aggregate":             "ERROR: Mixed aggregates and non-aggregates are not allowed.\n",
-	"err_nested_aggregate":            "ERROR: Aggregates of aggregates are not allowed.\n",
-	"err_null_argument":               "ERROR: Invalid type for argument 0 of Length: found <class 'NoneType'> expected (<class 'list'>, <class 'set'>, <class 'str'>).\n",
-	"err_object_argument":             "ERROR: Invalid type for argument 0 of Year: found <class 'object'> expected <class 'datetime.date'>.\n",
-	"err_order_by_index":              "ERROR: Invalid ORDER-BY column index 5.\n",
-	"err_pivot":                       "ERROR: The PIVOT BY clause is not supported yet.\n",
-	"err_pivot_by_after_checks":       "ERROR: The PIVOT BY clause is not supported yet.\n",
-	"err_print_close_before_open":     "ERROR: Invalid dates: CLOSE date must follow OPEN date.\n",
-	"err_pivot_by_expression":         "ERROR: Syntax error near '(' (at 27)\n  SELECT account PIVOT BY foo(1)\n                             ^\n",
-	"err_signed_number_after_operand": "ERROR: Syntax error near '-1' (at 14)\n  SELECT number -1\n                ^\n",
-	"err_syntax_near":                 "ERROR: Syntax error near '*' (at 22)\n  SELECT account, count(*) GROUP BY account\n                        ^\n",
-	"err_unary_minus":                 "ERROR: Syntax error near '-' (at 7)\n  SELECT -number\n         ^\n",
-	"err_unknown_token":               "Unknown token: LexToken(error,\"'coffee\",1,33)\n",
-	"err_unterminated":                "ERROR: unterminated statement. Missing a semicolon?\n",
-	"err_where_aggregate":             "ERROR: Invalid function 'sum(Decimal)' in WHERE clause context.\n",
-	"err_where_has_account":           "ERROR: Invalid function 'has_account(str)' in WHERE clause context.\n",
+	"err_aggregate_arg_count": `error: no function matches "sum(decimal, int)" name and argument types
+| SELECT sum(number, 1)
+|        ^^^^^^^^^^^^^^`,
+	"err_aggregate_arg_type": `error: no function matches "sum(str)" name and argument types
+| SELECT sum(account)
+|        ^^^^^^^^^^^^`,
+	"err_bad_column": `error: column "bogus" not found in table "postings"
+| SELECT bogus
+|        ^^^^^`,
+	"err_bad_function": `error: no function matches "bogusfn(date)" name and argument types
+| SELECT bogusfn(date)
+|        ^^^^^^^^^^^^^`,
+	"err_empty_from": `error: syntax error
+| SELECT account FROM WHERE account ~ 'Assets'
+|                          ^`,
+	"err_from_close_before_open": `error: CLOSE date must follow OPEN date`,
+	"err_from_context": `error: column "bogus" not found in table "postings"
+| SELECT account FROM bogus
+|                     ^^^^^`,
+	"err_function_arg_count": `error: no function matches "root(str)" name and argument types
+| SELECT root(account)
+|        ^^^^^^^^^^^^^`,
+	"err_function_arg_type": `error: no function matches "grepn(str, str, str)" name and argument types
+| SELECT grepn('a', account, 'x')
+|        ^^^^^^^^^^^^^^^^^^^^^^^^`,
+	"err_function_arg_types": `error: no function matches "bogusfn(date, position, amount, set, decimal, bool, nonetype)" name and argument types
+| SELECT bogusfn(date, position, units(position), tags, 2.7, TRUE, NULL)
+|        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^`,
+	"err_group_by_aggregate_expr": `error: GROUP-BY expressions may not be aggregates: "NotEqual(left=Function(fname='count', operands=[Constant(value='x')]), right=Constant(value=datetime.date(2014, 1, 1)))"`,
+	"err_group_by_inventory":      `error: GROUP-BY a non-hashable type is not supported: "Column(name='balance')"`,
+	"err_group_coverage":          `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "date"`,
+	"err_having": `error: the HAVING clause is not supported yet
+| SELECT account GROUP BY account HAVING count(account) > 1
+|                                        ^^^^^^^^^^^^^^^^^^`,
+	"err_identifier_digits": `error: syntax error
+| SELECT account2
+|               ^`,
+	"err_mixed_aggregate":  `error: mixed aggregates and non-aggregates are not allowed`,
+	"err_nested_aggregate": `error: aggregates of aggregates are not allowed`,
+	"err_null_argument": `error: no function matches "length(nonetype)" name and argument types
+| SELECT length(NULL)
+|        ^^^^^^^^^^^^`,
+	"err_object_argument": `error: no function matches "year(object)" name and argument types
+| SELECT year(entry_meta('x'))
+|        ^^^^^^^^^^^^^^^^^^^^^`,
+	"err_order_by_index": `error: invalid ORDER-BY column index 5`,
+	"err_pivot": `error: the PIVOT BY clause is not supported yet
+| SELECT date, account, sum(position) GROUP BY 1, 2 PIVOT BY date, account
+|                                                            ^^^^`,
+	"err_pivot_by_after_checks": `error: the PIVOT BY clause is not supported yet
+| SELECT account, sum(number) PIVOT BY bogus
+|                                      ^^^^^`,
+	"err_pivot_by_expression": `error: syntax error
+| SELECT account PIVOT BY foo(1)
+|                            ^`,
+	"err_print_close_before_open": `error: CLOSE date must follow OPEN date`,
+	"err_signed_number_after_operand": `error: syntax error
+| SELECT number -1
+|               ^`,
+	"err_syntax_near": `error: syntax error
+| SELECT account, count(*) GROUP BY account
+|                       ^`,
+	"err_unary_minus": `error: syntax error
+| SELECT -number
+|        ^`,
+	"err_unknown_token": `error: syntax error
+| SELECT account WHERE narration ~ 'coffee
+|                                  ^`,
+	"err_unterminated": `error: syntax error
+| SELECT account WHERE
+|                     ^`,
+	"err_where_aggregate": `error: aggregates are not allowed in WHERE clause`,
+	"err_where_has_account": `error: no function matches "has_account(str)" name and argument types
+| SELECT account WHERE has_account('Cash')
+|                      ^^^^^^^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its
@@ -90,24 +134,87 @@ func run(t *testing.T, qctx *Context, text string, format Format, numberify bool
 	return out.String()
 }
 
-// TestRunErrorFixtures runs every err_ fixture through Run and checks the
-// error lines byte for byte, so they hold without bean-query installed.
+// runError runs a statement that does not parse or compile and returns
+// what its Error reports; Run writes nothing for it.
+func runError(t *testing.T, qctx *Context, text string, format Format) string {
+	t.Helper()
+	var out strings.Builder
+	err := Run(context.Background(), qctx, text, format, false, &out)
+	var queryErr *Error
+	assert.True(t, stdErrors.As(err, &queryErr), "want an *Error, got %v", err)
+	assert.Equal(t, "", out.String())
+	return queryErr.Report()
+}
+
+// TestRunErrorFixtures runs every err_ fixture through Run and checks its
+// report byte for byte, so it holds without bean-query installed.
 func TestRunErrorFixtures(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(fixtureDir, "err_*.bql"))
 	assert.NoError(t, err)
-	assert.Equal(t, len(errorFixtures), len(paths), "every err_ fixture needs its output in errorFixtures, and every entry a fixture")
+	assert.Equal(t, len(errorFixtures), len(paths), "every err_ fixture needs its report in errorFixtures, and every entry a fixture")
 
 	for _, path := range paths {
 		name := strings.TrimSuffix(filepath.Base(path), ".bql")
 		t.Run(name, func(t *testing.T) {
 			expected, ok := errorFixtures[name]
-			assert.True(t, ok, "add bean-query's output for %s to errorFixtures", name)
+			assert.True(t, ok, "add beanquery's report for %s to errorFixtures", name)
 
 			text, qctx := loadFixture(t, name)
 			for _, format := range []Format{FormatText, FormatCSV} {
-				assert.Equal(t, expected, run(t, qctx, text, format, false), "format %s", format)
+				assert.Equal(t, expected, runError(t, qctx, text, format), "format %s", format)
 			}
 		})
+	}
+}
+
+// TestErrorReport checks how an error's report places the statement's
+// lines and the caret, against beanquery's shell.
+func TestErrorReport(t *testing.T) {
+	qctx := newTestContext(t)
+	for _, tt := range []struct {
+		text string
+		want string
+	}{
+		// The lines up to the node's, leading blank lines skipped.
+		{"SELECT account,\n\n  bogus\nWHERE TRUE", "error: column \"bogus\" not found in table \"postings\"\n" +
+			"| SELECT account,\n" +
+			"| \n" +
+			"|   bogus\n" +
+			"|   ^^^^^"},
+		{"\n\nSELECT bogus", "error: column \"bogus\" not found in table \"postings\"\n" +
+			"| SELECT bogus\n" +
+			"|        ^^^^^"},
+		// Tabs expand in the line but not in the caret's column.
+		{"SELECT\tbogus", "error: column \"bogus\" not found in table \"postings\"\n" +
+			"| SELECT  bogus\n" +
+			"|        ^^^^^"},
+		// Columns and carets count characters.
+		{"SELECT 'é', bogus", "error: column \"bogus\" not found in table \"postings\"\n" +
+			"| SELECT 'é', bogus\n" +
+			"|             ^^^^^"},
+		// A node spanning lines gets a caret per character, line break
+		// included, under its first line.
+		{"SELECT sum(number,\n 1)", "error: no function matches \"sum(decimal, int)\" name and argument types\n" +
+			"| SELECT sum(number,\n" +
+			"|        ^^^^^^^^^^^^^^^"},
+		{"SELECT account\nWHERE", "error: syntax error\n" +
+			"| SELECT account\n" +
+			"| WHERE\n" +
+			"|      ^"},
+		// Any of Python's line breaks ends a line, \r\n as one.
+		{"SELECT account,\rbogus", "error: column \"bogus\" not found in table \"postings\"\n" +
+			"| SELECT account,\n" +
+			"| bogus\n" +
+			"| ^^^^^"},
+		{"SELECT account,\r\n\r\n bogus", "error: column \"bogus\" not found in table \"postings\"\n" +
+			"| SELECT account,\n" +
+			"| \n" +
+			"|  bogus\n" +
+			"|  ^^^^^"},
+		// A node BALANCES desugars to has no source text to underline.
+		{"BALANCES AT bogus", "error: no function matches \"bogus(position)\" name and argument types"},
+	} {
+		assert.Equal(t, tt.want, runError(t, qctx, tt.text, FormatText), tt.text)
 	}
 }
 
@@ -156,8 +263,9 @@ func TestRunPrint(t *testing.T) {
 		"  meta: \"posting-level\"\n"+
 		"  Expenses:Food     4.50 USD\n"+
 		"  Assets:Checking  -4.50 USD\n", run(t, qctx, "PRINT FROM 'food' IN tags", FormatText, false))
-	assert.Equal(t, "ERROR: Invalid column name 'account' in FROM clause context.\n",
-		run(t, qctx, "PRINT FROM account = 'x'", FormatText, false))
+	assert.Equal(t, "error: column \"account\" not found in table \"entries\"\n"+
+		"| PRINT FROM account = 'x'\n"+
+		"|            ^^^^^^^", runError(t, qctx, "PRINT FROM account = 'x'", FormatText))
 }
 
 func TestRunUnknownFormat(t *testing.T) {

@@ -66,7 +66,9 @@ func TestAPIQuery(t *testing.T) {
 	t.Run("BQLErrorIsOutput", func(t *testing.T) {
 		code, output := run(t, `{"query": "select nosuchcolumn"}`)
 		assert.Equal(t, http.StatusOK, code)
-		assert.Equal(t, "ERROR: Invalid column name 'nosuchcolumn' in targets/column context.\n", output)
+		assert.Equal(t, "error: column \"nosuchcolumn\" not found in table \"postings\"\n"+
+			"| select nosuchcolumn\n"+
+			"|        ^^^^^^^^^^^^\n", output)
 	})
 
 	t.Run("UnknownFormat", func(t *testing.T) {

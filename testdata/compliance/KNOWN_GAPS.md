@@ -3,7 +3,7 @@
 Documented divergences from official beancount v3, probed against 3.2.3,
 and for BQL against beanquery 0.2.0, v3's `bean-query`. The query fixtures
 that still differ are listed in `queryGaps` (`cli/query_compliance_test.go`)
-with the #562 topic or the issue that closes them.
+with the issue that closes them.
 
 Fixtures prefixed `gap_` in this directory exercise open gaps: the
 differential suite verifies their expectations against `bean-check`, while
@@ -146,6 +146,34 @@ lands:
   here, and a ledger path starting with `//` keeps it in beancount's file
   and document names, where we collapse it.
 
+Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
+
+- #582: a SELECT's FROM expression reads the postings table in beanquery, and
+  the entry columns in ours (bean-query 2.3.6's): `SELECT account FROM
+  account ~ 'Cash'` returns rows in beanquery, and ours reports
+  `column "account" is not supported in FROM clause`. PRINT's FROM reads
+  entries in both.
+- #583: beanquery reserves no `AT`, `OPEN`, `CLOSE`, `CLEAR` or `ON`: they are
+  names outside the clauses they start. `SELECT open` is `column "open"
+  not found in table "postings"` there, and a syntax error after `open`
+  in ours; `SELECT account AS clear` runs there and is a syntax error in
+  ours.
+- #584: beanquery runs a statement up to its first `;` and ignores the rest:
+  `SELECT 1; bogus` prints the result of `SELECT 1`. Ours reports a
+  syntax error at what follows the `;`.
+- #584: an empty query (`bean-query ledger.beancount ""`) prints nothing and
+  exits 0; ours reports `no query given` and exits 1.
+- #586: a decimal after LIMIT (`SELECT account LIMIT 1.5`) is a syntax error in
+  both, with beanquery's caret under the `5` (offset 23) and ours under
+  `LIMIT`.
+- #585: beanquery's lexer takes `\v`, `\f`, `\x1c` to `\x1f` and other Unicode
+  white space (Python's `\s`), such as U+00A0, as white space, ours only
+  space, tab, `\r` and `\n`: `$'SELECT account,\vdate'` returns rows in
+  beanquery and is a syntax error at offset 15 in ours.
+- #582: `SELECT account FROM OPEN ON 2020-01-01 CLOSE` (CLOSE without a date
+  after OPEN ON) fails in beanquery with a Python `TypeError`, nothing on
+  stdout and exit status 1; ours prints the rows.
+
 Differences in message text only, which the suites cannot see since they
 compare the lines errors are on:
 
@@ -181,15 +209,17 @@ compare the lines errors are on:
   `display_precision`, inventories laid out in per-commodity
   sub-columns, CSV with Python's QUOTE_MINIMAL and CRLF that pads number,
   amount, position and inventory cells and leaves the others as they are,
-  numberify in text too, nothing printed for an empty text result, and
-  implicit GROUP BY. Still to follow beanquery (#562; `queryGaps` in
-  `cli/query_compliance_test.go` lists every fixture): errors on stderr
-  with exit status 1 in its words (ours are bean-query 2.3.6's `ERROR:`
-  lines on stdout); operator typing; grammar (`count(*)`, unary minus on
-  any expression, `number -1` as a subtraction, digits in identifiers);
-  per-term ORDER BY directions; `HAVING` and `PIVOT BY`; and functions
-  (every function NULL-strict, one-argument `root`, `has_account` in
-  WHERE, `balance` accumulated where it is evaluated).
+  numberify in text too, nothing printed for an empty text result,
+  implicit GROUP BY, and a statement that does not parse or compile
+  reported on stderr with exit status 1, in the words and with the caret
+  lines of beanquery's interactive shell (one-shot `bean-query` prints a
+  Python traceback instead). Still to follow beanquery (`queryGaps` in
+  `cli/query_compliance_test.go` lists every fixture): operator typing
+  (#573); grammar (#574: `count(*)`, unary minus on any expression,
+  `number -1` as a subtraction, digits in identifiers); per-term ORDER BY
+  directions (#575); `HAVING` and `PIVOT BY` (#576); and functions (#577:
+  every function NULL-strict, one-argument `root`, `has_account` in WHERE,
+  `balance` accumulated where it is evaluated).
 
 ## Deliberate deviations
 
@@ -209,7 +239,7 @@ compare the lines errors are on:
   Python's `bool` subclasses `int`, sums the values as integers and still
   types the column as boolean, so `sum(1 = 1)` over four rows renders
   `TRUE` and `sum(false)` renders `FALSE`. We reject it:
-  `ERROR: Invalid function 'sum(bool)' in targets/column context.` (#422).
+  `error: no function matches "sum(bool)" name and argument types` (#422).
 
 - **BQL comparisons of mixed types**: bean-query rejects a comparison
   between types it has no operator for when it compiles the query
@@ -220,7 +250,24 @@ compare the lines errors are on:
   other values of different types unequal (`1 = '1'` is FALSE), and `<`,
   `<=`, `>` and `>=` compare the two values' string forms (`year < '2024'`
   is TRUE for 2023). The `query/compare_*.bql` fixtures are in `queryGaps`
-  until #562 types operators.
+  until #573 types operators.
+
+- **BQL errors without a node**: beanquery's shell underlines the node a
+  compile error names, but raises some errors without one and then prints
+  `error: ` and a Python traceback. We print `error: ` and the message
+  alone. `SELECT account ORDER BY 5` is `error: invalid ORDER-BY column
+  index 5` for us, and the last line of beanquery's traceback is
+  `beanquery.compiler.CompilationError: invalid ORDER-BY column index 5`.
+  The same holds for `CLOSE date must follow OPEN date`, a GROUP-BY index
+  out of range, a GROUP-BY item that is or refers to an aggregate or has a
+  non-hashable type (`balance`), an aggregate query whose GROUP BY misses
+  a target, mixed aggregates and non-aggregates, aggregates of aggregates,
+  and aggregates in WHERE or FROM. The query parity suite compares only
+  the error line for these. For a node that `BALANCES` or `JOURNAL` adds,
+  beanquery underlines it in the `SELECT` it rewrites the statement to:
+  for `BALANCES AT bogus` it prints the line
+  `SELECT account, SUM(bogus(position))` and carets under
+  `bogus(position)`. We print the error line alone there too.
 
 - **Error lines**: the differential suite compares the lines errors are
   reported on, and we keep our line where beancount's is less precise
@@ -293,7 +340,7 @@ compare the lines errors are on:
 - **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives,
   shell settings (`set format ...`) and dot-commands are not implemented;
   nor are beanquery's subqueries, `FROM #table` and `CREATE TABLE`.
-  `HAVING`, `PIVOT BY` and per-term ORDER BY directions are in #562.
+  `HAVING` and `PIVOT BY` are in #576, per-term ORDER BY directions in #575.
 - **BQL dict-typed metadata functions**: `commodity_meta`, `currency_meta`,
   `open_meta`, and `getitem` (dict-typed values) are not implemented;
   `meta`, `entry_meta`, and `any_meta` cover scalar metadata lookups.
