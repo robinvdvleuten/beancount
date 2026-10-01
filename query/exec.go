@@ -27,23 +27,26 @@ type tableColumn struct {
 }
 
 // execute runs a compiled query over the context's processed directives.
+// Like beanquery, it evaluates each row's targets, or updates its group,
+// right after WHERE keeps the row, so the lazy balance column accumulates
+// in the order beanquery's does.
 func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*table, error) {
 	timer := telemetry.FromContext(ctx).Start("query.execute")
 	defer timer.End()
 
-	rows, last, err := generateRows(ctx, qctx, compiled)
+	var output [][]any
+	visit := func(row *evalRow) { output = append(output, evalTargets(row, compiled)) }
+	var groups *grouper
+	if compiled.HasAgg || len(compiled.GroupBy) > 0 {
+		groups = newGrouper(compiled)
+		visit = groups.add
+	}
+	last, err := scanRows(ctx, qctx, compiled, visit)
 	if err != nil {
 		return nil, err
 	}
-
-	var output [][]any
-	if compiled.HasAgg || len(compiled.GroupBy) > 0 {
-		output = executeGrouped(rows, last, compiled)
-	} else {
-		output = make([][]any, 0, len(rows))
-		for _, row := range rows {
-			output = append(output, evalTargets(row, compiled))
-		}
+	if groups != nil {
+		output = groups.rows(last)
 	}
 
 	output = orderRows(output, compiled)
@@ -67,14 +70,14 @@ func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*tab
 	return result, nil
 }
 
-// generateRows applies the FROM filter to the directive stream and flattens
-// the surviving transactions into posting rows, one per booked position (see
-// postingPositions). The balance column is a single running inventory over
-// the rows that survive WHERE, matching the official executor. It also
-// returns last, the last row of the table: after FROM's transforms but
-// before its filter expression and WHERE, which beanquery joins into one
-// filter. It is nil for an empty table.
-func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) (rows []*evalRow, last *evalRow, err error) {
+// scanRows applies the FROM transforms to the directive stream, flattens
+// the transactions into posting rows, one per booked position (see
+// postingPositions), and visits each row that FROM's filter expression and
+// WHERE keep. Every row shares one running inventory for the lazy balance
+// column. It returns last, the last row of the table: after FROM's
+// transforms but before its filter expression and WHERE, which beanquery
+// joins into one filter. It is nil for an empty table.
+func scanRows(ctx context.Context, qctx *Context, compiled *compiledSelect, visit func(*evalRow)) (last *evalRow, err error) {
 	qctx, entries := compiled.From.transformed(qctx)
 	running := newInventory()
 
@@ -82,7 +85,7 @@ func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) 
 		if i%1024 == 0 {
 			select {
 			case <-ctx.Done():
-				return nil, nil, ctx.Err()
+				return nil, ctx.Err()
 			default:
 			}
 		}
@@ -100,32 +103,16 @@ func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) 
 			}
 
 			for _, position := range positions {
-				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position}
+				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position, running: running}
 				last = row
-				if !kept {
+				if !kept || compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
 					continue
 				}
-				if compiled.Where != nil {
-					// WHERE sees the balance of the rows kept so far, without
-					// the one it filters.
-					if compiled.UsesBalance {
-						row.Balance = running
-					}
-					if !truthy(compiled.Where.eval(row)) {
-						continue
-					}
-				}
-				if compiled.UsesBalance {
-					if position != nil {
-						running.AddPosition(position)
-					}
-					row.Balance = running.Copy()
-				}
-				rows = append(rows, row)
+				visit(row)
 			}
 		}
 	}
-	return rows, last, nil
+	return last, nil
 }
 
 // evalTargets evaluates every target (visible and hidden) for a row.
@@ -143,38 +130,62 @@ type group struct {
 	accs []accumulator
 }
 
-// executeGrouped hash-aggregates rows by the GROUP-BY targets and evaluates
-// the full target list once per group, in first-seen order, keeping the
-// groups HAVING accepts.
-func executeGrouped(rows []*evalRow, last *evalRow, compiled *compiledSelect) [][]any {
-	groups := make(map[string]*group)
-	var order []string
+// grouper hash-aggregates rows by the GROUP-BY targets, keeping groups in
+// first-seen order.
+type grouper struct {
+	compiled *compiledSelect
+	// keyOrder lists the group-key targets in target order, the order
+	// beanquery evaluates them in.
+	keyOrder []int
+	groups   map[string]*group
+	order    []string
+}
 
-	for _, row := range rows {
-		var key strings.Builder
-		for _, idx := range compiled.GroupBy {
-			key.WriteString(valueString(compiled.Targets[idx].expr.eval(row)))
-			key.WriteByte('\x00')
-		}
-		k := key.String()
-
-		g, ok := groups[k]
-		if !ok {
-			g = &group{rep: row, accs: make([]accumulator, len(compiled.Aggs))}
-			for i, agg := range compiled.Aggs {
-				g.accs[i] = agg.def.new(agg.arg.typ())
-			}
-			groups[k] = g
-			order = append(order, k)
-		}
-		for i, agg := range compiled.Aggs {
-			g.accs[i].update(agg.arg.eval(row))
-		}
+func newGrouper(compiled *compiledSelect) *grouper {
+	return &grouper{
+		compiled: compiled,
+		keyOrder: slices.Sorted(slices.Values(compiled.GroupBy)),
+		groups:   make(map[string]*group),
 	}
+}
 
-	// Like beanquery, a target outside the group key, an aggregate one
-	// such as HAVING's or an ORDER BY expression's, reads its columns from
-	// last, the table's last row; last is set whenever a group exists.
+// add evaluates a row's group key, in target order like beanquery, and
+// updates its group's aggregates.
+func (gr *grouper) add(row *evalRow) {
+	compiled := gr.compiled
+	var key strings.Builder
+	for _, idx := range gr.keyOrder {
+		key.WriteString(valueString(compiled.Targets[idx].expr.eval(row)))
+		key.WriteByte('\x00')
+	}
+	k := key.String()
+
+	g, ok := gr.groups[k]
+	if !ok {
+		g = &group{rep: row, accs: make([]accumulator, len(compiled.Aggs))}
+		for i, agg := range compiled.Aggs {
+			g.accs[i] = agg.def.new(agg.arg.typ())
+		}
+		gr.groups[k] = g
+		gr.order = append(gr.order, k)
+	}
+	for i, agg := range compiled.Aggs {
+		// An accumulator that is done no longer evaluates its argument,
+		// which matters for the lazy balance column.
+		if acc, ok := g.accs[i].(interface{ done() bool }); ok && acc.done() {
+			continue
+		}
+		g.accs[i].update(agg.arg.eval(row))
+	}
+}
+
+// rows evaluates the full target list once per group, keeping the groups
+// HAVING accepts. Like beanquery, a target outside the group key, an
+// aggregate one such as HAVING's or an ORDER BY expression's, reads its
+// columns from last, the table's last row; last is set whenever a group
+// exists.
+func (gr *grouper) rows(last *evalRow) [][]any {
+	compiled := gr.compiled
 	inGroup := make([]bool, len(compiled.Targets))
 	for _, idx := range compiled.GroupBy {
 		inGroup[idx] = true
@@ -183,9 +194,9 @@ func executeGrouped(rows []*evalRow, last *evalRow, compiled *compiledSelect) []
 	if last != nil {
 		scanned = *last
 	}
-	output := make([][]any, 0, len(order))
-	for _, k := range order {
-		g := groups[k]
+	output := make([][]any, 0, len(gr.order))
+	for _, k := range gr.order {
+		g := gr.groups[k]
 		g.rep.AggValues = make([]any, len(compiled.Aggs))
 		for i, acc := range g.accs {
 			g.rep.AggValues[i] = acc.finalize()

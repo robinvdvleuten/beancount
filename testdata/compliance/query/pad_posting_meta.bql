@@ -1,0 +1,1 @@
+SELECT date, account, meta('note') AS note, entry_meta('padnote') AS padnote, lineno

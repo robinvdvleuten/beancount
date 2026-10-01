@@ -123,10 +123,6 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"balance_where_running":           "#577: balance accumulates where it is evaluated, WHERE included",
-	"err_function_arg_count":          "#577: root takes one argument too",
-	"err_where_has_account":           "#577: has_account is allowed in WHERE",
-	"str_composites":                  "#577: every function is NULL-strict and str(TRUE) is TRUE",
 	"from_open_kept_entries":          "#560: beanquery's printer hides __implicit_prices__ metadata",
 	"print_document_pushed_tags":      "#560: beanquery's printer spaces a document's tags and links",
 	"print_implicit_price_scale":      "#560: beanquery's printer hides __implicit_prices__ metadata",

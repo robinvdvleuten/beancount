@@ -116,13 +116,19 @@ func createPaddingTransaction(pad *ast.Pad, balance *ast.Balance, difference str
 		negated = "-" + difference
 	}
 
+	// Like beancount's, the postings carry the balance assertion's
+	// location and metadata, where the transaction carries the pad's.
+	padded := ast.NewPosting(balance.Account, ast.WithAmount(difference, currency))
+	source := ast.NewPosting(pad.AccountPad, ast.WithAmount(negated, currency))
+	for _, posting := range []*ast.Posting{padded, source} {
+		posting.SetPosition(balance.Position())
+		posting.AddMetadata(balance.GetMetadata()...)
+	}
 	txn := ast.NewTransaction(pad.Date(), narration.String(),
 		ast.WithFlag("P"),
-		ast.WithPostings(
-			ast.NewPosting(balance.Account, ast.WithAmount(difference, currency)),
-			ast.NewPosting(pad.AccountPad, ast.WithAmount(negated, currency)),
-		),
+		ast.WithPostings(padded, source),
 	)
 	txn.SetPosition(pad.Position())
+	txn.AddMetadata(pad.GetMetadata()...)
 	return txn
 }

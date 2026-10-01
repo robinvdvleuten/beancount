@@ -286,7 +286,7 @@ var casts = map[dtype]func(v any) any{
 	tBool:    func(v any) any { return truthy(v) },
 	tDate:    castDate,
 	tDecimal: castDecimal,
-	tString:  func(v any) any { return objectString(v) },
+	tString:  func(v any) any { return strValue(v) },
 }
 
 // castDecimal is beanquery's decimal(): a number or a numeric string as a

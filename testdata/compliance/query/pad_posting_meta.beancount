@@ -1,0 +1,7 @@
+2023-01-01 open Assets:Cash
+2023-01-01 open Equity:Opening
+
+2023-01-01 pad Assets:Cash Equity:Opening
+  padnote: "from pad"
+2023-01-02 balance Assets:Cash 10 USD
+  note: "counted"

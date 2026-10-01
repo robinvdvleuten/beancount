@@ -25,7 +25,7 @@ type aggDef struct {
 var aggregates = map[string]*aggDef{
 	"count": {
 		resultType: func(dtype) (dtype, bool) { return tInt, true },
-		new:        func(dtype) accumulator { return &countAcc{} },
+		new:        func(arg dtype) accumulator { return &countAcc{rows: arg == tAsterisk} },
 	},
 	"first": {
 		resultType: func(arg dtype) (dtype, bool) { return arg, arg != tAsterisk },
@@ -68,24 +68,34 @@ var aggregates = map[string]*aggDef{
 	},
 }
 
-// countAcc counts rows, including NULL values, matching Python's len().
+// countAcc is beanquery's CountArg, which counts the non-NULL values, or
+// Count, which counts the rows of count(*).
 type countAcc struct {
-	n int64
+	rows bool // count(*), which counts NULLs too
+	n    int64
 }
 
-func (a *countAcc) update(any)    { a.n++ }
+func (a *countAcc) update(v any) {
+	if v != nil || a.rows {
+		a.n++
+	}
+}
+
 func (a *countAcc) finalize() any { return a.n }
 
+// firstAcc is beanquery's First, which stores a value while it holds none,
+// so it keeps the first non-NULL value, and stops evaluating its argument
+// once it has one (see done).
 type firstAcc struct {
 	value any
-	seen  bool
 }
 
 func (a *firstAcc) update(v any) {
-	if !a.seen {
-		a.value, a.seen = v, true
+	if a.value == nil {
+		a.value = v
 	}
 }
+func (a *firstAcc) done() bool    { return a.value != nil }
 func (a *firstAcc) finalize() any { return a.value }
 
 type lastAcc struct {

@@ -5,12 +5,25 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
+
+// strValue is beanquery's str(): TRUE or FALSE for a boolean, and Python's
+// str() otherwise. Rendering an untyped column prints Python's True.
+func strValue(v any) string {
+	if b, ok := v.(bool); ok {
+		if b {
+			return "TRUE"
+		}
+		return "FALSE"
+	}
+	return objectString(v)
+}
 
 // funcOverload is one typed signature of a simple function. tAny parameters
 // match any argument type but the * of count(*); other parameters need that
@@ -181,6 +194,9 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 	"root": {overloads: []funcOverload{
+		{[]dtype{tString}, tString, func(_ *evalRow, args []any) any {
+			return strings.SplitN(args[0].(string), ":", 2)[0]
+		}},
 		{[]dtype{tString, tInt}, tString, func(_ *evalRow, args []any) any {
 			parts := strings.Split(args[0].(string), ":")
 			n := min(int(args[1].(int64)), len(parts))
@@ -387,12 +403,13 @@ var functions = map[string]*funcDef{
 	// String functions.
 	"str": {overloads: []funcOverload{
 		{[]dtype{tAny}, tString, func(_ *evalRow, args []any) any {
-			return objectString(args[0])
+			return strValue(args[0])
 		}},
 	}},
 	"length": {overloads: []funcOverload{
 		{[]dtype{tString}, tInt, func(_ *evalRow, args []any) any {
-			return int64(len(args[0].(string)))
+			// Python's len() counts code points.
+			return int64(utf8.RuneCountInString(args[0].(string)))
 		}},
 		{[]dtype{tSet}, tInt, func(_ *evalRow, args []any) any {
 			return int64(len(args[0].(setValue)))
@@ -465,14 +482,6 @@ var functions = map[string]*funcDef{
 	"joinstr": {overloads: []funcOverload{
 		{[]dtype{tSet}, tString, func(_ *evalRow, args []any) any {
 			return strings.Join(args[0].(setValue).Sorted(), ",")
-		}},
-	}},
-	"coalesce": {overloads: []funcOverload{
-		{[]dtype{tAny, tAny}, tAny, func(_ *evalRow, args []any) any {
-			if args[0] != nil {
-				return args[0]
-			}
-			return args[1]
 		}},
 	}},
 

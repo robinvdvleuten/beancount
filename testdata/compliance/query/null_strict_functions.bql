@@ -1,0 +1,1 @@
+SELECT account, str(cost_number), year(cost_date), length(str(cost_date)), coalesce(str(cost_number), 'none') AS c

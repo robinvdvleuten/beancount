@@ -1,0 +1,1 @@
+SELECT account, first(cost_number), last(cost_number), min(cost_date), max(cost_date), sum(cost_number), count(cost_number) GROUP BY account

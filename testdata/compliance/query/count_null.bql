@@ -1,0 +1,1 @@
+SELECT count(NULL), count(cost_number), count(*), count(cost_date)

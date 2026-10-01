@@ -242,9 +242,10 @@ type leftAligned struct{}
 
 func (leftAligned) rightAligned() bool { return false }
 
-// objectString renders a value like Python's str(), for object columns and
-// the str() function: numbers keep the digits they were written with (3.10,
-// 10.50 USD), and an inventory is parenthesized like beancount's.
+// objectString renders a value like Python's str(), for object columns;
+// beanquery's str() function is strValue. Numbers keep the digits they
+// were written with (3.10, 10.50 USD), and an inventory is parenthesized
+// like beancount's.
 func objectString(v any) string {
 	switch val := v.(type) {
 	case nil:

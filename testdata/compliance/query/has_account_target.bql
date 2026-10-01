@@ -1,0 +1,1 @@
+SELECT account, has_account('Cash') AS cash, has_account('travel') AS travel

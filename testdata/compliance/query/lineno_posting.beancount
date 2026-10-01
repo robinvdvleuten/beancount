@@ -1,0 +1,11 @@
+2023-01-01 open Assets:Cash
+2023-01-01 open Expenses:Food
+2023-01-01 open Equity:Opening
+
+2023-01-01 pad Assets:Cash Equity:Opening
+
+2023-01-02 balance Assets:Cash 100 USD
+
+2023-02-01 * "Lunch"
+  Expenses:Food   3.50 USD
+  Assets:Cash

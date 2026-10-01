@@ -53,6 +53,41 @@ func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 	assert.Equal(t, "1000", balance.String(), "Balance should be 1000 USD")
 }
 
+// TestPaddingLocationsAndMetadata checks that, like beancount's, the padding
+// transaction carries the pad's position and metadata, and its postings the
+// balance assertion's.
+func TestPaddingLocationsAndMetadata(t *testing.T) {
+	source := `
+2020-01-01 open Assets:Checking
+2020-01-01 open Equity:Opening-Balances
+
+2020-01-01 pad Assets:Checking Equity:Opening-Balances
+  padnote: "from pad"
+2020-01-15 balance Assets:Checking 1000.00 USD
+  note: "counted"
+`
+	tree := parser.MustParseBytes(context.Background(), []byte(source))
+	assert.NoError(t, New().Process(context.Background(), tree))
+
+	var pad *ast.Pad
+	var balance *ast.Balance
+	for _, directive := range tree.Directives {
+		switch d := directive.(type) {
+		case *ast.Pad:
+			pad = d
+		case *ast.Balance:
+			balance = d
+		}
+	}
+	txn := findPaddingTransactions(tree)[0]
+	assert.Equal(t, pad.Position(), txn.Position())
+	assert.Equal(t, pad.GetMetadata(), txn.GetMetadata())
+	for _, posting := range txn.Postings {
+		assert.Equal(t, balance.Position(), posting.Position())
+		assert.Equal(t, balance.GetMetadata(), posting.GetMetadata())
+	}
+}
+
 func TestPadWithMultipleCurrencies(t *testing.T) {
 	source := `
 2020-01-01 open Assets:Investment

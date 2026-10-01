@@ -27,20 +27,38 @@ type Context struct {
 
 // evalRow is the evaluation context for one data row. In the FROM (entry)
 // environment only Entry is set; in the posting environment Txn and Posting
-// identify the flattened posting row. Balance is the running per-account
-// inventory maintained by the executor. AggValues holds finalized aggregate
-// results while group targets are evaluated.
+// identify the flattened posting row. running is the inventory the
+// executor shares between a query's rows, which the balance column adds the
+// row to (see balance). AggValues holds finalized aggregate results while
+// group targets are evaluated.
 type evalRow struct {
 	Ctx       *Context
 	Entry     ast.Directive
 	Txn       *ast.Transaction
 	Posting   *ast.Posting
-	Balance   *inventoryValue
+	running   *inventoryValue
+	balance   *inventoryValue
 	AggValues []any
 	// Position is what this row books: the posting's own position, or for a
 	// reduction the share booked against one lot. Nil for postings without
 	// an amount.
 	Position *positionValue
+}
+
+// balanceValue is the balance column, lazy like beanquery's (its postings
+// table caches the column per row): the first time a row evaluates it, the
+// row's position joins the shared running inventory, and the row keeps a
+// copy. A row that never evaluates it, because WHERE short-circuited before
+// reaching it or dropped the row, never joins, so the column sums only the
+// rows that read it, up to and including the current one.
+func (row *evalRow) balanceValue() any {
+	if row.balance == nil {
+		if row.Position != nil {
+			row.running.AddPosition(row.Position)
+		}
+		row.balance = row.running.Copy()
+	}
+	return row.balance
 }
 
 // columnDef declares a column available in an environment: its result type
@@ -77,7 +95,7 @@ var postingColumns = map[string]*columnDef{
 	"account":       {tString, func(row *evalRow) any { return string(row.Posting.Account) }},
 	"position":      {tPosition, func(row *evalRow) any { return row.Position }},
 	"change":        {tPosition, func(row *evalRow) any { return row.Position }},
-	"balance":       {tInventory, func(row *evalRow) any { return row.Balance }},
+	"balance":       {tInventory, func(row *evalRow) any { return row.balanceValue() }},
 	"number":        {tDecimal, unitsColumn(func(units amountValue) any { return units.Number })},
 	"currency":      {tString, unitsColumn(func(units amountValue) any { return units.Currency })},
 	"cost_number":   {tDecimal, costColumn(func(c *costValue) any { return c.Number })},
@@ -96,9 +114,25 @@ var postingColumns = map[string]*columnDef{
 		}
 		return others
 	}},
+	// Like beanquery, the location columns are the posting's, and NULL for
+	// a posting with none, such as one FROM's summarization creates.
 	"location": {tString, func(row *evalRow) any {
-		pos := row.Posting.Position()
-		return fmt.Sprintf("%s:%d:", pos.Filename, pos.Line)
+		if pos := row.Posting.Position(); pos.Filename != "" {
+			return fmt.Sprintf("%s:%d:", pos.Filename, pos.Line)
+		}
+		return nil
+	}},
+	"filename": {tString, func(row *evalRow) any {
+		if pos := row.Posting.Position(); pos.Filename != "" {
+			return pos.Filename
+		}
+		return nil
+	}},
+	"lineno": {tInt, func(row *evalRow) any {
+		if pos := row.Posting.Position(); pos.Filename != "" {
+			return int64(pos.Line)
+		}
+		return nil
 	}},
 
 	// Transaction-level context, shared with the entry environment.
@@ -107,8 +141,6 @@ var postingColumns = map[string]*columnDef{
 	"month":       {tInt, func(row *evalRow) any { return int64(row.Entry.Date().Month()) }},
 	"day":         {tInt, func(row *evalRow) any { return int64(row.Entry.Date().Day()) }},
 	"type":        {tString, func(row *evalRow) any { return string(row.Entry.Kind()) }},
-	"filename":    {tString, func(row *evalRow) any { return row.Entry.Position().Filename }},
-	"lineno":      {tInt, func(row *evalRow) any { return int64(row.Entry.Position().Line) }},
 	"id":          {tString, func(row *evalRow) any { return entryID(row.Entry) }},
 	"flag":        {tString, func(row *evalRow) any { return row.Txn.Flag }},
 	"payee":       {tString, func(row *evalRow) any { return row.Txn.Payee.String() }},
@@ -119,13 +151,11 @@ var postingColumns = map[string]*columnDef{
 }
 
 // environment is what one clause compiles against, like one of
-// beanquery's tables: its columns, the table name its errors quote, and
-// whether it registers the entry filters.
+// beanquery's tables: its columns and the table name its errors quote.
+// Every environment registers every function and aggregate.
 type environment struct {
 	columns map[string]*columnDef
 	table   string
-	// withEntryFilters registers has_account (FROM only).
-	withEntryFilters bool
 }
 
 var (
@@ -134,21 +164,10 @@ var (
 	targetsEnv = &environment{columns: postingColumns, table: "postings"}
 	// fromEnv compiles a SELECT's FROM clause, over entries; beanquery's
 	// errors name the postings table there.
-	fromEnv = &environment{columns: entryColumns, table: "postings", withEntryFilters: true}
+	fromEnv = &environment{columns: entryColumns, table: "postings"}
 	// printFromEnv compiles PRINT's FROM clause, over entries.
-	printFromEnv = &environment{columns: entryColumns, table: "entries", withEntryFilters: true}
+	printFromEnv = &environment{columns: entryColumns, table: "entries"}
 )
-
-// entryFilters are the functions only the FROM environment registers.
-var entryFilters = map[string]bool{"has_account": true}
-
-// function returns the simple function registered under name, if any.
-func (e *environment) function(name string) *funcDef {
-	if entryFilters[name] && !e.withEntryFilters {
-		return nil
-	}
-	return functions[name]
-}
 
 // txnColumn wraps a transaction accessor into an entry-environment column
 // that yields NULL for non-transaction directives.

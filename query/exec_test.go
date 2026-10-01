@@ -133,21 +133,25 @@ func TestExecuteRunningBalance(t *testing.T) {
 	assert.Equal(t, "-1504.5 USD", valueString(result.Rows[3][0]))
 }
 
-// WHERE sees the running balance of the rows it kept before the one it
-// filters, like bean-query 2.3.6; beanquery accumulates the balance where
-// it is evaluated, WHERE included, and keeps 6 rows here (#577).
+// Like beanquery, balance is lazy: a row joins the running inventory the
+// first time it evaluates the column, so WHERE sees the current posting
+// too, and a row WHERE drops after reading balance still counts.
 func TestExecuteBalanceInWhere(t *testing.T) {
 	// The last posting sees the HOOL lot, held at cost.
-	assert.Equal(t, 7, len(runQuery(t, "SELECT date WHERE str(balance) = str(units(balance))").Rows))
+	assert.Equal(t, 6, len(runQuery(t, "SELECT date WHERE str(balance) = str(units(balance))").Rows))
 
-	// Before the first kept row the balance is empty. The salary's income
-	// leg is filtered against the 2500 USD its checking leg left, without
-	// its own -2500 USD, so it is dropped.
+	// Every row reads balance in WHERE, so the dropped ones count too: the
+	// salary's income leg is dropped, yet the food's checking leg sees it.
 	result := runQuery(t, "SELECT account, balance WHERE number(only('USD', balance)) <= 1000")
-	assert.Equal(t, 3, len(result.Rows))
+	assert.Equal(t, 7, len(result.Rows))
 	assert.Equal(t, "1000 USD", valueString(result.Rows[0][1]))
 	assert.Equal(t, "Equity:Opening-Balances", result.Rows[1][0])
-	assert.Equal(t, "2500 USD", valueString(result.Rows[2][1]))
+	assert.Equal(t, "", valueString(result.Rows[2][1]))
+
+	// Short-circuiting keeps the balance to the rows that reach it.
+	result = runQuery(t, "SELECT balance WHERE account = 'Assets:Checking' AND number(only('USD', balance)) > 0")
+	assert.Equal(t, 3, len(result.Rows))
+	assert.Equal(t, "3495.5 USD", valueString(result.Rows[2][0]))
 }
 
 // TestExecuteHavingReadsLastRow pins a beanquery quirk: HAVING reads its

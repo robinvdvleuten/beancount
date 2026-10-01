@@ -1,0 +1,1 @@
+SELECT str(any_meta('kb')), any_meta('kb'), any_meta('kb') = 'TRUE', 'v' + any_meta('kb'), str(1 = 1)

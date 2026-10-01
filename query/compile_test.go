@@ -246,13 +246,12 @@ func TestCompileOrderByMatchesTarget(t *testing.T) {
 
 func TestCompileClauseEnvironments(t *testing.T) {
 	// Like beanquery, every clause registers the aggregates and rejects
-	// them outside the targets once the clause compiles; only FROM has
-	// has_account; and errors name the table.
+	// them outside the targets once the clause compiles, and errors name
+	// the table.
 	ctx := newTestContext(t)
 	for query, want := range map[string]string{
 		"SELECT account WHERE sum(number) > 0":                       "aggregates are not allowed in WHERE clause",
 		"SELECT account WHERE sum(account) > 0":                      `no function matches "sum(str)" name and argument types`,
-		"SELECT account WHERE has_account('x')":                      `no function matches "has_account(str)" name and argument types`,
 		"SELECT account WHERE bogus":                                 `column "bogus" not found in table "postings"`,
 		"SELECT account FROM bogus":                                  `column "bogus" not found in table "postings"`,
 		"PRINT FROM bogus":                                           `column "bogus" not found in table "entries"`,
@@ -286,8 +285,9 @@ func TestCompileFromUsesEntryEnvironment(t *testing.T) {
 	err := compileFails(t, ctx, "SELECT date FROM account ~ 'Assets'")
 	assert.Equal(t, `column "account" is not supported in FROM clause`, err.Error())
 
-	// has_account is the FROM-environment predicate for that.
+	// has_account is the predicate for that, in every clause.
 	mustCompile(t, ctx, "SELECT date FROM has_account('Assets')")
+	mustCompile(t, ctx, "SELECT has_account('Assets') WHERE has_account('Cash')")
 }
 
 func TestCompileFunctionOverloads(t *testing.T) {
@@ -316,19 +316,19 @@ func TestCompileNoMatchingFunction(t *testing.T) {
 	// Like beanquery, a call no signature matches names the function and
 	// its arguments' lower-cased Python types; an empty want compiles.
 	for query, want := range map[string]string{
-		"SELECT sum(number, 1)":           "sum(decimal, int)",
-		"SELECT sum(account)":             "sum(str)",
-		"SELECT today(1)":                 "today(int)",
-		"SELECT year(account)":            "year(str)",
-		"SELECT year(NULL)":               "year(nonetype)",
-		"SELECT year(entry_meta('x'))":    "year(object)",
-		"SELECT length(number)":           "length(decimal)",
-		"SELECT only('USD', number)":      "only(str, decimal)",
-		"SELECT units(account)":           "units(str)",
-		"SELECT count(entry_meta('x'))":   "",
-		"SELECT str(entry_meta('x'))":     "",
-		"SELECT coalesce(account, NULL)":  "",
-		"SELECT maxwidth(account, 1 + 1)": "",
+		"SELECT sum(number, 1)":                "sum(decimal, int)",
+		"SELECT sum(account)":                  "sum(str)",
+		"SELECT today(1)":                      "today(int)",
+		"SELECT year(account)":                 "year(str)",
+		"SELECT year(NULL)":                    "year(nonetype)",
+		"SELECT year(entry_meta('x'))":         "year(object)",
+		"SELECT length(number)":                "length(decimal)",
+		"SELECT only('USD', number)":           "only(str, decimal)",
+		"SELECT units(account)":                "units(str)",
+		"SELECT count(entry_meta('x'))":        "",
+		"SELECT str(entry_meta('x'))":          "",
+		"SELECT coalesce(cost_number, number)": "",
+		"SELECT maxwidth(account, 1 + 1)":      "",
 	} {
 		ctx := newTestContext(t)
 		stmt, err := bql.Parse(query)
@@ -342,6 +342,19 @@ func TestCompileNoMatchingFunction(t *testing.T) {
 		assert.True(t, errors.As(err, &queryErr), query)
 		assert.Equal(t, `no function matches "`+want+`" name and argument types`, queryErr.Error(), query)
 	}
+}
+
+func TestCompileCoalesceUniformType(t *testing.T) {
+	// Like beanquery, coalesce() takes arguments of one type, NULL counting
+	// as its own.
+	ctx := newTestContext(t)
+	for query, want := range map[string]string{
+		"SELECT coalesce(account, NULL)":  "coalesce() function arguments must have uniform type, found: str, NoneType",
+		"SELECT coalesce(cost_number, 1)": "coalesce() function arguments must have uniform type, found: Decimal, int",
+	} {
+		assert.Equal(t, want, compileFails(t, ctx, query).Error(), query)
+	}
+	assert.Equal(t, tDecimal, mustCompile(t, ctx, "SELECT coalesce(cost_number, number, number)").Targets[0].Type)
 }
 
 func TestCompileKeepsRepeatedTargetNames(t *testing.T) {

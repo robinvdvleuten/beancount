@@ -175,15 +175,22 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   stdout and exit status 1; ours prints the rows.
 - #590: beanquery's list constants are syntax errors in ours:
   `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
-- #579: ORDER BY sorts amounts, positions and sets by their string forms
-  in ours; beanquery uses beancount's sort keys and Python's set
-  comparison, so `SELECT account, units(position) AS u ORDER BY u`
-  differs. A column of mixed types (metadata holding a string on one
+- #579: ORDER BY sorts amounts, positions, inventories and sets by their
+  string forms in ours; beanquery uses beancount's sort keys and Python's
+  set comparison, so `SELECT account, units(position) AS u ORDER BY u`
+  differs, and so does row 5 of `SELECT date, account, position ORDER BY
+  balance LIMIT 5`. A column of mixed types (metadata holding a string on one
   entry and a number on another) fails in beanquery with a `TypeError`
   and is sorted by string form in ours. The same holds for `PIVOT BY`'s
   values: `SELECT year, units(position) AS u, count(*) WHERE account ~
   'Coffee' GROUP BY 1, 2 PIVOT BY 1, 2` orders its pivot columns
   `18.00 USD`, `3.75 USD`, `4.50 USD` in ours and by number in beanquery.
+- #593: beanquery's functions `round`, `substr`, `splitcomp`,
+  `yearmonth`, `int`, `decimal`, `bool`, `date_trunc`, `date_part`,
+  `date_bin`, `interval`, `parse_date`, `repr` and `empty` are missing in
+  ours (`SELECT round(number)` prints `200` there and is `no function
+  matches "round(decimal)"` here), and ours has a `ymonth` that
+  beanquery has not.
 - #592: `SELECT account ORDER BY sum(number)`, an aggregate in ORDER BY
   without GROUP BY, prints the rows in ledger order in beanquery; ours
   reports the GROUP-BY coverage error.
@@ -263,13 +270,17 @@ compare the lines errors are on:
   `col1/col2` first column, one column per sorted value of the second
   column, or per value and other column, named after the value as Python
   prints it, empty where a combination is missing, applied after ORDER BY
-  and LIMIT), and a statement that does not parse or compile reported on
+  and LIMIT), functions that give NULL for any NULL argument, `str()`
+  printing `TRUE` and `FALSE`, `count()` of a value skipping NULLs,
+  `coalesce()` of one type only, `has_account()` in every clause,
+  `length()` counting code points, a posting's own `lineno`, `filename` and
+  `location` (NULL for a posting summarization creates), a lazy `balance`
+  that a row joins the first time it reads the column (so WHERE sees the
+  current posting, and a row WHERE short-circuits before reading it never
+  joins), and a statement that does not parse or compile reported on
   stderr with exit status 1, in the words and with the caret lines of
   beanquery's interactive shell (one-shot `bean-query` prints a Python
-  traceback instead). Still to follow beanquery (`queryGaps` in
-  `cli/query_compliance_test.go` lists every fixture): functions (#577:
-  every function NULL-strict, one-argument `root`, `has_account` in WHERE,
-  `balance` accumulated where it is evaluated).
+  traceback instead).
 
 ## Deliberate deviations
 
@@ -305,7 +316,10 @@ compare the lines errors are on:
   PIVOT BY index of a hidden target that passes beanquery's checks
   (`SELECT account, year, count(*) GROUP BY 1, 2 HAVING count(*) > 0
   PIVOT BY 4, 2`) is an `IndexError` there and `invalid PIVOT BY column
-  index 4` here.
+  index 4` here. `coalesce()` without arguments is an `IndexError` there
+  and `no function matches "coalesce()"` here. `maxwidth()` narrower than
+  its `[...]` placeholder (`maxwidth(str(cost_number), 3)`) is a
+  `ValueError` there and prints `[...]` here.
 
 - **BQL errors without a node**: beanquery's shell underlines the node a
   compile error names, but raises some errors without one and then prints

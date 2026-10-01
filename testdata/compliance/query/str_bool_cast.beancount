@@ -1,0 +1,7 @@
+2023-01-01 open Assets:Cash
+2023-01-01 open Expenses:Food
+
+2023-02-01 * "Lunch"
+  kb: TRUE
+  Expenses:Food   3.50 USD
+  Assets:Cash

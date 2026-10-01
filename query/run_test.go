@@ -21,6 +21,9 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_coalesce_uniform_type": `error: coalesce() function arguments must have uniform type, found: NoneType, int
+| SELECT coalesce(NULL, 1)
+|        ^^^^^^^^^^^^^^^^^`,
 	"err_group_by_set":                 `error: GROUP-BY a non-hashable type is not supported: "2"`,
 	"err_group_by_hidden_order_target": `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "None"`,
 	"err_pivot_by_hidden_index":        `error: the second PIVOT BY column must be a GROUP BY column`,
@@ -89,9 +92,6 @@ var errorFixtures = map[string]string{
 	"err_from_context": `error: column "bogus" not found in table "postings"
 | SELECT account FROM bogus
 |                     ^^^^^`,
-	"err_function_arg_count": `error: no function matches "root(str)" name and argument types
-| SELECT root(account)
-|        ^^^^^^^^^^^^^`,
 	"err_function_arg_type": `error: no function matches "grepn(str, str, str)" name and argument types
 | SELECT grepn('a', account, 'x')
 |        ^^^^^^^^^^^^^^^^^^^^^^^^`,
@@ -123,9 +123,6 @@ var errorFixtures = map[string]string{
 | SELECT account WHERE
 |                     ^`,
 	"err_where_aggregate": `error: aggregates are not allowed in WHERE clause`,
-	"err_where_has_account": `error: no function matches "has_account(str)" name and argument types
-| SELECT account WHERE has_account('Cash')
-|                      ^^^^^^^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

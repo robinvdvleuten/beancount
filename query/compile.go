@@ -48,9 +48,6 @@ type compiledSelect struct {
 	Distinct bool
 	HasAgg   bool
 	Aggs     []*cAgg
-	// UsesBalance is set when the running balance column is referenced,
-	// so the executor can skip per-row inventory snapshots otherwise.
-	UsesBalance bool
 }
 
 // compiledTarget is one output column (or hidden sort/group key).
@@ -83,10 +80,9 @@ func compile(qctx *Context, parsed bql.Statement) (statement, error) {
 }
 
 type compiler struct {
-	ctx         *Context
-	env         *environment
-	aggs        []*cAgg
-	usesBalance bool
+	ctx  *Context
+	env  *environment
+	aggs []*cAgg
 }
 
 func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
@@ -160,7 +156,6 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 		}
 	}
 	compiled.Aggs = c.aggs
-	compiled.UsesBalance = c.usesBalance
 
 	if err := checkGroupCoverage(sel, compiled); err != nil {
 		return nil, err
@@ -520,9 +515,6 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 			}
 			return nil, compileErrorf(node, `column "%s" not found in table "%s"`, node.Name, c.env.table)
 		}
-		if node.Name == "balance" {
-			c.usesBalance = true
-		}
 		return &cColumn{def: def}, nil
 
 	case *bql.Call:
@@ -568,13 +560,57 @@ func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
 			return agg, nil
 		}
 	}
-	if def := c.env.function(name); def != nil {
+	if special, ok := specialFunctions[name]; ok {
+		return special(node, args)
+	}
+	if def := functions[name]; def != nil {
 		if overload := def.matchOverload(argTypes); overload != nil {
 			return &cCall{overload: overload, args: args}, nil
 		}
 	}
 
 	return nil, compileErrorf(node, `no function matches "%s(%s)" name and argument types`, name, argTypeList(args))
+}
+
+// specialFunctions are the functions beanquery compiles itself rather than
+// looking up by argument types.
+var specialFunctions = map[string]func(node *bql.Call, args []cexpr) (cexpr, error){
+	"coalesce": compileCoalesce,
+}
+
+// compileCoalesce compiles coalesce(), the first non-NULL argument, which
+// beanquery requires to have arguments of one type (NULL included).
+func compileCoalesce(node *bql.Call, args []cexpr) (cexpr, error) {
+	if len(args) == 0 {
+		// beanquery fails with a Python IndexError (KNOWN_GAPS.md).
+		return nil, compileErrorf(node, `no function matches "coalesce()" name and argument types`)
+	}
+	names := make([]string, len(args))
+	uniform := true
+	for i, arg := range args {
+		names[i] = arg.typ().String()
+		uniform = uniform && arg.typ() == args[0].typ()
+	}
+	if !uniform {
+		return nil, compileErrorf(node, "coalesce() function arguments must have uniform type, found: %s", strings.Join(names, ", "))
+	}
+	return &cCoalesce{args: args}, nil
+}
+
+// cCoalesce is coalesce(): its first non-NULL argument.
+type cCoalesce struct {
+	args []cexpr
+}
+
+func (c *cCoalesce) typ() dtype { return c.args[0].typ() }
+
+func (c *cCoalesce) eval(row *evalRow) any {
+	for _, arg := range c.args {
+		if v := arg.eval(row); v != nil {
+			return v
+		}
+	}
+	return nil
 }
 
 // argTypeList renders compiled arguments' types by their lower-cased
@@ -789,15 +825,15 @@ type cCall struct {
 
 func (c *cCall) typ() dtype { return c.overload.result }
 
+// eval evaluates every argument, then, like beanquery's functions, gives
+// NULL when any of them is NULL.
 func (c *cCall) eval(row *evalRow) any {
 	args := make([]any, len(c.args))
 	for i, arg := range c.args {
 		args[i] = arg.eval(row)
-		// Propagate NULL through typed parameters; polymorphic (tAny)
-		// parameters receive NULL and decide themselves.
-		if args[i] == nil && c.overload.params[i] != tAny {
-			return nil
-		}
+	}
+	if slices.Contains(args, nil) {
+		return nil
 	}
 	return c.overload.call(row, args)
 }
