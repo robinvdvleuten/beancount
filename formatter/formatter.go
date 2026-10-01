@@ -1215,12 +1215,6 @@ func (f *run) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		buf.WriteByte('{')
 	}
 
-	if cost.IsMerge {
-		buf.WriteByte('*')
-		buf.WriteByte('}')
-		return
-	}
-
 	if cost.IsEmpty() {
 		buf.WriteByte('}')
 		return
@@ -1266,6 +1260,11 @@ func (f *run) formatCost(cost *ast.Cost, buf *strings.Builder) {
 		buf.WriteByte('"')
 		buf.WriteString(f.escapeString(cost.Label))
 		buf.WriteByte('"')
+	}
+
+	if cost.IsMerge {
+		writeSeparator()
+		buf.WriteByte('*')
 	}
 
 	if cost.IsTotal {

@@ -206,6 +206,29 @@ func TestParseCost(t *testing.T) {
 		{
 			name:     "TotalMergeCost",
 			input:    "{{*}}",
+			expected: &ast.Cost{IsTotal: true, IsMerge: true},
+		},
+		{
+			name:  "MergeCostAfterAmount",
+			input: "{100 USD, *}",
+			expected: &ast.Cost{
+				IsMerge: true,
+				Amount:  &ast.Amount{Raw: "100", Value: "100", Currency: "USD"},
+			},
+		},
+		{
+			name:  "MergeCostBeforeAmountDateAndLabel",
+			input: `{*, 100 USD, 2020-01-01, "lot"}`,
+			expected: &ast.Cost{
+				IsMerge: true,
+				Amount:  &ast.Amount{Raw: "100", Value: "100", Currency: "USD"},
+				Date:    &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+				Label:   "lot",
+			},
+		},
+		{
+			name:     "DuplicateMergeCost",
+			input:    "{*, *}",
 			hasError: true,
 		},
 		{

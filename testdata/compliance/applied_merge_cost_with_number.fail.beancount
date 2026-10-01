@@ -1,0 +1,11 @@
+; A merge cost next to a number is reported and booked at that number, so
+; the balances that follow hold.
+2020-01-01 open Assets:Brokerage
+2020-01-01 open Assets:Cash
+
+2020-02-01 * "Buy with a merge cost"
+  Assets:Brokerage  10 HOOL {100.00 USD, *}
+  Assets:Cash
+
+2020-03-01 balance Assets:Brokerage 10 HOOL
+2020-03-01 balance Assets:Cash -1000.00 USD

@@ -1,0 +1,14 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "x"
+  Assets:A  1 HOOL {100 USD, *}
+  Assets:B   -100 USD
+
+2020-01-03 * "y"
+  Assets:A    1 HOOL {*, 100 USD, 2020-01-01, "lot"}
+  Assets:B  -100 USD
+
+2020-01-04 * "z"
+  Assets:A 1 HOOL {{*}}
+  Assets:B

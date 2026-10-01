@@ -110,7 +110,8 @@ func (c *Cost) HasNumber() bool {
 	return c != nil && c.Amount != nil && c.Amount.Value != "" && (c.Total == nil || c.Total.Value != "")
 }
 
-// IsMergeCost returns true if this is a merge cost specification {*}.
+// IsMergeCost reports whether the cost holds the merge marker *, as {*} and
+// {100 USD, *} do.
 func (c *Cost) IsMergeCost() bool {
 	return c != nil && c.IsMerge
 }

@@ -99,10 +99,6 @@ lands:
   (`2020-01-02 V "x"`). We read only `P`, `S`, `T`, `C`, `U`, `R` and `M`
   as flags, never as a currency, and report any other single letter as an
   invalid token.
-- #563: a merge cost next to a number (`{100 USD, *}`, `{*, 100 USD}`,
-  `{{*}}`) parses in bean-check, which reports `Cost merging is not
-  supported yet`; we report a syntax error and drop the transaction. The
-  lines agree.
 - #564: an indented comment line before the metadata of an `open` passes
   bean-check; we report `unexpected indentation` and drop the directive.
 - #566: a currency ending in `-` (`price BA- 1 USD`) passes bean-check

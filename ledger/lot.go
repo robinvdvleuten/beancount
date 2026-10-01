@@ -148,9 +148,15 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 		return nil, nil
 	}
 
-	// Empty cost {}, and a merge cost {*}, which beancount v2 reports and
-	// then books like {}.
-	if cost.IsEmpty() || cost.IsMergeCost() {
+	// A merge marker, which beancount reports and then ignores: {*} books
+	// like {}, {100 USD, *} like {100 USD}.
+	if cost.IsMergeCost() {
+		unmerged := *cost
+		unmerged.IsMerge = false
+		cost = &unmerged
+	}
+
+	if cost.IsEmpty() {
 		return &lotSpec{}, nil
 	}
 

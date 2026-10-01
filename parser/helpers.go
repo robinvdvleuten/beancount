@@ -143,9 +143,9 @@ func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
 	return valueTok, isExpression, value, nil
 }
 
-// parseCost parses a cost specification: {} or {*} or a comma-separated list of
-// components (AMOUNT, DATE, LABEL) in any order, wrapped in {} (per-unit) or
-// {{}} (total). Total cost requires an amount.
+// parseCost parses a cost specification: {} or a comma-separated list of
+// components (AMOUNT, DATE, LABEL, the merge marker *) in any order, wrapped
+// in {} (per-unit) or {{}} (total). Total cost requires an amount or *.
 func (p *Parser) parseCost() (*ast.Cost, error) {
 	// Check for {{ or {
 	isTotal := false
@@ -159,18 +159,6 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	}
 
 	cost := &ast.Cost{IsTotal: isTotal}
-
-	// Check for merge cost {*} (only valid with single braces)
-	if p.match(ASTERISK) {
-		if isTotal {
-			return nil, p.error("merge cost {*} cannot use total cost syntax {{}}")
-		}
-		cost.IsMerge = true
-		if err := p.consume(RBRACE, "expected '}'"); err != nil {
-			return nil, err
-		}
-		return cost, nil
-	}
 
 	// Determine closing token
 	closingToken := RBRACE
@@ -230,8 +218,17 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 			cost.Label = label
 			hasLabel = true
 
+		case p.check(ASTERISK):
+			// A merge marker, among the other components as beancount's
+			// grammar takes it, in either braces; Booking reports it.
+			if cost.IsMerge {
+				return nil, p.error("duplicate merge cost in cost spec")
+			}
+			p.advance()
+			cost.IsMerge = true
+
 		default:
-			return nil, p.error("expected cost amount, currency, date, or label")
+			return nil, p.error("expected cost amount, currency, date, label, or '*'")
 		}
 
 		if !p.match(COMMA) {
@@ -239,7 +236,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		}
 	}
 
-	if isTotal && cost.Amount == nil {
+	if isTotal && cost.Amount == nil && !cost.IsMerge {
 		return nil, p.error("total cost {{}} requires an amount")
 	}
 

@@ -352,8 +352,9 @@ func validateCosts(txn *ast.Transaction) []error {
 			continue
 		}
 
-		// Validate total cost {{}} requirements
-		if posting.Cost.IsTotal {
+		// Validate total cost {{}} requirements; {{*}} leaves its number
+		// to Booking, as {*} does.
+		if posting.Cost.IsTotal && (posting.Cost.Amount != nil || !posting.Cost.IsMerge) {
 			if posting.Amount == nil {
 				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires a quantity"))
 				continue

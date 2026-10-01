@@ -121,6 +121,19 @@ func TestFormatCost(t *testing.T) {
 			expected: "{USD}",
 		},
 		{
+			name: "MergeCostWithAmount",
+			cost: &ast.Cost{
+				IsMerge: true,
+				Amount:  &ast.Amount{Value: "100", Currency: "USD"},
+			},
+			expected: "{100 USD, *}",
+		},
+		{
+			name:     "TotalMergeCost",
+			cost:     &ast.Cost{IsTotal: true, IsMerge: true},
+			expected: "{{*}}",
+		},
+		{
 			name:     "NumberOnlyCost",
 			cost:     &ast.Cost{Amount: &ast.Amount{Value: "10"}},
 			expected: "{10}",
