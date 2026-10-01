@@ -233,7 +233,7 @@ func TestCompileOrderByHiddenTarget(t *testing.T) {
 
 	assert.Equal(t, 2, len(compiled.Targets))
 	assert.True(t, compiled.Targets[1].Hidden)
-	assert.Equal(t, []int{1}, compiled.OrderBy)
+	assert.Equal(t, []orderKey{{target: 1}}, compiled.OrderBy)
 }
 
 func TestCompileOrderByMatchesTarget(t *testing.T) {
@@ -241,8 +241,7 @@ func TestCompileOrderByMatchesTarget(t *testing.T) {
 	compiled := mustCompile(t, ctx, "SELECT account, sum(position) GROUP BY account ORDER BY sum(position) DESC")
 
 	assert.Equal(t, 2, len(compiled.Targets))
-	assert.Equal(t, []int{1}, compiled.OrderBy)
-	assert.True(t, compiled.OrderDesc)
+	assert.Equal(t, []orderKey{{target: 1, desc: true}}, compiled.OrderBy)
 }
 
 func TestCompileClauseEnvironments(t *testing.T) {

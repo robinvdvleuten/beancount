@@ -178,11 +178,16 @@ func (p *parser) parseSelect() (*Select, error) {
 		if !p.accept(BY) {
 			return nil, p.clauseErrorf(clause, "GROUP BY")
 		}
-		exprs, err := p.parseClauseItems()
-		if err != nil {
-			return nil, err
+		for {
+			item, err := p.parseClauseItem()
+			if err != nil {
+				return nil, err
+			}
+			sel.GroupBy = append(sel.GroupBy, item)
+			if !p.accept(COMMA) {
+				break
+			}
 		}
-		sel.GroupBy = exprs
 		if p.accept(HAVING) {
 			having, err := p.parseExpr()
 			if err != nil {
@@ -198,15 +203,19 @@ func (p *parser) parseSelect() (*Select, error) {
 		if !p.accept(BY) {
 			return nil, p.clauseErrorf(clause, "ORDER BY")
 		}
-		exprs, err := p.parseClauseItems()
-		if err != nil {
-			return nil, err
-		}
-		sel.OrderBy = exprs
-		if p.accept(DESC) {
-			sel.OrderDesc = true
-		} else {
-			p.accept(ASC)
+		for {
+			item, err := p.parseClauseItem()
+			if err != nil {
+				return nil, err
+			}
+			desc := p.accept(DESC)
+			if !desc {
+				p.accept(ASC)
+			}
+			sel.OrderBy = append(sel.OrderBy, OrderTerm{Expr: item, Desc: desc})
+			if !p.accept(COMMA) {
+				break
+			}
 		}
 	}
 
@@ -439,37 +448,28 @@ func (p *parser) parseExprList() ([]Expr, error) {
 	return exprs, nil
 }
 
-// parseClauseItems parses GROUP BY or ORDER BY items. Like beanquery's
+// parseClauseItem parses a GROUP BY or ORDER BY item. Like beanquery's
 // grammar, which tries its integer rule first, an item that starts with an
 // integer is a column index and ends there: GROUP BY 1 + 1 is a syntax
 // error at the +.
-func (p *parser) parseClauseItems() ([]Expr, error) {
-	var items []Expr
-	for {
-		if tok := p.cur; tok.Type == INTEGER {
-			p.next()
-			value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
-			if err != nil {
-				return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
-			}
-			items = append(items, &ColumnIndex{position: p.node(tok.Start), Value: value})
-		} else if tok := p.cur; tok.Type == DECIMAL && isDigit(p.source[tok.Start]) {
-			// The integer rule takes the digits before the dot, and the
-			// item fails at the dot: GROUP BY 1.0 is a syntax error.
-			digits := strings.IndexByte(tok.String(p.source), '.')
-			dot := Token{Type: DECIMAL, Start: tok.Start + digits, End: tok.End, Line: tok.Line, Column: tok.Column + digits}
-			return nil, p.errorf(dot, "expected an integer column index, found %s", p.describe(tok))
-		} else {
-			expr, err := p.parseExpr()
-			if err != nil {
-				return nil, err
-			}
-			items = append(items, expr)
+func (p *parser) parseClauseItem() (Expr, error) {
+	tok := p.cur
+	switch {
+	case tok.Type == INTEGER:
+		p.next()
+		value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
+		if err != nil {
+			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
 		}
-		if !p.accept(COMMA) {
-			return items, nil
-		}
+		return &ColumnIndex{position: p.node(tok.Start), Value: value}, nil
+	case tok.Type == DECIMAL && isDigit(p.source[tok.Start]):
+		// The integer rule takes the digits before the dot, and the item
+		// fails at the dot: GROUP BY 1.0 is a syntax error.
+		digits := strings.IndexByte(tok.String(p.source), '.')
+		dot := Token{Type: DECIMAL, Start: tok.Start + digits, End: tok.End, Line: tok.Line, Column: tok.Column + digits}
+		return nil, p.errorf(dot, "expected an integer column index, found %s", p.describe(tok))
 	}
+	return p.parseExpr()
 }
 
 // Expression precedence, low to high: OR, AND, NOT, comparison, additive,

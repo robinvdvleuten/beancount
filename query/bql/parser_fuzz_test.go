@@ -21,6 +21,7 @@ func FuzzParseQuery(f *testing.F) {
 		"SELECT * WHERE date >= 2014-01-01 AND date < 2015-01-01",
 		"SELECT * WHERE meta('x') IS NULL OR NOT cost_date IS NOT NULL",
 		"SELECT count(*), -number, number -1, - -(1 + 2), +1, account2, _x WHERE -year < 0",
+		"SELECT date, account ORDER BY 1 DESC, account ASC, -number",
 		`SELECT "double", 'single', 42, 3.14, TRUE, FALSE, NULL`,
 
 		// FROM transforms
@@ -110,8 +111,8 @@ func walkNodes(stmt Statement, fn func(Node)) {
 			expr(e)
 		}
 		expr(node.Having)
-		for _, e := range node.OrderBy {
-			expr(e)
+		for _, term := range node.OrderBy {
+			expr(term.Expr)
 		}
 		for _, ident := range node.PivotBy {
 			expr(ident)

@@ -61,7 +61,7 @@ func TestParseSelectCaseInsensitiveKeywords(t *testing.T) {
 	assert.NotZero(t, sel.Where)
 	assert.Equal(t, 1, len(sel.GroupBy))
 	assert.Equal(t, 1, len(sel.OrderBy))
-	assert.True(t, sel.OrderDesc)
+	assert.True(t, sel.OrderBy[0].Desc)
 	assert.Equal(t, int64(10), *sel.Limit)
 }
 
@@ -283,8 +283,8 @@ func TestParseGroupByIndexAndName(t *testing.T) {
 	assert.Equal(t, "year", sel.GroupBy[1].(*Call).Func)
 	assert.Equal(t, int64(1), sel.GroupBy[2].(*Int).Value)
 	assert.Equal(t, int64(1), sel.GroupBy[3].(*Int).Value)
-	assert.Equal(t, int64(2), sel.OrderBy[0].(*ColumnIndex).Value)
-	assert.Equal(t, MINUS, sel.OrderBy[1].(*Unary).Op)
+	assert.Equal(t, int64(2), sel.OrderBy[0].Expr.(*ColumnIndex).Value)
+	assert.Equal(t, MINUS, sel.OrderBy[1].Expr.(*Unary).Op)
 
 	// An item that starts with an integer ends there.
 	_, err = Parse("SELECT count(*) GROUP BY 1 + 1")
@@ -292,17 +292,16 @@ func TestParseGroupByIndexAndName(t *testing.T) {
 }
 
 func TestParseOrderByList(t *testing.T) {
-	// The official grammar accepts a single trailing ASC/DESC that applies
-	// to the whole ORDER BY list, not one direction per term.
-	stmt, err := Parse("SELECT * ORDER BY date, account DESC")
+	// Like beanquery's grammar, each term takes its own ASC or DESC, and a
+	// term without one is ascending.
+	stmt, err := Parse("SELECT * ORDER BY date, account DESC, 1 ASC, -number DESC")
 	assert.NoError(t, err)
 
-	sel := stmt.(*Select)
-	assert.Equal(t, 2, len(sel.OrderBy))
-	assert.True(t, sel.OrderDesc)
-
-	_, err = Parse("SELECT * ORDER BY date DESC, account ASC")
-	assert.Error(t, err)
+	terms := stmt.(*Select).OrderBy
+	assert.Equal(t, 4, len(terms))
+	for i, desc := range []bool{false, true, false, true} {
+		assert.Equal(t, desc, terms[i].Desc, "term %d", i)
+	}
 }
 
 func TestParsePivotBy(t *testing.T) {

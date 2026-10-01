@@ -177,17 +177,19 @@ func executeGrouped(rows []*evalRow, compiled *compiledSelect) [][]any {
 	return output
 }
 
-// orderRows sorts rows by the ORDER-BY target values. The sort is stable so
-// ties keep their natural (ledger) order, and a single direction applies to
-// the whole key list, matching the official grammar.
+// orderRows sorts rows by the ORDER-BY target values, each term in its own
+// direction. beanquery sorts stably once per run of terms sharing a
+// direction, last run first, with NULL below every value; one stable sort
+// comparing term by term gives the same order, NULL last under DESC and
+// ties in their natural (ledger) order.
 func orderRows(output [][]any, compiled *compiledSelect) [][]any {
 	if len(compiled.OrderBy) == 0 {
 		return output
 	}
 	slices.SortStableFunc(output, func(a, b []any) int {
-		for _, idx := range compiled.OrderBy {
-			if cmp := compareValues(a[idx], b[idx]); cmp != 0 {
-				if compiled.OrderDesc {
+		for _, key := range compiled.OrderBy {
+			if cmp := compareValues(a[key.target], b[key.target]); cmp != 0 {
+				if key.desc {
 					return -cmp
 				}
 				return cmp

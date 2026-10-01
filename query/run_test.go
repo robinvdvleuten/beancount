@@ -21,6 +21,7 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_order_by_index_repeated_name": `error: invalid ORDER-BY column index 3`,
 	"err_group_by_decimal_index": `error: syntax error
 | SELECT account, count(*) GROUP BY 1.0
 |                                    ^`,

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Conventions for the Go implementation of Beancount. The yardstick is parity with the official beancount v3 tools (3.2.3) and, for BQL, beanquery 0.2.0, v3's `bean-query`. Some parts still differ, each listed in `queryGaps` until its issue closes: BQL behaviours (#562's sub-issues: ORDER BY #575, HAVING and PIVOT BY #576, functions #577), signed zero (#408), and the printer, which follows beancount 2.3.6 (#560).
+Conventions for the Go implementation of Beancount. The yardstick is parity with the official beancount v3 tools (3.2.3) and, for BQL, beanquery 0.2.0, v3's `bean-query`. Some parts still differ, each listed in `queryGaps` until its issue closes: BQL behaviours (#562's sub-issues: HAVING and PIVOT BY #576, functions #577), signed zero (#408), and the printer, which follows beancount 2.3.6 (#560).
 
 Update this file in the same change whenever you add a package, change the phase pipeline, introduce a convention, or add a compliance suite. A stale convention misleads more than a missing one.
 

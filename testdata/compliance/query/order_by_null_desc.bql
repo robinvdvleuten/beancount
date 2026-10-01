@@ -1,0 +1,1 @@
+SELECT date, account, cost_number ORDER BY cost_number DESC, date DESC

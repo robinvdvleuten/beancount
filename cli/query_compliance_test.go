@@ -123,8 +123,6 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"column_names_unique":             "#575: a name binds the last target it names",
-	"order_by_desc":                   "#575: each term takes its own direction",
 	"err_having":                      "#576: HAVING is supported",
 	"err_pivot":                       "#576: PIVOT BY is supported",
 	"err_pivot_by_after_checks":       "#576: PIVOT BY takes two columns",

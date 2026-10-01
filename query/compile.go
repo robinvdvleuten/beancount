@@ -34,16 +34,15 @@ type cexpr interface {
 // OrderBy reference targets by index; hidden targets were appended
 // during resolution and are not rendered.
 type compiledSelect struct {
-	Targets   []compiledTarget
-	Where     cexpr
-	From      *compiledFrom
-	GroupBy   []int
-	OrderBy   []int
-	OrderDesc bool
-	Limit     *int64
-	Distinct  bool
-	HasAgg    bool
-	Aggs      []*cAgg
+	Targets  []compiledTarget
+	Where    cexpr
+	From     *compiledFrom
+	GroupBy  []int
+	OrderBy  []orderKey
+	Limit    *int64
+	Distinct bool
+	HasAgg   bool
+	Aggs     []*cAgg
 	// UsesBalance is set when the running balance column is referenced,
 	// so the executor can skip per-row inventory snapshots otherwise.
 	UsesBalance bool
@@ -194,8 +193,11 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 		return nil
 	}
 
+	// GROUP BY resolves before any hidden target is added, so every
+	// target is a visible one an index may refer to.
+	visible := int64(len(compiled.Targets))
 	for _, item := range sel.GroupBy {
-		idx, err := c.resolveGroupByItem(item, compiled)
+		idx, err := c.resolveGroupByItem(item, compiled, visible)
 		if err != nil {
 			return err
 		}
@@ -215,10 +217,10 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 // a target name refers to that target; any other expression, which may
 // not be an aggregate, matches a target structurally or becomes a hidden
 // one.
-func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect) (int, error) {
+func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect, visible int64) (int, error) {
 	switch ref := item.(type) {
 	case *bql.ColumnIndex:
-		return c.targetIndex(ref, compiled, "GROUP-BY")
+		return c.targetIndex(ref, compiled, "GROUP-BY", visible)
 	case *bql.Ident:
 		if idx, ok := targetNamed(ref.Name, compiled); ok {
 			return idx, nil
@@ -239,28 +241,41 @@ func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect) (
 	return c.hiddenTarget(item, expr, compiled), nil
 }
 
-// resolveOrderBy maps ORDER BY expressions to target indices, appending
-// hidden targets as needed. A single trailing direction applies to the
-// whole list.
+// orderKey is an ORDER BY term resolved to a target, with its direction.
+type orderKey struct {
+	target int
+	desc   bool
+}
+
+// resolveOrderBy maps ORDER BY terms to target indices, appending hidden
+// targets as needed. Each term keeps its own direction. Like beanquery, an
+// index may not exceed the number of distinct target names, so with a
+// repeated name the last targets cannot be referred to by index.
 func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *compiledSelect) error {
-	compiled.OrderDesc = sel.OrderDesc
-	for _, item := range sel.OrderBy {
-		idx, err := c.resolveTargetRef(item, compiled, "ORDER-BY")
+	names := make(map[string]bool, len(compiled.Targets))
+	for _, target := range compiled.Targets {
+		if !target.Hidden {
+			names[target.Name] = true
+		}
+	}
+	limit := int64(len(names))
+	for _, term := range sel.OrderBy {
+		idx, err := c.resolveTargetRef(term.Expr, compiled, limit)
 		if err != nil {
 			return err
 		}
-		compiled.OrderBy = append(compiled.OrderBy, idx)
+		compiled.OrderBy = append(compiled.OrderBy, orderKey{target: idx, desc: term.Desc})
 	}
 	return nil
 }
 
-// resolveTargetRef resolves a clause item to a target index. A column
-// index is 1-based into the visible targets; identifiers match
+// resolveTargetRef resolves an ORDER BY item to a target index. A column
+// index is 1-based into the first limit visible targets; identifiers match
 // aliases; other expressions match targets structurally or are appended as
-// hidden targets. clause names the clause in index errors.
-func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, clause string) (int, error) {
+// hidden targets.
+func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, limit int64) (int, error) {
 	if index, ok := item.(*bql.ColumnIndex); ok {
-		return c.targetIndex(index, compiled, clause)
+		return c.targetIndex(index, compiled, "ORDER-BY", limit)
 	}
 	if ident, ok := item.(*bql.Ident); ok {
 		if idx, ok := targetNamed(ident.Name, compiled); ok {
@@ -316,8 +331,9 @@ func targetName(target bql.Target) string {
 	return target.Text
 }
 
-// targetIndex resolves a 1-based index into the visible targets.
-func (c *compiler) targetIndex(lit *bql.ColumnIndex, compiled *compiledSelect, clause string) (int, error) {
+// targetIndex resolves a 1-based index into the visible targets, of which
+// the first limit may be referred to. clause names the clause in errors.
+func (c *compiler) targetIndex(lit *bql.ColumnIndex, compiled *compiledSelect, clause string, limit int64) (int, error) {
 	// Walk the visible targets to the index; no int64-to-int narrowing.
 	var n int64
 	for i, target := range compiled.Targets {
@@ -325,17 +341,18 @@ func (c *compiler) targetIndex(lit *bql.ColumnIndex, compiled *compiledSelect, c
 			continue
 		}
 		n++
-		if n == lit.Value {
+		if n == lit.Value && n <= limit {
 			return i, nil
 		}
 	}
 	return 0, statementErrorf("invalid %s column index %d", clause, lit.Value)
 }
 
-// targetNamed finds the visible target with the given name or alias.
+// targetNamed finds the visible target with the given name or alias, the
+// last one when several share it, as beanquery's name map keeps the last.
 func targetNamed(name string, compiled *compiledSelect) (int, bool) {
-	for i, target := range compiled.Targets {
-		if !target.Hidden && target.Name == name {
+	for i := len(compiled.Targets) - 1; i >= 0; i-- {
+		if target := compiled.Targets[i]; !target.Hidden && target.Name == name {
 			return i, true
 		}
 	}

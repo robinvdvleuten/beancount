@@ -175,6 +175,15 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   stdout and exit status 1; ours prints the rows.
 - #590: beanquery's list constants are syntax errors in ours:
   `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
+- #579: ORDER BY sorts amounts, positions and sets by their string forms
+  in ours; beanquery uses beancount's sort keys and Python's set
+  comparison, so `SELECT account, units(position) AS u ORDER BY u`
+  differs. A column of mixed types (metadata holding a string on one
+  entry and a number on another) fails in beanquery with a `TypeError`
+  and is sorted by string form in ours.
+- #592: `SELECT account ORDER BY sum(number)`, an aggregate in ORDER BY
+  without GROUP BY, prints the rows in ledger order in beanquery; ours
+  reports the GROUP-BY coverage error.
 - #591: beanquery's attribute (`.x`) and subscript (`['x']`) access on a
   column are syntax errors in ours: `SELECT account.x` is `column type is
   not structured` there, with carets under `account.x`, and a syntax
@@ -240,12 +249,15 @@ compare the lines errors are on:
   operands giving NULL, AND and OR with beanquery's NULL handling
   (`NULL AND FALSE` is NULL), `IS [NOT] NULL`, unsigned numbers with a
   unary minus on any expression (`-number`, `- -1`, `number -1` as a
-  subtraction), `count(*)`, digits in identifiers, and a statement that
-  does not parse or compile reported on stderr with exit status 1, in the
-  words and with the caret lines of beanquery's interactive shell
-  (one-shot `bean-query` prints a Python traceback instead). Still to
-  follow beanquery (`queryGaps` in `cli/query_compliance_test.go` lists
-  every fixture): per-term ORDER BY directions (#575); `HAVING` and
+  subtraction), `count(*)`, digits in identifiers, an ASC or DESC per
+  ORDER BY term with NULL first ascending and last descending, an ORDER BY
+  or GROUP BY name bound to the last target with that name, an ORDER BY
+  index at most the number of distinct target names, and a
+  statement that does not parse or compile reported on stderr with exit
+  status 1, in the words and with the caret lines of beanquery's
+  interactive shell (one-shot `bean-query` prints a Python traceback
+  instead). Still to follow beanquery (`queryGaps` in
+  `cli/query_compliance_test.go` lists every fixture): `HAVING` and
   `PIVOT BY` (#576); and functions (#577: every function NULL-strict,
   one-argument `root`, `has_account` in WHERE, `balance` accumulated where
   it is evaluated).
@@ -358,7 +370,7 @@ compare the lines errors are on:
 - **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives,
   shell settings (`set format ...`) and dot-commands are not implemented;
   nor are beanquery's subqueries, `FROM #table` and `CREATE TABLE`.
-  `HAVING` and `PIVOT BY` are in #576, per-term ORDER BY directions in #575.
+  `HAVING` and `PIVOT BY` are in #576.
 - **BQL dict-typed metadata functions**: `commodity_meta`, `currency_meta`,
   `open_meta`, and `getitem` (dict-typed values) are not implemented;
   `meta`, `entry_meta`, and `any_meta` cover scalar metadata lookups.

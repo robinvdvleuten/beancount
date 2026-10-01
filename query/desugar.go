@@ -39,7 +39,7 @@ func desugarBalances(b *bql.Balances) *bql.Select {
 		From:    b.From,
 		Where:   b.Where,
 		GroupBy: []bql.Expr{account},
-		OrderBy: []bql.Expr{call("account_sortkey", account)},
+		OrderBy: []bql.OrderTerm{{Expr: call("account_sortkey", account)}},
 	}
 }
 

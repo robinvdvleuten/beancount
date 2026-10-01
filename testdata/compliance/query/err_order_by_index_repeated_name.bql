@@ -1,0 +1,1 @@
+SELECT date AS d, narration AS d, account ORDER BY 3 LIMIT 2

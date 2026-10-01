@@ -42,10 +42,7 @@ type Select struct {
 	// Having is parsed like bean-query's grammar, which the compiler then
 	// rejects as not supported yet.
 	Having  Expr
-	OrderBy []Expr
-	// OrderDesc applies to the whole ORDER BY list; the official grammar
-	// accepts a single trailing ASC or DESC, not one per term.
-	OrderDesc bool
+	OrderBy []OrderTerm
 	// PivotBy holds column names; bean-query parses the clause but rejects
 	// it as not supported.
 	PivotBy []*Ident
@@ -126,6 +123,13 @@ type Call struct {
 }
 
 func (*Call) expr() {}
+
+// OrderTerm is one ORDER BY item with its own direction: ascending
+// unless DESC follows it, as in beanquery.
+type OrderTerm struct {
+	Expr Expr
+	Desc bool
+}
 
 // ColumnIndex is a GROUP BY or ORDER BY item written as a bare integer,
 // a 1-based reference to a target. Any other integer there, such as +1 or
