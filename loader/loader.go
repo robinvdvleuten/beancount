@@ -32,6 +32,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -535,8 +536,14 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 	}
 	l.diagnostics = append(l.diagnostics, pushPopErrors...)
 
+	// Like beancount, an included file's options are checked and then
+	// ignored: an invalid one is an error, a valid one a warning.
 	if absPath != l.root {
 		for _, option := range result.Options {
+			if errs := config.CheckOption(option); len(errs) > 0 {
+				l.diagnostics = append(l.diagnostics, errs...)
+				continue
+			}
 			l.diagnostics = append(l.diagnostics, &IncludedOptionWarning{Option: option})
 		}
 	}

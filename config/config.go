@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/shopspring/decimal"
 )
@@ -95,20 +96,38 @@ func ParseOptions(tree *ast.AST) (*Config, []error) {
 	cfg := New()
 	var errs []error
 	for _, option := range tree.Options {
-		if err := validateOptionName(option); err != nil {
-			errs = append(errs, err)
-			continue
-		}
-		name := option.Name.Value
-		if current, renamed := renamedOptions[name]; renamed {
-			errs = append(errs, &RenamedOptionError{Option: option})
-			name = current
-		}
-		if err := cfg.apply(name, option.Value.Value); err != nil {
-			errs = append(errs, &OptionValueError{Option: option, Err: err})
-		}
+		errs = append(errs, cfg.applyOption(option)...)
 	}
 	return cfg, errs
+}
+
+// CheckOption returns the errors beancount reports for an option directive
+// without applying it anywhere, as for an option in an included file, which
+// beancount checks and then ignores.
+func CheckOption(option *ast.Option) []error {
+	return New().applyOption(option)
+}
+
+// applyOption applies one option directive and returns its errors, in
+// beancount's order: an unknown or reserved name, a deprecation (a rename
+// included), then an invalid value.
+func (c *Config) applyOption(option *ast.Option) []error {
+	if err := validateOptionName(option); err != nil {
+		return []error{err}
+	}
+	var errs []error
+	name := option.Name.Value
+	if current, renamed := renamedOptions[name]; renamed {
+		errs = append(errs, &RenamedOptionError{Option: option})
+		name = current
+	}
+	if message, deprecated := deprecatedOptions[name]; deprecated {
+		errs = append(errs, &DeprecatedOptionError{Option: option, Message: message})
+	}
+	if err := c.apply(name, option.Value.Value); err != nil {
+		errs = append(errs, &OptionValueError{Option: option, Err: err})
+	}
+	return errs
 }
 
 // FromAST builds the configuration from an AST's options, returning the
@@ -171,6 +190,13 @@ var renamedOptions = map[string]string{
 	"inferred_tolerance_multiplier": "tolerance_multiplier",
 }
 
+// deprecatedOptions maps an option beancount deprecates, whatever its
+// value, to the message it reports it with.
+var deprecatedOptions = map[string]string{
+	"allow_pipe_separator":                     "Allowing pipe separator temporarily; this will go away eventually.",
+	"allow_deprecated_none_for_tags_and_links": "Allowing None for tags and link will go away eventually.",
+}
+
 // currentName returns the name an option goes by: the one it was renamed
 // to, or its own.
 func currentName(name string) string {
@@ -199,6 +225,26 @@ func (e *RenamedOptionError) MarshalJSON() ([]byte, error) {
 	return marshalOptionError("RenamedOptionError", e, e.Option)
 }
 
+// DeprecatedOptionError reports an option directive beancount deprecates,
+// in beancount's words. The option is still accepted.
+type DeprecatedOptionError struct {
+	Option  *ast.Option
+	Message string
+}
+
+func (e *DeprecatedOptionError) Error() string {
+	pos := e.Option.Position()
+	return fmt.Sprintf("%s:%d: %s", pos.Filename, pos.Line, e.Message)
+}
+
+// GetPosition returns the source position of the deprecated option directive.
+func (e *DeprecatedOptionError) GetPosition() ast.Position { return e.Option.Position() }
+
+// MarshalJSON renders the error for the web API.
+func (e *DeprecatedOptionError) MarshalJSON() ([]byte, error) {
+	return marshalOptionError("DeprecatedOptionError", e, e.Option)
+}
+
 // InvalidOptionError reports an option directive official beancount rejects.
 type InvalidOptionError struct {
 	Option   *ast.Option
@@ -208,9 +254,9 @@ type InvalidOptionError struct {
 func (e *InvalidOptionError) Error() string {
 	pos := e.Option.Position()
 	if e.Reserved {
-		return fmt.Sprintf("%s:%d: option %q may not be set", pos.Filename, pos.Line, e.Option.Name.Value)
+		return fmt.Sprintf("%s:%d: Option '%s' may not be set", pos.Filename, pos.Line, e.Option.Name.Value)
 	}
-	return fmt.Sprintf("%s:%d: invalid option: %q", pos.Filename, pos.Line, e.Option.Name.Value)
+	return fmt.Sprintf("%s:%d: Invalid option: '%s'", pos.Filename, pos.Line, e.Option.Name.Value)
 }
 
 // GetPosition returns the source position of the offending option directive.
@@ -301,9 +347,9 @@ func (c *Config) apply(name, value string) error {
 	case "operating_currency":
 		c.OperatingCurrencies = append(c.OperatingCurrencies, value)
 	case "tolerance_multiplier":
-		multiplier, err := decimal.NewFromString(value)
+		multiplier, err := parseNumber(value)
 		if err != nil {
-			return fmt.Errorf("invalid tolerance_multiplier %q: %w", value, err)
+			return err
 		}
 		c.Tolerance.Multiplier = multiplier
 	case "inferred_tolerance_default":
@@ -348,7 +394,8 @@ func (e beancountError) Error() string { return string(e) }
 // currencyNumberRegex is beancount's options_validate_tolerance_map
 // pattern. Like Python's re.match it anchors at the start only, and its
 // greedy currency splits the value at the last colon a number follows.
-var currencyNumberRegex = regexp.MustCompile(`^(.*):([\d.]+)`)
+// Python's \d is any Unicode decimal digit.
+var currencyNumberRegex = regexp.MustCompile(`^(.*):([\p{Nd}.]+)`)
 
 // parseCurrencyNumber reads a CURRENCY:NUMBER option value, with
 // beancount's error messages.
@@ -357,11 +404,30 @@ func parseCurrencyNumber(value string) (string, decimal.Decimal, error) {
 	if match == nil {
 		return "", decimal.Decimal{}, beancountError("Invalid value '" + value + "'")
 	}
-	number, err := decimal.NewFromString(match[2])
+	number, err := parseNumber(match[2])
 	if err != nil {
-		return "", decimal.Decimal{}, beancountError("Impossible to create Decimal instance from " + match[2] + ": [<class 'decimal.ConversionSyntax'>]")
+		return "", decimal.Decimal{}, err
 	}
 	return match[1], number, nil
+}
+
+// numberSeparators are the characters beancount's D() drops from a number
+// before reading it: thousands separators and spaces.
+var numberSeparators = strings.NewReplacer(",", "", " ", "")
+
+// parseNumber reads an option's number as beancount's D() does: an empty
+// value is 0, and commas and spaces are dropped before Python's Decimal
+// reads the rest. Unlike D(), it rejects an infinity or a NaN, which
+// beancount takes and then fails on in its first tolerance.
+func parseNumber(value string) (decimal.Decimal, error) {
+	if value == "" {
+		return decimal.Zero, nil
+	}
+	number, err := pydecimal.NewFromString(numberSeparators.Replace(value))
+	if err != nil {
+		return decimal.Decimal{}, beancountError(fmt.Sprintf("Impossible to create Decimal instance from %s: %v", value, err))
+	}
+	return number, nil
 }
 
 // leafComponentRegex is beancount's ACC_COMP_NAME_RE. Unlike an account

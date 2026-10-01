@@ -116,23 +116,6 @@ lands:
   (`Assets:😀x`) is `Invalid account name` in bean-check, which keeps the
   posting and reports the account as unknown; we report a syntax error and
   drop the transaction.
-- #568: an option's CURRENCY:NUMBER value (`inferred_tolerance_default`,
-  `display_precision`) takes any Unicode digit in bean-check, as Python's
-  `\d` does (`"USD:٣"` is 3); we take ASCII digits only and report the
-  value as invalid.
-- #568: an option's number is read by beancount's `D()`, which takes `""`
-  (as 0), `"1,000"`, `" 10 "` and `"1_0"`: each passes bean-check as a
-  `tolerance_multiplier`; we report an invalid value. `"Infinity"` and
-  `"NaN"` pass too, until a transaction infers a tolerance: bean-check then
-  crashes with `decimal.InvalidOperation`.
-- #568: an included file's options are ignored by both, but bean-check
-  still reports their errors (an invalid name or value, a rename) on the
-  included file's line and exits 1; we print a warning that the option is
-  ignored, valid or not, and pass.
-- #568: `option "allow_pipe_separator"` and
-  `option "allow_deprecated_none_for_tags_and_links"` are errors in
-  bean-check whatever their value (`Allowing pipe separator temporarily;
-  this will go away eventually.`), in 2.3.6 too; we accept them silently.
 - #570: a `documents` root reached through a symlink discovers nothing
   here, and a ledger path starting with `//` keeps it in beancount's file
   and document names, where we collapse it.
@@ -278,6 +261,13 @@ compare the lines errors are on:
   (`-0.001 USD` at USD's two digits) keeps its sign as in beanquery,
   `-0.00 USD`, numberified too (`query/negative_dust.bql`,
   `query/numberify_negative_dust.bql`).
+
+- **Infinite and NaN option numbers** (#568): beancount's `D()` takes
+  `"Infinity"` and `"NaN"` as a `tolerance_multiplier` or a CURRENCY:NUMBER
+  value, and bean-check then crashes with `decimal.InvalidOperation` once a
+  transaction infers a tolerance. Our decimals have neither, so we report
+  the value as beancount reports any other it cannot read (`Impossible to
+  create Decimal instance from NaN: [<class 'decimal.ConversionSyntax'>]`).
 
 - **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
   Python's `bool` subclasses `int`, sums the values as integers and still

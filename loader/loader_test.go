@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -696,6 +697,35 @@ include "included.beancount"
 	for _, item := range result.Diagnostics {
 		assert.Equal(t, diagnostic.SeverityWarning, diagnostic.SeverityOf(item))
 	}
+}
+
+func TestLoadReportsIncludedOptionErrors(t *testing.T) {
+	// Like beancount, an included file's options are ignored, but an invalid
+	// one is still reported as an error on its own line.
+	tmpDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "included.beancount"), []byte(`option "title" "Included"
+option "nope" "x"
+option "inferred_tolerance_multiplier" "zz"
+`), 0644))
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`include "included.beancount"
+`), 0644))
+
+	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(result.AST.Options))
+
+	var messages []string
+	for _, loadErr := range diagnostic.Errors(result.Diagnostics) {
+		_, message, _ := strings.Cut(loadErr.Error(), "included.beancount:")
+		messages = append(messages, message)
+	}
+	assert.Equal(t, []string{
+		"2: Invalid option: 'nope'",
+		"3: Renamed to 'tolerance_multiplier'.",
+		"3: Error for option 'tolerance_multiplier': Impossible to create Decimal instance from zz: [<class 'decimal.ConversionSyntax'>]",
+	}, messages)
+	assert.Equal(t, 1, len(diagnostic.Warnings(result.Diagnostics)))
 }
 
 func TestDocumentsDiscovery(t *testing.T) {

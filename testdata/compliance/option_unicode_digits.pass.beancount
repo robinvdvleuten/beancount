@@ -1,0 +1,12 @@
+; A CURRENCY:NUMBER option takes any Unicode decimal digit, as Python's \d
+; and Decimal do: USD's default tolerance is 0.5 (Arabic-Indic digits), so
+; the transaction balances.
+option "inferred_tolerance_default" "USD:٠.٥"
+option "display_precision" "USD:٠.٠١"
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Residual within the configured tolerance"
+  Assets:A   1 USD
+  Assets:B  -1.4 USD

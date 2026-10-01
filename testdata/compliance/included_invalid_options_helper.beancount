@@ -1,0 +1,8 @@
+option "operating_currency" "EUR"
+option "nope" "x"
+option "filename" "y"
+option "allow_pipe_separator" "TRUE"
+option "inferred_tolerance_multiplier" "0.6"
+option "booking_method" "XX"
+option "inferred_tolerance_multiplier" "zz"
+2020-01-01 open Assets:Included

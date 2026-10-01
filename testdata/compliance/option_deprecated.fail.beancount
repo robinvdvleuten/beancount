@@ -1,0 +1,7 @@
+; Two options beancount deprecates are errors whatever their value, each on
+; its own line; processing continues.
+option "allow_pipe_separator" "TRUE"
+option "allow_deprecated_none_for_tags_and_links" "FALSE"
+option "allow_pipe_separator" ""
+
+2020-01-01 open Assets:A

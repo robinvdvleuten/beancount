@@ -1,0 +1,5 @@
+; An included file's options are ignored, but beancount still reports an
+; invalid name, a reserved or deprecated option, a rename and an invalid
+; value on the included file's lines. Its valid options pass.
+include "included_invalid_options_helper.beancount"
+2020-01-01 open Assets:Main

@@ -37,22 +37,22 @@ func TestFromASTOptionValidation(t *testing.T) {
 		{
 			name:    "unknown option is rejected",
 			source:  `option "nomatch" "x"`,
-			wantErr: `invalid option: "nomatch"`,
+			wantErr: `Invalid option: 'nomatch'`,
 		},
 		{
 			name:    "reserved option may not be set",
 			source:  `option "filename" "x"`,
-			wantErr: `option "filename" may not be set`,
+			wantErr: `Option 'filename' may not be set`,
 		},
 		{
 			name:    "deprecated plugin option may not be set",
 			source:  `option "plugin" "beancount.plugins.auto"`,
-			wantErr: `option "plugin" may not be set`,
+			wantErr: `Option 'plugin' may not be set`,
 		},
 		{
 			name:    "all invalid options are reported",
 			source:  "option \"nomatch\" \"x\"\noption \"filename\" \"y\"",
-			wantErr: `invalid option: "nomatch"`,
+			wantErr: `Invalid option: 'nomatch'`,
 		},
 	}
 
@@ -131,14 +131,17 @@ option "display_precision" "USD"
 option "display_precision" " USD : 0.01"
 option "inferred_tolerance_default" "USD:-0.01"
 option "inferred_tolerance_default" "USD:0.0.1"
+option "display_precision" "EUR:٠.٠١"
+option "inferred_tolerance_default" "EUR:٣"
 `))
 	assert.NoError(t, err)
 	cfg, errs := ParseOptions(tree)
 
 	// Like beancount's options_validate_tolerance_map, a value matches
 	// from its start, splits at its last colon and ignores trailing text.
-	assert.Equal(t, map[string]string{"USD": "0.01", "A:B": "0.5"}, decimalStrings(cfg.DisplayPrecision))
-	assert.Equal(t, map[string]string{"*": "0.1", "USD": "0.01"}, decimalStrings(cfg.Tolerance.Defaults))
+	// Its digits are any Unicode digits, as Python's \d matches them.
+	assert.Equal(t, map[string]string{"USD": "0.01", "A:B": "0.5", "EUR": "0.01"}, decimalStrings(cfg.DisplayPrecision))
+	assert.Equal(t, map[string]string{"*": "0.1", "USD": "0.01", "EUR": "3"}, decimalStrings(cfg.Tolerance.Defaults))
 	var got []string
 	for _, err := range errs {
 		got = append(got, err.Error())
@@ -227,7 +230,7 @@ option "inferred_tolerance_multiplier" "10"`,
 			source: `option "tolerance_multiplier" "abc"`,
 			want:   "0.5",
 			errs: []string{
-				`ledger.beancount:1: Error for option 'tolerance_multiplier': invalid tolerance_multiplier "abc": can't convert abc to decimal`,
+				`ledger.beancount:1: Error for option 'tolerance_multiplier': Impossible to create Decimal instance from abc: [<class 'decimal.ConversionSyntax'>]`,
 			},
 		},
 		{
@@ -237,7 +240,7 @@ option "inferred_tolerance_multiplier" "abc"`,
 			want: "0.6",
 			errs: []string{
 				"ledger.beancount:2: Renamed to 'tolerance_multiplier'.",
-				`ledger.beancount:2: Error for option 'tolerance_multiplier': invalid tolerance_multiplier "abc": can't convert abc to decimal`,
+				`ledger.beancount:2: Error for option 'tolerance_multiplier': Impossible to create Decimal instance from abc: [<class 'decimal.ConversionSyntax'>]`,
 			},
 		},
 	}
@@ -256,6 +259,55 @@ option "inferred_tolerance_multiplier" "abc"`,
 			assert.Equal(t, tt.errs, got)
 		})
 	}
+}
+
+func TestOptionNumbersReadLikeBeancountsD(t *testing.T) {
+	// beancount reads an option's number with D(): empty is 0, commas and
+	// spaces are dropped, and Python's Decimal strips white space and takes
+	// underscores and any Unicode digit.
+	for value, want := range map[string]string{
+		"": "0", "1,000": "1000", " 10 ": "10", "1_0": "10", "٣": "3", "\t0.6\n": "0.6",
+	} {
+		cfg, errs := ParseOptions(parser.MustParseString(context.Background(), `option "tolerance_multiplier" "`+value+`"`))
+		assert.Zero(t, errs, value)
+		assert.Equal(t, want, cfg.Tolerance.Multiplier.String(), value)
+	}
+
+	// beancount takes an infinity or a NaN, then fails on its first
+	// tolerance; they are rejected here.
+	for _, value := range []string{"NaN", "Infinity", "-inf"} {
+		cfg, errs := ParseOptions(parser.MustParseString(context.Background(), `option "tolerance_multiplier" "`+value+`"`))
+		assert.Equal(t, 1, len(errs), value)
+		assert.Contains(t, errs[0].Error(), "Impossible to create Decimal instance from "+value+": [<class 'decimal.ConversionSyntax'>]")
+		assert.Equal(t, "0.5", cfg.Tolerance.Multiplier.String(), value)
+	}
+}
+
+func TestDeprecatedOptions(t *testing.T) {
+	// beancount reports both whatever their value, and accepts them.
+	tree, err := parser.ParseBytesWithFilename(context.Background(), "ledger.beancount", []byte(`option "allow_pipe_separator" "TRUE"
+option "allow_deprecated_none_for_tags_and_links" ""
+`))
+	assert.NoError(t, err)
+	_, errs := ParseOptions(tree)
+	var got []string
+	for _, err := range errs {
+		got = append(got, err.Error())
+	}
+	assert.Equal(t, []string{
+		"ledger.beancount:1: Allowing pipe separator temporarily; this will go away eventually.",
+		"ledger.beancount:2: Allowing None for tags and link will go away eventually.",
+	}, got)
+}
+
+func TestCheckOptionAppliesNothing(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `option "booking_method" "FIFO"
+option "booking_method" "XX"
+`)
+	assert.Zero(t, CheckOption(tree.Options[0]))
+	errs := CheckOption(tree.Options[1])
+	assert.Equal(t, 1, len(errs))
+	assert.Contains(t, errs[0].Error(), "Error for option 'booking_method': 'XX'")
 }
 
 func TestFromOptionsToleranceMultiplier(t *testing.T) {

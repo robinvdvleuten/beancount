@@ -1,2 +1,3 @@
 option "plugin" "beancount.plugins.auto"
+option "filename" "x"
 2020-01-01 open Assets:A
