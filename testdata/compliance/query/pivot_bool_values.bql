@@ -1,0 +1,1 @@
+SELECT account, number > 0 AS pos, count(*) GROUP BY account, pos PIVOT BY account, pos

@@ -1,0 +1,1 @@
+SELECT account, count(*) GROUP BY account HAVING count(*) > 1 AND account ~ 'Cash'

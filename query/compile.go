@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -34,11 +35,15 @@ type cexpr interface {
 // OrderBy reference targets by index; hidden targets were appended
 // during resolution and are not rendered.
 type compiledSelect struct {
-	Targets  []compiledTarget
-	Where    cexpr
-	From     *compiledFrom
-	GroupBy  []int
-	OrderBy  []orderKey
+	Targets []compiledTarget
+	Where   cexpr
+	From    *compiledFrom
+	GroupBy []int
+	// Having is the index of the hidden HAVING target, or -1.
+	Having  int
+	OrderBy []orderKey
+	// Pivot holds the two PIVOT BY targets, or nothing.
+	Pivot    []int
 	Limit    *int64
 	Distinct bool
 	HasAgg   bool
@@ -85,7 +90,7 @@ type compiler struct {
 }
 
 func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
-	compiled := &compiledSelect{Distinct: sel.Distinct, Limit: sel.Limit}
+	compiled := &compiledSelect{Distinct: sel.Distinct, Limit: sel.Limit, Having: -1}
 
 	from, err := c.compileFrom(sel.From, fromEnv)
 	if err != nil {
@@ -160,11 +165,52 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 	if err := checkGroupCoverage(sel, compiled); err != nil {
 		return nil, err
 	}
-	// bean-query parses PIVOT BY but rejects it as its last check.
-	if len(sel.PivotBy) > 0 {
-		return nil, compileErrorf(sel.PivotBy[0], "the PIVOT BY clause is not supported yet")
+	if err := c.resolvePivotBy(sel, compiled); err != nil {
+		return nil, err
 	}
 	return compiled, nil
+}
+
+// resolvePivotBy resolves PIVOT BY's two items like beanquery's
+// _compile_pivot_by: an index or a name (the last visible target with it),
+// the two distinct, and the second a GROUP BY column. A query without GROUP BY
+// has none, where beanquery fails with a Python TypeError (KNOWN_GAPS.md).
+func (c *compiler) resolvePivotBy(sel *bql.Select, compiled *compiledSelect) error {
+	if len(sel.PivotBy) == 0 {
+		return nil
+	}
+	for _, item := range sel.PivotBy {
+		var idx int
+		switch ref := item.(type) {
+		case *bql.ColumnIndex:
+			// Like beanquery, an index counts every target, hidden
+			// ones included.
+			if ref.Value < 1 || ref.Value > int64(len(compiled.Targets)) {
+				return statementErrorf("invalid PIVOT BY column index %d", ref.Value)
+			}
+			idx = int(ref.Value - 1)
+		case *bql.Ident:
+			var ok bool
+			if idx, ok = targetNamed(ref.Name, compiled); !ok {
+				return statementErrorf("PIVOT BY column %s is not in the targets list", pyExprRepr(ref))
+			}
+		}
+		compiled.Pivot = append(compiled.Pivot, idx)
+	}
+	if compiled.Pivot[0] == compiled.Pivot[1] {
+		return statementErrorf("the two PIVOT BY columns cannot be the same column")
+	}
+	if !slices.Contains(compiled.GroupBy, compiled.Pivot[1]) {
+		return statementErrorf("the second PIVOT BY column must be a GROUP BY column")
+	}
+	// beanquery pivots the visible columns, and fails with a Python
+	// IndexError on a hidden one (KNOWN_GAPS.md).
+	for _, idx := range compiled.Pivot {
+		if compiled.Targets[idx].Hidden {
+			return statementErrorf("invalid PIVOT BY column index %d", idx+1)
+		}
+	}
+	return nil
 }
 
 // resolveGroupBy maps GROUP BY items to target indices, appending hidden
@@ -172,9 +218,6 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 // explicit GROUP BY, an aggregate query implicitly groups by all
 // non-aggregate targets (official behavior).
 func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) error {
-	if sel.Having != nil {
-		return compileErrorf(sel.Having, "the HAVING clause is not supported yet")
-	}
 	if len(sel.GroupBy) == 0 {
 		hasAgg := false
 		for _, target := range compiled.Targets {
@@ -205,11 +248,36 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 		if compiled.Targets[idx].IsAgg {
 			return statementErrorf(`GROUP-BY expressions may not reference aggregates: "%s"`, ref)
 		}
-		if compiled.Targets[idx].Type == tInventory {
+		// Sets and inventories are unhashable in Python.
+		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet {
 			return statementErrorf(`GROUP-BY a non-hashable type is not supported: "%s"`, ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)
 	}
+	return c.resolveHaving(sel, compiled)
+}
+
+// resolveHaving compiles HAVING, which must hold an aggregate, into a
+// hidden aggregate target, like beanquery.
+func (c *compiler) resolveHaving(sel *bql.Select, compiled *compiledSelect) error {
+	if sel.Having == nil {
+		return nil
+	}
+	expr, err := c.compileExpr(sel.Having)
+	if err != nil {
+		return err
+	}
+	if !c.isAggregate(sel.Having) {
+		return statementErrorf("the HAVING clause must be an aggregate expression")
+	}
+	compiled.Targets = append(compiled.Targets, compiledTarget{
+		Type:   expr.typ(),
+		Hidden: true,
+		IsAgg:  true,
+		expr:   expr,
+		key:    exprKey(sel.Having),
+	})
+	compiled.Having = len(compiled.Targets) - 1
 	return nil
 }
 
@@ -395,8 +463,8 @@ func (c *compiler) isAggregate(e bql.Expr) bool {
 	return len(aggs) > 0
 }
 
-// checkGroupCoverage enforces that grouped queries cover every visible
-// non-aggregate target with a GROUP-BY key, using the official error message.
+// checkGroupCoverage enforces that grouped queries cover every non-aggregate
+// target with a GROUP-BY key, using the official error message.
 func checkGroupCoverage(sel *bql.Select, compiled *compiledSelect) error {
 	if !compiled.HasAgg && len(sel.GroupBy) == 0 {
 		return nil
@@ -405,10 +473,16 @@ func checkGroupCoverage(sel *bql.Select, compiled *compiledSelect) error {
 	for _, idx := range compiled.GroupBy {
 		grouped[idx] = true
 	}
+	// Like beanquery, a hidden target counts too, named None: ORDER BY date
+	// in an aggregate query reports "None" as missing.
 	var missing []string
 	for i, target := range compiled.Targets {
-		if !target.Hidden && !target.IsAgg && !grouped[i] {
-			missing = append(missing, `"`+target.Name+`"`)
+		if !target.IsAgg && !grouped[i] {
+			name := target.Name
+			if target.Hidden {
+				name = "None"
+			}
+			missing = append(missing, `"`+name+`"`)
 		}
 	}
 	if len(missing) > 0 {

@@ -1,0 +1,1 @@
+SELECT year, number / 10000000 AS n, count(*) WHERE account ~ 'Coffee' GROUP BY 1, 2 PIVOT BY 1, 2

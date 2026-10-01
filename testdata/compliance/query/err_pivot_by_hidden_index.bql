@@ -1,0 +1,1 @@
+SELECT account, year, count(*) GROUP BY 1, 2 HAVING count(*) > 0 PIVOT BY 1, 4

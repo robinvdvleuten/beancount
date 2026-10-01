@@ -180,7 +180,10 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   comparison, so `SELECT account, units(position) AS u ORDER BY u`
   differs. A column of mixed types (metadata holding a string on one
   entry and a number on another) fails in beanquery with a `TypeError`
-  and is sorted by string form in ours.
+  and is sorted by string form in ours. The same holds for `PIVOT BY`'s
+  values: `SELECT year, units(position) AS u, count(*) WHERE account ~
+  'Coffee' GROUP BY 1, 2 PIVOT BY 1, 2` orders its pivot columns
+  `18.00 USD`, `3.75 USD`, `4.50 USD` in ours and by number in beanquery.
 - #592: `SELECT account ORDER BY sum(number)`, an aggregate in ORDER BY
   without GROUP BY, prints the rows in ledger order in beanquery; ours
   reports the GROUP-BY coverage error.
@@ -252,15 +255,21 @@ compare the lines errors are on:
   subtraction), `count(*)`, digits in identifiers, an ASC or DESC per
   ORDER BY term with NULL first ascending and last descending, an ORDER BY
   or GROUP BY name bound to the last target with that name, an ORDER BY
-  index at most the number of distinct target names, and a
-  statement that does not parse or compile reported on stderr with exit
-  status 1, in the words and with the caret lines of beanquery's
-  interactive shell (one-shot `bean-query` prints a Python traceback
-  instead). Still to follow beanquery (`queryGaps` in
-  `cli/query_compliance_test.go` lists every fixture): `HAVING` and
-  `PIVOT BY` (#576); and functions (#577: every function NULL-strict,
-  one-argument `root`, `has_account` in WHERE, `balance` accumulated where
-  it is evaluated).
+  index at most the number of distinct target names, `HAVING` on an
+  aggregate, a grouped query's targets outside the group key (HAVING's, an
+  ORDER BY expression's) reading their columns from the table's last row,
+  after FROM's transforms and before its filter expression and WHERE, as
+  beanquery's do, `PIVOT BY` with beanquery's pivoted layout (a
+  `col1/col2` first column, one column per sorted value of the second
+  column, or per value and other column, named after the value as Python
+  prints it, empty where a combination is missing, applied after ORDER BY
+  and LIMIT), and a statement that does not parse or compile reported on
+  stderr with exit status 1, in the words and with the caret lines of
+  beanquery's interactive shell (one-shot `bean-query` prints a Python
+  traceback instead). Still to follow beanquery (`queryGaps` in
+  `cli/query_compliance_test.go` lists every fixture): functions (#577:
+  every function NULL-strict, one-argument `root`, `has_account` in WHERE,
+  `balance` accumulated where it is evaluated).
 
 ## Deliberate deviations
 
@@ -281,6 +290,22 @@ compare the lines errors are on:
   types the column as boolean, so `sum(1 = 1)` over four rows renders
   `TRUE` and `sum(false)` renders `FALSE`. We reject it:
   `error: no function matches "sum(bool)" name and argument types` (#422).
+
+- **BQL Python exceptions**: where beanquery fails with a Python exception
+  rather than a query error, we answer instead. `PIVOT BY` on a query
+  without aggregates (`SELECT account, year PIVOT BY account, year`) is a
+  `TypeError` there and `the second PIVOT BY column must be a GROUP BY
+  column` here. A NULL among other values of the second PIVOT BY column
+  (`PIVOT BY year, cost_currency`) is a `TypeError` there; here NULL
+  sorts first and names its column `None`. Numberifying (`-m`) a pivoted
+  inventory column with a missing cell is an `AttributeError` there; here
+  the cell stays empty. Values of mixed types in the second PIVOT BY
+  column (metadata holding `"x"` on one entry and `2` on another) are a
+  `TypeError` there; here they sort as `compareValues` orders them. A
+  PIVOT BY index of a hidden target that passes beanquery's checks
+  (`SELECT account, year, count(*) GROUP BY 1, 2 HAVING count(*) > 0
+  PIVOT BY 4, 2`) is an `IndexError` there and `invalid PIVOT BY column
+  index 4` here.
 
 - **BQL errors without a node**: beanquery's shell underlines the node a
   compile error names, but raises some errors without one and then prints
@@ -370,7 +395,6 @@ compare the lines errors are on:
 - **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives,
   shell settings (`set format ...`) and dot-commands are not implemented;
   nor are beanquery's subqueries, `FROM #table` and `CREATE TABLE`.
-  `HAVING` and `PIVOT BY` are in #576.
 - **BQL dict-typed metadata functions**: `commodity_meta`, `currency_meta`,
   `open_meta`, and `getitem` (dict-typed values) are not implemented;
   `meta`, `entry_meta`, and `any_meta` cover scalar metadata lookups.

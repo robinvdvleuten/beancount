@@ -310,6 +310,23 @@ func TestParsePivotBy(t *testing.T) {
 
 	pivotBy := stmt.(*Select).PivotBy
 	assert.Equal(t, 2, len(pivotBy))
+	assert.Equal(t, "account", pivotBy[0].(*Ident).Name)
+
+	// Like beanquery's grammar, PIVOT BY takes exactly two items, each an
+	// index or a name, a double-quoted one included.
+	stmt, err = Parse(`SELECT account, year GROUP BY 1, 2 PIVOT BY 2, "account"`)
+	assert.NoError(t, err)
+	pivotBy = stmt.(*Select).PivotBy
+	assert.Equal(t, int64(2), pivotBy[0].(*ColumnIndex).Value)
+	assert.Equal(t, "account", pivotBy[1].(*Ident).Name)
+	for _, query := range []string{
+		"SELECT account PIVOT BY account",
+		"SELECT account PIVOT BY account, year, date",
+		"SELECT account PIVOT BY 1 + 1, 2",
+	} {
+		_, err := Parse(query)
+		assert.Error(t, err, query)
+	}
 }
 
 func TestParseTrailingSemicolon(t *testing.T) {

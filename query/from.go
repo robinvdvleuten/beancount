@@ -54,13 +54,8 @@ func (c *compiler) compileFrom(from *bql.From, env *environment) (*compiledFrom,
 // knows the positions of the postings summarization creates. A nil clause
 // reads every directive.
 func (from *compiledFrom) entries(ctx context.Context, qctx *Context) (*Context, []ast.Directive, error) {
-	entries := []ast.Directive(qctx.AST.Directives)
-	if from == nil {
-		return qctx, entries, nil
-	}
-
-	qctx, entries = applyFromTransforms(qctx, entries, from)
-	if from.Expr == nil {
+	qctx, entries := from.transformed(qctx)
+	if from == nil || from.Expr == nil {
 		return qctx, entries, nil
 	}
 
@@ -71,9 +66,24 @@ func (from *compiledFrom) entries(ctx context.Context, qctx *Context) (*Context,
 				return nil, nil, err
 			}
 		}
-		if truthy(from.Expr.eval(&evalRow{Ctx: qctx, Entry: entry})) {
+		if from.keeps(qctx, entry) {
 			kept = append(kept, entry)
 		}
 	}
 	return qctx, kept, nil
+}
+
+// transformed returns the ledger's directives summarized by the clause's
+// transforms, and the context to evaluate them in.
+func (from *compiledFrom) transformed(qctx *Context) (*Context, []ast.Directive) {
+	entries := []ast.Directive(qctx.AST.Directives)
+	if from == nil {
+		return qctx, entries
+	}
+	return applyFromTransforms(qctx, entries, from)
+}
+
+// keeps reports whether the clause's filter expression keeps entry.
+func (from *compiledFrom) keeps(qctx *Context, entry ast.Directive) bool {
+	return from == nil || from.Expr == nil || truthy(from.Expr.eval(&evalRow{Ctx: qctx, Entry: entry}))
 }

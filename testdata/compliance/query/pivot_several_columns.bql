@@ -1,0 +1,1 @@
+SELECT year, account, sum(number), count(*) GROUP BY year, account PIVOT BY year, account

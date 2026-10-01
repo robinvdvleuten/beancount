@@ -123,9 +123,6 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"err_having":                      "#576: HAVING is supported",
-	"err_pivot":                       "#576: PIVOT BY is supported",
-	"err_pivot_by_after_checks":       "#576: PIVOT BY takes two columns",
 	"balance_where_running":           "#577: balance accumulates where it is evaluated, WHERE included",
 	"err_function_arg_count":          "#577: root takes one argument too",
 	"err_where_has_account":           "#577: has_account is allowed in WHERE",

@@ -1,0 +1,1 @@
+SELECT account, count(*) FROM year = 2023 GROUP BY account ORDER BY count(*) * year DESC, account

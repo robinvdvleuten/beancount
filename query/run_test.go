@@ -21,6 +21,12 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_group_by_set":                 `error: GROUP-BY a non-hashable type is not supported: "2"`,
+	"err_group_by_hidden_order_target": `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "None"`,
+	"err_pivot_by_hidden_index":        `error: the second PIVOT BY column must be a GROUP BY column`,
+	"err_having_not_aggregate":         `error: the HAVING clause must be an aggregate expression`,
+	"err_pivot_by_not_group_column":    `error: the second PIVOT BY column must be a GROUP BY column`,
+	"err_pivot_by_same_column":         `error: the two PIVOT BY columns cannot be the same column`,
 	"err_order_by_index_repeated_name": `error: invalid ORDER-BY column index 3`,
 	"err_group_by_decimal_index": `error: syntax error
 | SELECT account, count(*) GROUP BY 1.0
@@ -94,11 +100,8 @@ var errorFixtures = map[string]string{
 |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^`,
 	"err_group_by_inventory": `error: GROUP-BY a non-hashable type is not supported: "Column(name='balance')"`,
 	"err_group_coverage":     `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "date"`,
-	"err_having": `error: the HAVING clause is not supported yet
-| SELECT account GROUP BY account HAVING count(account) > 1
-|                                        ^^^^^^^^^^^^^^^^^^`,
-	"err_mixed_aggregate":  `error: mixed aggregates and non-aggregates are not allowed`,
-	"err_nested_aggregate": `error: aggregates of aggregates are not allowed`,
+	"err_mixed_aggregate":    `error: mixed aggregates and non-aggregates are not allowed`,
+	"err_nested_aggregate":   `error: aggregates of aggregates are not allowed`,
 	"err_null_argument": `error: no function matches "length(nonetype)" name and argument types
 | SELECT length(NULL)
 |        ^^^^^^^^^^^^`,
@@ -106,12 +109,9 @@ var errorFixtures = map[string]string{
 | SELECT year(entry_meta('x'))
 |        ^^^^^^^^^^^^^^^^^^^^^`,
 	"err_order_by_index": `error: invalid ORDER-BY column index 5`,
-	"err_pivot": `error: the PIVOT BY clause is not supported yet
-| SELECT date, account, sum(position) GROUP BY 1, 2 PIVOT BY date, account
-|                                                            ^^^^`,
-	"err_pivot_by_after_checks": `error: the PIVOT BY clause is not supported yet
+	"err_pivot_by_after_checks": `error: syntax error
 | SELECT account, sum(number) PIVOT BY bogus
-|                                      ^^^^^`,
+|                                           ^`,
 	"err_pivot_by_expression": `error: syntax error
 | SELECT account PIVOT BY foo(1)
 |                            ^`,

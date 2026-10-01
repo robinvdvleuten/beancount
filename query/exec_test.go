@@ -150,6 +150,21 @@ func TestExecuteBalanceInWhere(t *testing.T) {
 	assert.Equal(t, "2500 USD", valueString(result.Rows[2][1]))
 }
 
+// TestExecuteHavingReadsLastRow pins a beanquery quirk: HAVING reads its
+// columns from the table's last row (Assets:Checking of "Buy HOOL"), after
+// FROM's transforms but before its filter, not from the group's own rows.
+func TestExecuteHavingReadsLastRow(t *testing.T) {
+	for query, rows := range map[string]int{
+		"SELECT account, count(*) GROUP BY account HAVING count(*) > 0 AND account = 'Assets:Checking'": 5,
+		"SELECT account, count(*) GROUP BY account HAVING count(*) > 0 AND account = 'Expenses:Food'":   0,
+		// FROM keeps only the coffee, yet the last row is still the HOOL buy.
+		"SELECT account, count(*) FROM narration ~ 'Coffee' GROUP BY account HAVING count(*) > 0 AND narration ~ 'HOOL'":   2,
+		"SELECT account, count(*) FROM narration ~ 'Coffee' GROUP BY account HAVING count(*) > 0 AND narration ~ 'Coffee'": 0,
+	} {
+		assert.Equal(t, rows, len(runQuery(t, query).Rows), query)
+	}
+}
+
 func TestExecuteTagsAndLinks(t *testing.T) {
 	result := runQuery(t, "SELECT date WHERE 'job' in tags")
 	assert.Equal(t, 2, len(result.Rows))

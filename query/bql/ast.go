@@ -39,13 +39,11 @@ type Select struct {
 	From     *From
 	Where    Expr
 	GroupBy  []Expr // column names, aliases, or 1-based integer indices
-	// Having is parsed like bean-query's grammar, which the compiler then
-	// rejects as not supported yet.
-	Having  Expr
-	OrderBy []OrderTerm
-	// PivotBy holds column names; bean-query parses the clause but rejects
-	// it as not supported.
-	PivotBy []*Ident
+	Having   Expr   // only with GROUP BY, as in beanquery's grammar
+	OrderBy  []OrderTerm
+	// PivotBy is empty or holds exactly two items, each a target name
+	// (Ident) or a 1-based index (ColumnIndex).
+	PivotBy []Expr
 	Limit   *int64
 }
 

@@ -225,16 +225,19 @@ func (p *parser) parseSelect() (*Select, error) {
 		if !p.accept(BY) {
 			return nil, p.clauseErrorf(clause, "PIVOT BY")
 		}
-		// Like bean-query's grammar, PIVOT BY lists column names only.
-		for {
-			tok, err := p.expect(IDENT, "PIVOT BY")
+		// Like beanquery's grammar, PIVOT BY takes exactly two items, each
+		// an integer or a column name.
+		for i := range 2 {
+			if i > 0 {
+				if _, err := p.expect(COMMA, "PIVOT BY"); err != nil {
+					return nil, err
+				}
+			}
+			item, err := p.parsePivotItem()
 			if err != nil {
 				return nil, err
 			}
-			sel.PivotBy = append(sel.PivotBy, &Ident{position: p.node(tok.Start), Name: strings.ToLower(tok.String(p.source))})
-			if !p.accept(COMMA) {
-				break
-			}
+			sel.PivotBy = append(sel.PivotBy, item)
 		}
 	}
 
@@ -446,6 +449,29 @@ func (p *parser) parseExprList() ([]Expr, error) {
 		}
 	}
 	return exprs, nil
+}
+
+// parsePivotItem parses a PIVOT BY item: a column index or a name.
+func (p *parser) parsePivotItem() (Expr, error) {
+	tok := p.cur
+	switch tok.Type {
+	case INTEGER:
+		return p.parseClauseItem()
+	case DECIMAL:
+		if isDigit(p.source[tok.Start]) {
+			return p.parseClauseItem() // fails at the dot
+		}
+	case IDENT:
+		p.next()
+		return &Ident{position: p.node(tok.Start), Name: strings.ToLower(tok.String(p.source))}, nil
+	case STRING:
+		// beanquery's identifier rule takes a double-quoted name too.
+		if p.source[tok.Start] == '"' {
+			p.next()
+			return &Ident{position: p.node(tok.Start), Name: stripQuotes(tok.String(p.source))}, nil
+		}
+	}
+	return nil, p.nameErrorf(tok, "expected a PIVOT BY column, found %s", p.describe(tok))
 }
 
 // parseClauseItem parses a GROUP BY or ORDER BY item. Like beanquery's

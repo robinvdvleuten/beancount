@@ -1,0 +1,1 @@
+SELECT account, count(*) FROM year = 2023 GROUP BY account HAVING count(*) > 0 AND year = 2024

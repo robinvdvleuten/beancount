@@ -22,7 +22,8 @@ func desugar(stmt bql.Statement) bql.Statement {
 // desugarBalances expands BALANCES [AT fn] [FROM ...] [WHERE ...] into
 //
 //	SELECT account, SUM([fn](position)) [FROM ...] [WHERE ...]
-//	GROUP BY account ORDER BY account_sortkey(account)
+//	GROUP BY account, account_sortkey(account)
+//	ORDER BY account_sortkey(account)
 //
 // Its targets carry the text beanquery parses them from, which names them.
 func desugarBalances(b *bql.Balances) *bql.Select {
@@ -38,7 +39,7 @@ func desugarBalances(b *bql.Balances) *bql.Select {
 		},
 		From:    b.From,
 		Where:   b.Where,
-		GroupBy: []bql.Expr{account},
+		GroupBy: []bql.Expr{account, call("account_sortkey", account)},
 		OrderBy: []bql.OrderTerm{{Expr: call("account_sortkey", account)}},
 	}
 }

@@ -1,0 +1,1 @@
+SELECT account, year, sum(number) GROUP BY account, year PIVOT BY account, year LIMIT 3

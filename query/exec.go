@@ -31,14 +31,14 @@ func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*tab
 	timer := telemetry.FromContext(ctx).Start("query.execute")
 	defer timer.End()
 
-	rows, err := generateRows(ctx, qctx, compiled)
+	rows, last, err := generateRows(ctx, qctx, compiled)
 	if err != nil {
 		return nil, err
 	}
 
 	var output [][]any
 	if compiled.HasAgg || len(compiled.GroupBy) > 0 {
-		output = executeGrouped(rows, compiled)
+		output = executeGrouped(rows, last, compiled)
 	} else {
 		output = make([][]any, 0, len(rows))
 		for _, row := range rows {
@@ -61,27 +61,28 @@ func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*tab
 			result.Columns = append(result.Columns, tableColumn{Name: target.Name, Type: target.Type})
 		}
 	}
+	if compiled.Pivot != nil {
+		result = result.pivot(compiled.Pivot[0], compiled.Pivot[1])
+	}
 	return result, nil
 }
 
 // generateRows applies the FROM filter to the directive stream and flattens
 // the surviving transactions into posting rows, one per booked position (see
 // postingPositions). The balance column is a single running inventory over
-// the rows that survive WHERE, matching the official executor.
-func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) ([]*evalRow, error) {
-	qctx, entries, err := compiled.From.entries(ctx, qctx)
-	if err != nil {
-		return nil, err
-	}
-
-	var rows []*evalRow
+// the rows that survive WHERE, matching the official executor. It also
+// returns last, the last row of the table: after FROM's transforms but
+// before its filter expression and WHERE, which beanquery joins into one
+// filter. It is nil for an empty table.
+func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) (rows []*evalRow, last *evalRow, err error) {
+	qctx, entries := compiled.From.transformed(qctx)
 	running := newInventory()
 
 	for i, entry := range entries {
 		if i%1024 == 0 {
 			select {
 			case <-ctx.Done():
-				return nil, ctx.Err()
+				return nil, nil, ctx.Err()
 			default:
 			}
 		}
@@ -90,6 +91,7 @@ func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) 
 		if !ok {
 			continue
 		}
+		kept := compiled.From.keeps(qctx, entry)
 
 		for _, posting := range txn.Postings {
 			positions := postingPositions(qctx, posting)
@@ -99,6 +101,10 @@ func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) 
 
 			for _, position := range positions {
 				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position}
+				last = row
+				if !kept {
+					continue
+				}
 				if compiled.Where != nil {
 					// WHERE sees the balance of the rows kept so far, without
 					// the one it filters.
@@ -119,7 +125,7 @@ func generateRows(ctx context.Context, qctx *Context, compiled *compiledSelect) 
 			}
 		}
 	}
-	return rows, nil
+	return rows, last, nil
 }
 
 // evalTargets evaluates every target (visible and hidden) for a row.
@@ -138,8 +144,9 @@ type group struct {
 }
 
 // executeGrouped hash-aggregates rows by the GROUP-BY targets and evaluates
-// the full target list once per group, in first-seen order.
-func executeGrouped(rows []*evalRow, compiled *compiledSelect) [][]any {
+// the full target list once per group, in first-seen order, keeping the
+// groups HAVING accepts.
+func executeGrouped(rows []*evalRow, last *evalRow, compiled *compiledSelect) [][]any {
 	groups := make(map[string]*group)
 	var order []string
 
@@ -165,6 +172,17 @@ func executeGrouped(rows []*evalRow, compiled *compiledSelect) [][]any {
 		}
 	}
 
+	// Like beanquery, a target outside the group key, an aggregate one
+	// such as HAVING's or an ORDER BY expression's, reads its columns from
+	// last, the table's last row; last is set whenever a group exists.
+	inGroup := make([]bool, len(compiled.Targets))
+	for _, idx := range compiled.GroupBy {
+		inGroup[idx] = true
+	}
+	var scanned evalRow
+	if last != nil {
+		scanned = *last
+	}
 	output := make([][]any, 0, len(order))
 	for _, k := range order {
 		g := groups[k]
@@ -172,7 +190,19 @@ func executeGrouped(rows []*evalRow, compiled *compiledSelect) [][]any {
 		for i, acc := range g.accs {
 			g.rep.AggValues[i] = acc.finalize()
 		}
-		output = append(output, evalTargets(g.rep, compiled))
+		scanned.AggValues = g.rep.AggValues
+		values := make([]any, len(compiled.Targets))
+		for i, target := range compiled.Targets {
+			if inGroup[i] {
+				values[i] = target.expr.eval(g.rep)
+			} else {
+				values[i] = target.expr.eval(&scanned)
+			}
+		}
+		if compiled.Having >= 0 && !truthy(values[compiled.Having]) {
+			continue
+		}
+		output = append(output, values)
 	}
 	return output
 }
