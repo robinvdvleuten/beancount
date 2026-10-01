@@ -132,6 +132,12 @@ var errorFixtures = map[string]string{
 	"err_limit_decimal": `error: syntax error
 | SELECT account LIMIT 1.5
 |                       ^`,
+	"err_unreserved_keyword_column": `error: column "open" not found in table "postings"
+| SELECT account WHERE open
+|                      ^^^^`,
+	"err_unreserved_keyword_from": `error: column "on" not found in table "postings"
+| SELECT account FROM on = 1
+|                     ^^`,
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

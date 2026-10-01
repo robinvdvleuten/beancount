@@ -90,15 +90,22 @@ func (p *parser) errorf(tok Token, format string, args ...any) *ParseError {
 
 // nameErrorf reports tok where a name or an expression was expected.
 // beanquery's parser reads a reserved keyword there as a name before
-// rejecting it, so it fails after the keyword. AT, OPEN, CLOSE, CLEAR and
-// ON are not reserved in beanquery (KNOWN_GAPS.md).
+// rejecting it, so it fails after the keyword.
 func (p *parser) nameErrorf(tok Token, format string, args ...any) *ParseError {
 	err := p.errorf(tok, format, args...)
-	if _, ok := keywordTypes[tok.Type]; ok {
+	if _, ok := reservedKeywords[tok.Type]; ok {
 		err.Pos.Offset = tok.End
 		err.Pos.Column += tok.End - tok.Start
 	}
 	return err
+}
+
+// isName reports whether tok can be a name: an identifier, or a keyword
+// beanquery does not reserve (AT, OPEN, CLOSE, CLEAR and ON), which the
+// parser reads as a clause only where one starts.
+func isName(tok Token) bool {
+	_, unreserved := unreservedKeywords[tok.Type]
+	return tok.Type == IDENT || unreserved
 }
 
 // clauseErrorf reports a clause, starting at the keyword clause, that
@@ -283,9 +290,10 @@ func (p *parser) parseTarget() (Target, error) {
 			return target, nil
 		}
 		tok := p.cur
-		if !p.accept(IDENT) {
+		if !isName(tok) {
 			return Target{}, p.nameErrorf(tok, "expected target alias, found %s", p.describe(tok))
 		}
+		p.next()
 		target.As = strings.ToLower(tok.String(p.source))
 	}
 	return target, nil
@@ -312,8 +320,8 @@ func (p *parser) parseFrom() (*From, error) {
 		clause := p.cur
 		p.next()
 		if !p.accept(ON) || p.cur.Type != DATE {
-			// With no expression before it, beanquery reads OPEN as a
-			// column name and fails at what follows it.
+			// With no expression before it, beanquery has committed to
+			// the OPEN transform (a cut) and fails at what follows OPEN.
 			if from.Expr == nil {
 				return nil, p.errorf(p.cur, "expected ON and a date after OPEN, found %s", p.describe(p.cur))
 			}
@@ -434,10 +442,11 @@ func (p *parser) parseAtSummary() (string, error) {
 	if !p.accept(AT) {
 		return "", nil
 	}
-	tok, err := p.expect(IDENT, "AT")
-	if err != nil {
-		return "", err
+	tok := p.cur
+	if !isName(tok) {
+		return "", p.errorf(tok, "expected IDENT in AT, found %s", p.describe(tok))
 	}
+	p.next()
 	return tok.String(p.source), nil
 }
 
@@ -466,7 +475,7 @@ func (p *parser) parsePivotItem() (Expr, error) {
 		if isDigit(p.source[tok.Start]) {
 			return p.parseClauseItem() // fails at the dot
 		}
-	case IDENT:
+	case IDENT, AT, OPEN, CLOSE, CLEAR, ON:
 		p.next()
 		return &Ident{position: p.node(tok.Start), Name: strings.ToLower(tok.String(p.source))}, nil
 	case STRING:
@@ -712,7 +721,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		p.next()
 		return &Null{position: p.node(tok.Start)}, nil
 
-	case IDENT:
+	case IDENT, AT, OPEN, CLOSE, CLEAR, ON:
 		p.next()
 		// Identifiers are case-insensitive: bean-query lower-cases them.
 		name := strings.ToLower(tok.String(p.source))
@@ -764,10 +773,13 @@ func (p *parser) parseDate() (*ast.Date, error) {
 
 // startsExpr reports whether the current token can begin an expression. Used
 // to decide whether a FROM clause has a filter expression before its
-// OPEN/CLOSE/CLEAR transforms.
+// OPEN/CLOSE/CLEAR transforms: like beanquery's grammar, which tries the
+// transforms first and commits to one once its keyword matches, a FROM
+// that starts with OPEN, CLOSE or CLEAR has none, while AT and ON are
+// names there.
 func (p *parser) startsExpr() bool {
 	switch p.cur.Type {
-	case LPAREN, STRING, INTEGER, DECIMAL, DATE, TRUE, FALSE, NULL, IDENT, NOT, MINUS, PLUS:
+	case LPAREN, STRING, INTEGER, DECIMAL, DATE, TRUE, FALSE, NULL, IDENT, AT, ON, NOT, MINUS, PLUS:
 		return true
 	}
 	return false

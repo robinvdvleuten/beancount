@@ -29,6 +29,7 @@ func FuzzParseQuery(f *testing.F) {
 		"SELECT * FROM OPEN ON 2014-01-01 CLOSE ON 2015-01-01 CLEAR",
 		"SELECT * FROM CLOSE",
 		"SELECT * FROM year = 2014 CLEAR",
+		"SELECT open, close(at) AS clear FROM on OPEN ON 2014-01-01 WHERE at",
 
 		// Shortcut statements
 		"BALANCES",

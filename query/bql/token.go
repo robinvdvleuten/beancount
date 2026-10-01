@@ -171,11 +171,19 @@ var keywords = map[string]TokenType{
 	"NULL":     NULL,
 }
 
-// keywordTypes holds the keyword token types.
-var keywordTypes = func() map[TokenType]struct{} {
+// unreservedKeywords are the keywords beanquery does not reserve
+// (parser.py's KEYWORDS): outside the clauses they start, they are names.
+var unreservedKeywords = map[TokenType]struct{}{
+	AT: {}, OPEN: {}, CLOSE: {}, CLEAR: {}, ON: {},
+}
+
+// reservedKeywords holds the keyword token types that cannot be a name.
+var reservedKeywords = func() map[TokenType]struct{} {
 	types := make(map[TokenType]struct{}, len(keywords))
 	for _, t := range keywords {
-		types[t] = struct{}{}
+		if _, ok := unreservedKeywords[t]; !ok {
+			types[t] = struct{}{}
+		}
 	}
 	return types
 }()

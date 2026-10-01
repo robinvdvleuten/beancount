@@ -498,12 +498,6 @@ func TestParseErrorOffset(t *testing.T) {
 		{"SELECT account LIMIT -1", 15},
 		{"SELECT account LIMIT +1", 15},
 		{"SELECT account LIMIT .5", 15},
-		// LIMIT's integer takes the digits before a dot, and the
-		// statement fails at the dot or the letter after them.
-		{"SELECT account LIMIT 1.5", 22},
-		{"SELECT account LIMIT 12.5", 23},
-		{"SELECT account LIMIT 1.", 22},
-		{"SELECT account LIMIT 1e2", 22},
 		{"SELECT account ORDER BY account ASC LIMIT x", 36},
 		{"SELECT account GROUP account", 15},
 		{"SELECT account ORDER", 15},
@@ -514,15 +508,56 @@ func TestParseErrorOffset(t *testing.T) {
 		{"PRINT FROM year = 2023 OPEN ON", 23},
 		{"SELECT account FROM year = 2023 CLOSE ON", 38},
 		{"SELECT account FROM CLOSE ON x", 26},
-		// Without an expression, beanquery reads OPEN as a column name.
+		// Without an expression, beanquery commits to OPEN, CLOSE or
+		// CLEAR and fails after it.
 		{"SELECT account FROM OPEN ON x", 28},
 		{"SELECT account FROM OPEN x", 25},
+		{"SELECT account FROM open = 1", 25},
+		{"SELECT account FROM clear = 1", 26},
+		{"SELECT account FROM CLEAR open", 26},
+		// AT, OPEN, CLOSE, CLEAR and ON are names outside their clauses,
+		// so they fail where a name would.
+		{"SELECT account open", 15},
+		{"SELECT account FROM year = 2023 OPEN", 32},
+		{"SELECT account FROM year = 2023 CLOSE on", 38},
+		{"BALANCES at", 11},
+		{"JOURNAL AT", 10},
+		// LIMIT's integer takes the digits before a dot, and the
+		// statement fails at the dot or the letter after them.
+		{"SELECT account LIMIT 1.5", 22},
+		{"SELECT account LIMIT 12.5", 23},
+		{"SELECT account LIMIT 1.", 22},
+		{"SELECT account LIMIT 1e2", 22},
 	} {
 		_, err := Parse(tc.query)
 		parseErr, ok := err.(*ParseError)
 		assert.True(t, ok, tc.query)
 		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
 	}
+}
+
+// TestParseUnreservedKeywords checks that AT, OPEN, CLOSE, CLEAR and ON,
+// which beanquery does not reserve, are names outside their clauses.
+func TestParseUnreservedKeywords(t *testing.T) {
+	stmt, err := Parse("SELECT open, Close(at) AS clear, on AS at FROM at WHERE clear GROUP BY open ORDER BY on PIVOT BY at, on")
+	assert.NoError(t, err)
+	sel := stmt.(*Select)
+	assert.Equal(t, Expr(&Ident{position: position{7, 11}, Name: "open"}), sel.Targets[0].Expr)
+	assert.Equal(t, "close", sel.Targets[1].Expr.(*Call).Func)
+	assert.Equal(t, "clear", sel.Targets[1].As)
+	assert.Equal(t, "at", sel.Targets[2].As)
+	assert.Equal(t, "at", sel.From.Expr.(*Ident).Name)
+	assert.Zero(t, sel.From.OpenOn)
+	assert.Equal(t, "clear", sel.Where.(*Ident).Name)
+
+	stmt, err = Parse("BALANCES AT open FROM on OPEN ON 2023-01-01 CLOSE CLEAR")
+	assert.NoError(t, err)
+	balances := stmt.(*Balances)
+	assert.Equal(t, "open", balances.Summary)
+	assert.Equal(t, "on", balances.From.Expr.(*Ident).Name)
+	assert.NotZero(t, balances.From.OpenOn)
+	assert.True(t, balances.From.Close)
+	assert.True(t, balances.From.Clear)
 }
 
 // TestParsePythonWhitespace checks that, like beanquery's lexer, white

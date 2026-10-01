@@ -1,0 +1,1 @@
+SELECT account AS clear, date AS open, narration AS at, payee AS on, flag AS close LIMIT 2

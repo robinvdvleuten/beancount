@@ -119,11 +119,6 @@ lands:
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
-- #583: beanquery reserves no `AT`, `OPEN`, `CLOSE`, `CLEAR` or `ON`: they are
-  names outside the clauses they start. `SELECT open` is `column "open"
-  not found in table "postings"` there, and a syntax error after `open`
-  in ours; `SELECT account AS clear` runs there and is a syntax error in
-  ours.
 - #590: beanquery's list constants are syntax errors in ours:
   `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
 - #593: beanquery's functions `round`, `substr`, `splitcomp`,
