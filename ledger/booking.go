@@ -185,6 +185,15 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		return nil, malformed
 	}
 
+	// Like beancount, which dates an augmentation before interpolation and
+	// so leaves undated a lot whose units it interpolates.
+	undated := make(map[*ast.Posting]bool)
+	for _, posting := range txn.Postings {
+		if posting.Cost != nil && (posting.Amount == nil || isIncompleteAmount(posting.Amount)) {
+			undated[posting] = true
+		}
+	}
+
 	groups, errs := b.categorize(txn)
 	if len(errs) > 0 {
 		return nil, errs
@@ -281,7 +290,11 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	for _, posting := range txn.Postings {
 		positions, reduced := reductions[posting]
 		if !reduced {
-			positions = b.inventory(posting.Account).augment(posting, txn.Date())
+			date := txn.Date()
+			if undated[posting] {
+				date = nil
+			}
+			positions = b.inventory(posting.Account).augment(posting, date)
 		}
 		if len(positions) > 0 {
 			booked.postings = append(booked.postings, bookedPosting{posting: posting, commodity: posting.Amount.Currency, positions: positions})

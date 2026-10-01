@@ -1158,6 +1158,35 @@ func TestLedger_BookedPositions(t *testing.T) {
 	assert.Equal(t, []BookedPosition{{Units: mustParseDec("20"), Reduced: true}}, l.BookedPositions(posting("Sell", "Assets:Cash")))
 }
 
+func TestLedger_InterpolatedUnitsLeaveTheLotUndated(t *testing.T) {
+	// beancount dates an augmentation before interpolation, so a lot whose
+	// units it interpolates has no date, and a reduction naming the
+	// transaction's date does not match it.
+	tree := parser.MustParseString(context.Background(), `
+2024-01-01 open Assets:Stock
+2024-01-01 open Assets:Cash
+
+2024-01-10 * "Buy"
+  Assets:Stock  HOOL {10 USD}
+  Assets:Cash  -20.00 USD
+
+2024-02-01 * "Sell"
+  Assets:Stock  -1 HOOL {10 USD, 2024-01-10}
+  Assets:Cash
+`)
+	l := New()
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
+	assert.Equal(t, 1, len(validationErrors.Errors))
+	assert.Contains(t, validationErrors.Errors[0].Error(), "No position matches")
+
+	buy := tree.Directives[2].(*ast.Transaction)
+	assert.Equal(t, []BookedPosition{{
+		Units: mustParseDec("2.00"),
+		Cost:  &BookedCost{Number: mustParseDec("10"), Currency: "USD"},
+	}}, l.BookedPositions(buy.Postings[0]))
+}
+
 func TestLedger_UnknownVersusInactiveAccount(t *testing.T) {
 	// Like v2's validate_active_accounts, an account opened anywhere in the
 	// ledger, even later, is inactive outside its open interval; only an

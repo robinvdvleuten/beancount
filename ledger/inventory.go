@@ -48,7 +48,7 @@ type BookedCost struct {
 	// keeps its source precision (5.0 stays 5.0).
 	Number   decimal.Decimal
 	Currency string
-	Date     *ast.Date // The cost's date, or the transaction's for an augmentation without one
+	Date     *ast.Date // The cost's date, or the transaction's for an augmentation without one, unless its units were interpolated
 	Label    string
 }
 
@@ -355,12 +355,13 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 // augment adds a posting that book did not book as a reduction, once its
 // transaction is booked and its numbers are complete, like beancount's
 // add_position: at cost, to the lot its spec names, per unit (a total or
-// compound cost spread over the units) and, like beancount, dated by its
-// transaction when the spec has none (FIFO/LIFO ordering and dated lot
-// specs depend on it); without cost, its units alone. It returns the
-// position it booked, which is both the change and its record, or none for
-// a posting that holds nothing: one without a complete amount, or at a cost
-// whose number was not interpolated.
+// compound cost spread over the units) and, like beancount, dated by date
+// when the spec has none (FIFO/LIFO ordering and dated lot specs depend on
+// it): the transaction's, or nil for units it interpolated; without cost,
+// its units alone. It returns the position it booked, which is both the
+// change and its record, or none for a posting that holds nothing: one
+// without a complete amount, or at a cost whose number was not
+// interpolated.
 func (inv *Inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosition {
 	if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
 		return nil
@@ -593,8 +594,9 @@ func planStrictReductionWithSize(commodity string, matches []*lot, amount decima
 	}, nil
 }
 
-// compareLotDates orders lots by their cost date. Every lot at cost is
-// dated once augmented; one without a date sorts first.
+// compareLotDates orders lots by their cost date. A lot at cost is dated
+// once augmented unless its units were interpolated; one without a date
+// sorts first (beancount fails to compare it).
 func compareLotDates(a, b *lot) int {
 	switch {
 	case a.Spec.Date == nil && b.Spec.Date == nil:

@@ -266,6 +266,13 @@ compare the lines errors are on:
   the value as beancount reports any other it cannot read (`Impossible to
   create Decimal instance from NaN: [<class 'decimal.ConversionSyntax'>]`).
 
+- **FIFO, LIFO or STRICT_WITH_SIZE over an undated lot** (#597): a lot
+  whose units are interpolated is undated, as in beancount. When a FIFO or
+  LIFO reduction, or a STRICT_WITH_SIZE one choosing among lots of its
+  size, matches it and another lot, beancount sorts the matches by date and
+  crashes comparing `None` with a date (`TypeError`); we sort an undated
+  lot before every dated one.
+
 - **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
   Python's `bool` subclasses `int`, sums the values as integers and still
   types the column as boolean, so `sum(1 = 1)` over four rows renders
