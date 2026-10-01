@@ -258,8 +258,8 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 		if compiled.Targets[idx].IsAgg {
 			return statementErrorf(`GROUP-BY expressions may not reference aggregates: "%s"`, ref)
 		}
-		// Sets and inventories are unhashable in Python.
-		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet {
+		// Sets, lists and inventories are unhashable in Python.
+		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList {
 			return statementErrorf(`GROUP-BY a non-hashable type is not supported: "%s"`, ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)
@@ -519,6 +519,8 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 		return &cLiteral{v: nil, t: tNull}, nil
 	case *bql.Asterisk:
 		return &cLiteral{v: nil, t: tAsterisk}, nil
+	case *bql.List:
+		return &cLiteral{v: constantValue(node), t: tList}, nil
 
 	case *bql.Ident:
 		def, ok := c.env.columns[node.Name]
@@ -784,25 +786,32 @@ func logicalArgs(node *bql.Binary) []bql.Expr {
 	return []bql.Expr{node.L, node.R}
 }
 
-// pyConstantRepr renders a literal like Python's repr() of its value.
+// pyConstantRepr renders a constant like Python's repr() of its value.
 func pyConstantRepr(e bql.Expr) string {
+	return pyValueRepr(constantValue(e))
+}
+
+// constantValue is the value of a literal or a list constant.
+func constantValue(e bql.Expr) any {
 	switch node := e.(type) {
 	case *bql.Int:
-		return strconv.FormatInt(node.Value, 10)
+		return node.Value
 	case *bql.Dec:
-		return fmt.Sprintf("Decimal('%s')", decimalLiteral(node.Value))
+		return node.Value
 	case *bql.Str:
-		return pyrepr.String(node.Value)
+		return node.Value
 	case *bql.DateLit:
-		t := node.Value.Time
-		return fmt.Sprintf("datetime.date(%d, %d, %d)", t.Year(), t.Month(), t.Day())
+		return node.Value
 	case *bql.Bool:
-		if node.Value {
-			return "True"
+		return node.Value
+	case *bql.List:
+		values := make(listValue, len(node.Items))
+		for i, item := range node.Items {
+			values[i] = constantValue(item)
 		}
-		return "False"
+		return values
 	}
-	return "None"
+	return nil
 }
 
 // exprKey builds a canonical key for structural expression matching, used

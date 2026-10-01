@@ -652,10 +652,10 @@ func (p *parser) parseUnary() (Expr, error) {
 		return &Unary{position: p.node(tok.Start), Op: MINUS, X: x}, nil
 	case PLUS:
 		p.next()
-		if p.cur.Type == LPAREN {
-			// beanquery reads ( after a unary plus as a list constant,
-			// (literal, ...), which ours does not parse (#590), and fails
-			// after the literal it expects a comma behind.
+		if p.cur.Type == LPAREN && !p.listAhead() {
+			// A unary plus takes an atom, of which only a list constant
+			// starts with (, so beanquery fails where the list does:
+			// after a first literal it expects a comma behind.
 			p.next()
 			if _, ok := literalTypes[p.cur.Type]; ok {
 				p.next()
@@ -666,6 +666,45 @@ func (p *parser) parseUnary() (Expr, error) {
 	return p.parsePrimary()
 }
 
+// listAhead reports whether the ( at the current token starts a list
+// constant: beanquery's list rule looks ahead for a literal and a comma
+// after it, and a parenthesized expression is read otherwise.
+func (p *parser) listAhead() bool {
+	lexer := *p.lexer
+	if _, ok := literalTypes[lexer.Next().Type]; !ok {
+		return false
+	}
+	return lexer.Next().Type == COMMA
+}
+
+// parseList parses a list constant, its ( the current token: literals and
+// empty slots separated by commas, of which beanquery keeps the literals
+// but a NULL after the first.
+func (p *parser) parseList() (Expr, error) {
+	start := p.cur.Start
+	p.next() // (
+	list := &List{}
+	for {
+		if _, ok := literalTypes[p.cur.Type]; ok {
+			item, err := p.parseLiteral()
+			if err != nil {
+				return nil, err
+			}
+			if _, null := item.(*Null); !null || len(list.Items) == 0 {
+				list.Items = append(list.Items, item)
+			}
+		}
+		if !p.accept(COMMA) {
+			break
+		}
+	}
+	if _, err := p.expect(RPAREN, "list"); err != nil {
+		return nil, err
+	}
+	list.position = p.node(start)
+	return list, nil
+}
+
 // literalTypes are the tokens of beanquery's literal rule.
 var literalTypes = map[TokenType]struct{}{
 	INTEGER: {}, DECIMAL: {}, DATE: {}, STRING: {}, NULL: {}, TRUE: {}, FALSE: {},
@@ -673,8 +712,14 @@ var literalTypes = map[TokenType]struct{}{
 
 func (p *parser) parsePrimary() (Expr, error) {
 	tok := p.cur
+	if _, ok := literalTypes[tok.Type]; ok {
+		return p.parseLiteral()
+	}
 	switch tok.Type {
 	case LPAREN:
+		if p.listAhead() {
+			return p.parseList()
+		}
 		p.next()
 		expr, err := p.parseExpr()
 		if err != nil {
@@ -684,42 +729,6 @@ func (p *parser) parsePrimary() (Expr, error) {
 			return nil, err
 		}
 		return expr, nil
-
-	case STRING:
-		p.next()
-		return &Str{position: p.node(tok.Start), Value: stripQuotes(tok.String(p.source))}, nil
-
-	case INTEGER:
-		p.next()
-		value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
-		if err != nil {
-			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
-		}
-		return &Int{position: p.node(tok.Start), Value: value}, nil
-
-	case DECIMAL:
-		p.next()
-		value, err := decimal.NewFromString(numberText(tok.String(p.source)))
-		if err != nil {
-			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
-		}
-		return &Dec{position: p.node(tok.Start), Value: value}, nil
-
-	case DATE:
-		p.next()
-		date := &ast.Date{}
-		if err := date.Capture([]string{tok.String(p.source)}); err != nil {
-			return nil, p.errorf(tok, "invalid date %q", tok.String(p.source))
-		}
-		return &DateLit{position: p.node(tok.Start), Value: date}, nil
-
-	case TRUE, FALSE:
-		p.next()
-		return &Bool{position: p.node(tok.Start), Value: tok.Type == TRUE}, nil
-
-	case NULL:
-		p.next()
-		return &Null{position: p.node(tok.Start)}, nil
 
 	case IDENT, AT, OPEN, CLOSE, CLEAR, ON:
 		p.next()
@@ -756,6 +765,50 @@ func (p *parser) parsePrimary() (Expr, error) {
 	}
 
 	return nil, p.nameErrorf(tok, "expected expression, found %s", p.describe(tok))
+}
+
+// parseLiteral parses the literal at the current token, one of
+// literalTypes.
+func (p *parser) parseLiteral() (Expr, error) {
+	tok := p.cur
+	switch tok.Type {
+	case STRING:
+		p.next()
+		return &Str{position: p.node(tok.Start), Value: stripQuotes(tok.String(p.source))}, nil
+
+	case INTEGER:
+		p.next()
+		value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
+		if err != nil {
+			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
+		}
+		return &Int{position: p.node(tok.Start), Value: value}, nil
+
+	case DECIMAL:
+		p.next()
+		value, err := decimal.NewFromString(numberText(tok.String(p.source)))
+		if err != nil {
+			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
+		}
+		return &Dec{position: p.node(tok.Start), Value: value}, nil
+
+	case DATE:
+		p.next()
+		date := &ast.Date{}
+		if err := date.Capture([]string{tok.String(p.source)}); err != nil {
+			return nil, p.errorf(tok, "invalid date %q", tok.String(p.source))
+		}
+		return &DateLit{position: p.node(tok.Start), Value: date}, nil
+
+	case TRUE, FALSE:
+		p.next()
+		return &Bool{position: p.node(tok.Start), Value: tok.Type == TRUE}, nil
+
+	case NULL:
+		p.next()
+		return &Null{position: p.node(tok.Start)}, nil
+	}
+	return nil, p.errorf(tok, "expected a literal, found %s", p.describe(tok))
 }
 
 // parseDate parses a DATE token into an ast.Date, validating its value.

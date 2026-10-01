@@ -87,8 +87,24 @@ func pyOrder(l, r any) (ordering, bool) {
 		if rv, ok := r.(setValue); ok {
 			return lv.order(rv), true
 		}
+	case listValue:
+		if rv, ok := r.(listValue); ok {
+			return lv.order(rv), true
+		}
 	}
 	return ordering{}, false
+}
+
+// order compares two lists as Python does: at their first unequal
+// values, else by length.
+func (a listValue) order(b listValue) ordering {
+	for i := range min(len(a), len(b)) {
+		if c, equal := pyCompare(a[i], b[i]); !equal {
+			return ordering{c, false}
+		}
+	}
+	c := len(a) - len(b)
+	return ordering{max(min(c, 1), -1), c == 0}
 }
 
 // asNumber coerces a value Python treats as a number, a boolean included,

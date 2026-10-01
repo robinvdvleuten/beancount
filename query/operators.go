@@ -253,6 +253,9 @@ func (c *cIn) eval(row *evalRow) any {
 	if r == nil {
 		return nil
 	}
+	if list, ok := r.(listValue); ok {
+		return list.contains(l)
+	}
 	elem, ok := l.(string)
 	if !ok {
 		return false

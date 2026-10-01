@@ -119,8 +119,6 @@ lands:
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
-- #590: beanquery's list constants are syntax errors in ours:
-  `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
 - #593: beanquery's functions `round`, `substr`, `splitcomp`,
   `yearmonth`, `int`, `decimal`, `bool`, `date_trunc`, `date_part`,
   `date_bin`, `interval`, `parse_date`, `repr` and `empty` are missing in

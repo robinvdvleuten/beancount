@@ -1,0 +1,1 @@
+SELECT DISTINCT account WHERE account IN ('Assets:Cash', 'Expenses:Food:Coffee')

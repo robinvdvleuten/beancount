@@ -536,6 +536,48 @@ func TestParseErrorOffset(t *testing.T) {
 	}
 }
 
+// TestParseList checks beanquery's list constants: a ( whose first
+// literal a comma follows, keeping its literals but empty slots and a
+// NULL after the first; any other ( is a parenthesized expression.
+func TestParseList(t *testing.T) {
+	stmt, err := Parse("SELECT (NULL, 1, NULL,, 'a',), (2023-01-01,), +(TRUE, 2.5), (1), (1 + 2) WHERE x IN ('a', 'b')")
+	assert.NoError(t, err)
+	sel := stmt.(*Select)
+
+	list := sel.Targets[0].Expr.(*List)
+	assert.Equal(t, 3, len(list.Items))
+	assert.Equal(t, "(NULL, 1, NULL,, 'a',)", sel.Targets[0].Text)
+	_, null := list.Items[0].(*Null)
+	assert.True(t, null)
+	assert.Equal(t, int64(1), list.Items[1].(*Int).Value)
+	assert.Equal(t, "a", list.Items[2].(*Str).Value)
+
+	assert.Equal(t, 1, len(sel.Targets[1].Expr.(*List).Items))
+	// A unary plus leaves no node of its own.
+	assert.Equal(t, "(TRUE, 2.5)", sel.Targets[2].Text)
+	assert.Equal(t, 2, len(sel.Targets[2].Expr.(*List).Items))
+	assert.Equal(t, int64(1), sel.Targets[3].Expr.(*Int).Value)
+	assert.Equal(t, PLUS, sel.Targets[4].Expr.(*Binary).Op)
+	assert.Equal(t, 2, len(sel.Where.(*Binary).R.(*List).Items))
+
+	for _, tc := range []struct {
+		query  string
+		offset int
+	}{
+		{"SELECT (1, 2 + 3)", 13},
+		{"SELECT (1, -2)", 11},
+		{"SELECT (1, 2", 12},
+		{"SELECT (1, 2)(3)", 13},
+		{"SELECT (1 + 2, 3)", 13},
+		{"SELECT (account, 1)", 15},
+	} {
+		_, err := Parse(tc.query)
+		parseErr, ok := err.(*ParseError)
+		assert.True(t, ok, tc.query)
+		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
+	}
+}
+
 // TestParseUnreservedKeywords checks that AT, OPEN, CLOSE, CLEAR and ON,
 // which beanquery does not reserve, are names outside their clauses.
 func TestParseUnreservedKeywords(t *testing.T) {

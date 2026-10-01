@@ -220,3 +220,14 @@ type Null struct {
 }
 
 func (*Null) expr() {}
+
+// List is a list constant, (literal, ...): beanquery's list rule, whose
+// first literal a comma follows. Like beanquery's, it leaves out an empty
+// slot and a NULL after the first item, so (1, NULL,, 2) holds 1 and 2
+// and (NULL, 1) holds NULL and 1. Its span takes in its parentheses.
+type List struct {
+	position
+	Items []Expr // Str, Int, Dec, DateLit, Bool and Null literals
+}
+
+func (*List) expr() {}

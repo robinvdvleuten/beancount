@@ -8,10 +8,12 @@ import (
 	"fmt"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/shopspring/decimal"
 )
 
@@ -19,7 +21,8 @@ import (
 // function overload and operator resolution at compile time and column
 // formatting in the renderers, where tNull renders like tAny. Runtime
 // values are Go values: bool, int64, decimal.Decimal, string, *ast.Date,
-// setValue, *amountValue, *positionValue and *inventoryValue; NULL is nil.
+// setValue, listValue, *amountValue, *positionValue and *inventoryValue;
+// NULL is nil.
 // Only numberify's output holds a negativeZero, for the renderers.
 type dtype uint8
 
@@ -36,6 +39,7 @@ const (
 	tInventory
 	tNull     // the NULL literal, Python's NoneType
 	tAsterisk // the * of count(*)
+	tList     // a list constant, (1, 2)
 )
 
 var dtypeNames = map[dtype]string{
@@ -51,6 +55,7 @@ var dtypeNames = map[dtype]string{
 	tInventory: "Inventory",
 	tNull:      "NoneType",
 	tAsterisk:  "*",
+	tList:      "list",
 }
 
 func (t dtype) String() string {
@@ -206,6 +211,54 @@ func (s setValue) Sorted() []string {
 	return elems
 }
 
+// listValue is a list constant's values, Python's list: literal values
+// in the order written.
+type listValue []any
+
+// String renders the list like Python's str() of a list: each value's
+// repr() between brackets.
+func (l listValue) String() string {
+	parts := make([]string, len(l))
+	for i, v := range l {
+		parts[i] = pyValueRepr(v)
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
+// contains is Python's in on a list: whether a value equals v.
+func (l listValue) contains(v any) bool {
+	for _, elem := range l {
+		if pyEqual(elem, v) {
+			return true
+		}
+	}
+	return false
+}
+
+// pyValueRepr renders a literal's value like Python's repr().
+func pyValueRepr(v any) string {
+	switch val := v.(type) {
+	case nil:
+		return "None"
+	case bool:
+		if val {
+			return "True"
+		}
+		return "False"
+	case int64:
+		return strconv.FormatInt(val, 10)
+	case decimal.Decimal:
+		return "Decimal(" + pyrepr.String(pydecimal.String(val)) + ")"
+	case string:
+		return pyrepr.String(val)
+	case *ast.Date:
+		return fmt.Sprintf("datetime.date(%d, %d, %d)", val.Year(), val.Month(), val.Day())
+	case listValue:
+		return val.String()
+	}
+	return valueString(v)
+}
+
 // truthy converts a value to a boolean following Python truthiness, which is
 // what the official implementation applies in logical contexts: NULL, zero,
 // empty strings and empty collections are false.
@@ -224,6 +277,8 @@ func truthy(v any) bool {
 	case *ast.Date:
 		return !val.IsZero()
 	case setValue:
+		return len(val) > 0
+	case listValue:
 		return len(val) > 0
 	case *amountValue:
 		return val != nil
@@ -276,6 +331,8 @@ func valueString(v any) string {
 			quoted[i] = fmt.Sprintf("'%s'", elem)
 		}
 		return "frozenset({" + strings.Join(quoted, ", ") + "})"
+	case listValue:
+		return val.String()
 	case *amountValue:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)
 	case *positionValue:

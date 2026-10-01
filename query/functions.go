@@ -414,6 +414,9 @@ var functions = map[string]*funcDef{
 		{[]dtype{tSet}, tInt, func(_ *evalRow, args []any) any {
 			return int64(len(args[0].(setValue)))
 		}},
+		{[]dtype{tList}, tInt, func(_ *evalRow, args []any) any {
+			return int64(len(args[0].(listValue)))
+		}},
 	}},
 	"maxwidth": {overloads: []funcOverload{
 		{[]dtype{tString, tInt}, tString, func(_ *evalRow, args []any) any {

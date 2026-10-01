@@ -138,6 +138,13 @@ var errorFixtures = map[string]string{
 	"err_unreserved_keyword_from": `error: column "on" not found in table "postings"
 | SELECT account FROM on = 1
 |                     ^^`,
+	"err_list_neg": `error: operator "neg(list)" not supported
+| SELECT -(1, 2)
+|        ^^^^^^^`,
+	"err_list_literal": `error: syntax error
+| SELECT (1, 2 + 3)
+|              ^`,
+	"err_group_by_list": `error: GROUP-BY a non-hashable type is not supported: "1"`,
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

@@ -1,0 +1,1 @@
+SELECT (1, 2) AS ints, ('a', 2.50, 2023-01-01, TRUE, "x") AS mixed, (NULL, 1, NULL,, 2,) AS slots, +(.5,) AS plus, str((1, 2)) AS s, length((1, 2)) AS n, (1, 2) LIMIT 2
