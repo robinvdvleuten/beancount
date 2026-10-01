@@ -26,6 +26,7 @@ func FuzzParseQuery(f *testing.F) {
 		`SELECT "double", 'single', 42, 3.14, TRUE, FALSE, NULL`,
 		"SELECT (1, 2), (NULL, 'a',, 2.5, 2014-01-01,), +(1,), -(TRUE, FALSE) WHERE account IN ('Assets', \"x\")",
 		"SELECT (1, 2 + 3), (1), ((1, 2))",
+		`SELECT position.units.number, -weight.currency, meta['x'].y, f(x)["k"], 2.5.5, 1 .x, +a.b WHERE date.year = 2014`,
 
 		// FROM transforms
 		"SELECT * FROM OPEN ON 2014-01-01 CLOSE ON 2015-01-01 CLEAR",
@@ -101,6 +102,10 @@ func walkNodes(stmt Statement, fn func(Node)) {
 			for _, item := range node.Items {
 				expr(item)
 			}
+		case *Attribute:
+			expr(node.X)
+		case *Subscript:
+			expr(node.X)
 		}
 	}
 	from := func(f *From) {

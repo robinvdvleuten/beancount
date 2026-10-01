@@ -128,12 +128,12 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 - #592: `SELECT account ORDER BY sum(number)`, an aggregate in ORDER BY
   without GROUP BY, prints the rows in ledger order in beanquery; ours
   reports the GROUP-BY coverage error.
-- #591: beanquery's attribute (`.x`) and subscript (`['x']`) access on a
-  column are syntax errors in ours: `SELECT account.x` is `column type is
-  not structured` there, with carets under `account.x`, and a syntax
-  error at offset 14 in ours. A `.` after a number moves the caret too:
-  beanquery's is one column right of ours for `SELECT 2.5.5` and
-  `SELECT 1 .5`.
+- beanquery's `meta`, `entry` and `accounts` columns are missing in ours,
+  and with them the only values beanquery takes a subscript or a
+  Transaction attribute on: `SELECT meta['x']` and `SELECT
+  entry.narration` run there and are `column ... not found` in ours.
+  Attribute access on the types ours has (position, amount, cost, date)
+  matches.
 - #595: `other_accounts` is a sorted list in beanquery, though its column is
   typed as a set, and a set in ours. Both render it alike, but ORDER BY
   compares beanquery's lists element by element and ours sets by

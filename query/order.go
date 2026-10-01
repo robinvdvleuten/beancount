@@ -91,6 +91,12 @@ func pyOrder(l, r any) (ordering, bool) {
 		if rv, ok := r.(listValue); ok {
 			return lv.order(rv), true
 		}
+	case *costValue:
+		// A Cost is a named tuple, compared field by field.
+		if rv, ok := r.(*costValue); ok {
+			c := costTupleCmp(lv, rv)
+			return ordering{c, c == 0}, true
+		}
 	}
 	return ordering{}, false
 }

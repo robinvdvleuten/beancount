@@ -183,6 +183,49 @@ var columnRenderers = map[dtype]func(ctx *renderContext) columnRenderer{
 	tAmount:    func(ctx *renderContext) columnRenderer { return newAmountRenderer(ctx) },
 	tPosition:  func(ctx *renderContext) columnRenderer { return newPositionRenderer(ctx) },
 	tInventory: func(ctx *renderContext) columnRenderer { return newInventoryRenderer(ctx) },
+	tCost:      func(ctx *renderContext) columnRenderer { return &costRenderer{amount: newAmountRenderer(ctx)} },
+}
+
+// costRenderer renders a cost column like beanquery's CostRenderer: its
+// number and currency as an aligned amount, then its date and its quoted
+// label, each after a comma.
+type costRenderer struct {
+	leftAligned
+	amount     *amountRenderer
+	dateWidth  int
+	labelWidth int
+}
+
+func (r *costRenderer) update(v any) {
+	cost, ok := v.(*costValue)
+	if !ok || cost == nil {
+		return
+	}
+	r.amount.observe(cost.Number, cost.Currency)
+	if cost.Date != nil {
+		r.dateWidth = 10 + 2
+	}
+	if cost.Label != "" {
+		r.labelWidth = max(r.labelWidth, length(cost.Label)+4)
+	}
+}
+
+func (r *costRenderer) prepare()   { r.amount.prepare() }
+func (r *costRenderer) width() int { return r.amount.width() + r.dateWidth + r.labelWidth }
+
+func (r *costRenderer) format(v any) string {
+	cost, ok := v.(*costValue)
+	if !ok || cost == nil {
+		return ""
+	}
+	parts := []string{r.amount.formatAmount(cost.Number, cost.Currency)}
+	if cost.Date != nil {
+		parts = append(parts, cost.Date.String())
+	}
+	if cost.Label != "" {
+		parts = append(parts, `"`+cost.Label+`"`)
+	}
+	return strings.Join(parts, ", ")
 }
 
 // Python measures and pads strings in code points, so these helpers do too.

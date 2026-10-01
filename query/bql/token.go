@@ -62,6 +62,9 @@ const (
 	PLUS      // +
 	MINUS     // -
 	TILDE     // ~
+	DOT       // .
+	LBRACKET  // [
+	RBRACKET  // ]
 	EQ        // =
 	NE        // !=
 	LT        // <
@@ -122,6 +125,9 @@ var tokenNames = map[TokenType]string{
 	PLUS:      "+",
 	MINUS:     "-",
 	TILDE:     "~",
+	DOT:       ".",
+	LBRACKET:  "[",
+	RBRACKET:  "]",
 	EQ:        "=",
 	NE:        "!=",
 	LT:        "<",

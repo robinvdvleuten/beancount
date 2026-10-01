@@ -145,6 +145,21 @@ var errorFixtures = map[string]string{
 | SELECT (1, 2 + 3)
 |              ^`,
 	"err_group_by_list": `error: GROUP-BY a non-hashable type is not supported: "1"`,
+	"err_attribute_digits": `error: syntax error
+| SELECT 2.5.5
+|            ^`,
+	"err_attribute_missing": `error: structured type has no attribute "x"
+| SELECT position.cost.x
+|        ^^^^^^^^^^^^^^^`,
+	"err_attribute_not_structured": `error: column type is not structured
+| SELECT account.x
+|        ^^^^^^^^^`,
+	"err_attribute_unary_plus": `error: syntax error
+| SELECT +position.units
+|                 ^`,
+	"err_subscript": `error: column type is not subscriptable
+| SELECT position.units['x']
+|        ^^^^^^^^^^^^^^^^^^^`,
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

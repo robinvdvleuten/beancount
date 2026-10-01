@@ -461,6 +461,10 @@ func (c *compiler) columnsAndAggregates(e bql.Expr) (columns int, aggs []*bql.Ca
 		case *bql.Binary:
 			walk(node.L)
 			walk(node.R)
+		case *bql.Attribute:
+			walk(node.X)
+		case *bql.Subscript:
+			walk(node.X)
 		}
 	}
 	walk(e)
@@ -544,6 +548,29 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 
 	case *bql.Binary:
 		return c.compileBinary(node)
+
+	case *bql.Attribute:
+		x, err := c.compileExpr(node.X)
+		if err != nil {
+			return nil, err
+		}
+		attrs, ok := structures[x.typ()]
+		if !ok {
+			return nil, compileErrorf(node, "column type is not structured")
+		}
+		attr, ok := attrs[node.Name]
+		if !ok {
+			return nil, compileErrorf(node, `structured type has no attribute "%s"`, node.Name)
+		}
+		return &cAttribute{x: x, attr: attr}, nil
+
+	case *bql.Subscript:
+		// Only beanquery's dict columns, such as meta, take a subscript;
+		// ours has none (KNOWN_GAPS.md).
+		if _, err := c.compileExpr(node.X); err != nil {
+			return nil, err
+		}
+		return nil, compileErrorf(node, "column type is not subscriptable")
 	}
 	return nil, compileErrorf(e, "unsupported expression")
 }
@@ -768,6 +795,10 @@ func pyExprRepr(e bql.Expr) string {
 			return fmt.Sprintf("%s(args=[%s])", pyOpClasses[node.Op], strings.Join(args, ", "))
 		}
 		return fmt.Sprintf("%s(left=%s, right=%s)", pyOpClasses[node.Op], pyExprRepr(node.L), pyExprRepr(node.R))
+	case *bql.Attribute:
+		return fmt.Sprintf("Attribute(operand=%s, name=%s)", pyExprRepr(node.X), pyrepr.String(node.Name))
+	case *bql.Subscript:
+		return fmt.Sprintf("Subscript(operand=%s, key=%s)", pyExprRepr(node.X), pyrepr.String(node.Key))
 	}
 	return fmt.Sprintf("Constant(value=%s)", pyConstantRepr(e))
 }

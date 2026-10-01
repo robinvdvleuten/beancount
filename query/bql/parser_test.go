@@ -578,6 +578,55 @@ func TestParseList(t *testing.T) {
 	}
 }
 
+// TestParseAttributeSubscript checks beanquery's primary: an atom followed
+// by attribute and subscript accesses, binding tighter than a unary minus,
+// while a unary plus and a parenthesized expression take none.
+func TestParseAttributeSubscript(t *testing.T) {
+	stmt, err := Parse(`SELECT -a.B['c'] . "D", f(x).y, 2.5.x, (1, 2).open, a ["k"]`)
+	assert.NoError(t, err)
+	sel := stmt.(*Select)
+
+	neg := sel.Targets[0].Expr.(*Unary)
+	outer := neg.X.(*Attribute)
+	assert.Equal(t, "D", outer.Name)
+	assert.Equal(t, `a.B['c'] . "D"`, sel.Targets[0].Text[1:])
+	sub := outer.X.(*Subscript)
+	assert.Equal(t, "c", sub.Key)
+	inner := sub.X.(*Attribute)
+	assert.Equal(t, "b", inner.Name)
+	assert.Equal(t, "a", inner.X.(*Ident).Name)
+
+	assert.Equal(t, "f", sel.Targets[1].Expr.(*Attribute).X.(*Call).Func)
+	assert.Equal(t, "x", sel.Targets[2].Expr.(*Attribute).Name)
+	assert.Equal(t, "open", sel.Targets[3].Expr.(*Attribute).Name)
+	assert.Equal(t, "k", sel.Targets[4].Expr.(*Subscript).Key)
+
+	for _, tc := range []struct {
+		query  string
+		offset int
+	}{
+		{"SELECT 2.5.5", 11},
+		{"SELECT 1 .5", 10},
+		{"SELECT position.1", 16},
+		{"SELECT position.", 16},
+		{"SELECT position .", 17},
+		{"SELECT position.'units'", 16},
+		{"SELECT position.from", 20},
+		{"SELECT a.true", 13},
+		{"SELECT account[1]", 15},
+		{"SELECT account['x'", 18},
+		{"SELECT +position.units", 16},
+		{"SELECT +position['x']", 16},
+		{"SELECT (position).units", 17},
+		{"SELECT 1.x", 9},
+	} {
+		_, err := Parse(tc.query)
+		parseErr, ok := err.(*ParseError)
+		assert.True(t, ok, tc.query)
+		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
+	}
+}
+
 // TestParseUnreservedKeywords checks that AT, OPEN, CLOSE, CLEAR and ON,
 // which beanquery does not reserve, are names outside their clauses.
 func TestParseUnreservedKeywords(t *testing.T) {

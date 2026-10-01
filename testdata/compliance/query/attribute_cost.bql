@@ -1,0 +1,1 @@
+SELECT position.cost, position.cost.label, position.cost.date.year AS y, str(position.cost) AS s, position.units.currency ORDER BY position.cost

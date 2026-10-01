@@ -1,0 +1,1 @@
+SELECT position.units, position.units.number * 2 AS n, -weight.number AS w, price.currency, units(position).currency, date.month AS m WHERE position.units.currency = 'HOOL' ORDER BY position.units

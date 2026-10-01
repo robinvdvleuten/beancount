@@ -231,3 +231,21 @@ type List struct {
 }
 
 func (*List) expr() {}
+
+// Attribute is attribute access on a structured value, X.Name.
+type Attribute struct {
+	position
+	X    Expr
+	Name string
+}
+
+func (*Attribute) expr() {}
+
+// Subscript is subscript access on a dict value, X['Key'].
+type Subscript struct {
+	position
+	X   Expr
+	Key string
+}
+
+func (*Subscript) expr() {}

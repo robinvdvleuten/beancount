@@ -662,6 +662,8 @@ func (p *parser) parseUnary() (Expr, error) {
 			}
 			return nil, p.errorf(p.cur, "expected an atom after unary plus, found %s", p.describe(p.cur))
 		}
+		// Nor does it take attribute or subscript access.
+		return p.parseAtom()
 	}
 	return p.parsePrimary()
 }
@@ -710,16 +712,11 @@ var literalTypes = map[TokenType]struct{}{
 	INTEGER: {}, DECIMAL: {}, DATE: {}, STRING: {}, NULL: {}, TRUE: {}, FALSE: {},
 }
 
+// parsePrimary parses a parenthesized expression, or beanquery's primary:
+// an atom followed by any attribute (.name) and subscript (['key'])
+// accesses, which a parenthesized expression does not take.
 func (p *parser) parsePrimary() (Expr, error) {
-	tok := p.cur
-	if _, ok := literalTypes[tok.Type]; ok {
-		return p.parseLiteral()
-	}
-	switch tok.Type {
-	case LPAREN:
-		if p.listAhead() {
-			return p.parseList()
-		}
+	if p.cur.Type == LPAREN && !p.listAhead() {
 		p.next()
 		expr, err := p.parseExpr()
 		if err != nil {
@@ -729,6 +726,62 @@ func (p *parser) parsePrimary() (Expr, error) {
 			return nil, err
 		}
 		return expr, nil
+	}
+
+	start := p.cur.Start
+	x, err := p.parseAtom()
+	if err != nil {
+		return nil, err
+	}
+	for {
+		switch tok := p.cur; {
+		case tok.Type == DOT:
+			p.next()
+			name := p.cur
+			switch {
+			case isName(name):
+				x = &Attribute{X: x, Name: strings.ToLower(name.String(p.source))}
+			case name.Type == STRING && p.source[name.Start] == '"':
+				// A quoted identifier, kept as written.
+				x = &Attribute{X: x, Name: stripQuotes(name.String(p.source))}
+			default:
+				return nil, p.nameErrorf(name, "expected an attribute name, found %s", p.describe(name))
+			}
+			p.next()
+			x.(*Attribute).position = p.node(start)
+		case tok.Type == DECIMAL && p.source[tok.Start] == '.':
+			// The dot of .5 starts an attribute, whose name cannot
+			// start with a digit.
+			digits := Token{Type: DECIMAL, Start: tok.Start + 1, End: tok.End, Line: tok.Line, Column: tok.Column + 1}
+			return nil, p.errorf(digits, "expected an attribute name, found %s", p.describe(tok))
+		case tok.Type == LBRACKET:
+			p.next()
+			key, err := p.expect(STRING, "subscript")
+			if err != nil {
+				return nil, err
+			}
+			if _, err := p.expect(RBRACKET, "subscript"); err != nil {
+				return nil, err
+			}
+			x = &Subscript{position: p.node(start), X: x, Key: stripQuotes(key.String(p.source))}
+		default:
+			return x, nil
+		}
+	}
+}
+
+// parseAtom parses beanquery's atom: a function call, a constant (a
+// literal or a list) or a column name.
+func (p *parser) parseAtom() (Expr, error) {
+	tok := p.cur
+	if _, ok := literalTypes[tok.Type]; ok {
+		return p.parseLiteral()
+	}
+	switch tok.Type {
+	case LPAREN:
+		if p.listAhead() {
+			return p.parseList()
+		}
 
 	case IDENT, AT, OPEN, CLOSE, CLEAR, ON:
 		p.next()

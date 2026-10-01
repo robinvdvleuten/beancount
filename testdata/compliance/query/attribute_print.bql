@@ -1,0 +1,1 @@
+PRINT FROM date.year = 2024 AND date.month < 2

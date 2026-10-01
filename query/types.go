@@ -21,8 +21,8 @@ import (
 // function overload and operator resolution at compile time and column
 // formatting in the renderers, where tNull renders like tAny. Runtime
 // values are Go values: bool, int64, decimal.Decimal, string, *ast.Date,
-// setValue, listValue, *amountValue, *positionValue and *inventoryValue;
-// NULL is nil.
+// setValue, listValue, *amountValue, *costValue, *positionValue and
+// *inventoryValue; NULL is nil.
 // Only numberify's output holds a negativeZero, for the renderers.
 type dtype uint8
 
@@ -40,6 +40,7 @@ const (
 	tNull     // the NULL literal, Python's NoneType
 	tAsterisk // the * of count(*)
 	tList     // a list constant, (1, 2)
+	tCost     // a position's cost, position.cost
 )
 
 var dtypeNames = map[dtype]string{
@@ -56,6 +57,7 @@ var dtypeNames = map[dtype]string{
 	tNull:      "NoneType",
 	tAsterisk:  "*",
 	tList:      "list",
+	tCost:      "cost",
 }
 
 func (t dtype) String() string {
@@ -255,6 +257,17 @@ func pyValueRepr(v any) string {
 		return fmt.Sprintf("datetime.date(%d, %d, %d)", val.Year(), val.Month(), val.Day())
 	case listValue:
 		return val.String()
+	case *costValue:
+		var label any
+		if val.Label != "" {
+			label = val.Label
+		}
+		var date any
+		if val.Date != nil {
+			date = val.Date
+		}
+		return fmt.Sprintf("Cost(number=%s, currency=%s, date=%s, label=%s)",
+			pyValueRepr(val.Number), pyValueRepr(val.Currency), pyValueRepr(date), pyValueRepr(label))
 	}
 	return valueString(v)
 }
@@ -333,6 +346,8 @@ func valueString(v any) string {
 		return "frozenset({" + strings.Join(quoted, ", ") + "})"
 	case listValue:
 		return val.String()
+	case *costValue:
+		return pyValueRepr(val)
 	case *amountValue:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)
 	case *positionValue:

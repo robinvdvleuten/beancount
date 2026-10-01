@@ -72,6 +72,13 @@ func (l *Lexer) Next() Token {
 		return tok(MINUS)
 	case '~':
 		return tok(TILDE)
+	case '.':
+		// A dot before a digit starts a number, above.
+		return tok(DOT)
+	case '[':
+		return tok(LBRACKET)
+	case ']':
+		return tok(RBRACKET)
 	case '=':
 		return tok(EQ)
 	case '!':

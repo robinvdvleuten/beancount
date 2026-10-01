@@ -1,0 +1,14 @@
+2023-01-01 open Assets:Broker
+2023-01-01 open Equity:Opening
+
+2023-01-02 * "Labelled lot"
+  Assets:Broker   2 HOOL {100.00 USD, "lot-a"}
+  Equity:Opening
+
+2023-01-03 * "Unlabelled lot"
+  Assets:Broker   1 HOOL {90.00 USD}
+  Equity:Opening
+
+2023-01-04 * "Dated lot"
+  Assets:Broker   1 HOOL {80.00 USD, 2022-12-01, "lot-b"}
+  Equity:Opening
