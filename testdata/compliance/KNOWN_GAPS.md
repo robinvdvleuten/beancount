@@ -133,8 +133,6 @@ lands:
   `option "allow_deprecated_none_for_tags_and_links"` are errors in
   bean-check whatever their value (`Allowing pipe separator temporarily;
   this will go away eventually.`), in 2.3.6 too; we accept them silently.
-- #569: `plugin "beancount.plugins.__init__"` imports in bean-check; we
-  report `Error importing`.
 - #570: a `documents` root reached through a symlink discovers nothing
   here, and a ledger path starting with `//` keeps it in beancount's file
   and document names, where we collapse it.

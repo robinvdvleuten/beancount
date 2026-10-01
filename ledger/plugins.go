@@ -22,9 +22,11 @@ var pluginRegistry = map[string]Plugin{
 	"beancount.plugins.implicit_prices": implicitPrices,
 }
 
-// ignoredPlugins are the other plugin modules beancount v3 ships: they
-// import, so naming one is not an error, but they do not run here.
+// ignoredPlugins are the other plugin modules beancount v3 ships, and the
+// package's own __init__ module: they import, so naming one is not an
+// error, but they do not run here.
 var ignoredPlugins = map[string]bool{
+	"beancount.plugins.__init__":           true,
 	"beancount.plugins.auto":               true,
 	"beancount.plugins.check_average_cost": true,
 	"beancount.plugins.check_closing":      true,
