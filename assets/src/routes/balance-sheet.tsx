@@ -6,11 +6,15 @@ import { FinancialReport } from "../components/financial-report";
 
 const BalanceSheet: Component = () => {
   // The as-of date lives in the URL (?asOf=), so reloading or sharing keeps it
-  const [searchParams, setSearchParams] = useSearchParams<{ asOf: string }>();
+  const [searchParams, setSearchParams] = useSearchParams<{ asOf: string; valuation: string }>();
   const [data, { refetch }] = createResource(
-    () => ({ endDate: searchParams.asOf }),
-    (period) => fetchBalances(["Assets", "Liabilities", "Equity"], period),
+    () => ({ period: { endDate: searchParams.asOf }, valuation: searchParams.valuation }),
+    ({ period, valuation }) =>
+      fetchBalances(["Assets", "Liabilities", "Equity"], period, valuation),
   );
+
+  // The picker offers each operating currency once a report has listed them
+  const operatingCurrencies = () => (data.error ? undefined : data.latest?.operatingCurrencies);
 
   // File change detection via SSE - click to reload
   const fileChange = useFileChange({
@@ -42,6 +46,11 @@ const BalanceSheet: Component = () => {
               Today
             </button>
           </Show>
+          <FinancialReport.ValuationField
+            value={searchParams.valuation}
+            operatingCurrencies={operatingCurrencies()}
+            onChange={(valuation) => setSearchParams({ valuation })}
+          />
         </FinancialReport.Toolbar>
         <Switch>
           <Match when={data.loading}>

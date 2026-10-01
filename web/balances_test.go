@@ -375,3 +375,64 @@ option "operating_currency" "EUR"
 	assert.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
 	assert.Equal(t, []string{"EUR", "USD"}, response.OperatingCurrencies)
 }
+
+// getBalances serves a GET of /api/balances with query and returns the
+// status and, when it is 200, the decoded response.
+func getBalances(t *testing.T, mux *http.ServeMux, query string) (int, *BalancesResponse) {
+	t.Helper()
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/balances?"+query, nil))
+	if rec.Code != http.StatusOK {
+		return rec.Code, nil
+	}
+	var response BalancesResponse
+	assert.NoError(t, json.NewDecoder(rec.Body).Decode(&response))
+	return rec.Code, &response
+}
+
+func TestAPIBalancesValuation(t *testing.T) {
+	server := New(8080, filepath.Join("..", "testdata", "example.beancount"))
+	_, err := server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	t.Run("DefaultsToCost", func(t *testing.T) {
+		// select cost(sum(position)) where account ~ '^Assets'
+		code, response := getBalances(t, mux, "types=Assets")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, map[string]string{"IRAUSD": "500", "USD": "101981.88", "VACHR": "151"}, response.Roots[0].Balance)
+		assert.Equal(t, []string{"IRAUSD", "USD", "VACHR"}, response.Currencies)
+	})
+
+	t.Run("AtMarketOnTheEndDate", func(t *testing.T) {
+		// select value(sum(position), 2022-06-30)
+		//   where account ~ '^Assets' and date <= 2022-06-30
+		code, response := getBalances(t, mux, "types=Assets&endDate=2022-06-30&valuation=market")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, map[string]string{"IRAUSD": "2900", "USD": "67219.37", "VACHR": "11"}, response.Roots[0].Balance)
+	})
+
+	t.Run("ConvertedToUSD", func(t *testing.T) {
+		// select convert(sum(position), 'USD', 2022-06-30)
+		//   where account ~ '^Assets' and date <= 2022-06-30
+		code, response := getBalances(t, mux, "types=Assets&endDate=2022-06-30&valuation=USD")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, map[string]string{"IRAUSD": "2900", "USD": "67219.37", "VACHR": "11"}, response.Roots[0].Balance)
+	})
+
+	t.Run("Units", func(t *testing.T) {
+		// select sum(position) where account ~ '^Assets'
+		code, response := getBalances(t, mux, "types=Assets&valuation=units")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, "1267.05", response.Roots[0].Balance["USD"])
+		assert.Equal(t, "151", response.Roots[0].Balance["VACHR"])
+	})
+
+	t.Run("RejectsAnUnknownValuation", func(t *testing.T) {
+		for _, valuation := range []string{"bogus", "usd"} {
+			code, _ := getBalances(t, mux, "valuation="+valuation)
+			assert.Equal(t, http.StatusBadRequest, code, valuation)
+		}
+	})
+}

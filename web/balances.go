@@ -37,6 +37,10 @@ type BalanceNodeResponse struct {
 //     Must match configured account names. If omitted, returns all types (trial balance).
 //   - startDate: Start date in YYYY-MM-DD format.
 //   - endDate: End date in YYYY-MM-DD format.
+//   - valuation: units, cost (the default), market, or a currency to
+//     convert to (ledger.ParseValuation); anything else is a 400. The ledger
+//     values each account's balance on endDate, or today without one, and
+//     every amount is rounded to its currency's display precision.
 //
 // Date semantics (both dates inclusive, an omitted one leaves that side open):
 //   - Both omitted: Current inventory state (all postings).
@@ -87,24 +91,36 @@ func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 		endDate = d
 	}
 
+	valuation := ledger.ValuationAtCost
+	if param := r.URL.Query().Get("valuation"); param != "" {
+		v, err := ledger.ParseValuation(param)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		valuation = v
+	}
+
 	// Get balance tree from ledger
-	tree, err := s.ledger.GetBalanceTree(accountTypes, startDate, endDate)
+	tree, err := s.ledger.GetBalanceTree(accountTypes, startDate, endDate, valuation)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Convert to response format
-	response := convertBalanceTree(tree)
+	response := convertBalanceTree(tree, s.ledger.DisplayContext())
 	response.OperatingCurrencies = operatingCurrencies(s.config)
 	writeJSONResponse(w, response)
 }
 
-// convertBalanceTree converts a ledger.BalanceTree to a BalancesResponse.
-func convertBalanceTree(tree *ledger.BalanceTree) *BalancesResponse {
+// convertBalanceTree converts a ledger.BalanceTree to a BalancesResponse,
+// each amount rounded half-to-even to its currency's display precision,
+// as bean-query renders it.
+func convertBalanceTree(tree *ledger.BalanceTree, display *ledger.DisplayContext) *BalancesResponse {
 	roots := make([]*BalanceNodeResponse, len(tree.Roots))
 	for i, root := range tree.Roots {
-		roots[i] = convertBalanceNode(root)
+		roots[i] = convertBalanceNode(root, display)
 	}
 
 	return &BalancesResponse{
@@ -128,12 +144,12 @@ func operatingCurrencies(cfg *config.Config) []string {
 }
 
 // convertBalanceNode recursively converts a ledger.BalanceNode to a BalanceNodeResponse.
-func convertBalanceNode(node *ledger.BalanceNode) *BalanceNodeResponse {
+func convertBalanceNode(node *ledger.BalanceNode, display *ledger.DisplayContext) *BalanceNodeResponse {
 	var children []*BalanceNodeResponse
 	if len(node.Children) > 0 {
 		children = make([]*BalanceNodeResponse, len(node.Children))
 		for i, child := range node.Children {
-			children[i] = convertBalanceNode(child)
+			children[i] = convertBalanceNode(child, display)
 		}
 	}
 
@@ -141,12 +157,12 @@ func convertBalanceNode(node *ledger.BalanceNode) *BalanceNodeResponse {
 		Name:     node.Name,
 		Account:  node.Account,
 		Depth:    node.Depth,
-		Balance:  convertBalance(node.Balance),
+		Balance:  convertBalance(node.Balance, display),
 		Children: children,
 	}
 }
 
-func convertBalance(balance *ledger.Balance) map[string]string {
+func convertBalance(balance *ledger.Balance, display *ledger.DisplayContext) map[string]string {
 	if balance == nil {
 		return map[string]string{}
 	}
@@ -154,7 +170,7 @@ func convertBalance(balance *ledger.Balance) map[string]string {
 	entries := balance.Entries()
 	converted := make(map[string]string, len(entries))
 	for _, entry := range entries {
-		converted[entry.Currency] = entry.Amount.String()
+		converted[entry.Currency] = display.Quantize(entry.Amount, entry.Currency).String()
 	}
 	return converted
 }

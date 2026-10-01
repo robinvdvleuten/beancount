@@ -518,13 +518,23 @@ var functions = map[string]*funcDef{
 	}},
 }
 
-// positionCost returns a position's total cost as an amount, or its units
-// when no cost basis is attached.
-func positionCost(p *positionValue) *amountValue {
-	if p.Cost == nil {
-		return &amountValue{Number: p.Units.Number, Currency: p.Units.Currency}
+// ledgerPosition returns p as the ledger values it.
+func ledgerPosition(p *positionValue) ledger.Position {
+	position := ledger.Position{Number: p.Units.Number, Currency: p.Units.Currency}
+	if p.Cost != nil {
+		position.Cost = &ledger.BookedCost{Number: p.Cost.Number, Currency: p.Cost.Currency, Date: p.Cost.Date, Label: p.Cost.Label}
 	}
-	return &amountValue{Number: pydecimal.Mul(p.Units.Number, p.Cost.Number), Currency: p.Cost.Currency}
+	return position
+}
+
+func fromLedgerAmount(a ledger.CurrencyAmount) *amountValue {
+	return &amountValue{Number: a.Amount, Currency: a.Currency}
+}
+
+// positionCost returns a position's total cost as an amount, or its units
+// when no cost basis is attached (ledger.Position.AtCost).
+func positionCost(p *positionValue) *amountValue {
+	return fromLedgerAmount(ledgerPosition(p).AtCost())
 }
 
 // priceDate defaults a missing conversion date to today, matching the
@@ -544,40 +554,33 @@ func getPrice(row *evalRow, from, to string, date *ast.Date) any {
 	return nil
 }
 
-// convertAmount converts an amount to the given currency, returning it
-// unmodified when no conversion rate is available (official behavior).
-func convertAmount(row *evalRow, a *amountValue, currency string, date *ast.Date) any {
-	if a.Currency == currency {
-		return a
+// valuer returns the ledger that values positions, or nil without one, when
+// every position keeps its units.
+func valuer(row *evalRow) *ledger.Ledger {
+	if row.Ctx == nil {
+		return nil
 	}
-	if rate, ok := priceLookup(row.Ctx, priceDate(date), a.Currency, currency); ok {
-		return &amountValue{Number: pydecimal.Mul(a.Number, rate), Currency: currency}
-	}
-	return a
+	return row.Ctx.Ledger
 }
 
-// convertPosition converts a position like beancount's convert_position:
-// at its units' price in the currency, or else through its cost currency,
-// multiplying the units' price in that currency by its price in the target.
-// Without either it is returned as its units.
+// convertAmount converts an amount to the given currency, returning it
+// unmodified when no conversion rate is available (ledger.ConvertAmount).
+func convertAmount(row *evalRow, a *amountValue, currency string, date *ast.Date) any {
+	l := valuer(row)
+	if l == nil || a.Currency == currency {
+		return a
+	}
+	return fromLedgerAmount(l.ConvertAmount(a.Number, a.Currency, currency, priceDate(date)))
+}
+
+// convertPosition converts a position like beancount's convert_position
+// (ledger.Convert).
 func convertPosition(row *evalRow, p *positionValue, currency string, date *ast.Date) any {
-	units := &p.Units
-	if units.Currency == currency {
-		return units
+	l := valuer(row)
+	if l == nil {
+		return &p.Units
 	}
-	date = priceDate(date)
-	if rate, ok := priceLookup(row.Ctx, date, units.Currency, currency); ok {
-		return &amountValue{Number: pydecimal.Mul(units.Number, rate), Currency: currency}
-	}
-	if p.Cost != nil && p.Cost.Currency != currency {
-		toCost, ok := priceLookup(row.Ctx, date, units.Currency, p.Cost.Currency)
-		if ok {
-			if toTarget, ok := priceLookup(row.Ctx, date, p.Cost.Currency, currency); ok {
-				return &amountValue{Number: pydecimal.Mul(pydecimal.Mul(units.Number, toCost), toTarget), Currency: currency}
-			}
-		}
-	}
-	return units
+	return fromLedgerAmount(l.Convert(ledgerPosition(p), currency, priceDate(date)))
 }
 
 func convertInventory(row *evalRow, inv *inventoryValue, currency string, date *ast.Date) any {
@@ -588,13 +591,15 @@ func convertInventory(row *evalRow, inv *inventoryValue, currency string, date *
 	return result
 }
 
-// marketValue converts a position to its cost currency at market value.
-// Positions without a cost basis are returned as their units.
+// marketValue converts a position to its cost currency at market value
+// (ledger.MarketValue). Positions without a cost basis are returned as
+// their units.
 func marketValue(row *evalRow, p *positionValue, date *ast.Date) any {
-	if p.Cost == nil {
+	l := valuer(row)
+	if l == nil {
 		return &amountValue{Number: p.Units.Number, Currency: p.Units.Currency}
 	}
-	return convertAmount(row, &p.Units, p.Cost.Currency, date)
+	return fromLedgerAmount(l.MarketValue(ledgerPosition(p), priceDate(date)))
 }
 
 func inventoryMarketValue(row *evalRow, inv *inventoryValue, date *ast.Date) any {

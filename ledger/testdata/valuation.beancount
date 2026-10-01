@@ -1,0 +1,35 @@
+; Each Valuation's expected balances in valuation_test.go come from
+; bean-query on this ledger.
+2024-01-01 open Assets:Broker
+2024-01-01 open Assets:Cash
+2024-01-01 open Equity:Opening
+2024-01-01 open Income:Dividends
+2024-01-01 open Expenses:Fees
+
+2024-01-02 * "buy"
+  Assets:Broker   5 HOOL {10 USD}
+  Assets:Broker   3 NOP {10 USD}
+  Assets:Broker   2 EHOOL {20 EUR}
+  Equity:Opening
+
+2024-01-02 * "cash"
+  Assets:Cash      100 EUR
+  Assets:Cash       50 CHF
+  Assets:Cash        7 XYZ
+  Equity:Opening  -100 EUR
+  Equity:Opening   -50 CHF
+  Equity:Opening    -7 XYZ
+
+2024-01-05 * "dividend in HOOL"
+  Assets:Broker      1 HOOL {11 USD}
+  Income:Dividends
+
+2024-01-06 * "fee"
+  Expenses:Fees     10 EUR
+  Assets:Cash
+
+2024-01-10 price HOOL   12 USD
+2024-01-10 price EHOOL  25 EUR
+2024-01-10 price EUR  1.10 USD
+2024-01-10 price USD  0.90 CHF
+2024-02-01 price HOOL   15 USD

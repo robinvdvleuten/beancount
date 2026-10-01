@@ -1,5 +1,6 @@
 import { type ParentComponent, For } from "solid-js";
 import type { BalanceNode } from "../types";
+import { type Valuation, valuationOptions } from "../lib/balances";
 
 interface FlatRow {
   name: string;
@@ -17,6 +18,12 @@ interface DateFieldProps {
   label: string;
   value: string | undefined;
   onChange: (value: string | undefined) => void;
+}
+
+interface ValuationFieldProps {
+  value: Valuation;
+  operatingCurrencies?: string[];
+  onChange: (value: Valuation) => void;
 }
 
 interface TableProps {
@@ -132,6 +139,41 @@ const DateField = (props: DateFieldProps) => (
   </label>
 );
 
+// ValuationField picks how the report states its balances; At cost, the
+// default, reports undefined.
+const ValuationField = (props: ValuationFieldProps) => {
+  const options = () => {
+    const listed = valuationOptions(props.operatingCurrencies);
+    // A currency from the URL stays selectable before the report lists it
+    return props.value && !listed.some((option) => option.value === props.value)
+      ? [...listed, { value: props.value, label: `Converted to ${props.value}` }]
+      : listed;
+  };
+
+  return (
+    // The select names itself: a wrapping label would also take in the
+    // options' text, so "Converted to USD" would answer to a "To" label
+    <div class="flex flex-col gap-1 text-xs text-base-content/70">
+      <span aria-hidden="true">Valuation</span>
+      <select
+        aria-label="Valuation"
+        class="select select-sm"
+        onChange={(event) => props.onChange(event.currentTarget.value || undefined)}
+      >
+        {/* Selecting the option rather than setting the select's value
+            holds while the options are still being rendered */}
+        <For each={options()}>
+          {(option) => (
+            <option value={option.value ?? ""} selected={option.value === props.value}>
+              {option.label}
+            </option>
+          )}
+        </For>
+      </select>
+    </div>
+  );
+};
+
 const Table = (props: TableProps) => {
   const main = () => mainCurrencies(props.currencies, props.operatingCurrencies);
   const secondary = () => otherCurrencies(props.currencies, main());
@@ -199,6 +241,7 @@ export const FinancialReport = {
   Column,
   Toolbar,
   DateField,
+  ValuationField,
   Table,
   getSections,
 };

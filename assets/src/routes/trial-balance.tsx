@@ -1,11 +1,20 @@
 import { type Component, For, Match, Show, Switch, createResource } from "solid-js";
+import { useSearchParams } from "@solidjs/router";
 import { useFileChange } from "../hooks/useFileChange";
 import { fetchBalances } from "../lib/balances";
 import { FinancialReport } from "../components/financial-report";
 
 const TrialBalance: Component = () => {
+  // The valuation lives in the URL (?valuation=), like the other reports'
+  const [searchParams, setSearchParams] = useSearchParams<{ valuation: string }>();
   // No types: every account type, rooted under the ledger's own names
-  const [data, { refetch }] = createResource(() => fetchBalances([]));
+  const [data, { refetch }] = createResource(
+    () => ({ valuation: searchParams.valuation }),
+    ({ valuation }) => fetchBalances([], {}, valuation),
+  );
+
+  // The picker offers each operating currency once a report has listed them
+  const operatingCurrencies = () => (data.error ? undefined : data.latest?.operatingCurrencies);
 
   // File change detection via SSE - click to reload
   const fileChange = useFileChange({
@@ -18,6 +27,13 @@ const TrialBalance: Component = () => {
   return (
     <>
       <FinancialReport.Root>
+        <FinancialReport.Toolbar>
+          <FinancialReport.ValuationField
+            value={searchParams.valuation}
+            operatingCurrencies={operatingCurrencies()}
+            onChange={(valuation) => setSearchParams({ valuation })}
+          />
+        </FinancialReport.Toolbar>
         <Switch>
           <Match when={data.loading}>
             <FinancialReport.Loading />

@@ -6,11 +6,21 @@ import { FinancialReport } from "../components/financial-report";
 
 const IncomeStatement: Component = () => {
   // The period lives in the URL (?from=&to=), so reloading or sharing keeps it
-  const [searchParams, setSearchParams] = useSearchParams<{ from: string; to: string }>();
+  const [searchParams, setSearchParams] = useSearchParams<{
+    from: string;
+    to: string;
+    valuation: string;
+  }>();
   const [data, { refetch }] = createResource(
-    () => ({ startDate: searchParams.from, endDate: searchParams.to }),
-    (period) => fetchBalances(["Income", "Expenses"], period),
+    () => ({
+      period: { startDate: searchParams.from, endDate: searchParams.to },
+      valuation: searchParams.valuation,
+    }),
+    ({ period, valuation }) => fetchBalances(["Income", "Expenses"], period, valuation),
   );
+
+  // The picker offers each operating currency once a report has listed them
+  const operatingCurrencies = () => (data.error ? undefined : data.latest?.operatingCurrencies);
 
   // File change detection via SSE - click to reload
   const fileChange = useFileChange({
@@ -47,6 +57,11 @@ const IncomeStatement: Component = () => {
               All time
             </button>
           </Show>
+          <FinancialReport.ValuationField
+            value={searchParams.valuation}
+            operatingCurrencies={operatingCurrencies()}
+            onChange={(valuation) => setSearchParams({ valuation })}
+          />
         </FinancialReport.Toolbar>
         <Switch>
           <Match when={data.loading}>

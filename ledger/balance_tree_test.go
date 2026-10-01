@@ -48,7 +48,7 @@ func TestGetBalanceTree_TrialBalance(t *testing.T) {
 	assert.NoError(t, l.Process(ctx, tree))
 
 	// Get trial balance (all types, current state)
-	balanceTree, err := l.GetBalanceTree(nil, nil, nil)
+	balanceTree, err := l.GetBalanceTree(nil, nil, nil, ledger.ValuationUnits)
 	assert.NoError(t, err)
 
 	// Should have 5 root nodes (one per account type with activity)
@@ -103,6 +103,7 @@ func TestGetBalanceTree_BalanceSheet(t *testing.T) {
 	balanceTree, err := l.GetBalanceTree(
 		[]ast.AccountType{ast.AccountTypeAssets, ast.AccountTypeLiabilities, ast.AccountTypeEquity},
 		nil, date, // As of date
+		ledger.ValuationUnits,
 	)
 	assert.NoError(t, err)
 
@@ -163,6 +164,7 @@ func TestGetBalanceTree_IncomeStatement(t *testing.T) {
 	balanceTree, err := l.GetBalanceTree(
 		[]ast.AccountType{ast.AccountTypeIncome, ast.AccountTypeExpenses},
 		startDate, endDate,
+		ledger.ValuationUnits,
 	)
 	assert.NoError(t, err)
 
@@ -208,7 +210,7 @@ func TestGetBalanceTree_HierarchicalAggregation(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, l.Process(ctx, tree))
 
-	balanceTree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, nil)
+	balanceTree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, nil, ledger.ValuationUnits)
 	assert.NoError(t, err)
 
 	// Should have 1 root (Assets)
@@ -254,7 +256,7 @@ func TestGetBalanceTree_InvalidDateRange(t *testing.T) {
 	// startDate > endDate should return error
 	startDate, _ := ast.NewDate("2024-02-01")
 	endDate, _ := ast.NewDate("2024-01-01")
-	_, err = l.GetBalanceTree(nil, startDate, endDate)
+	_, err = l.GetBalanceTree(nil, startDate, endDate, ledger.ValuationUnits)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "after")
 }
@@ -285,7 +287,7 @@ func TestGetBalanceTree_MixedNilDates(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			_, err := l.GetBalanceTree(nil, test.startDate, test.endDate)
+			_, err := l.GetBalanceTree(nil, test.startDate, test.endDate, ledger.ValuationUnits)
 			if test.wantError {
 				assert.Error(t, err)
 				return
@@ -307,7 +309,7 @@ func TestGetBalanceTree_NoTransactions(t *testing.T) {
 
 	// No transactions - account exists but has no balance
 	// The account still appears in the tree (Fava behavior)
-	balanceTree, err := l.GetBalanceTree(nil, nil, nil)
+	balanceTree, err := l.GetBalanceTree(nil, nil, nil, ledger.ValuationUnits)
 	assert.NoError(t, err)
 
 	// Account with zero balance is still included
@@ -342,7 +344,7 @@ func TestGetBalanceTree_MultiCurrency(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, l.Process(ctx, tree))
 
-	balanceTree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, nil)
+	balanceTree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, nil, ledger.ValuationUnits)
 	assert.NoError(t, err)
 
 	// Verify currencies are tracked
@@ -379,7 +381,7 @@ func TestGetBalanceTree_ZeroBalancesIncluded(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NoError(t, l.Process(ctx, tree))
 
-	balanceTree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, nil)
+	balanceTree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, nil, ledger.ValuationUnits)
 	assert.NoError(t, err)
 
 	// Assets:Checking has zero balance but should still appear
