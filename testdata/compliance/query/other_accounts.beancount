@@ -1,0 +1,28 @@
+2023-01-01 open Assets:Cash
+2023-01-01 open Assets:Broker
+2023-01-01 open Expenses:Food
+2023-01-01 open Equity:Opening
+2023-01-01 open Income:Gains
+
+2023-01-02 pad Assets:Cash Equity:Opening
+2023-01-03 balance Assets:Cash 100 USD
+
+2023-01-04 * "Split"
+  Expenses:Food   10.00 USD
+  Expenses:Food   20.00 USD
+  Assets:Cash
+
+2023-01-05 * "Two currencies, one auto posting"
+  Expenses:Food   5.00 EUR
+  Expenses:Food   3.00 USD
+  Assets:Cash
+
+2023-01-06 * "Lots"
+  Assets:Broker   1 HOOL {10.00 USD}
+  Assets:Broker   1 HOOL {12.00 USD}
+  Assets:Cash
+
+2023-01-07 * "Sell across lots"
+  Assets:Broker   -2 HOOL {}
+  Assets:Cash     30.00 USD
+  Income:Gains

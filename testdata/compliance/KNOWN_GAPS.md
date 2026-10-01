@@ -190,6 +190,12 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   error at offset 14 in ours. A `.` after a number moves the caret too:
   beanquery's is one column right of ours for `SELECT 2.5.5` and
   `SELECT 1 .5`.
+- #595: `other_accounts` is a sorted list in beanquery, though its column is
+  typed as a set, and a set in ours. Both render it alike, but ORDER BY
+  compares beanquery's lists element by element and ours sets by
+  inclusion (`ORDER BY other_accounts DESC` orders the rows differently),
+  and `str(other_accounts)` is `['Assets:Cash', 'Expenses:Food']` there
+  and `frozenset({'Assets:Cash', 'Expenses:Food'})` here.
 - #587: beanquery's `%`, `!~`, `?~`, `NOT IN` and `BETWEEN` operators are
   syntax errors in ours: `SELECT 7 % 3` prints `1` there.
 - #588: a transaction without a payee has a NULL `payee` in beanquery and

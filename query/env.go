@@ -115,10 +115,15 @@ var postingColumns = map[string]*columnDef{
 	"price":        {tAmount, func(row *evalRow) any { return postingPrice(row.Posting) }},
 	"weight":       {tAmount, func(row *evalRow) any { return postingWeight(row.Posting, row.Position) }},
 	"posting_flag": {tString, func(row *evalRow) any { return row.Posting.Flag }},
+	// Like beanquery's, other_accounts leaves out the row's own posting
+	// alone, so another posting to the same account still counts. Booking
+	// splits a reduction across lots into one posting per lot in beancount,
+	// where ours is one posting with a row per lot, so the posting's other
+	// lots count too.
 	"other_accounts": {tSet, func(row *evalRow) any {
 		others := make(setValue)
 		for _, p := range row.Txn.Postings {
-			if p.Account != row.Posting.Account {
+			if p != row.Posting || len(postingPositions(row.Ctx, p)) > 1 {
 				others[string(p.Account)] = struct{}{}
 			}
 		}
