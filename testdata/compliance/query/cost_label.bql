@@ -1,0 +1,1 @@
+SELECT narration, account, cost_label, cost_label IS NULL AS l, cost_date ORDER BY cost_label DESC, narration

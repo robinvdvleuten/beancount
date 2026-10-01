@@ -23,9 +23,10 @@ func (t *table) pivot(col1, col2 int) *table {
 		}
 	}
 
+	// Python dedupes the keys with == and sorts them with <.
 	var keys []any
 	for _, row := range t.Rows {
-		if !slices.ContainsFunc(keys, func(key any) bool { return compareValues(key, row[col2]) == 0 }) {
+		if !slices.ContainsFunc(keys, func(key any) bool { return pyEqual(key, row[col2]) }) {
 			keys = append(keys, row[col2])
 		}
 	}
@@ -50,13 +51,13 @@ func (t *table) pivot(col1, col2 int) *table {
 	var pivoted [][]any
 	for _, row := range rows {
 		n := len(pivoted)
-		if n == 0 || compareValues(pivoted[n-1][0], row[col1]) != 0 {
+		if n == 0 || !pyEqual(pivoted[n-1][0], row[col1]) {
 			out := make([]any, len(columns))
 			out[0] = row[col1]
 			pivoted = append(pivoted, out)
 			n++
 		}
-		index := slices.IndexFunc(keys, func(key any) bool { return compareValues(key, row[col2]) == 0 })
+		index := slices.IndexFunc(keys, func(key any) bool { return pyEqual(key, row[col2]) })
 		for j, other := range others {
 			pivoted[n-1][1+index*len(others)+j] = row[other]
 		}

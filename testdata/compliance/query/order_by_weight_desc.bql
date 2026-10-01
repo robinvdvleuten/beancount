@@ -1,0 +1,1 @@
+SELECT account, weight ORDER BY weight DESC

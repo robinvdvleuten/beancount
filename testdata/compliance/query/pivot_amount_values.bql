@@ -1,0 +1,1 @@
+SELECT year, units(position) AS u, count(*) WHERE account ~ 'Coffee' GROUP BY 1, 2 PIVOT BY 1, 2

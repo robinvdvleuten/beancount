@@ -218,26 +218,33 @@ func (gr *grouper) rows(last *evalRow) [][]any {
 	return output
 }
 
-// orderRows sorts rows by the ORDER-BY target values, each term in its own
-// direction. beanquery sorts stably once per run of terms sharing a
-// direction, last run first, with NULL below every value; one stable sort
-// comparing term by term gives the same order, NULL last under DESC and
-// ties in their natural (ledger) order.
+// orderRows sorts rows like beanquery: one stable sort per run of ORDER BY
+// terms sharing a direction, last run first, each comparing its terms'
+// values as a Python tuple does: the first unequal value decides, even when
+// neither of the two is smaller. One lexicographic sort over every term
+// would differ there: a run that ties on values neither smaller keeps the
+// order the later runs gave. NULL sorts below everything.
 func orderRows(output [][]any, compiled *compiledSelect) [][]any {
-	if len(compiled.OrderBy) == 0 {
-		return output
-	}
-	slices.SortStableFunc(output, func(a, b []any) int {
-		for _, key := range compiled.OrderBy {
-			if cmp := compareValues(a[key.target], b[key.target]); cmp != 0 {
-				if key.desc {
-					return -cmp
-				}
-				return cmp
-			}
+	keys := compiled.OrderBy
+	for end := len(keys); end > 0; {
+		start := end - 1
+		for start > 0 && keys[start-1].desc == keys[end-1].desc {
+			start--
 		}
-		return 0
-	})
+		run, desc := keys[start:end], keys[end-1].desc
+		slices.SortStableFunc(output, func(a, b []any) int {
+			for _, key := range run {
+				if c, equal := pyCompare(a[key.target], b[key.target]); !equal {
+					if desc {
+						return -c
+					}
+					return c
+				}
+			}
+			return 0
+		})
+		end = start
+	}
 	return output
 }
 

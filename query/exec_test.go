@@ -169,6 +169,40 @@ func TestExecuteHavingReadsLastRow(t *testing.T) {
 	}
 }
 
+// TestExecuteOrderByRuns pins beanquery's ORDER BY: one stable sort per run
+// of terms sharing a direction, last run first, each comparing its terms as
+// a Python tuple, which stops at tags that neither include the other.
+func TestExecuteOrderByRuns(t *testing.T) {
+	ctx := newContextFromSource(t, `
+2014-01-01 open Assets:Cash
+2014-01-01 open Equity:Opening
+
+2014-01-03 * "Later" #b
+  Assets:Cash  1 USD
+  Equity:Opening
+
+2014-01-02 * "Earlier" #a
+  Assets:Cash  1 USD
+  Equity:Opening
+`)
+	dates := func(query string) []string {
+		var got []string
+		for _, row := range runQueryOn(t, ctx, query).Rows {
+			got = append(got, valueString(row[0]))
+		}
+		return got
+	}
+	// Two runs: date sorts first, and the tags run keeps that order.
+	assert.Equal(t, []string{"2014-01-02", "2014-01-03"},
+		dates("SELECT date WHERE account = 'Assets:Cash' ORDER BY tags DESC, date"))
+	assert.Equal(t, []string{"2014-01-03", "2014-01-02"},
+		dates("SELECT date WHERE account = 'Assets:Cash' ORDER BY tags, date DESC"))
+	// One run: the tuple stops at the tags, so date is never compared and
+	// the rows keep their ledger order.
+	assert.Equal(t, []string{"2014-01-02", "2014-01-03"},
+		dates("SELECT date WHERE account = 'Assets:Cash' ORDER BY tags DESC, date DESC"))
+}
+
 func TestExecuteTagsAndLinks(t *testing.T) {
 	result := runQuery(t, "SELECT date WHERE 'job' in tags")
 	assert.Equal(t, 2, len(result.Rows))

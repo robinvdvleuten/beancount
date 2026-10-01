@@ -6,12 +6,12 @@ package query
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
-	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
 
@@ -157,32 +157,11 @@ func (inv *inventoryValue) Positions() []*positionValue {
 }
 
 // sortedPositions returns the positions in the order Python's sorted()
-// gives a beancount inventory (Position.sortkey): by currency rank, cost
-// number, cost currency, then units, ties keeping their insertion order.
+// gives a beancount inventory: by Position.sortkey (positionValue.cmp), ties
+// keeping their insertion order.
 func (inv *inventoryValue) sortedPositions() []*positionValue {
-	costOf := func(p *positionValue) (decimal.Decimal, string) {
-		if p.Cost == nil {
-			return decimal.Zero, ""
-		}
-		return p.Cost.Number, p.Cost.Currency
-	}
-
 	positions := inv.Positions()
-	sort.SliceStable(positions, func(i, j int) bool {
-		a, b := positions[i], positions[j]
-		if ra, rb := ledger.CurrencyRank(a.Units.Currency), ledger.CurrencyRank(b.Units.Currency); ra != rb {
-			return ra < rb
-		}
-		an, ac := costOf(a)
-		bn, bc := costOf(b)
-		if c := an.Cmp(bn); c != 0 {
-			return c < 0
-		}
-		if ac != bc {
-			return ac < bc
-		}
-		return a.Units.Number.LessThan(b.Units.Number)
-	})
+	slices.SortStableFunc(positions, (*positionValue).cmp)
 	return positions
 }
 
@@ -266,58 +245,6 @@ func asDecimal(v any) (decimal.Decimal, bool) {
 		return val, true
 	}
 	return decimal.Decimal{}, false
-}
-
-// compareValues orders two values of compatible types, returning -1, 0, or 1.
-// NULL sorts before everything. Values of incompatible types compare by their
-// string forms as a last resort, so sorting never fails at runtime.
-func compareValues(l, r any) int {
-	if l == nil && r == nil {
-		return 0
-	}
-	if l == nil {
-		return -1
-	}
-	if r == nil {
-		return 1
-	}
-
-	if ld, ok := asDecimal(l); ok {
-		if rd, ok := asDecimal(r); ok {
-			return ld.Cmp(rd)
-		}
-	}
-
-	switch lv := l.(type) {
-	case string:
-		if rv, ok := r.(string); ok {
-			return strings.Compare(lv, rv)
-		}
-	case *ast.Date:
-		if rv, ok := r.(*ast.Date); ok {
-			switch {
-			case lv.Before(rv.Time):
-				return -1
-			case lv.After(rv.Time):
-				return 1
-			default:
-				return 0
-			}
-		}
-	case bool:
-		if rv, ok := r.(bool); ok {
-			switch {
-			case !lv && rv:
-				return -1
-			case lv && !rv:
-				return 1
-			default:
-				return 0
-			}
-		}
-	}
-
-	return strings.Compare(valueString(l), valueString(r))
 }
 
 // valueString renders a value the way the official str() function does,

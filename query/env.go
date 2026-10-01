@@ -101,10 +101,20 @@ var postingColumns = map[string]*columnDef{
 	"cost_number":   {tDecimal, costColumn(func(c *costValue) any { return c.Number })},
 	"cost_currency": {tString, costColumn(func(c *costValue) any { return c.Currency })},
 	"cost_date":     {tDate, costColumn(func(c *costValue) any { return c.Date })},
-	"cost_label":    {tString, costColumn(func(c *costValue) any { return c.Label })},
-	"price":         {tAmount, func(row *evalRow) any { return postingPrice(row.Posting) }},
-	"weight":        {tAmount, func(row *evalRow) any { return postingWeight(row.Posting, row.Position) }},
-	"posting_flag":  {tString, func(row *evalRow) any { return row.Posting.Flag }},
+	// Like beanquery's, cost_label is '' without a cost and NULL for a
+	// cost without a label.
+	"cost_label": {tString, func(row *evalRow) any {
+		if row.Position == nil || row.Position.Cost == nil {
+			return ""
+		}
+		if label := row.Position.Cost.Label; label != "" {
+			return label
+		}
+		return nil
+	}},
+	"price":        {tAmount, func(row *evalRow) any { return postingPrice(row.Posting) }},
+	"weight":       {tAmount, func(row *evalRow) any { return postingWeight(row.Posting, row.Position) }},
+	"posting_flag": {tString, func(row *evalRow) any { return row.Posting.Flag }},
 	"other_accounts": {tSet, func(row *evalRow) any {
 		others := make(setValue)
 		for _, p := range row.Txn.Postings {

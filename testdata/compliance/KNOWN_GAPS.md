@@ -175,16 +175,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   stdout and exit status 1; ours prints the rows.
 - #590: beanquery's list constants are syntax errors in ours:
   `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
-- #579: ORDER BY sorts amounts, positions, inventories and sets by their
-  string forms in ours; beanquery uses beancount's sort keys and Python's
-  set comparison, so `SELECT account, units(position) AS u ORDER BY u`
-  differs, and so does row 5 of `SELECT date, account, position ORDER BY
-  balance LIMIT 5`. A column of mixed types (metadata holding a string on one
-  entry and a number on another) fails in beanquery with a `TypeError`
-  and is sorted by string form in ours. The same holds for `PIVOT BY`'s
-  values: `SELECT year, units(position) AS u, count(*) WHERE account ~
-  'Coffee' GROUP BY 1, 2 PIVOT BY 1, 2` orders its pivot columns
-  `18.00 USD`, `3.75 USD`, `4.50 USD` in ours and by number in beanquery.
 - #593: beanquery's functions `round`, `substr`, `splitcomp`,
   `yearmonth`, `int`, `decimal`, `bool`, `date_trunc`, `date_part`,
   `date_bin`, `interval`, `parse_date`, `repr` and `empty` are missing in
@@ -262,7 +252,11 @@ compare the lines errors are on:
   subtraction), `count(*)`, digits in identifiers, an ASC or DESC per
   ORDER BY term with NULL first ascending and last descending, an ORDER BY
   or GROUP BY name bound to the last target with that name, an ORDER BY
-  index at most the number of distinct target names, `HAVING` on an
+  index at most the number of distinct target names, values ordered as
+  Python orders beancount's (in ORDER BY, `min()`, `max()` and PIVOT BY:
+  a position by `Position.sortkey`, an amount by currency then number, an
+  inventory by its sorted positions, a set by inclusion, and `max()` with
+  the named tuples' `>`), `HAVING` on an
   aggregate, a grouped query's targets outside the group key (HAVING's, an
   ORDER BY expression's) reading their columns from the table's last row,
   after FROM's transforms and before its filter expression and WHERE, as
@@ -302,6 +296,20 @@ compare the lines errors are on:
   `TRUE` and `sum(false)` renders `FALSE`. We reject it:
   `error: no function matches "sum(bool)" name and argument types` (#422).
 
+- **BQL ordering of sets**: Python orders sets by inclusion, a partial
+  order, so where two sets neither include the other (`{a, c}` and `{b}`)
+  the order `sorted()` gives depends on its algorithm (timsort). We sort
+  stably with the same comparison, which gives Python's order whenever
+  incomparable sets form groups (as an empty set and single tags do,
+  `query/order_by_tags.bql`), and often not otherwise: it is common, not
+  an edge case, wherever tag sets mix (of 40 random ledgers of ten
+  transactions with one or two of four tags, 19 differed under `ORDER BY
+  tags` and 17 under `ORDER BY tags DESC`).
+  `ORDER BY tags DESC` over ten transactions tagged `#b`, `#a #c`, `#a`,
+  `#c`, `#a #b`, `#a`, `#a #d`, `#a #c`, `#a #b` and `#a #c` puts the
+  `#b` one sixth there and first here. Exact parity would need a port of
+  CPython's timsort.
+
 - **BQL Python exceptions**: where beanquery fails with a Python exception
   rather than a query error, we answer instead. `PIVOT BY` on a query
   without aggregates (`SELECT account, year PIVOT BY account, year`) is a
@@ -310,16 +318,25 @@ compare the lines errors are on:
   (`PIVOT BY year, cost_currency`) is a `TypeError` there; here NULL
   sorts first and names its column `None`. Numberifying (`-m`) a pivoted
   inventory column with a missing cell is an `AttributeError` there; here
-  the cell stays empty. Values of mixed types in the second PIVOT BY
-  column (metadata holding `"x"` on one entry and `2` on another) are a
-  `TypeError` there; here they sort as `compareValues` orders them. A
+  the cell stays empty. Values of types Python cannot order against each
+  other in one untyped column (metadata holding `"x"` on one entry and `2`
+  on another) are a `TypeError` there, in ORDER BY, `min()`/`max()` and
+  PIVOT BY alike; here they order by their string forms. A
   PIVOT BY index of a hidden target that passes beanquery's checks
   (`SELECT account, year, count(*) GROUP BY 1, 2 HAVING count(*) > 0
   PIVOT BY 4, 2`) is an `IndexError` there and `invalid PIVOT BY column
   index 4` here. `coalesce()` without arguments is an `IndexError` there
   and `no function matches "coalesce()"` here. `maxwidth()` narrower than
   its `[...]` placeholder (`maxwidth(str(cost_number), 3)`) is a
-  `ValueError` there and prints `[...]` here.
+  `ValueError` there and prints `[...]` here. `max(position)` over two
+  positions with equal units where one has no cost (`10 HOOL {5.00 USD}`
+  and `10 HOOL`), or equal cost dates where one has no label, is a
+  `TypeError: '>' not supported between instances of 'NoneType' and
+  'Cost'` there; here a missing cost or label orders first. PIVOT BY on
+  positions with equal sort keys (`1.00 BRL`, `1.00 ARS`, `1.00 COP`)
+  orders those pivot columns by Python's set iteration order there, which
+  changes with `PYTHONHASHSEED`; here they keep the order the rows first
+  show them in.
 
 - **BQL errors without a node**: beanquery's shell underlines the node a
   compile error names, but raises some errors without one and then prints

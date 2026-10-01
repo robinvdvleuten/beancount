@@ -105,6 +105,8 @@ type lastAcc struct {
 func (a *lastAcc) update(v any)  { a.value = v }
 func (a *lastAcc) finalize() any { return a.value }
 
+// minMaxAcc is beanquery's Min (value < cur) or Max (value > cur), which
+// skip NULLs. Python's > is not always the reverse of <: see pyGreater.
 type minMaxAcc struct {
 	keepMin bool
 	value   any
@@ -119,8 +121,7 @@ func (a *minMaxAcc) update(v any) {
 		a.value, a.seen = v, true
 		return
 	}
-	cmp := compareValues(v, a.value)
-	if (a.keepMin && cmp < 0) || (!a.keepMin && cmp > 0) {
+	if (a.keepMin && compareValues(v, a.value) < 0) || (!a.keepMin && pyGreater(v, a.value)) {
 		a.value = v
 	}
 }
