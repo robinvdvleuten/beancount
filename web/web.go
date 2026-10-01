@@ -24,6 +24,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -43,7 +44,8 @@ type Server struct {
 	ast          *ast.AST       // Directives the ledger processed, booked; nil until a load succeeds
 	rootFile     string         // Absolute path of the root ledger file
 	includeFiles []string       // Absolute paths of included files
-	reloadErr    error          // Last load or parse error, if the current files are invalid
+	reloadErr    error          // Last error that stopped a load, such as a missing file
+	loadErrors   []error        // Errors of the last load that went on, syntax errors among them
 
 	// inputFile is the file path passed to New(), used only for initial loading.
 	// After loading, rootFile contains the resolved absolute path.
@@ -147,7 +149,7 @@ func (s *Server) initializeSourceState(ctx context.Context) error {
 	}
 
 	includes := []string{}
-	if result, err := loader.New().Load(ctx, s.inputFile); err == nil {
+	if result, err := loader.New(loader.WithSyntaxRecovery()).Load(ctx, s.inputFile); err == nil {
 		rootFile = result.Root
 		baseDir := filepath.Dir(result.Root)
 		includes = make([]string, 0, len(result.AST.Includes))
@@ -207,7 +209,9 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 // Caller must NOT hold the mutex - this method acquires it internally.
 // Returns the old include files for comparison by the caller.
 func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err error) {
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
+	// Like check and query, a syntax error drops the directive it is in
+	// and the rest of the ledger still loads.
+	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
 
 	result, err := ldr.Load(ctx, s.inputFile)
 	if err != nil {
@@ -216,8 +220,13 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 		}
 		s.mu.Lock()
 		s.reloadErr = jsonSafeSourceError(err)
+		s.loadErrors = nil
 		s.mu.Unlock()
-		return nil, err // I/O or parse error
+		return nil, err // I/O error
+	}
+	loadErrors := diagnostic.Errors(result.Diagnostics)
+	for i, loadErr := range loadErrors {
+		loadErrors[i] = jsonSafeSourceError(loadErr)
 	}
 
 	l := ledger.New()
@@ -233,6 +242,7 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes
 	s.reloadErr = nil
+	s.loadErrors = loadErrors
 	s.mu.Unlock()
 
 	return oldIncludes, nil

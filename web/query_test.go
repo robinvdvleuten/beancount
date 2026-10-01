@@ -93,8 +93,8 @@ func TestAPIQuery(t *testing.T) {
 }
 
 func TestAPIQueryWithoutLoadedLedger(t *testing.T) {
-	ledgerFile := filepath.Join(t.TempDir(), "main.beancount")
-	assert.NoError(t, os.WriteFile(ledgerFile, []byte("2024-01-01 open\n"), 0600))
+	// A syntax error leaves the rest loaded; a missing file loads nothing.
+	ledgerFile := filepath.Join(t.TempDir(), "missing.beancount")
 
 	server := New(8080, ledgerFile)
 	_, err := server.reloadLedger(context.Background())

@@ -301,7 +301,7 @@ func TestAPISourceInitialParseErrorStillServesEditor(t *testing.T) {
 	err = server.initializeSourceState(context.Background())
 	assert.NoError(t, err)
 	_, err = server.reloadLedger(context.Background())
-	assert.Error(t, err)
+	assert.NoError(t, err)
 	mux, err := server.setupRouter()
 	assert.NoError(t, err)
 
@@ -320,6 +320,87 @@ func TestAPISourceInitialParseErrorStillServesEditor(t *testing.T) {
 	mux.ServeHTTP(accountsRec, accountsReq)
 
 	assert.Equal(t, http.StatusOK, accountsRec.Code)
+}
+
+func TestSyntaxErrorsLeaveTheRestOfTheLedgerLoaded(t *testing.T) {
+	// Like check, a syntax error drops only the directive it is in: the
+	// reports show the rest, and the editor marks every syntax error.
+	ledgerFile := filepath.Join(t.TempDir(), "main.beancount")
+	source := "2024-01-01 open Assets:Cash\n" +
+		"2024-01-01 open Income:Salary\n" +
+		"\n" +
+		"2024-01-02 * \"syntax error\"\n" +
+		"  Assets:Cash  -5 USD USD\n" +
+		"\n" +
+		"2024-01-03 * \"pay\"\n" +
+		"  Assets:Cash  100 USD\n" +
+		"  Income:Salary\n" +
+		"\n" +
+		"2024-01-04 open\n"
+	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
+
+	server := New(8080, ledgerFile)
+	assert.NoError(t, server.initializeSourceState(context.Background()))
+	_, err := server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var lines []float64
+	for _, raw := range decodeSourceResponse(t, rec)["errors"].([]any) {
+		sourceErr := raw.(map[string]any)
+		assert.Equal[any](t, "ParseError", sourceErr["type"])
+		position := sourceErr["position"].(map[string]any)
+		assert.Equal[any](t, ledgerFile, position["filename"])
+		lines = append(lines, position["line"].(float64))
+	}
+	assert.Equal(t, []float64{5, 11}, lines)
+
+	rec = httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/balances?types=Income,Expenses", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	var balances BalancesResponse
+	assert.NoError(t, json.NewDecoder(rec.Body).Decode(&balances))
+	assert.Equal(t, 1, len(balances.Roots))
+	assert.Equal(t, "Income", balances.Roots[0].Name)
+	assert.Equal(t, "-100", balances.Roots[0].Balance["USD"])
+}
+
+func TestWatcherReloadsAnIncludeOfALedgerWithASyntaxError(t *testing.T) {
+	dir := t.TempDir()
+	rootFile := filepath.Join(dir, "main.beancount")
+	includeFile := filepath.Join(dir, "include.beancount")
+	assert.NoError(t, os.WriteFile(rootFile, []byte("include \"include.beancount\"\n2024-01-01 open\n"), 0600))
+	assert.NoError(t, os.WriteFile(includeFile, []byte("2024-01-01 open Assets:Cash\n"), 0600))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server := New(8080, rootFile)
+	server.sseClients = make(map[chan string]struct{})
+	assert.NoError(t, server.initializeSourceState(ctx))
+	_, err := server.reloadLedger(ctx)
+	assert.NoError(t, err)
+	assert.NoError(t, server.startWatcher(ctx))
+
+	events := make(chan string, 10)
+	server.sseMu.Lock()
+	server.sseClients[events] = struct{}{}
+	server.sseMu.Unlock()
+
+	assert.NoError(t, os.WriteFile(includeFile, []byte("2024-01-01 open Assets:Cash\n2024-01-01 open Assets:Bank\n"), 0600))
+	select {
+	case event := <-events:
+		assert.Equal(t, "reload", event)
+	case <-time.After(5 * time.Second):
+		t.Fatal("no reload after the include changed")
+	}
+	server.mu.RLock()
+	_, ok := server.ledger.GetAccount("Assets:Bank")
+	server.mu.RUnlock()
+	assert.True(t, ok, "the reloaded ledger has the include's new account")
 }
 
 func decodeSourceResponse(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {

@@ -10,6 +10,8 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+
+	"github.com/robinvdvleuten/beancount/ast"
 )
 
 // writeJSONResponse writes a JSON response to the http.ResponseWriter.
@@ -37,14 +39,18 @@ type SourceResponse struct {
 }
 
 type sourceError struct {
-	Type    string `json:"type"`
-	Message string `json:"message"`
+	Type     string        `json:"type"`
+	Message  string        `json:"message"`
+	Position *ast.Position `json:"position,omitempty"`
 }
 
 func (e *sourceError) Error() string {
 	return e.Message
 }
 
+// jsonSafeSourceError returns err as the web API marshals it: as itself
+// when it marshals itself, otherwise as a LoadError with its message and,
+// when it has one, its position, so the editor marks its line.
 func jsonSafeSourceError(err error) error {
 	if err == nil {
 		return nil
@@ -52,10 +58,16 @@ func jsonSafeSourceError(err error) error {
 	if _, ok := err.(json.Marshaler); ok {
 		return err
 	}
-	return &sourceError{
+	sourceErr := &sourceError{
 		Type:    "LoadError",
 		Message: err.Error(),
 	}
+	if positioned, ok := err.(interface{ GetPosition() ast.Position }); ok {
+		if pos := positioned.GetPosition(); pos.Filename != "" {
+			sourceErr.Position = &pos
+		}
+	}
+	return sourceErr
 }
 
 // computeFingerprint returns a short hash of content for change detection.
@@ -119,8 +131,11 @@ func (s *Server) buildResponse(source []byte) *SourceResponse {
 	errors := []error{}
 	if s.reloadErr != nil {
 		errors = []error{s.reloadErr}
-	} else if s.ledger != nil {
-		errors = s.ledger.Errors()
+	} else {
+		errors = append(errors, s.loadErrors...)
+		if s.ledger != nil {
+			errors = append(errors, s.ledger.Errors()...)
+		}
 	}
 	return &SourceResponse{
 		Source:      string(source),
