@@ -10,7 +10,7 @@ const BalanceSheet: Component = () => {
   const [data, { refetch }] = createResource(
     () => ({ period: { endDate: searchParams.asOf }, valuation: searchParams.valuation }),
     ({ period, valuation }) =>
-      fetchBalances(["Assets", "Liabilities", "Equity"], period, valuation),
+      fetchBalances(["Assets", "Liabilities", "Equity"], period, valuation, true),
   );
 
   // The picker offers each operating currency once a report has listed them

@@ -1,0 +1,44 @@
+; Closed balances' expected Equity in balance_tree_closed_test.go comes
+; from bean-query on this ledger.
+2024-01-01 open Assets:Checking
+2024-01-01 open Assets:Euro
+2024-01-01 open Assets:Broker
+2024-01-01 open Equity:Opening
+2024-01-01 open Equity:Earnings:Current
+2024-01-01 open Income:Salary
+2024-01-01 open Expenses:Food
+
+2024-01-01 * "opening"
+  Assets:Checking  1000.00 USD
+  Equity:Opening
+
+2024-01-15 * "salary"
+  Assets:Checking  2000.00 USD
+  Income:Salary
+
+2024-01-20 * "dinner"
+  Expenses:Food      45.50 USD
+  Assets:Checking
+
+2024-02-01 * "to euros"
+  Assets:Euro       500.00 EUR @ 1.10 USD
+  Assets:Checking  -550.00 USD
+
+2024-02-10 * "lunch in euros"
+  Expenses:Food      20.00 EUR
+  Assets:Euro
+
+2024-02-15 * "buy"
+  Assets:Broker      10 HOOL {50.00 USD}
+  Assets:Checking  -500.00 USD
+
+2024-02-20 * "earnings carried by hand"
+  Equity:Earnings:Current  100.00 USD
+  Equity:Opening
+
+2024-03-01 * "salary"
+  Assets:Checking  2000.00 USD
+  Income:Salary
+
+2024-03-05 price HOOL 60.00 USD
+2024-03-05 price EUR   1.20 USD

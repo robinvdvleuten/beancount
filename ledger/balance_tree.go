@@ -6,6 +6,8 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/shopspring/decimal"
 )
 
 // BalanceTree represents a hierarchical view of account balances.
@@ -68,21 +70,44 @@ type BalanceNode struct {
 //     account's postings in the period booked (BookedPositions) are summed
 //     per lot and valued once, on endDate or else today, then summed per
 //     currency.
+//   - closed: Return Closed balances, a balance sheet's: Equity gains the
+//     Current earnings and Current conversions accounts the
+//     account_current_* options name and, At market value or Converted to
+//     a currency, Unrealized gains (Equity:Earnings:Unrealized), so that
+//     Assets, Liabilities and Equity sum to zero. A computed amount adds to
+//     a real account of the same name, and a computed account that comes
+//     out empty is left out. It needs a balance as of endDate (no
+//     startDate) and types that leave out Income and Expenses.
 //
-// Returns an error if startDate > endDate.
+// Returns an error if startDate > endDate, or for closed balances of a
+// period or with Income or Expenses among the types.
 //
 // The tree is organized with account types as virtual root nodes. Balances are
 // aggregated bottom-up so parent nodes include the sum of all their descendants.
-func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation) (*BalanceTree, error) {
-	return l.newBalanceTree(l.accounts, l.config, types, startDate, endDate, valuation)
+func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation, closed bool) (*BalanceTree, error) {
+	return l.newBalanceTree(l.accounts, l.config, types, startDate, endDate, valuation, closed)
 }
+
+// unrealizedGainsLeaf is the leaf, under the equity root, of the account
+// Closed balances hold Unrealized gains in. Like fava's, it is fixed:
+// beancount has no option naming it.
+const unrealizedGainsLeaf = "Earnings:Unrealized"
 
 // newBalanceTree builds the balance tree GetBalanceTree returns from the
 // accounts, with the account-type roots cfg names.
-func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation) (*BalanceTree, error) {
+func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation, closed bool) (*BalanceTree, error) {
 	// Validate date range
 	if startDate != nil && endDate != nil && startDate.After(endDate.Time) {
 		return nil, fmt.Errorf("startDate %s is after endDate %s", startDate.String(), endDate.String())
+	}
+	if closed {
+		if startDate != nil {
+			return nil, fmt.Errorf("closed balances are a balance as of a date and take no startDate")
+		}
+		if len(types) == 0 || slices.Contains(types, ast.AccountTypeIncome) || slices.Contains(types, ast.AccountTypeExpenses) {
+			return nil, fmt.Errorf("closed balances close %s and %s into %s, so they cannot include them",
+				cfg.AccountNames.Income, cfg.AccountNames.Expenses, cfg.AccountNames.Equity)
+		}
 	}
 	valuationDate := endDate
 	if valuationDate == nil {
@@ -97,24 +122,36 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types
 
 	// Collect all accounts with their balances
 	var entries []balanceTreeEntry
-	currencySet := make(map[string]bool)
-
+	var closing *closingBalances
+	if closed {
+		closing = newClosingBalances(cfg)
+	}
 	for _, account := range accounts {
-		// Skip if type filter is set and account doesn't match
-		if len(typeFilter) > 0 && !typeFilter[account.Type] {
+		included := len(typeFilter) == 0 || typeFilter[account.Type]
+		if !included && closing == nil {
 			continue
 		}
 
-		balance := l.valuedBalance(account, startDate, endDate, valuation, valuationDate)
-		entries = append(entries, balanceTreeEntry{account: account, balance: balance})
-
-		// Track currencies
-		for _, currency := range balance.Currencies() {
-			currencySet[currency] = true
+		positions := l.positionsBetween(account, startDate, endDate)
+		balance := l.valuePositions(positions, valuation, valuationDate)
+		if closing != nil {
+			closing.add(account.Type, positions, balance)
 		}
+		if included {
+			entries = append(entries, balanceTreeEntry{name: string(account.Name), accountType: account.Type, balance: balance})
+		}
+	}
+	if closing != nil {
+		entries = l.closeEntries(entries, closing, typeFilter, valuation, valuationDate)
 	}
 
 	// Build sorted currency list
+	currencySet := make(map[string]bool)
+	for _, entry := range entries {
+		for _, currency := range entry.balance.Currencies() {
+			currencySet[currency] = true
+		}
+	}
 	currencies := make([]string, 0, len(currencySet))
 	for currency := range currencySet {
 		currencies = append(currencies, currency)
@@ -138,18 +175,111 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types
 	return tree, nil
 }
 
+// closingBalances gathers, account by account, what Closed balances add
+// under Equity: the Current earnings and Current conversions positions,
+// and the valued total of the balance sheet's own accounts.
+type closingBalances struct {
+	cfg         *Config
+	earnings    lotSums                    // Income and Expenses
+	conversions map[string]decimal.Decimal // every account at cost, negated
+	total       map[string]decimal.Decimal // Assets, Liabilities and Equity, valued
+}
+
+func newClosingBalances(cfg *Config) *closingBalances {
+	return &closingBalances{
+		cfg:         cfg,
+		earnings:    newLotSums(),
+		conversions: make(map[string]decimal.Decimal),
+		total:       make(map[string]decimal.Decimal),
+	}
+}
+
+// add takes in an account of accountType, its positions and their
+// valued balance.
+func (c *closingBalances) add(accountType string, positions []Position, valued *Balance) {
+	for _, position := range positions {
+		cost := position.AtCost()
+		c.conversions[cost.Currency] = pydecimal.Sub(c.conversions[cost.Currency], cost.Amount)
+	}
+	switch accountType {
+	case c.cfg.AccountNames.Income, c.cfg.AccountNames.Expenses:
+		for _, position := range positions {
+			c.earnings.add(position)
+		}
+	default:
+		c.addTotal(valued)
+	}
+}
+
+func (c *closingBalances) addTotal(valued *Balance) {
+	for _, entry := range valued.Entries() {
+		c.total[entry.Currency] = pydecimal.Add(c.total[entry.Currency], entry.Amount)
+	}
+}
+
+// closeEntries adds Closed balances' computed accounts to entries: each
+// merges into the entry of the same name or, unless it comes out empty,
+// becomes an entry of its own. Unrealized gains, At market value or
+// Converted to a currency only, is what leaves the valued Assets,
+// Liabilities and Equity summing to zero, every other computed account
+// included.
+func (l *Ledger) closeEntries(entries []balanceTreeEntry, closing *closingBalances, typeFilter map[string]bool, v Valuation, date *ast.Date) []balanceTreeEntry {
+	equity := closing.cfg.AccountNames.Equity
+	add := func(name string, balance *Balance) {
+		if balance.IsZero() {
+			return
+		}
+		if !typeFilter[equity] {
+			return
+		}
+		for i := range entries {
+			if entries[i].name == name {
+				merged := entries[i].balance.Copy()
+				merged.Merge(balance)
+				entries[i].balance = merged
+				return
+			}
+		}
+		entries = append(entries, balanceTreeEntry{name: name, accountType: equity, balance: balance})
+	}
+
+	earningsAccount, conversionsAccount := closing.cfg.CurrentAccounts()
+	earnings := l.valuePositions(closing.earnings.positions, v, date)
+	var conversionPositions []Position
+	for currency, number := range closing.conversions {
+		conversionPositions = append(conversionPositions, Position{Number: number, Currency: currency})
+	}
+	conversions := l.valuePositions(conversionPositions, v, date)
+	closing.addTotal(earnings)
+	closing.addTotal(conversions)
+	add(earningsAccount, earnings)
+	add(conversionsAccount, conversions)
+
+	if v.kind == valuationAtMarket || v.kind == valuationConverted {
+		unrealized := make(map[string]decimal.Decimal, len(closing.total))
+		for currency, number := range closing.total {
+			if !number.IsZero() {
+				unrealized[currency] = number.Neg()
+			}
+		}
+		add(equity+":"+unrealizedGainsLeaf, NewBalanceFromMap(unrealized))
+	}
+	return entries
+}
+
 // buildBalanceTree constructs the hierarchical tree structure from account entries.
 // balanceTreeEntry is used internally by GetBalanceTree.
 type balanceTreeEntry struct {
-	account *Account
-	balance *Balance
+	name        string
+	accountType string // the account type root name
+	balance     *Balance
 }
 
 func buildBalanceTree(cfg *Config, entries []balanceTreeEntry, typeFilter map[string]bool) *BalanceTree {
 	// Group accounts by type
 	accountsByType := make(map[string][]balanceTreeEntry)
 	for _, entry := range entries {
-		accountsByType[entry.account.Type] = append(accountsByType[entry.account.Type], entry)
+		accountsByType[entry.accountType] = append(accountsByType[entry.accountType], entry)
 	}
 
 	// Determine which types to include
@@ -205,7 +335,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 
 	// Create leaf nodes for all accounts
 	for _, entry := range entries {
-		accountName := string(entry.account.Name)
+		accountName := entry.name
 		nodeMap[accountName] = &BalanceNode{
 			Name:     accountName,
 			Account:  accountName,
@@ -235,7 +365,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 	// both ends first so an intermediate node is linked to its own parent
 	// even when no other account passes through it.
 	for _, entry := range entries {
-		accountName := string(entry.account.Name)
+		accountName := entry.name
 		parts := strings.Split(accountName, ":")
 
 		for i := 1; i < len(parts); i++ {

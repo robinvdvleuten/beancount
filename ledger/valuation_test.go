@@ -134,7 +134,7 @@ func TestGetBalanceTreeValuations(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			tree, err := l.GetBalanceTree(nil, nil, asOf, test.valuation)
+			tree, err := l.GetBalanceTree(nil, nil, asOf, test.valuation, false)
 			assert.NoError(t, err)
 			assert.Equal(t, test.want, accountBalances(tree))
 		})
@@ -149,6 +149,7 @@ func TestGetBalanceTreeValuesAPeriodAtItsEnd(t *testing.T) {
 		[]ast.AccountType{ast.AccountTypeIncome, ast.AccountTypeExpenses},
 		mustDate(t, "2024-01-05"), mustDate(t, "2024-01-31"),
 		ledger.ValuationConvertedTo("EUR"),
+		false,
 	)
 	assert.NoError(t, err)
 	assert.Equal(t, map[string]map[string]string{
@@ -160,7 +161,7 @@ func TestGetBalanceTreeValuesAPeriodAtItsEnd(t *testing.T) {
 
 func TestGetBalanceTreeAtCostListsTheValuedCurrencies(t *testing.T) {
 	l := loadValuationLedger(t)
-	tree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, mustDate(t, "2024-01-31"), ledger.ValuationAtCost)
+	tree, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets}, nil, mustDate(t, "2024-01-31"), ledger.ValuationAtCost, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"CHF", "EUR", "USD", "XYZ"}, tree.Currencies)
 }

@@ -10,6 +10,8 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/shopspring/decimal"
 )
 
 func TestAPIBalances(t *testing.T) {
@@ -433,6 +435,121 @@ func TestAPIBalancesValuation(t *testing.T) {
 		for _, valuation := range []string{"bogus", "usd"} {
 			code, _ := getBalances(t, mux, "valuation="+valuation)
 			assert.Equal(t, http.StatusBadRequest, code, valuation)
+		}
+	})
+}
+
+// findBalanceNode returns the node of account in nodes or their
+// descendants, or nil.
+func findBalanceNode(nodes []*BalanceNodeResponse, account string) *BalanceNodeResponse {
+	for _, node := range nodes {
+		if node.Account == account {
+			return node
+		}
+		if found := findBalanceNode(node.Children, account); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+// rootsTotal sums the roots' balances per currency, leaving out the
+// currencies that sum to zero.
+func rootsTotal(t *testing.T, roots []*BalanceNodeResponse) map[string]string {
+	t.Helper()
+	sums := map[string]decimal.Decimal{}
+	for _, root := range roots {
+		for currency, amount := range root.Balance {
+			sums[currency] = pydecimal.Add(sums[currency], decimal.RequireFromString(amount))
+		}
+	}
+	total := map[string]string{}
+	for currency, sum := range sums {
+		if !sum.IsZero() {
+			total[currency] = sum.String()
+		}
+	}
+	return total
+}
+
+func TestAPIBalancesClosed(t *testing.T) {
+	server := New(8080, filepath.Join("..", "testdata", "example.beancount"))
+	_, err := server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+	const sheet = "types=Assets,Liabilities,Equity&closed=true"
+
+	balance := func(response *BalancesResponse, account string) map[string]string {
+		t.Helper()
+		node := findBalanceNode(response.Roots, account)
+		if node == nil {
+			return nil
+		}
+		return node.Balance
+	}
+
+	t.Run("AtCost", func(t *testing.T) {
+		// select account, sum(position) from close clear
+		//   where account ~ '^Equity' group by account
+		code, response := getBalances(t, mux, sheet)
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, map[string]string{"IRAUSD": "-500", "USD": "-96099.32", "VACHR": "-151"}, balance(response, "Equity:Earnings:Current"))
+		assert.Equal(t, map[string]string{"USD": "0.02"}, balance(response, "Equity:Conversions:Current"))
+		assert.Equal(t, map[string]string{"USD": "-3793.56"}, balance(response, "Equity:Opening-Balances"))
+		assert.Equal(t, nil, balance(response, "Equity:Earnings:Unrealized"))
+		assert.Equal(t, map[string]string{}, rootsTotal(t, response.Roots))
+	})
+
+	t.Run("AtMarket", func(t *testing.T) {
+		// select value(sum(position)) from close clear
+		//   where account ~ '^(Assets|Liabilities|Equity)'
+		// is 11824.61 USD, which Unrealized gains negate.
+		code, response := getBalances(t, mux, sheet+"&valuation=market")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, map[string]string{"USD": "-11824.61"}, balance(response, "Equity:Earnings:Unrealized"))
+		assert.Equal(t, map[string]string{}, rootsTotal(t, response.Roots))
+	})
+
+	t.Run("ConvertedToUSD", func(t *testing.T) {
+		// select convert(sum(position), 'USD') from close clear
+		//   where account ~ '^(Assets|Liabilities|Equity)'
+		code, response := getBalances(t, mux, sheet+"&valuation=USD")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, map[string]string{"USD": "-11824.61"}, balance(response, "Equity:Earnings:Unrealized"))
+		assert.Equal(t, map[string]string{}, rootsTotal(t, response.Roots))
+	})
+
+	t.Run("Units", func(t *testing.T) {
+		code, response := getBalances(t, mux, sheet+"&valuation=units")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, nil, balance(response, "Equity:Earnings:Unrealized"))
+		assert.NotEqual(t, nil, balance(response, "Equity:Earnings:Current"))
+	})
+
+	t.Run("RejectsAPeriodOrIncomeAndExpenses", func(t *testing.T) {
+		for _, query := range []string{
+			sheet + "&startDate=2022-01-01",
+			"types=Assets,Income&closed=true",
+			"types=Expenses&closed=true",
+			"closed=true",
+			sheet[:len(sheet)-len("true")] + "yes",
+		} {
+			code, _ := getBalances(t, mux, query)
+			assert.Equal(t, http.StatusBadRequest, code, query)
+		}
+	})
+
+	t.Run("LeavesOtherReportsAlone", func(t *testing.T) {
+		for _, query := range []string{
+			"types=Income,Expenses&startDate=2022-01-01&endDate=2022-12-31",
+			"",
+			"types=Assets,Liabilities,Equity",
+		} {
+			_, unclosed := getBalances(t, mux, query)
+			_, explicit := getBalances(t, mux, query+"&closed=false")
+			assert.Equal(t, unclosed, explicit, query)
+			assert.Equal(t, nil, findBalanceNode(unclosed.Roots, "Equity:Earnings:Current"), query)
 		}
 	})
 }

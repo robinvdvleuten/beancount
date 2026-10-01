@@ -39,17 +39,21 @@ export const withValuation = (path: string, valuation: Valuation): string =>
 
 // fetchBalances fetches the balances of the given account types, or of every
 // type when types is empty, over period (current balances when it is empty),
-// stated under valuation (at cost when it is undefined).
+// stated under valuation (at cost when it is undefined). With closed, it
+// fetches a balance sheet's Closed balances: Equity adds Current earnings,
+// Current conversions and Unrealized gains, so the sheet sums to zero.
 export const fetchBalances = async (
   types: string[],
   period: Period = {},
   valuation?: Valuation,
+  closed = false,
 ): Promise<BalancesResponse> => {
   const params: string[] = [];
   if (types.length > 0) params.push(`types=${types.map(encodeURIComponent).join(",")}`);
   if (period.startDate) params.push(`startDate=${encodeURIComponent(period.startDate)}`);
   if (period.endDate) params.push(`endDate=${encodeURIComponent(period.endDate)}`);
   if (valuation) params.push(`valuation=${encodeURIComponent(valuation)}`);
+  if (closed) params.push("closed=true");
 
   const query = params.length > 0 ? `?${params.join("&")}` : "";
   const response = await fetch(`/api/balances${query}`);

@@ -72,6 +72,31 @@ test.describe("Balance Sheet", () => {
     await expectBalanceSheetRow(page, "Equity", "Opening-Balances");
   });
 
+  test("closes Income and Expenses into Equity", async ({ page }) => {
+    const balancesLoaded = page.waitForResponse(
+      (response) =>
+        response.url().includes("/api/balances?types=Assets,Liabilities,Equity") &&
+        response.url().includes("closed=true") &&
+        response.ok(),
+    );
+    await page.goto("/balance-sheet");
+    await balancesLoaded;
+    await waitForBalanceSheetRows(page);
+
+    // select account, sum(position) from close clear
+    //   where account ~ '^Equity' group by account
+    await expectBalanceSheetRow(page, "Equity", "Earnings", ["-96,099.32"]);
+    const currentEarnings = page
+      .getByRole("table", { name: "Equity" })
+      .locator("tbody tr")
+      .filter({
+        has: page.getByRole("cell", { name: "Current", exact: true }),
+        hasText: "-96,099.32",
+      });
+    await expect(currentEarnings).toHaveCount(1);
+    await expectBalanceSheetRow(page, "Equity", "Conversions", ["0.02"]);
+  });
+
   test("displays multicurrency columns with amounts", async ({ page }) => {
     await navigateToBalanceSheet(page);
     await waitForBalanceSheetRows(page);

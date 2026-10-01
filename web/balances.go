@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -41,6 +42,12 @@ type BalanceNodeResponse struct {
 //     convert to (ledger.ParseValuation); anything else is a 400. The ledger
 //     values each account's balance on endDate, or today without one, and
 //     every amount is rounded to its currency's display precision.
+//   - closed: true returns Closed balances, a balance sheet's: Equity adds
+//     Current earnings, Current conversions and, At market value or
+//     Converted to a currency, Unrealized gains, so that Assets,
+//     Liabilities and Equity sum to zero (ledger.GetBalanceTree). With a
+//     startDate, or with types that are omitted or include Income or
+//     Expenses, it is a 400.
 //
 // Date semantics (both dates inclusive, an omitted one leaves that side open):
 //   - Both omitted: Current inventory state (all postings).
@@ -52,7 +59,7 @@ type BalanceNodeResponse struct {
 //
 // Examples:
 //   - GET /api/balances - Trial balance (all types, current state)
-//   - GET /api/balances?types=Assets,Liabilities,Equity&endDate=2024-01-31 - Balance sheet
+//   - GET /api/balances?types=Assets,Liabilities,Equity&endDate=2024-01-31&closed=true - Balance sheet
 //   - GET /api/balances?types=Income,Expenses&startDate=2024-01-01&endDate=2024-01-31 - Income statement
 func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
@@ -101,8 +108,18 @@ func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 		valuation = v
 	}
 
+	closed := false
+	if param := r.URL.Query().Get("closed"); param != "" {
+		v, err := strconv.ParseBool(param)
+		if err != nil {
+			http.Error(w, "invalid closed (expected true or false): "+param, http.StatusBadRequest)
+			return
+		}
+		closed = v
+	}
+
 	// Get balance tree from ledger
-	tree, err := s.ledger.GetBalanceTree(accountTypes, startDate, endDate, valuation)
+	tree, err := s.ledger.GetBalanceTree(accountTypes, startDate, endDate, valuation, closed)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return

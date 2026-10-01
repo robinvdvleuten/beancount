@@ -188,22 +188,33 @@ func keyOf(p Position) positionKey {
 	return key
 }
 
+// lotSums sums positions per lot, keeping the lots in the order they
+// first appear, as an inventory does.
+type lotSums struct {
+	positions []Position
+	index     map[positionKey]int
+}
+
+func newLotSums() lotSums {
+	return lotSums{index: make(map[positionKey]int)}
+}
+
+func (s *lotSums) add(p Position) {
+	key := keyOf(p)
+	if i, ok := s.index[key]; ok {
+		s.positions[i].Number = pydecimal.Add(s.positions[i].Number, p.Number)
+		return
+	}
+	s.index[key] = len(s.positions)
+	s.positions = append(s.positions, p)
+}
+
 // positionsBetween returns the positions account's postings dated within
 // [start, end] inclusive add up to, a nil bound leaving that side open,
 // summed per lot in the order the lots first appear. A posting holds the
 // positions Booking recorded for it (BookedPositions), or else its units.
 func (l *Ledger) positionsBetween(account *Account, start, end *ast.Date) []Position {
-	var positions []Position
-	index := make(map[positionKey]int)
-	add := func(p Position) {
-		key := keyOf(p)
-		if i, ok := index[key]; ok {
-			positions[i].Number = pydecimal.Add(positions[i].Number, p.Number)
-			return
-		}
-		index[key] = len(positions)
-		positions = append(positions, p)
-	}
+	sums := newLotSums()
 	for _, posting := range account.Postings {
 		date := posting.Transaction.Date()
 		if start != nil && date.Before(start.Time) || end != nil && date.After(end.Time) {
@@ -219,22 +230,22 @@ func (l *Ledger) positionsBetween(account *Account, start, end *ast.Date) []Posi
 			if err != nil {
 				continue
 			}
-			add(Position{Number: number, Currency: amount.Currency})
+			sums.add(Position{Number: number, Currency: amount.Currency})
 			continue
 		}
 		for _, position := range booked {
-			add(Position{Number: position.Units, Currency: amount.Currency, Cost: position.Cost})
+			sums.add(Position{Number: position.Units, Currency: amount.Currency, Cost: position.Cost})
 		}
 	}
-	return positions
+	return sums.positions
 }
 
-// valuedBalance returns account's balance over [start, end] stated under
-// v on date: each lot's summed position valued, then summed per currency.
-// Like a beancount inventory, it holds no currency that sums to zero.
-func (l *Ledger) valuedBalance(account *Account, start, end *ast.Date, v Valuation, date *ast.Date) *Balance {
+// valuePositions returns positions stated under v on date, summed per
+// currency. Like a beancount inventory, it holds no currency that sums to
+// zero.
+func (l *Ledger) valuePositions(positions []Position, v Valuation, date *ast.Date) *Balance {
 	sums := make(map[string]decimal.Decimal)
-	for _, position := range l.positionsBetween(account, start, end) {
+	for _, position := range positions {
 		valued := l.Value(position, v, date)
 		sums[valued.Currency] = pydecimal.Add(sums[valued.Currency], valued.Amount)
 	}
