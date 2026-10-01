@@ -237,6 +237,28 @@ func (l listValue) contains(v any) bool {
 	return false
 }
 
+// stringElements returns the elements of a set-typed value as strings: a
+// set's sorted, and a list's in order. other_accounts holds a listValue of
+// account names: beanquery types the column as a set but holds a sorted
+// list, which orders element by element and prints as a list.
+func stringElements(v any) ([]string, bool) {
+	switch val := v.(type) {
+	case setValue:
+		return val.Sorted(), true
+	case listValue:
+		elems := make([]string, 0, len(val))
+		for _, elem := range val {
+			s, ok := elem.(string)
+			if !ok {
+				return nil, false
+			}
+			elems = append(elems, s)
+		}
+		return elems, true
+	}
+	return nil, false
+}
+
 // pyValueRepr renders a literal's value like Python's repr().
 func pyValueRepr(v any) string {
 	switch val := v.(type) {

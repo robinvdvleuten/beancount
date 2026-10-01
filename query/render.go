@@ -353,9 +353,9 @@ type setRenderer struct {
 }
 
 func (r *setRenderer) update(v any) {
-	set, _ := v.(setValue)
+	elems, _ := stringElements(v)
 	w := -length(r.sep)
-	for elem := range set {
+	for _, elem := range elems {
 		w += length(elem) + length(r.sep)
 	}
 	r.w = max(r.w, w)
@@ -365,8 +365,8 @@ func (r *setRenderer) prepare()   {}
 func (r *setRenderer) width() int { return r.w }
 
 func (r *setRenderer) format(v any) string {
-	set, _ := v.(setValue)
-	return strings.Join(set.Sorted(), r.sep)
+	elems, _ := stringElements(v)
+	return strings.Join(elems, r.sep)
 }
 
 // coefficientDigits counts the digits of d's coefficient, as Python's

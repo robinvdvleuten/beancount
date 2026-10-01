@@ -412,7 +412,8 @@ var functions = map[string]*funcDef{
 			return int64(utf8.RuneCountInString(args[0].(string)))
 		}},
 		{[]dtype{tSet}, tInt, func(_ *evalRow, args []any) any {
-			return int64(len(args[0].(setValue)))
+			elems, _ := stringElements(args[0])
+			return int64(len(elems))
 		}},
 		{[]dtype{tList}, tInt, func(_ *evalRow, args []any) any {
 			return int64(len(args[0].(listValue)))
@@ -474,7 +475,8 @@ var functions = map[string]*funcDef{
 			if err != nil {
 				return nil
 			}
-			for _, elem := range args[1].(setValue).Sorted() {
+			elems, _ := stringElements(args[1])
+			for _, elem := range elems {
 				if re.MatchString(elem) {
 					return elem
 				}
@@ -484,7 +486,8 @@ var functions = map[string]*funcDef{
 	}},
 	"joinstr": {overloads: []funcOverload{
 		{[]dtype{tSet}, tString, func(_ *evalRow, args []any) any {
-			return strings.Join(args[0].(setValue).Sorted(), ",")
+			elems, _ := stringElements(args[0])
+			return strings.Join(elems, ",")
 		}},
 	}},
 

@@ -104,12 +104,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   entry.narration` run there and are `column ... not found` in ours.
   Attribute access on the types ours has (position, amount, cost, date)
   matches.
-- #595: `other_accounts` is a sorted list in beanquery, though its column is
-  typed as a set, and a set in ours. Both render it alike, but ORDER BY
-  compares beanquery's lists element by element and ours sets by
-  inclusion (`ORDER BY other_accounts DESC` orders the rows differently),
-  and `str(other_accounts)` is `['Assets:Cash', 'Expenses:Food']` there
-  and `frozenset({'Assets:Cash', 'Expenses:Food'})` here.
 - #587: beanquery's `%`, `!~`, `?~`, `NOT IN` and `BETWEEN` operators are
   syntax errors in ours: `SELECT 7 % 3` prints `1` there.
 - #589: `~` takes Python's regular expressions in beanquery and RE2's in
@@ -172,7 +166,9 @@ compare the lines errors are on:
   index at most the number of distinct target names, values ordered as
   Python orders beancount's (in ORDER BY, `min()`, `max()` and PIVOT BY:
   a position by `Position.sortkey`, an amount by currency then number, an
-  inventory by its sorted positions, a set by inclusion, and `max()` with
+  inventory by its sorted positions, a set by inclusion,
+  `other_accounts`, a set-typed column holding a sorted list, element by
+  element (its `str()` a list, `['Assets:Cash']`), and `max()` with
   the named tuples' `>`), `HAVING` on an
   aggregate, an aggregate in the ORDER BY of a query whose targets and
   GROUP BY do not aggregate ordering as NULL, so the rows keep ledger order

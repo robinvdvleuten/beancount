@@ -1,0 +1,1 @@
+SELECT account, min(other_accounts) AS lo, max(other_accounts) AS hi GROUP BY account ORDER BY account

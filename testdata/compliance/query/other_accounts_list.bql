@@ -1,0 +1,1 @@
+SELECT date, account, other_accounts, str(other_accounts) AS s, length(other_accounts) AS n, joinstr(other_accounts) AS j, findfirst('Assets:.*', other_accounts) AS f, 'Assets:Cash' IN other_accounts AS i ORDER BY other_accounts DESC, account

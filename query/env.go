@@ -119,7 +119,8 @@ var postingColumns = map[string]*columnDef{
 	// alone, so another posting to the same account still counts. Booking
 	// splits a reduction across lots into one posting per lot in beancount,
 	// where ours is one posting with a row per lot, so the posting's other
-	// lots count too.
+	// lots count too. Like beanquery's, the column is typed as a set and
+	// holds a sorted list.
 	"other_accounts": {tSet, func(row *evalRow) any {
 		others := make(setValue)
 		for _, p := range row.Txn.Postings {
@@ -127,7 +128,12 @@ var postingColumns = map[string]*columnDef{
 				others[string(p.Account)] = struct{}{}
 			}
 		}
-		return others
+		sorted := others.Sorted()
+		list := make(listValue, len(sorted))
+		for i, account := range sorted {
+			list[i] = account
+		}
+		return list
 	}},
 	// Like beanquery, the location columns are the posting's, and NULL for
 	// a posting with none, such as one FROM's summarization creates.
