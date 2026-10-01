@@ -1,0 +1,1 @@
+SELECT date_part('week', 2024-12-30) AS a, date_part('isoyear', 2024-12-30) AS b, date_part('epoch', 1969-12-31) AS c, date_part('century', 2000-05-17) AS d, date_part('millennium', 2001-05-17) AS e, date_trunc('century', 2000-05-17) AS f, date_trunc('millennium', 2001-01-01) AS g

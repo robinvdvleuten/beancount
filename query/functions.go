@@ -24,6 +24,11 @@ func strValue(v any) string {
 	return objectString(v)
 }
 
+// castIntArg and castDecimalArg are beanquery's int() and decimal() of
+// their one argument.
+func castIntArg(_ *evalRow, args []any) any     { return castInt(args[0]) }
+func castDecimalArg(_ *evalRow, args []any) any { return castDecimal(args[0]) }
+
 // funcOverload is one typed signature of a simple function. tAny parameters
 // match any argument type but the * of count(*); other parameters need that
 // exact type, so like bean-query an object-typed value or NULL only fits a
@@ -136,7 +141,7 @@ var functions = map[string]*funcDef{
 			return args[0].(*ast.Date).Format("Mon")
 		}},
 	}},
-	"ymonth": {overloads: []funcOverload{
+	"yearmonth": {overloads: []funcOverload{
 		{[]dtype{tDate}, tDate, func(_ *evalRow, args []any) any {
 			d := args[0].(*ast.Date)
 			return &ast.Date{Time: time.Date(d.Year(), d.Month(), 1, 0, 0, 0, 0, time.UTC)}
@@ -158,6 +163,42 @@ var functions = map[string]*funcDef{
 				return nil
 			}
 			return date
+		}},
+	}},
+	"date_trunc": {overloads: []funcOverload{
+		{[]dtype{tString, tDate}, tDate, func(_ *evalRow, args []any) any {
+			return dateTrunc(args[0].(string), args[1].(*ast.Date))
+		}},
+	}},
+	"date_part": {overloads: []funcOverload{
+		{[]dtype{tString, tDate}, tInt, func(_ *evalRow, args []any) any {
+			return datePart(args[0].(string), args[1].(*ast.Date))
+		}},
+	}},
+	"interval": {overloads: []funcOverload{
+		{[]dtype{tString}, tInterval, func(_ *evalRow, args []any) any {
+			return parseInterval(args[0].(string))
+		}},
+	}},
+	"date_bin": {overloads: []funcOverload{
+		{[]dtype{tInterval, tDate, tDate}, tDate, func(_ *evalRow, args []any) any {
+			return dateBin(args[0].(*intervalValue), args[1].(*ast.Date), args[2].(*ast.Date))
+		}},
+		{[]dtype{tString, tDate, tDate}, tDate, func(_ *evalRow, args []any) any {
+			stride, ok := parseInterval(args[0].(string)).(*intervalValue)
+			if !ok {
+				// beanquery bins by the None interval() gives.
+				fail("'NoneType' object has no attribute 'months'")
+			}
+			return dateBin(stride, args[1].(*ast.Date), args[2].(*ast.Date))
+		}},
+	}},
+	"parse_date": {overloads: []funcOverload{
+		{[]dtype{tString}, tDate, func(_ *evalRow, args []any) any {
+			return parseDate(args[0].(string))
+		}},
+		{[]dtype{tString, tString}, tDate, func(_ *evalRow, args []any) any {
+			return strptime(args[0].(string), args[1].(string))
 		}},
 	}},
 	"date_add": {overloads: []funcOverload{
@@ -400,6 +441,59 @@ var functions = map[string]*funcDef{
 	"str": {overloads: []funcOverload{
 		{[]dtype{tAny}, tString, func(_ *evalRow, args []any) any {
 			return strValue(args[0])
+		}},
+	}},
+	"repr": {overloads: []funcOverload{
+		{[]dtype{tAny}, tString, func(_ *evalRow, args []any) any {
+			return reprValue(args[0])
+		}},
+	}},
+	"int": {overloads: []funcOverload{
+		{[]dtype{tInt}, tInt, castIntArg},
+		{[]dtype{tBool}, tInt, castIntArg},
+		{[]dtype{tDecimal}, tInt, castIntArg},
+		{[]dtype{tString}, tInt, castIntArg},
+		{[]dtype{tAny}, tInt, castIntArg},
+	}},
+	"decimal": {overloads: []funcOverload{
+		{[]dtype{tDecimal}, tDecimal, castDecimalArg},
+		{[]dtype{tInt}, tDecimal, castDecimalArg},
+		{[]dtype{tBool}, tDecimal, castDecimalArg},
+		{[]dtype{tString}, tDecimal, castDecimalArg},
+		{[]dtype{tAny}, tDecimal, castDecimalArg},
+	}},
+	"bool": {overloads: []funcOverload{
+		{[]dtype{tAny}, tBool, func(_ *evalRow, args []any) any {
+			return castBool(args[0])
+		}},
+	}},
+	"round": {overloads: []funcOverload{
+		{[]dtype{tDecimal}, tDecimal, func(_ *evalRow, args []any) any {
+			return roundDecimal(args[0].(decimal.Decimal), 0)
+		}},
+		{[]dtype{tDecimal, tInt}, tDecimal, func(_ *evalRow, args []any) any {
+			return roundDecimal(args[0].(decimal.Decimal), args[1].(int64))
+		}},
+		{[]dtype{tInt}, tInt, func(_ *evalRow, args []any) any {
+			return args[0].(int64)
+		}},
+		{[]dtype{tInt, tInt}, tInt, func(_ *evalRow, args []any) any {
+			return roundInt(args[0].(int64), args[1].(int64))
+		}},
+	}},
+	"substr": {overloads: []funcOverload{
+		{[]dtype{tString, tInt, tInt}, tString, func(_ *evalRow, args []any) any {
+			return substr(args[0].(string), args[1].(int64), args[2].(int64))
+		}},
+	}},
+	"splitcomp": {overloads: []funcOverload{
+		{[]dtype{tString, tString, tInt}, tString, func(_ *evalRow, args []any) any {
+			return splitComponent(args[0].(string), args[1].(string), args[2].(int64))
+		}},
+	}},
+	"empty": {overloads: []funcOverload{
+		{[]dtype{tInventory}, tBool, func(_ *evalRow, args []any) any {
+			return args[0].(*inventoryValue).IsEmpty()
 		}},
 	}},
 	"length": {overloads: []funcOverload{

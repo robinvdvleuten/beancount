@@ -174,6 +174,7 @@ type columnRenderer interface {
 // RENDERERS.
 var columnRenderers = map[dtype]func(ctx *renderContext) columnRenderer{
 	tAny:       func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
+	tInterval:  func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
 	tString:    func(*renderContext) columnRenderer { return &strRenderer{str: valueString} },
 	tInt:       func(*renderContext) columnRenderer { return &strRenderer{str: valueString, right: true} },
 	tBool:      func(*renderContext) columnRenderer { return &boolRenderer{} },

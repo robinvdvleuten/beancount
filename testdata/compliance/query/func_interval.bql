@@ -1,0 +1,1 @@
+SELECT interval('1 month') AS a, interval('-2 days') AS b, interval('3 years') AS c, interval('1 week') AS d, interval('14 months') AS e, interval('1  days') AS f, interval('+1 year') AS g, interval('1 Day') AS h, interval('-13 months') AS i, interval('0 days') AS j

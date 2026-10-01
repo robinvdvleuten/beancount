@@ -1,0 +1,1 @@
+SELECT date_bin('1 week', date, 2023-01-01)

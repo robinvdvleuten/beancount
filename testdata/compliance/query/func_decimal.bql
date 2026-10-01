@@ -1,0 +1,1 @@
+SELECT decimal(2) AS a, decimal(TRUE) AS b, decimal('1.50') AS c, decimal('x') AS d, decimal(2.5) AS e, decimal(' 1_000 ') AS f, decimal(year) AS g

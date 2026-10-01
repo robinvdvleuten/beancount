@@ -1,0 +1,1 @@
+SELECT int(2.7) AS a, int(-2.7) AS b, int(TRUE) AS c, int('12') AS d, int(' -7 ') AS e, int('1_0') AS f, int('1.5') AS g, int('x') AS h, int(7) AS i, int('٣') AS j, int(number) AS k, int(meta('x')) AS l

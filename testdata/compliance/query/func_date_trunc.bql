@@ -1,0 +1,1 @@
+SELECT date, date_trunc('week', date) AS w, date_trunc('month', date) AS m, date_trunc('quarter', date) AS q, date_trunc('year', date) AS y, date_trunc('decade', date) AS de, date_trunc('century', date) AS c, date_trunc('millennium', date) AS mi, date_trunc('WEEK', date) AS x

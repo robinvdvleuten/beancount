@@ -1,0 +1,1 @@
+SELECT round(7) AS a, round(7, 1) AS b, round(1234, -2) AS c, round(1250, -2) AS d, round(15, -1) AS e, round(25, -1) AS f, round(-15, -1) AS g, round(5, -10) AS h, round(year, -1) AS i

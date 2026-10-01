@@ -21,8 +21,8 @@ import (
 // function overload and operator resolution at compile time and column
 // formatting in the renderers, where tNull renders like tAny. Runtime
 // values are Go values: bool, int64, decimal.Decimal, string, *ast.Date,
-// setValue, listValue, *amountValue, *costValue, *positionValue and
-// *inventoryValue; NULL is nil.
+// setValue, listValue, *amountValue, *costValue, *positionValue,
+// *inventoryValue and *intervalValue; NULL is nil.
 // Only numberify's output holds a negativeZero, for the renderers.
 type dtype uint8
 
@@ -41,6 +41,7 @@ const (
 	tAsterisk // the * of count(*)
 	tList     // a list constant, (1, 2)
 	tCost     // a position's cost, position.cost
+	tInterval // interval()'s relative time interval, dateutil's relativedelta
 )
 
 var dtypeNames = map[dtype]string{
@@ -58,6 +59,7 @@ var dtypeNames = map[dtype]string{
 	tAsterisk:  "*",
 	tList:      "list",
 	tCost:      "cost",
+	tInterval:  "relativedelta",
 }
 
 func (t dtype) String() string {
@@ -370,6 +372,8 @@ func valueString(v any) string {
 		return val.String()
 	case *costValue:
 		return pyValueRepr(val)
+	case *intervalValue:
+		return val.String()
 	case *amountValue:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)
 	case *positionValue:

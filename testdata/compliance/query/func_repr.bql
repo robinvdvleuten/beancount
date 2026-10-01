@@ -1,0 +1,1 @@
+SELECT repr(1) AS a, repr(2.50) AS b, repr('a') AS c, repr(TRUE) AS d, repr(date) AS e, repr(tags) AS f, repr(other_accounts) AS g, repr(position) AS h, repr(balance) AS i, repr(cost_date) AS j, repr(price) AS k, repr(-number) AS l, repr("it's") AS m

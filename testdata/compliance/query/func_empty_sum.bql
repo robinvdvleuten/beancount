@@ -1,0 +1,1 @@
+SELECT account, empty(sum(position)) AS s GROUP BY account ORDER BY account

@@ -1,0 +1,1 @@
+SELECT date, date_bin('1 month', date, 2023-01-01) AS a, date_bin('7 days', date, 2023-01-01) AS b, date_bin('1 year', date, 2024-01-01) AS c, date_bin('10 days', date, 2023-03-01) AS d, date_bin('-1 month', date, 2023-01-01) AS e, date_bin(interval('2 months'), date, 2023-01-31) AS f, date_bin('3 days', date, 2023-01-01) AS g

@@ -1,0 +1,1 @@
+SELECT 2023-01-31 + interval('1 month') AS a, 2023-03-31 - interval('1 month') AS b, interval('1 month') + interval('2 days') AS c, interval('1 day') + 2023-01-01 AS d, 2024-02-29 + interval('1 year') AS e, date + interval('11 months') AS f, str(interval('1 day')) AS g, repr(interval('2 years')) AS h

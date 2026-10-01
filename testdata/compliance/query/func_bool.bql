@@ -1,0 +1,1 @@
+SELECT DISTINCT narration, bool(tags) AS t, bool(other_accounts) AS o, bool(units(position)) AS u, bool(number - number) AS z, bool(cost_number) AS c, bool(narration) AS n, bool(0) AS i, bool(2023-01-01) AS d

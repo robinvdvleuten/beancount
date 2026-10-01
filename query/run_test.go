@@ -21,6 +21,20 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_splitcomp_index":        `error: list index out of range`,
+	"err_splitcomp_empty":        `error: empty separator`,
+	"err_bool_inventory":         `error: Use explicit is_empty() method instead.`,
+	"err_date_bin_unknown_unit":  `error: 'NoneType' object has no attribute 'months'`,
+	"err_parse_date_format":      `error: time data 'x' does not match format '%Y'`,
+	"err_parse_date_unconverted": `error: unconverted data remains: x`,
+	"err_parse_date_day":         `error: day is out of range for month`,
+	"err_parse_date_unknown":     `error: Unknown string format: x`,
+	"err_ymonth": `error: no function matches "ymonth(date)" name and argument types
+| SELECT ymonth(date)
+|        ^^^^^^^^^^^^`,
+	"err_round_null": `error: no function matches "round(nonetype)" name and argument types
+| SELECT round(NULL)
+|        ^^^^^^^^^^^`,
 	"err_regex_invalid":      `error: invalid regular expression '[': missing closing ]`,
 	"err_regex_invalid_grep": `error: invalid regular expression '[': missing closing ]`,
 	"err_regex_lookahead":    `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,

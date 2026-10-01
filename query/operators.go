@@ -139,6 +139,24 @@ var operators = func() map[bql.TokenType]*operatorDef {
 		opSignature{l: tDate, r: tInt, result: tDate, eval: func(l, r any) any { return addDays(l.(*ast.Date), r.(int64)) }},
 		opSignature{l: tInt, r: tDate, result: tDate, eval: func(l, r any) any { return addDays(r.(*ast.Date), l.(int64)) }},
 	)
+	// Intervals move dates and add up, like dateutil's relativedelta.
+	// Python subtracts no date from an interval, which beanquery types as
+	// a date anyway, and types the difference of two intervals as a
+	// date, which it then fails to print; here it is an interval
+	// (KNOWN_GAPS.md).
+	ops[bql.PLUS].signatures = append(ops[bql.PLUS].signatures,
+		opSignature{l: tDate, r: tInterval, result: tDate, eval: func(l, r any) any { return r.(*intervalValue).addTo(l.(*ast.Date)) }},
+		opSignature{l: tInterval, r: tDate, result: tDate, eval: func(l, r any) any { return l.(*intervalValue).addTo(r.(*ast.Date)) }},
+		opSignature{l: tInterval, r: tInterval, result: tInterval, eval: func(l, r any) any { return l.(*intervalValue).add(r.(*intervalValue)) }},
+	)
+	ops[bql.MINUS].signatures = append(ops[bql.MINUS].signatures,
+		opSignature{l: tDate, r: tInterval, result: tDate, eval: func(l, r any) any { return r.(*intervalValue).neg().addTo(l.(*ast.Date)) }},
+		opSignature{l: tInterval, r: tDate, result: tDate, eval: func(l, r any) any {
+			fail("unsupported operand type(s) for -: 'relativedelta' and 'datetime.date'")
+			return nil
+		}},
+		opSignature{l: tInterval, r: tInterval, result: tInterval, eval: func(l, r any) any { return l.(*intervalValue).add(r.(*intervalValue).neg()) }},
+	)
 	ops[bql.MINUS].signatures = append(ops[bql.MINUS].signatures,
 		opSignature{l: tDate, r: tInt, result: tDate, eval: func(l, r any) any { return addDays(l.(*ast.Date), -r.(int64)) }},
 		opSignature{l: tDate, r: tDate, result: tInt, eval: func(l, r any) any {

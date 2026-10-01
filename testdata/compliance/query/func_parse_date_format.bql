@@ -1,0 +1,1 @@
+SELECT parse_date('17/05/2023', '%d/%m/%Y') AS a, parse_date('2023 May 17', '%Y %b %d') AS b, parse_date('23-5-1', '%y-%m-%d') AS c, parse_date('70-01-02', '%y-%m-%d') AS d, parse_date('2023-032', '%Y-%j') AS e, parse_date('MARCH  3 2023', '%B %d %Y') AS f, parse_date('Wed 2023-05-17 10:30', '%a %Y-%m-%d %H:%M') AS g

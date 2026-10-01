@@ -92,12 +92,6 @@ limits:
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
-- #593: beanquery's functions `round`, `substr`, `splitcomp`,
-  `yearmonth`, `int`, `decimal`, `bool`, `date_trunc`, `date_part`,
-  `date_bin`, `interval`, `parse_date`, `repr` and `empty` are missing in
-  ours (`SELECT round(number)` prints `200` there and is `no function
-  matches "round(decimal)"` here), and ours has a `ymonth` that
-  beanquery has not.
 - beanquery's `meta`, `entry` and `accounts` columns are missing in ours,
   and with them the only values beanquery takes a subscript or a
   Transaction attribute on: `SELECT meta['x']` and `SELECT
@@ -254,10 +248,31 @@ compare the lines errors are on:
   `10000000000000000000000` there, `query/err_integer_overflow.bql`), and
   an integer literal beyond 9223372036854775807 is a syntax error, so
   `SELECT -9223372036854775808` prints the number there and fails here.
-  No ledger value comes near these bounds. Casting an untyped operand
+  `int()` of a string or decimal beyond them fails the same way. No
+  ledger value comes near these bounds. Casting an untyped operand
   reads what Python's `Decimal()` and `strptime('%Y-%m-%d')` read
   (`"1_000"`, `" 7 "`, `"2023-2-1"`), but Python's `NaN` and `Infinity`
   have no decimal here and cast to NULL.
+
+- **BQL `parse_date()` without a format** (#593): beanquery reads the
+  string with dateutil's parser, which guesses at any spelling and fills
+  what the string leaves out from today's date (`parse_date('May 2023')`
+  takes today's day). We read the common spellings only: ISO dates with or
+  without a time, `2023/05/17`, `20230517`, `17.05.2023`, `05/06/2023` as
+  May 6, and month names (`May 17, 2023`, `17 May 2023`); anything else
+  fails with dateutil's `Unknown string format`. With a format,
+  `parse_date()` follows Python's `strptime` for the directives a date
+  takes (`%d`, `%m`, `%Y`, `%y`, `%j`, `%b`, `%B`, and `%a`, `%A`, `%H`,
+  `%I`, `%M`, `%S`, `%f`, `%p` read and dropped), with its messages.
+
+- **BQL intervals** (#593): `interval()` gives dateutil's relativedelta,
+  printed as Python prints it (`relativedelta(years=+1, months=+2)`). The
+  difference of two intervals, which beanquery types as a date and then
+  fails to print with an `AttributeError`, is an interval here. Python
+  orders no intervals, so ORDER BY one is a `TypeError` there and orders
+  by the printed form here. `repr()` of a set lists its elements sorted,
+  where Python lists them in its hash order, which changes with
+  `PYTHONHASHSEED`.
 
 - **BQL `IN` on a non-string**: `1 IN account` (or `1 IN 2`) fails with a
   Python `TypeError` in beanquery; here `IN` a string or a set is FALSE

@@ -1,0 +1,1 @@
+SELECT splitcomp(account, ':', 0) AS a, splitcomp(account, ':', -1) AS b, splitcomp('a::b', ':', 1) AS c

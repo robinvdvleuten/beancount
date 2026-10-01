@@ -1,0 +1,1 @@
+SELECT substr('hello', 1, 3) AS a, substr('hello', -3, 5) AS b, substr('hello', 2, 1) AS c, substr('hello', 0, 100) AS d, substr('héllo', 1, 2) AS e, substr('hello', -10, -2) AS f, substr(account, 0, 6) AS g
