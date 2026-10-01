@@ -34,7 +34,8 @@ const (
 	tAmount
 	tPosition
 	tInventory
-	tNull // the NULL literal, Python's NoneType
+	tNull     // the NULL literal, Python's NoneType
+	tAsterisk // the * of count(*)
 )
 
 var dtypeNames = map[dtype]string{
@@ -49,6 +50,7 @@ var dtypeNames = map[dtype]string{
 	tPosition:  "Position",
 	tInventory: "Inventory",
 	tNull:      "NoneType",
+	tAsterisk:  "*",
 }
 
 func (t dtype) String() string {

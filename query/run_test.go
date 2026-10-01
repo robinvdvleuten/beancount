@@ -21,6 +21,24 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_group_by_decimal_index": `error: syntax error
+| SELECT account, count(*) GROUP BY 1.0
+|                                    ^`,
+	"err_order_by_decimal_index": `error: syntax error
+| SELECT account ORDER BY 1.5 LIMIT 2
+|                          ^`,
+	"err_identifier_digits": `error: column "account2" not found in table "postings"
+| SELECT account2
+|        ^^^^^^^^`,
+	"err_unary_minus_date": `error: operator "neg(date)" not supported
+| SELECT -date
+|        ^^^^^`,
+	"err_unary_minus_amount": `error: operator "neg(amount)" not supported
+| SELECT -weight
+|        ^^^^^^^`,
+	"err_function_asterisk": `error: no function matches "sum(*)" name and argument types
+| SELECT sum(*)
+|        ^^^^^^`,
 	"err_balance_where_equal": `error: operator "equal(inventory, inventory)" not supported
 | SELECT count(date) WHERE balance = balance
 |                          ^^^^^^^^^^^^^^^^^`,
@@ -78,9 +96,6 @@ var errorFixtures = map[string]string{
 	"err_having": `error: the HAVING clause is not supported yet
 | SELECT account GROUP BY account HAVING count(account) > 1
 |                                        ^^^^^^^^^^^^^^^^^^`,
-	"err_identifier_digits": `error: syntax error
-| SELECT account2
-|               ^`,
 	"err_mixed_aggregate":  `error: mixed aggregates and non-aggregates are not allowed`,
 	"err_nested_aggregate": `error: aggregates of aggregates are not allowed`,
 	"err_null_argument": `error: no function matches "length(nonetype)" name and argument types
@@ -100,15 +115,6 @@ var errorFixtures = map[string]string{
 | SELECT account PIVOT BY foo(1)
 |                            ^`,
 	"err_print_close_before_open": `error: CLOSE date must follow OPEN date`,
-	"err_signed_number_after_operand": `error: syntax error
-| SELECT number -1
-|               ^`,
-	"err_syntax_near": `error: syntax error
-| SELECT account, count(*) GROUP BY account
-|                       ^`,
-	"err_unary_minus": `error: syntax error
-| SELECT -number
-|        ^`,
 	"err_unknown_token": `error: syntax error
 | SELECT account WHERE narration ~ 'coffee
 |                                  ^`,

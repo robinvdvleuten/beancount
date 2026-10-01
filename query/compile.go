@@ -199,12 +199,7 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 		if err != nil {
 			return err
 		}
-		// bean-query quotes an index as a bare number: its grammar keeps
-		// a top-level GROUP BY integer as a Python int.
 		ref := pyExprRepr(item)
-		if lit, ok := item.(*bql.Int); ok {
-			ref = strconv.FormatInt(lit.Value, 10)
-		}
 		if compiled.Targets[idx].IsAgg {
 			return statementErrorf(`GROUP-BY expressions may not reference aggregates: "%s"`, ref)
 		}
@@ -222,7 +217,7 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 // one.
 func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect) (int, error) {
 	switch ref := item.(type) {
-	case *bql.Int:
+	case *bql.ColumnIndex:
 		return c.targetIndex(ref, compiled, "GROUP-BY")
 	case *bql.Ident:
 		if idx, ok := targetNamed(ref.Name, compiled); ok {
@@ -259,13 +254,13 @@ func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *compiledSelect) err
 	return nil
 }
 
-// resolveTargetRef resolves a clause item to a target index. Integer
-// literals are 1-based indices into the visible targets; identifiers match
+// resolveTargetRef resolves a clause item to a target index. A column
+// index is 1-based into the visible targets; identifiers match
 // aliases; other expressions match targets structurally or are appended as
 // hidden targets. clause names the clause in index errors.
 func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, clause string) (int, error) {
-	if lit, ok := item.(*bql.Int); ok {
-		return c.targetIndex(lit, compiled, clause)
+	if index, ok := item.(*bql.ColumnIndex); ok {
+		return c.targetIndex(index, compiled, clause)
 	}
 	if ident, ok := item.(*bql.Ident); ok {
 		if idx, ok := targetNamed(ident.Name, compiled); ok {
@@ -322,7 +317,7 @@ func targetName(target bql.Target) string {
 }
 
 // targetIndex resolves a 1-based index into the visible targets.
-func (c *compiler) targetIndex(lit *bql.Int, compiled *compiledSelect, clause string) (int, error) {
+func (c *compiler) targetIndex(lit *bql.ColumnIndex, compiled *compiledSelect, clause string) (int, error) {
 	// Walk the visible targets to the index; no int64-to-int narrowing.
 	var n int64
 	for i, target := range compiled.Targets {
@@ -421,6 +416,8 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 		return &cLiteral{v: node.Value, t: tBool}, nil
 	case *bql.Null:
 		return &cLiteral{v: nil, t: tNull}, nil
+	case *bql.Asterisk:
+		return &cLiteral{v: nil, t: tAsterisk}, nil
 
 	case *bql.Ident:
 		def, ok := c.env.columns[node.Name]
@@ -505,10 +502,15 @@ func (c *compiler) compileUnary(node *bql.Unary) (cexpr, error) {
 	if err != nil {
 		return nil, err
 	}
-	if node.Op != bql.NOT {
+	def, ok := unaryOperators[node.Op]
+	if !ok {
 		return nil, compileErrorf(node, "unsupported unary operator")
 	}
-	return &cNot{x: x}, nil
+	sig := def.match(x.typ())
+	if sig == nil {
+		return nil, compileErrorf(node, `operator "%s(%s)" not supported`, def.name, operandTypeName(x.typ()))
+	}
+	return &cUnary{sig: sig, x: x}, nil
 }
 
 // compileBinary compiles a binary operation. AND, OR and IN take operands
@@ -607,7 +609,12 @@ func pyExprRepr(e bql.Expr) string {
 		}
 		return fmt.Sprintf("Function(fname=%s, operands=[%s])", pyrepr.String(strings.ToLower(node.Func)), strings.Join(operands, ", "))
 	case *bql.Unary:
-		return fmt.Sprintf("Not(operand=%s)", pyExprRepr(node.X))
+		return fmt.Sprintf("%s(operand=%s)", unaryOperators[node.Op].pyClass, pyExprRepr(node.X))
+	case *bql.Asterisk:
+		return "Asterisk()"
+	case *bql.ColumnIndex:
+		// beanquery's grammar keeps a column index as a Python int.
+		return strconv.FormatInt(node.Value, 10)
 	case *bql.IsNull:
 		if node.Not {
 			return fmt.Sprintf("IsNotNull(operand=%s)", pyExprRepr(node.X))
@@ -723,12 +730,21 @@ func (c *cAgg) eval(row *evalRow) any {
 	return nil
 }
 
-type cNot struct {
-	x cexpr
+// cUnary is a typed unary operation.
+type cUnary struct {
+	sig *unarySignature
+	x   cexpr
 }
 
-func (c *cNot) typ() dtype            { return tBool }
-func (c *cNot) eval(row *evalRow) any { return !truthy(c.x.eval(row)) }
+func (c *cUnary) typ() dtype { return c.sig.result }
+
+func (c *cUnary) eval(row *evalRow) any {
+	v := c.x.eval(row)
+	if v == nil && !c.sig.nullSafe {
+		return nil
+	}
+	return c.sig.eval(v)
+}
 
 // cIsNull is X IS NULL, or X IS NOT NULL.
 type cIsNull struct {

@@ -127,8 +127,24 @@ type Call struct {
 
 func (*Call) expr() {}
 
-// Unary is a unary operation. Op is NOT: BQL has no unary minus, only
-// signed number literals.
+// ColumnIndex is a GROUP BY or ORDER BY item written as a bare integer,
+// a 1-based reference to a target. Any other integer there, such as +1 or
+// (1), is a constant expression, as in beanquery's grammar.
+type ColumnIndex struct {
+	position
+	Value int64
+}
+
+func (*ColumnIndex) expr() {}
+
+// Asterisk is the * of a call like count(*), its only argument.
+type Asterisk struct {
+	position
+}
+
+func (*Asterisk) expr() {}
+
+// Unary is a unary operation: NOT, or MINUS for a negation.
 type Unary struct {
 	position
 	Op TokenType

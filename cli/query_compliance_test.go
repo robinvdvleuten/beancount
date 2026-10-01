@@ -123,10 +123,6 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"err_identifier_digits":           "#574: identifiers take digits",
-	"err_signed_number_after_operand": "#574: number -1 is a subtraction",
-	"err_syntax_near":                 "#574: count(*) is accepted",
-	"err_unary_minus":                 "#574: unary minus applies to any expression",
 	"column_names_unique":             "#575: a name binds the last target it names",
 	"order_by_desc":                   "#575: each term takes its own direction",
 	"err_having":                      "#576: HAVING is supported",

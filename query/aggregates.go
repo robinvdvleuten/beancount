@@ -28,19 +28,19 @@ var aggregates = map[string]*aggDef{
 		new:        func(dtype) accumulator { return &countAcc{} },
 	},
 	"first": {
-		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		resultType: func(arg dtype) (dtype, bool) { return arg, arg != tAsterisk },
 		new:        func(dtype) accumulator { return &firstAcc{} },
 	},
 	"last": {
-		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		resultType: func(arg dtype) (dtype, bool) { return arg, arg != tAsterisk },
 		new:        func(dtype) accumulator { return &lastAcc{} },
 	},
 	"min": {
-		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		resultType: func(arg dtype) (dtype, bool) { return arg, arg != tAsterisk },
 		new:        func(dtype) accumulator { return &minMaxAcc{keepMin: true} },
 	},
 	"max": {
-		resultType: func(arg dtype) (dtype, bool) { return arg, true },
+		resultType: func(arg dtype) (dtype, bool) { return arg, arg != tAsterisk },
 		new:        func(dtype) accumulator { return &minMaxAcc{} },
 	},
 	"sum": {

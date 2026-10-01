@@ -155,23 +155,62 @@ func TestParseLiterals(t *testing.T) {
 	assert.True(t, isNull)
 }
 
-func TestParseSignedNumbers(t *testing.T) {
-	// Like bean-query's lexer, a sign directly before a number is part of
-	// it, and there is no unary minus.
-	stmt, err := Parse("SELECT -2, +3, -.5, 2., .5, 007")
+func TestParseNumbersAndUnaryOperators(t *testing.T) {
+	// Like beanquery's grammar, numbers carry no sign: a minus is a
+	// negation or a subtraction, and a unary plus leaves no node.
+	stmt, err := Parse("SELECT -2, +3, -.5, 2., .5, 007, number -1, -(1 + 2), - -1, -2 * 3")
 	assert.NoError(t, err)
 	targets := stmt.(*Select).Targets
-	assert.Equal(t, int64(-2), targets[0].Expr.(*Int).Value)
+	neg := targets[0].Expr.(*Unary)
+	assert.Equal(t, MINUS, neg.Op)
+	assert.Equal(t, int64(2), neg.X.(*Int).Value)
 	assert.Equal(t, int64(3), targets[1].Expr.(*Int).Value)
-	assert.Equal(t, "-0.5", targets[2].Expr.(*Dec).Value.String())
+	assert.Equal(t, "3", targets[1].Text)
+	assert.Equal(t, "0.5", targets[2].Expr.(*Unary).X.(*Dec).Value.String())
 	assert.Equal(t, "2", targets[3].Expr.(*Dec).Value.String())
 	assert.Equal(t, "0.5", targets[4].Expr.(*Dec).Value.String())
 	assert.Equal(t, int64(7), targets[5].Expr.(*Int).Value)
+	assert.Equal(t, MINUS, targets[6].Expr.(*Binary).Op)
+	assert.Equal(t, "number -1", targets[6].Text)
+	assert.Equal(t, PLUS, targets[7].Expr.(*Unary).X.(*Binary).Op)
+	assert.Equal(t, "-(1 + 2)", targets[7].Text)
+	assert.Equal(t, MINUS, targets[8].Expr.(*Unary).X.(*Unary).Op)
+	mul := targets[9].Expr.(*Binary)
+	assert.Equal(t, ASTERISK, mul.Op)
+	assert.Equal(t, MINUS, mul.L.(*Unary).Op)
 
-	for _, query := range []string{"SELECT -number", "SELECT 1 -2", "SELECT - 1", "SELECT account2"} {
-		_, err := Parse(query)
-		assert.Error(t, err, query)
+	// A unary plus takes an atom, not a parenthesized expression.
+	_, err = Parse("SELECT +(1)")
+	assert.Error(t, err)
+}
+
+func TestParseIdentifierDigits(t *testing.T) {
+	// beanquery's identifiers are [a-zA-Z_][a-zA-Z0-9_]*.
+	stmt, err := Parse("SELECT account2, _x, a_1")
+	assert.NoError(t, err)
+	targets := stmt.(*Select).Targets
+	for i, name := range []string{"account2", "_x", "a_1"} {
+		assert.Equal(t, name, targets[i].Expr.(*Ident).Name)
 	}
+	_, err = Parse("SELECT 2x")
+	assert.Error(t, err)
+}
+
+func TestParseCallAsterisk(t *testing.T) {
+	// Any function takes * as its only argument, named by its source text.
+	stmt, err := Parse("SELECT count( * ), sum(*)")
+	assert.NoError(t, err)
+	targets := stmt.(*Select).Targets
+	call := targets[0].Expr.(*Call)
+	assert.Equal(t, 1, len(call.Args))
+	_, ok := call.Args[0].(*Asterisk)
+	assert.True(t, ok)
+	assert.Equal(t, "count( * )", targets[0].Text)
+	_, ok = targets[1].Expr.(*Call).Args[0].(*Asterisk)
+	assert.True(t, ok)
+
+	_, err = Parse("SELECT count(*, 1)")
+	assert.Error(t, err)
 }
 
 func TestParseIdentifiersAreLowerCased(t *testing.T) {
@@ -234,13 +273,22 @@ func TestParseFromTransformsOnly(t *testing.T) {
 }
 
 func TestParseGroupByIndexAndName(t *testing.T) {
-	stmt, err := Parse("SELECT account, year(date) GROUP BY 1, year(date)")
+	// Only a bare integer is a column index; +1 and (1) are constants.
+	stmt, err := Parse("SELECT account, year(date) GROUP BY 1, year(date), +1, (1) ORDER BY 2, -1")
 	assert.NoError(t, err)
 
-	groupBy := stmt.(*Select).GroupBy
-	assert.Equal(t, 2, len(groupBy))
-	assert.Equal(t, int64(1), groupBy[0].(*Int).Value)
-	assert.Equal(t, "year", groupBy[1].(*Call).Func)
+	sel := stmt.(*Select)
+	assert.Equal(t, 4, len(sel.GroupBy))
+	assert.Equal(t, int64(1), sel.GroupBy[0].(*ColumnIndex).Value)
+	assert.Equal(t, "year", sel.GroupBy[1].(*Call).Func)
+	assert.Equal(t, int64(1), sel.GroupBy[2].(*Int).Value)
+	assert.Equal(t, int64(1), sel.GroupBy[3].(*Int).Value)
+	assert.Equal(t, int64(2), sel.OrderBy[0].(*ColumnIndex).Value)
+	assert.Equal(t, MINUS, sel.OrderBy[1].(*Unary).Op)
+
+	// An item that starts with an integer ends there.
+	_, err = Parse("SELECT count(*) GROUP BY 1 + 1")
+	assert.Error(t, err)
 }
 
 func TestParseOrderByList(t *testing.T) {
@@ -380,6 +428,21 @@ func TestParseErrorOffset(t *testing.T) {
 		{"SELECT account FROM WHERE account ~ 'Assets'", 25},
 		{"SELECT account FROM LIMIT 1", 25},
 		{"BALANCES FROM", 13},
+		{"SELECT count(*, 1)", 13},
+		{"SELECT +(1)", 10},
+		{"SELECT +(number)", 9},
+		{"SELECT +()", 9},
+		{"SELECT +-1", 8},
+		{"SELECT 2x", 8},
+		{"SELECT count(*) GROUP BY 1 + 1", 27},
+		{"SELECT account ORDER BY 1 + 1 LIMIT 2", 26},
+		// An item that starts with digits and a dot fails at the dot.
+		{"SELECT account, count(*) GROUP BY 1.0", 35},
+		{"SELECT account, count(*) GROUP BY 1.", 35},
+		{"SELECT count(*) GROUP BY 1.5", 26},
+		{"SELECT account ORDER BY 1.5 LIMIT 2", 25},
+		{"SELECT account ORDER BY 10.25 LIMIT 2", 26},
+		{"SELECT account ORDER BY 1, 2.5 LIMIT 2", 28},
 		{"SELECT account AS WHERE", 23},
 		{"SELECT account AS 1", 18},
 		// A clause that cannot be finished: at its first keyword.

@@ -32,17 +32,14 @@ func (l *Lexer) Next() Token {
 	c := l.source[l.pos]
 
 	switch {
-	case isLetter(c):
+	case isLetter(c) || c == '_':
 		return l.scanIdent(start, line, col)
 	case isDigit(c):
 		return l.scanNumberOrDate(start, line, col)
-	case l.numberAhead(l.pos):
-		// A leading dot or sign belongs to the number, as in bean-query's
-		// [-+]?[0-9]*\.[0-9]+ and [-+]?[0-9]+ rules: -2 is one token, so
-		// 1 -2 is two numbers, not a subtraction.
-		if c == '-' || c == '+' {
-			l.advance()
-		}
+	case c == '.' && l.pos+1 < len(l.source) && isDigit(l.source[l.pos+1]):
+		// A leading dot belongs to the number, as in beanquery's
+		// [0-9]*\.[0-9]+ rule. Numbers carry no sign: - and + are
+		// operators, so 1 -2 is a subtraction.
 		return l.scanNumber(start, line, col)
 	case c == '"' || c == '\'':
 		return l.scanString(c, start, line, col)
@@ -97,11 +94,10 @@ func (l *Lexer) Next() Token {
 	return tok(ILLEGAL)
 }
 
-// scanIdent scans an identifier or keyword. Like bean-query's
-// [a-zA-Z][a-zA-Z_]* rule, identifiers hold no digits: account2 is the
-// identifier account followed by the number 2.
+// scanIdent scans an identifier or keyword, beanquery's
+// [a-zA-Z_][a-zA-Z0-9_]* rule.
 func (l *Lexer) scanIdent(start, line, col int) Token {
-	for l.pos < len(l.source) && (isLetter(l.source[l.pos]) || l.source[l.pos] == '_') {
+	for l.pos < len(l.source) && (isLetter(l.source[l.pos]) || isDigit(l.source[l.pos]) || l.source[l.pos] == '_') {
 		l.advance()
 	}
 	text := string(l.source[start:l.pos])
@@ -178,18 +174,6 @@ func (l *Lexer) advance() {
 		l.col++
 	}
 	l.pos++
-}
-
-// numberAhead reports whether a number without leading digits starts at
-// pos: an optional sign followed by a digit, or by a dot and a digit.
-func (l *Lexer) numberAhead(pos int) bool {
-	if pos < len(l.source) && (l.source[pos] == '-' || l.source[pos] == '+') {
-		pos++
-	}
-	if pos < len(l.source) && l.source[pos] == '.' {
-		pos++
-	}
-	return pos < len(l.source) && isDigit(l.source[pos])
 }
 
 func isLetter(c byte) bool {

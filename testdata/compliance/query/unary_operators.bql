@@ -1,0 +1,1 @@
+SELECT -(1 + 2) AS a, - -1 AS b, --1, -.5, -number, +1, + number, -TRUE AS t, 2 - -3, -2 * 3, NOT -1, number -1, number-1 LIMIT 3

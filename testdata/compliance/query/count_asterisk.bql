@@ -1,0 +1,1 @@
+SELECT account, count(*), count( * ), count(account) GROUP BY account

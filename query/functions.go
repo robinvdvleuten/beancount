@@ -13,8 +13,9 @@ import (
 )
 
 // funcOverload is one typed signature of a simple function. tAny parameters
-// match any argument type; other parameters need that exact type, so like
-// bean-query an object-typed value or NULL only fits a tAny parameter.
+// match any argument type but the * of count(*); other parameters need that
+// exact type, so like bean-query an object-typed value or NULL only fits a
+// tAny parameter.
 type funcOverload struct {
 	params []dtype
 	result dtype
@@ -36,7 +37,7 @@ func (d *funcDef) matchOverload(argTypes []dtype) *funcOverload {
 		}
 		ok := true
 		for j, param := range o.params {
-			if param != tAny && param != argTypes[j] {
+			if param != argTypes[j] && (param != tAny || argTypes[j] == tAsterisk) {
 				ok = false
 				break
 			}

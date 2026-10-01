@@ -173,6 +173,14 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 - #582: `SELECT account FROM OPEN ON 2020-01-01 CLOSE` (CLOSE without a date
   after OPEN ON) fails in beanquery with a Python `TypeError`, nothing on
   stdout and exit status 1; ours prints the rows.
+- #590: beanquery's list constants are syntax errors in ours:
+  `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
+- #591: beanquery's attribute (`.x`) and subscript (`['x']`) access on a
+  column are syntax errors in ours: `SELECT account.x` is `column type is
+  not structured` there, with carets under `account.x`, and a syntax
+  error at offset 14 in ours. A `.` after a number moves the caret too:
+  beanquery's is one column right of ours for `SELECT 2.5.5` and
+  `SELECT 1 .5`.
 - #587: beanquery's `%`, `!~`, `?~`, `NOT IN` and `BETWEEN` operators are
   syntax errors in ours: `SELECT 7 % 3` prints `1` there.
 - #588: a transaction without a payee has a NULL `payee` in beanquery and
@@ -182,7 +190,9 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   ours: `account ~ 'Cash(?=)'` keeps 6 rows there and none in ours, and
   `account ~ '['` fails there with `re.error` and keeps no rows in ours.
   Python's integers do not overflow: `100000000000 * 100000000000` is
-  `10000000000000000000000` there and wraps around in ours. Casting an
+  `10000000000000000000000` there and wraps around in ours, and
+  `SELECT -9223372036854775808` prints the number there and is a syntax
+  error in ours, whose unsigned 9223372036854775808 does not fit. Casting an
   untyped operand parses more there: the metadata strings `"1_000"` and
   `"NaN"` are decimals and `"2023-2-1"` a date in beanquery, and NULL in
   ours. `1 IN account` fails there with a `TypeError` and is FALSE in
@@ -228,16 +238,17 @@ compare the lines errors are on:
   (`operator "less(int, str)" not supported` for `year < '2024'`), an
   untyped (object) operand cast to the other operand's type, NULL
   operands giving NULL, AND and OR with beanquery's NULL handling
-  (`NULL AND FALSE` is NULL), `IS [NOT] NULL`, and a statement that does
-  not parse or compile reported on stderr with exit status 1, in the words
-  and with the caret lines of beanquery's interactive shell (one-shot
-  `bean-query` prints a Python traceback instead). Still to follow
-  beanquery (`queryGaps` in `cli/query_compliance_test.go` lists every
-  fixture): grammar (#574: `count(*)`, unary minus on any expression,
-  `number -1` as a subtraction, digits in identifiers); per-term ORDER BY
-  directions (#575); `HAVING` and `PIVOT BY` (#576); and functions (#577:
-  every function NULL-strict, one-argument `root`, `has_account` in WHERE,
-  `balance` accumulated where it is evaluated).
+  (`NULL AND FALSE` is NULL), `IS [NOT] NULL`, unsigned numbers with a
+  unary minus on any expression (`-number`, `- -1`, `number -1` as a
+  subtraction), `count(*)`, digits in identifiers, and a statement that
+  does not parse or compile reported on stderr with exit status 1, in the
+  words and with the caret lines of beanquery's interactive shell
+  (one-shot `bean-query` prints a Python traceback instead). Still to
+  follow beanquery (`queryGaps` in `cli/query_compliance_test.go` lists
+  every fixture): per-term ORDER BY directions (#575); `HAVING` and
+  `PIVOT BY` (#576); and functions (#577: every function NULL-strict,
+  one-argument `root`, `has_account` in WHERE, `balance` accumulated where
+  it is evaluated).
 
 ## Deliberate deviations
 

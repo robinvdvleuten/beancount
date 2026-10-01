@@ -125,6 +125,60 @@ var operators = func() map[bql.TokenType]*operatorDef {
 	return ops
 }()
 
+// unarySignature is one typed signature of a unary operator. A NULL
+// operand gives NULL, unless the operator is nullSafe.
+type unarySignature struct {
+	x, result dtype
+	nullSafe  bool
+	eval      func(x any) any
+}
+
+// unaryOperatorDef is a unary operator beanquery type-checks: the name its
+// errors give it and its signatures. tAny matches every operand.
+type unaryOperatorDef struct {
+	name       string
+	pyClass    string // beanquery's parser node class, as its errors quote it
+	signatures []unarySignature
+}
+
+// match finds the signature for an operand of type x. Like beanquery,
+// which looks unary operators up like functions, a boolean also matches
+// an integer signature: Python's bool subclasses int.
+func (d *unaryOperatorDef) match(x dtype) *unarySignature {
+	candidates := []dtype{x}
+	if x == tBool {
+		candidates = append(candidates, tInt)
+	}
+	for _, t := range candidates {
+		for i := range d.signatures {
+			if sig := &d.signatures[i]; sig.x == t || sig.x == tAny && x != tAsterisk {
+				return sig
+			}
+		}
+	}
+	return nil
+}
+
+// unaryOperators is the registry of unary operators, beanquery's OPERATORS
+// for Not and Neg.
+var unaryOperators = map[bql.TokenType]*unaryOperatorDef{
+	bql.NOT: {name: "not", pyClass: "Not", signatures: []unarySignature{
+		{x: tAny, result: tBool, nullSafe: true, eval: func(x any) any { return !truthy(x) }},
+	}},
+	bql.MINUS: {name: "neg", pyClass: "Neg", signatures: []unarySignature{
+		{x: tInt, result: tInt, eval: func(x any) any {
+			if b, ok := x.(bool); ok {
+				if b {
+					return int64(-1)
+				}
+				return int64(0)
+			}
+			return -x.(int64)
+		}},
+		{x: tDecimal, result: tDecimal, eval: func(x any) any { return x.(decimal.Decimal).Neg() }},
+	}},
+}
+
 // matcher is ~ against pattern: Python's re.search with re.IGNORECASE,
 // RE2's syntax standing in for Python's (#589), and false for a pattern
 // that does not compile.

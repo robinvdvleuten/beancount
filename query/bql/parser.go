@@ -178,7 +178,7 @@ func (p *parser) parseSelect() (*Select, error) {
 		if !p.accept(BY) {
 			return nil, p.clauseErrorf(clause, "GROUP BY")
 		}
-		exprs, err := p.parseExprList()
+		exprs, err := p.parseClauseItems()
 		if err != nil {
 			return nil, err
 		}
@@ -198,7 +198,7 @@ func (p *parser) parseSelect() (*Select, error) {
 		if !p.accept(BY) {
 			return nil, p.clauseErrorf(clause, "ORDER BY")
 		}
-		exprs, err := p.parseExprList()
+		exprs, err := p.parseClauseItems()
 		if err != nil {
 			return nil, err
 		}
@@ -232,10 +232,10 @@ func (p *parser) parseSelect() (*Select, error) {
 	if p.cur.Type == LIMIT {
 		clause := p.cur
 		p.next()
-		// beanquery's LIMIT takes digits alone, never a signed number,
-		// which also keeps a negative limit from reaching the executor.
+		// Numbers carry no sign, so a negative limit never reaches the
+		// executor: LIMIT -1 is a syntax error, as in beanquery.
 		tok := p.cur
-		if tok.Type != INTEGER || p.source[tok.Start] == '-' || p.source[tok.Start] == '+' {
+		if tok.Type != INTEGER {
 			return nil, p.clauseErrorf(clause, "LIMIT")
 		}
 		p.next()
@@ -439,6 +439,39 @@ func (p *parser) parseExprList() ([]Expr, error) {
 	return exprs, nil
 }
 
+// parseClauseItems parses GROUP BY or ORDER BY items. Like beanquery's
+// grammar, which tries its integer rule first, an item that starts with an
+// integer is a column index and ends there: GROUP BY 1 + 1 is a syntax
+// error at the +.
+func (p *parser) parseClauseItems() ([]Expr, error) {
+	var items []Expr
+	for {
+		if tok := p.cur; tok.Type == INTEGER {
+			p.next()
+			value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
+			if err != nil {
+				return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
+			}
+			items = append(items, &ColumnIndex{position: p.node(tok.Start), Value: value})
+		} else if tok := p.cur; tok.Type == DECIMAL && isDigit(p.source[tok.Start]) {
+			// The integer rule takes the digits before the dot, and the
+			// item fails at the dot: GROUP BY 1.0 is a syntax error.
+			digits := strings.IndexByte(tok.String(p.source), '.')
+			dot := Token{Type: DECIMAL, Start: tok.Start + digits, End: tok.End, Line: tok.Line, Column: tok.Column + digits}
+			return nil, p.errorf(dot, "expected an integer column index, found %s", p.describe(tok))
+		} else {
+			expr, err := p.parseExpr()
+			if err != nil {
+				return nil, err
+			}
+			items = append(items, expr)
+		}
+		if !p.accept(COMMA) {
+			return items, nil
+		}
+	}
+}
+
 // Expression precedence, low to high: OR, AND, NOT, comparison, additive,
 // multiplicative, unary, primary.
 
@@ -541,20 +574,55 @@ func (p *parser) parseAdditive() (Expr, error) {
 
 func (p *parser) parseMultiplicative() (Expr, error) {
 	start := p.cur.Start
-	left, err := p.parsePrimary()
+	left, err := p.parseUnary()
 	if err != nil {
 		return nil, err
 	}
 	for p.cur.Type == ASTERISK || p.cur.Type == SLASH {
 		tok := p.cur
 		p.next()
-		right, err := p.parsePrimary()
+		right, err := p.parseUnary()
 		if err != nil {
 			return nil, err
 		}
 		left = &Binary{position: p.node(start), Op: tok.Type, L: left, R: right}
 	}
 	return left, nil
+}
+
+// parseUnary parses beanquery's factor: a unary minus applies to a factor,
+// so -(1 + 2) and - -1 are negations, while a unary plus takes only an
+// atom (no parenthesized expression) and leaves no node of its own.
+// Numbers carry no sign, so number -1 is a subtraction.
+func (p *parser) parseUnary() (Expr, error) {
+	switch p.cur.Type {
+	case MINUS:
+		tok := p.cur
+		p.next()
+		x, err := p.parseUnary()
+		if err != nil {
+			return nil, err
+		}
+		return &Unary{position: p.node(tok.Start), Op: MINUS, X: x}, nil
+	case PLUS:
+		p.next()
+		if p.cur.Type == LPAREN {
+			// beanquery reads ( after a unary plus as a list constant,
+			// (literal, ...), which ours does not parse (#590), and fails
+			// after the literal it expects a comma behind.
+			p.next()
+			if _, ok := literalTypes[p.cur.Type]; ok {
+				p.next()
+			}
+			return nil, p.errorf(p.cur, "expected an atom after unary plus, found %s", p.describe(p.cur))
+		}
+	}
+	return p.parsePrimary()
+}
+
+// literalTypes are the tokens of beanquery's literal rule.
+var literalTypes = map[TokenType]struct{}{
+	INTEGER: {}, DECIMAL: {}, DATE: {}, STRING: {}, NULL: {}, TRUE: {}, FALSE: {},
 }
 
 func (p *parser) parsePrimary() (Expr, error) {
@@ -577,11 +645,11 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 	case INTEGER:
 		p.next()
-		value, err := strconv.ParseInt(numberText(tok.String(p.source)), 10, 64)
+		value, err := strconv.ParseInt(tok.String(p.source), 10, 64)
 		if err != nil {
 			return nil, p.errorf(tok, "invalid integer %q", tok.String(p.source))
 		}
-		return &Int{position: p.node(p.unsignedStart(tok)), Value: value}, nil
+		return &Int{position: p.node(tok.Start), Value: value}, nil
 
 	case DECIMAL:
 		p.next()
@@ -589,7 +657,7 @@ func (p *parser) parsePrimary() (Expr, error) {
 		if err != nil {
 			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
 		}
-		return &Dec{position: p.node(p.unsignedStart(tok)), Value: value}, nil
+		return &Dec{position: p.node(tok.Start), Value: value}, nil
 
 	case DATE:
 		p.next()
@@ -616,7 +684,18 @@ func (p *parser) parsePrimary() (Expr, error) {
 		}
 		p.next() // (
 		call := &Call{Func: name}
-		if p.cur.Type != RPAREN {
+		if p.cur.Type == ASTERISK {
+			// Like beanquery's grammar, any function takes * as its only
+			// argument; the compiler decides which accept it.
+			star := p.cur
+			p.next()
+			if p.cur.Type != RPAREN {
+				// beanquery backs out of the * alternative to the start
+				// of the *.
+				return nil, p.errorf(star, "expected ) after *, found %s", p.describe(p.cur))
+			}
+			call.Args = []Expr{&Asterisk{position: p.node(star.Start)}}
+		} else if p.cur.Type != RPAREN {
 			args, err := p.parseExprList()
 			if err != nil {
 				return nil, err
@@ -631,15 +710,6 @@ func (p *parser) parsePrimary() (Expr, error) {
 	}
 
 	return nil, p.nameErrorf(tok, "expected expression, found %s", p.describe(tok))
-}
-
-// unsignedStart returns where a number's source text starts: past a plus
-// sign, which beanquery's grammar drops from the number it parses.
-func (p *parser) unsignedStart(tok Token) int {
-	if p.source[tok.Start] == '+' {
-		return tok.Start + 1
-	}
-	return tok.Start
 }
 
 // parseDate parses a DATE token into an ast.Date, validating its value.
@@ -660,20 +730,16 @@ func (p *parser) parseDate() (*ast.Date, error) {
 // OPEN/CLOSE/CLEAR transforms.
 func (p *parser) startsExpr() bool {
 	switch p.cur.Type {
-	case LPAREN, STRING, INTEGER, DECIMAL, DATE, TRUE, FALSE, NULL, IDENT, NOT:
+	case LPAREN, STRING, INTEGER, DECIMAL, DATE, TRUE, FALSE, NULL, IDENT, NOT, MINUS, PLUS:
 		return true
 	}
 	return false
 }
 
-// numberText rewrites a number token into a form strconv and decimal parse,
-// keeping its digits: +2. is 2 and -.5 is -0.5.
+// numberText rewrites a decimal token into a form decimal parses, keeping
+// its digits: 2. is 2 and .5 is 0.5.
 func numberText(text string) string {
-	text = strings.TrimPrefix(text, "+")
 	text = strings.TrimSuffix(text, ".")
-	if rest, ok := strings.CutPrefix(text, "-."); ok {
-		return "-0." + rest
-	}
 	if rest, ok := strings.CutPrefix(text, "."); ok {
 		return "0." + rest
 	}
