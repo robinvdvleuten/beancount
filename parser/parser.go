@@ -368,8 +368,13 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 	// Parse the value like any metadata value, then rewind: the source text
 	// is kept for the formatter.
 	start := p.pos
+	first := p.peek()
 	value, err := p.parseMetadataValue(pos.Line)
-	if next := p.peek(); err != nil || (next.Type != EOF && next.Type != COMMENT && next.Line == pos.Line) {
+	single := err == nil
+	if next := p.peek(); next.Type != EOF && next.Type != COMMENT && next.Line == pos.Line {
+		single = false
+	}
+	if !single {
 		value = nil // Not a single value; applied as its source text
 	}
 	p.pos = start
@@ -378,6 +383,7 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		Key:       key,
 		Value:     p.parseRestOfLineUntilComment(),
 		MetaValue: value,
+		Null:      single && value == nil && first.Type == IDENT && first.String(p.source) == "NULL",
 	}
 	pm.SetPosition(pos)
 	if err := p.finishHeader(pm, pos.Offset); err != nil {

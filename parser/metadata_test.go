@@ -544,3 +544,33 @@ pushmeta words: some value here
 	assert.Equal(t, "42", *result.Pushmetas[1].MetaValue.Number)
 	assert.Zero(t, result.Pushmetas[2].MetaValue, "more than one value is kept as text only")
 }
+
+func TestParseMetadataNullIsNil(t *testing.T) {
+	source := "2024-01-01 commodity USD\n  name: NULL\n"
+
+	parsed, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+
+	commodity := parsed.Directives[0].(*ast.Commodity)
+	assert.Equal(t, 1, len(commodity.Metadata))
+	assert.Equal(t, (*ast.MetadataValue)(nil), commodity.Metadata[0].Value)
+}
+
+func TestParsePushmetaNull(t *testing.T) {
+	source := "pushmeta ka: NULL\npushmeta kb: \"NULL\"\npushmeta kc: NULL NULL\n"
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(result.Pushmetas))
+
+	assert.Equal(t, "NULL", result.Pushmetas[0].Value)
+	assert.True(t, result.Pushmetas[0].Null)
+	assert.False(t, result.Pushmetas[1].Null)
+	assert.False(t, result.Pushmetas[2].Null, "more than one value is kept as text only")
+}
+
+func TestParseCustomRejectsNull(t *testing.T) {
+	_, err := ParseString(context.Background(), "2024-01-01 custom \"budget\" NULL\n")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unexpected NULL")
+}

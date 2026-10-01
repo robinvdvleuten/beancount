@@ -1,0 +1,4 @@
+; NULL is a metadata value, not a custom one: bean-check reports a syntax
+; error at it.
+2020-01-01 custom "budget" NULL
+2020-01-02 custom "budget" "ok"

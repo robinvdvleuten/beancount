@@ -128,14 +128,17 @@ type Pushmeta struct {
 	// MetaValue is the parsed value applied to transactions; nil when the
 	// source text is not a single metadata value.
 	MetaValue *MetadataValue
+	// Null reports a NULL value, which pushed transactions receive as
+	// beancount's None, a nil value.
+	Null bool
 
 	withComment
 }
 
 // metadataValue returns the value pushed transactions receive: the parsed
-// value, or else the source text as a string.
+// value, nil for NULL, or else the source text as a string.
 func (p *Pushmeta) metadataValue() *MetadataValue {
-	if p.MetaValue != nil {
+	if p.MetaValue != nil || p.Null {
 		return p.MetaValue
 	}
 	raw := NewRawString(p.Value)

@@ -1,0 +1,13 @@
+; NULL is beancount's None, as an empty value is, here and in pushmeta.
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+
+pushmeta pushed: NULL
+2020-01-02 * "Null metadata"
+  mnone: NULL
+  mempty:
+  mtext: "NULL"
+  Expenses:B  1.00 USD
+    pnone: NULL
+  Assets:A   -1.00 USD
+popmeta pushed:

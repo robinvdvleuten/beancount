@@ -507,6 +507,7 @@ func (p *Parser) isMetadataKeyStart(tok Token) bool {
 
 // parseMetadataValue parses a typed metadata value. Beancount supports 8 value types:
 // strings, dates, accounts, currencies, tags, links, numbers, amounts, and booleans.
+// An empty value and NULL are beancount's None: a nil value.
 func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 	tok := p.peek()
 	if tok.Type == EOF || tok.Line != line || tok.Type == COMMENT {
@@ -567,8 +568,13 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 		return &ast.MetadataValue{Number: &value}, nil
 
 	case IDENT:
-		// Could be Account, Currency, or Boolean
+		// Could be Account, Currency, Boolean or NULL
 		identStr := tok.String(p.source)
+
+		if identStr == "NULL" {
+			p.advance()
+			return nil, nil
+		}
 
 		// Check for Boolean (TRUE/FALSE)
 		if identStr == "TRUE" {
@@ -632,6 +638,10 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 
 	case IDENT:
 		ident := p.internIdent(tok)
+		if ident == "NULL" {
+			// beancount's grammar takes no NULL among a custom's values
+			return nil, p.errorAtToken(tok, "unexpected NULL")
+		}
 		p.advance()
 		switch ident {
 		case "TRUE", "FALSE":

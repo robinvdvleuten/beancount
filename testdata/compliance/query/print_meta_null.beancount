@@ -1,0 +1,11 @@
+; PRINT renders a NULL metadata value empty, as printer.py prints None.
+2020-01-01 open Assets:A
+  mnone: NULL
+2020-01-01 open Expenses:B
+
+2020-01-02 * "Null metadata"
+  mnone: NULL
+  mtext: "NULL"
+  Expenses:B  1.00 USD
+    pnone: NULL
+  Assets:A   -1.00 USD
