@@ -1,6 +1,7 @@
 package parser
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -54,10 +55,11 @@ func FuzzLexer(f *testing.F) {
 		" ", "\t", "\n", "\r\n", "   ",
 
 		// Edge cases
-		"",          // Empty
-		"0",         // Single zero
-		".",         // Just a dot
-		"-",         // Just a minus
+		"",  // Empty
+		"0", // Single zero
+		".", // Just a dot
+		"-", // Just a minus
+		"/" + strings.Repeat("-", 64) + "\n- - -1\n+-(1)", // Runs of signs
 		"Assets",    // Partial account
 		"Assets:",   // Account with trailing colon
 		":Checking", // Account with leading colon

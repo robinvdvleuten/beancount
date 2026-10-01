@@ -37,6 +37,12 @@ type Lexer struct {
 	column   int       // Current column (1-indexed)
 	tokens   []Token   // Token buffer (pre-allocated)
 	interner *Interner // String interning pool
+
+	// signRun caches signedValueAhead's last scan, a run of signs and
+	// spaces from signRunStart up to signRunEnd, so a long run is scanned
+	// once rather than again from each of its signs.
+	signRunStart, signRunEnd int
+	signRunValue             bool // a digit or '(' ends the run
 }
 
 // NewLexer creates a new lexer for the given source.
@@ -452,18 +458,21 @@ func (l *Lexer) groupSeparatorAhead() bool {
 // expression through further signs or spaces: after them comes a digit or an
 // opening parenthesis on the same line.
 func (l *Lexer) signedValueAhead() bool {
-	sawSeparator := false
-	for i := l.pos; i < len(l.source); i++ {
-		switch ch := l.source[i]; {
-		case ch == '+' || ch == '-' || ch == ' ' || ch == '\t':
-			sawSeparator = true
-		case isDigit(ch) || ch == '(':
-			return sawSeparator
-		default:
-			return false
+	if l.pos < l.signRunStart || l.pos > l.signRunEnd {
+		end := l.pos
+		for end < len(l.source) && isSignOrBlank(l.source[end]) {
+			end++
 		}
+		l.signRunStart, l.signRunEnd = l.pos, end
+		l.signRunValue = end < len(l.source) && (isDigit(l.source[end]) || l.source[end] == '(')
 	}
-	return false
+	// A sign or a space must come between the sign just consumed and
+	// what ends the run.
+	return l.signRunValue && l.signRunEnd > l.pos
+}
+
+func isSignOrBlank(ch byte) bool {
+	return ch == '+' || ch == '-' || ch == ' ' || ch == '\t'
 }
 
 func (l *Lexer) consumeNumberRemainder() {

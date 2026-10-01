@@ -2,6 +2,7 @@ package parser
 
 import (
 	"errors"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -951,4 +952,40 @@ func TestColumnOneLongCurrency(t *testing.T) {
 	tokens, err := NewLexer([]byte(line), "test").ScanAll()
 	assert.NoError(t, err)
 	assert.Equal(t, []TokenType{IDENT, ILLEGAL, EOF}, tokenTypes(tokens))
+}
+
+// TestLexerSignRuns pins how runs of signs and spaces lex: a sign starts an
+// expression only when a digit or a parenthesis ends the run after at least
+// one more sign or space, whichever sign of the run it is.
+func TestLexerSignRuns(t *testing.T) {
+	tests := map[string][]TokenType{
+		"/---":     {ILLEGAL, ILLEGAL, ILLEGAL, ILLEGAL, EOF},
+		"--1":      {EXPRESSION, NUMBER, EOF},
+		"- - 1":    {EXPRESSION, EXPRESSION, NUMBER, EOF},
+		"-- x":     {ILLEGAL, ILLEGAL, ILLEGAL, EOF},
+		"+-(1)":    {EXPRESSION, EXPRESSION, EOF},
+		"-- 1 --x": {EXPRESSION, EXPRESSION, NUMBER, ILLEGAL, ILLEGAL, ILLEGAL, EOF},
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			tokens, err := NewLexer([]byte(input+"\n"), "test").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, want, tokenTypes(tokens))
+		})
+	}
+}
+
+// BenchmarkLexerSignRun lexes a slash and a run of dashes, which no digit
+// ends: the time per run doubles as the run does, rather than quadrupling.
+func BenchmarkLexerSignRun(b *testing.B) {
+	for _, n := range []int{20000, 40000, 80000} {
+		input := []byte("2020-01-01 open Assets:A\n/" + strings.Repeat("-", n) + "\n")
+		b.Run(strconv.Itoa(n), func(b *testing.B) {
+			for b.Loop() {
+				if _, err := NewLexer(input, "test").ScanAll(); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
+	}
 }
