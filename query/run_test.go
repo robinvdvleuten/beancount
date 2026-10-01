@@ -21,6 +21,33 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_between_types": `error: operator "int BETWEEN str AND int" not supported
+| SELECT 1 BETWEEN 'a' AND 2
+|        ^^^^^^^^^^^^^^^^^^^`,
+	"err_between_null": `error: operator "NULL BETWEEN int AND int" not supported
+| SELECT NULL BETWEEN 1 AND 3
+|        ^^^^^^^^^^^^^^^^^^^^`,
+	"err_between_column": `error: column "between" not found in table "postings"
+| SELECT account WHERE between
+|                      ^^^^^^^`,
+	"err_between_no_and": `error: syntax error
+| SELECT 1 BETWEEN 2
+|                   ^`,
+	"err_not_without_in": `error: syntax error
+| SELECT 1 NOT 2
+|              ^`,
+	"err_not_at_end": `error: syntax error
+| SELECT account NOT
+|                   ^`,
+	"err_mod_types": `error: operator "mod(str, int)" not supported
+| SELECT 'a' % 2
+|        ^^^^^^^`,
+	"err_not_match_types": `error: operator "notmatch(int, str)" not supported
+| SELECT 1 !~ 'a'
+|        ^^^^^^^^`,
+	"err_matches_types": `error: operator "matches(int, str)" not supported
+| SELECT 1 ?~ 'a'
+|        ^^^^^^^^`,
 	"err_coalesce_uniform_type": `error: coalesce() function arguments must have uniform type, found: NoneType, int
 | SELECT coalesce(NULL, 1)
 |        ^^^^^^^^^^^^^^^^^`,

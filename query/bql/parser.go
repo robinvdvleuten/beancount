@@ -573,22 +573,46 @@ func (p *parser) parseNot() (Expr, error) {
 }
 
 // parseComparison parses a non-associative comparison: at most one comparison
-// operator between two additive expressions.
+// operator between two additive expressions. Like beanquery, BETWEEN is
+// not a reserved word, so it is a name everywhere else.
 func (p *parser) parseComparison() (Expr, error) {
 	start := p.cur.Start
 	left, err := p.parseAdditive()
 	if err != nil {
 		return nil, err
 	}
-	switch p.cur.Type {
-	case EQ, NE, LT, LTE, GT, GTE, TILDE, IN:
-		tok := p.cur
+	op := p.cur.Type
+	if op == NOT {
+		// Only IN may follow a NOT here; beanquery fails after the NOT.
+		p.next()
+		if p.cur.Type != IN {
+			return nil, p.errorf(p.cur, "expected IN after NOT, found %s", p.describe(p.cur))
+		}
+		op = NOTIN
+	}
+	if p.cur.Type == IDENT && strings.EqualFold(p.cur.String(p.source), "between") {
+		p.next()
+		lower, err := p.parseAdditive()
+		if err != nil {
+			return nil, err
+		}
+		if _, err := p.expect(AND, "BETWEEN"); err != nil {
+			return nil, err
+		}
+		upper, err := p.parseAdditive()
+		if err != nil {
+			return nil, err
+		}
+		return &Between{position: p.node(start), X: left, Lower: lower, Upper: upper}, nil
+	}
+	switch op {
+	case EQ, NE, LT, LTE, GT, GTE, TILDE, NOTTILDE, QTILDE, IN, NOTIN:
 		p.next()
 		right, err := p.parseAdditive()
 		if err != nil {
 			return nil, err
 		}
-		return &Binary{position: p.node(start), Op: tok.Type, L: left, R: right}, nil
+		return &Binary{position: p.node(start), Op: op, L: left, R: right}, nil
 	case IS:
 		p.next()
 		negated := p.accept(NOT)
@@ -624,7 +648,7 @@ func (p *parser) parseMultiplicative() (Expr, error) {
 	if err != nil {
 		return nil, err
 	}
-	for p.cur.Type == ASTERISK || p.cur.Type == SLASH {
+	for p.cur.Type == ASTERISK || p.cur.Type == SLASH || p.cur.Type == PERCENT {
 		tok := p.cur
 		p.next()
 		right, err := p.parseUnary()

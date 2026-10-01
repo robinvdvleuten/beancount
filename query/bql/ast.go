@@ -165,7 +165,8 @@ type IsNull struct {
 func (*IsNull) expr() {}
 
 // Binary is a binary operation. Op is one of AND, OR, EQ, NE, LT, LTE, GT,
-// GTE, TILDE, IN, PLUS, MINUS, ASTERISK, SLASH.
+// GTE, TILDE, NOTTILDE, QTILDE, IN, NOTIN, PLUS, MINUS, ASTERISK, SLASH,
+// PERCENT.
 type Binary struct {
 	position
 	Op   TokenType
@@ -173,6 +174,14 @@ type Binary struct {
 }
 
 func (*Binary) expr() {}
+
+// Between is X BETWEEN Lower AND Upper.
+type Between struct {
+	position
+	X, Lower, Upper Expr
+}
+
+func (*Between) expr() {}
 
 // Str is a string literal.
 type Str struct {

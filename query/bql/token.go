@@ -71,6 +71,12 @@ const (
 	LTE       // <=
 	GT        // >
 	GTE       // >=
+	PERCENT   // %
+	NOTTILDE  // !~
+	QTILDE    // ?~
+
+	// NOTIN is the operator of x NOT IN y, the two keywords NOT and IN.
+	NOTIN
 )
 
 var tokenNames = map[TokenType]string{
@@ -134,6 +140,10 @@ var tokenNames = map[TokenType]string{
 	LTE:       "<=",
 	GT:        ">",
 	GTE:       ">=",
+	PERCENT:   "%",
+	NOTTILDE:  "!~",
+	QTILDE:    "?~",
+	NOTIN:     "NOT IN",
 }
 
 func (t TokenType) String() string {

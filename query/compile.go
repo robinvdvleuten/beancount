@@ -461,6 +461,10 @@ func (c *compiler) columnsAndAggregates(e bql.Expr) (columns int, aggs []*bql.Ca
 			walk(node.X)
 		case *bql.Subscript:
 			walk(node.X)
+		case *bql.Between:
+			walk(node.X)
+			walk(node.Lower)
+			walk(node.Upper)
 		}
 	}
 	walk(e)
@@ -567,6 +571,9 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 			return nil, err
 		}
 		return nil, compileErrorf(node, "column type is not subscriptable")
+
+	case *bql.Between:
+		return c.compileBetween(node)
 	}
 	return nil, compileErrorf(e, "unsupported expression")
 }
@@ -712,6 +719,28 @@ func (c *compiler) compileBinary(node *bql.Binary) (cexpr, error) {
 	}
 }
 
+// compileBetween compiles X BETWEEN Lower AND Upper, whose three operands
+// must be of types in one of betweenGroups. Like beanquery, it casts no
+// untyped operand.
+func (c *compiler) compileBetween(node *bql.Between) (cexpr, error) {
+	operands := make([]cexpr, 3)
+	for i, e := range []bql.Expr{node.X, node.Lower, node.Upper} {
+		operand, err := c.compileExpr(e)
+		if err != nil {
+			return nil, err
+		}
+		operands[i] = operand
+	}
+	for _, group := range betweenGroups {
+		if slices.ContainsFunc(operands, func(operand cexpr) bool { return !slices.Contains(group, operand.typ()) }) {
+			continue
+		}
+		return &cBetween{x: operands[0], lower: operands[1], upper: operands[2]}, nil
+	}
+	return nil, compileErrorf(node, `operator "%s BETWEEN %s AND %s" not supported`,
+		operandTypeName(operands[0].typ()), operandTypeName(operands[1].typ()), operandTypeName(operands[2].typ()))
+}
+
 // castOperand casts an untyped operand to the type of the other, or
 // returns nil when beanquery has no cast to it.
 func castOperand(x cexpr, to dtype) cexpr {
@@ -750,7 +779,11 @@ var pyOpClasses = map[bql.TokenType]string{
 	bql.LT:       "Less",
 	bql.LTE:      "LessEq",
 	bql.TILDE:    "Match",
+	bql.NOTTILDE: "NotMatch",
+	bql.QTILDE:   "Matches",
 	bql.IN:       "In",
+	bql.NOTIN:    "NotIn",
+	bql.PERCENT:  "Mod",
 	bql.ASTERISK: "Mul",
 	bql.SLASH:    "Div",
 	bql.PLUS:     "Add",
@@ -782,6 +815,8 @@ func pyExprRepr(e bql.Expr) string {
 			return fmt.Sprintf("IsNotNull(operand=%s)", pyExprRepr(node.X))
 		}
 		return fmt.Sprintf("IsNull(operand=%s)", pyExprRepr(node.X))
+	case *bql.Between:
+		return fmt.Sprintf("Between(operand=%s, lower=%s, upper=%s)", pyExprRepr(node.X), pyExprRepr(node.Lower), pyExprRepr(node.Upper))
 	case *bql.Binary:
 		if node.Op == bql.AND || node.Op == bql.OR {
 			args := make([]string, 0, 2)

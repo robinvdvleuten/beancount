@@ -104,8 +104,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   entry.narration` run there and are `column ... not found` in ours.
   Attribute access on the types ours has (position, amount, cost, date)
   matches.
-- #587: beanquery's `%`, `!~`, `?~`, `NOT IN` and `BETWEEN` operators are
-  syntax errors in ours: `SELECT 7 % 3` prints `1` there.
 - #589: `~` takes Python's regular expressions in beanquery and RE2's in
   ours: `account ~ 'Cash(?=)'` keeps 6 rows there and none in ours, and
   `account ~ '['` fails there with `re.error` and keeps no rows in ours.
@@ -116,7 +114,7 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   untyped operand parses more there: the metadata strings `"1_000"` and
   `"NaN"` are decimals and `"2023-2-1"` a date in beanquery, and NULL in
   ours. `1 IN account` fails there with a `TypeError` and is FALSE in
-  ours.
+  ours, and `1 NOT IN account` TRUE.
 
 Differences in message text only, which the suites cannot see since they
 compare the lines errors are on:
@@ -158,7 +156,11 @@ compare the lines errors are on:
   (`operator "less(int, str)" not supported` for `year < '2024'`), an
   untyped (object) operand cast to the other operand's type, NULL
   operands giving NULL, AND and OR with beanquery's NULL handling
-  (`NULL AND FALSE` is NULL), `IS [NOT] NULL`, unsigned numbers with a
+  (`NULL AND FALSE` is NULL), `IS [NOT] NULL`, `%` (an integer's
+  remainder taking the divisor's sign and a decimal's the dividend's, NULL
+  for a zero divisor), `!~`, a case-sensitive `?~` whose left operand is
+  the pattern, `NOT IN`, `BETWEEN` (not a reserved word) over numbers,
+  dates or strings, unsigned numbers with a
   unary minus on any expression (`-number`, `- -1`, `number -1` as a
   subtraction), `count(*)`, digits in identifiers, an ASC or DESC per
   ORDER BY term with NULL first ascending and last descending, an ORDER BY

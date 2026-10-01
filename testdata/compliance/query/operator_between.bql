@@ -1,0 +1,1 @@
+SELECT date, narration, number WHERE date BETWEEN 2023-02-01 AND 2023-04-30 AND number BETWEEN 0 AND 200

@@ -1,0 +1,1 @@
+SELECT DISTINCT account, account !~ 'cash' AS nm, account ?~ 'cash' AS m1, 'Cash' ?~ account AS m2, 'cash' ?~ account AS m3, account NOT IN 'Assets:Cash' AS ni, NOT account IN 'Assets:Cash' AS nj WHERE account ~ 'Assets'

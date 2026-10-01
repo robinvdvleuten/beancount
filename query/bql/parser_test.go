@@ -119,6 +119,35 @@ func TestParseArithmeticPrecedence(t *testing.T) {
 	assert.Equal(t, ASTERISK, mul.Op)
 }
 
+func TestParseModuloPrecedence(t *testing.T) {
+	// % binds like * and /, left to right.
+	stmt, err := Parse("SELECT 1 + 7 % 4 * 2")
+	assert.NoError(t, err)
+
+	expr := stmt.(*Select).Targets[0].Expr.(*Binary)
+	assert.Equal(t, PLUS, expr.Op)
+	mul := expr.R.(*Binary)
+	assert.Equal(t, ASTERISK, mul.Op)
+	assert.Equal(t, PERCENT, mul.L.(*Binary).Op)
+}
+
+func TestParseBetween(t *testing.T) {
+	// BETWEEN takes its bounds' AND, and binds tighter than NOT and AND.
+	stmt, err := Parse("SELECT * WHERE NOT date BETWEEN 2023-01-01 AND 2023-06-30 + 1 AND x")
+	assert.NoError(t, err)
+
+	where := stmt.(*Select).Where.(*Binary)
+	assert.Equal(t, AND, where.Op)
+	between := where.L.(*Unary).X.(*Between)
+	assert.Equal(t, "date", between.X.(*Ident).Name)
+	assert.Equal(t, PLUS, between.Upper.(*Binary).Op)
+
+	// It is no reserved word.
+	stmt, err = Parse("SELECT between")
+	assert.NoError(t, err)
+	assert.Equal(t, "between", stmt.(*Select).Targets[0].Expr.(*Ident).Name)
+}
+
 func TestParseComparisonOperators(t *testing.T) {
 	for _, tt := range []struct {
 		query string
@@ -132,6 +161,9 @@ func TestParseComparisonOperators(t *testing.T) {
 		{"SELECT * WHERE a >= 1", GTE},
 		{"SELECT * WHERE account ~ 'Expenses'", TILDE},
 		{"SELECT * WHERE 'trip' IN tags", IN},
+		{"SELECT * WHERE account !~ 'Cash'", NOTTILDE},
+		{"SELECT * WHERE account ?~ 'Cash'", QTILDE},
+		{"SELECT * WHERE 'trip' NOT IN tags", NOTIN},
 	} {
 		stmt, err := Parse(tt.query)
 		assert.NoError(t, err, tt.query)

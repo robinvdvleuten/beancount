@@ -1,0 +1,1 @@
+SELECT 2 BETWEEN 1 AND 3, 2 BETWEEN 1.5 AND 3, 'b' between 'a' AND 'c', 5 BETWEEN 1 AND 3, cost_number BETWEEN 500 AND 600 AS c, 'coffee' NOT IN tags AS t, payee NOT IN 'Acme' AS p

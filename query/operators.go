@@ -39,8 +39,9 @@ func (d *operatorDef) match(l, r dtype) *opSignature {
 }
 
 // operators is the registry of typed binary operators, beanquery's
-// OPERATORS (query_compile.py) for the operators BQL parses. AND, OR and IN
-// take operands of any type and are in untypedOperators instead.
+// OPERATORS (query_compile.py) for the operators BQL parses. AND, OR, IN
+// and NOT IN take operands of any type and are in untypedOperators
+// instead; BETWEEN, with three operands, is compileBetween's.
 var operators = func() map[bql.TokenType]*operatorDef {
 	ops := map[bql.TokenType]*operatorDef{
 		bql.TILDE: {name: "match", signatures: []opSignature{
@@ -49,6 +50,22 @@ var operators = func() map[bql.TokenType]*operatorDef {
 			}, func(r any) func(l any) any {
 				match := matcher(r.(string))
 				return func(l any) any { return match(l.(string)) }
+			}},
+		}},
+		bql.NOTTILDE: {name: "notmatch", signatures: []opSignature{
+			{tString, tString, tBool, func(l, r any) any {
+				return !matcher(r.(string))(l.(string))
+			}, func(r any) func(l any) any {
+				match := matcher(r.(string))
+				return func(l any) any { return !match(l.(string)) }
+			}},
+		}},
+		// Like beanquery's, ?~ searches the right operand for the left
+		// one, case-sensitively.
+		bql.QTILDE: {name: "matches", signatures: []opSignature{
+			{l: tString, r: tString, result: tBool, eval: func(l, r any) any {
+				re, err := regexp.Compile(l.(string))
+				return err == nil && re.MatchString(r.(string))
 			}},
 		}},
 	}
@@ -122,8 +139,62 @@ var operators = func() map[bql.TokenType]*operatorDef {
 			return int64(l.(*ast.Date).Sub(r.(*ast.Date).Time) / (24 * time.Hour))
 		}},
 	)
+
+	// Modulo takes two numbers, like Python's %: an integer's remainder
+	// takes the divisor's sign and a decimal's the dividend's. A zero
+	// divisor gives NULL.
+	modDecimal := func(l, r any) any {
+		ld, _ := asDecimal(l)
+		rd, _ := asDecimal(r)
+		if rd.IsZero() {
+			return nil
+		}
+		return pydecimal.Rem(ld, rd)
+	}
+	ops[bql.PERCENT] = &operatorDef{name: "mod", signatures: []opSignature{
+		{l: tInt, r: tInt, result: tInt, eval: func(l, r any) any {
+			x, y := l.(int64), r.(int64)
+			if y == 0 {
+				return nil
+			}
+			m := x % y
+			if m != 0 && (m < 0) != (y < 0) {
+				m += y
+			}
+			return m
+		}},
+		{l: tDecimal, r: tInt, result: tDecimal, eval: modDecimal},
+		{l: tInt, r: tDecimal, result: tDecimal, eval: modDecimal},
+		{l: tDecimal, r: tDecimal, result: tDecimal, eval: modDecimal},
+	}}
 	return ops
 }()
+
+// betweenGroups are the types BETWEEN compares with each other, beanquery's
+// _comparable: its three operands must all be in one group.
+var betweenGroups = [][]dtype{{tInt, tDecimal}, {tDate}, {tString}}
+
+// cBetween is beanquery's EvalBetween, lower <= x <= upper, NULL when any
+// operand is.
+type cBetween struct{ x, lower, upper cexpr }
+
+func (c *cBetween) typ() dtype { return tBool }
+
+func (c *cBetween) eval(row *evalRow) any {
+	x := c.x.eval(row)
+	if x == nil {
+		return nil
+	}
+	lower := c.lower.eval(row)
+	if lower == nil {
+		return nil
+	}
+	upper := c.upper.eval(row)
+	if upper == nil {
+		return nil
+	}
+	return compareValues(lower, x) <= 0 && compareValues(x, upper) <= 0
+}
 
 // unarySignature is one typed signature of a unary operator. A NULL
 // operand gives NULL, unless the operator is nullSafe.
@@ -193,9 +264,10 @@ func matcher(pattern string) func(s string) bool {
 // untypedOperators builds AND, OR and IN, which take operands of any type,
 // so beanquery checks no signature for them.
 var untypedOperators = map[bql.TokenType]func(l, r cexpr) cexpr{
-	bql.AND: func(l, r cexpr) cexpr { return &cAnd{l: l, r: r} },
-	bql.OR:  func(l, r cexpr) cexpr { return &cOr{l: l, r: r} },
-	bql.IN:  func(l, r cexpr) cexpr { return &cIn{l: l, r: r} },
+	bql.AND:   func(l, r cexpr) cexpr { return &cAnd{l: l, r: r} },
+	bql.OR:    func(l, r cexpr) cexpr { return &cOr{l: l, r: r} },
+	bql.IN:    func(l, r cexpr) cexpr { return &cIn{l: l, r: r} },
+	bql.NOTIN: func(l, r cexpr) cexpr { return &cNotIn{in: cIn{l: l, r: r}} },
 }
 
 // cAnd is beanquery's EvalAnd: NULL at the first NULL operand, FALSE at the
@@ -267,6 +339,19 @@ func (c *cIn) eval(row *evalRow) any {
 		return strings.Contains(container, elem)
 	}
 	return false
+}
+
+// cNotIn is Python's not in: the negation of in, NULL when either
+// operand is.
+type cNotIn struct{ in cIn }
+
+func (c *cNotIn) typ() dtype { return tBool }
+
+func (c *cNotIn) eval(row *evalRow) any {
+	if in, ok := c.in.eval(row).(bool); ok {
+		return !in
+	}
+	return nil
 }
 
 // divide divides like beanquery's operator, which gives NULL for a zero

@@ -71,6 +71,11 @@ func TestArithmetic(t *testing.T) {
 		{"tie to even, down", Add(big, decimal.RequireFromString("0.5")), "1000000000000000000000000000"},
 		{"tie to even, up", Add(big, decimal.RequireFromString("1.5")), "1000000000000000000000000002"},
 		{"tie to even, stays", Add(big, decimal.RequireFromString("2.5")), "1000000000000000000000000002"},
+		{"7.5 % 2", Rem(decimal.RequireFromString("7.5"), decimal.NewFromInt(2)), "1.5"},
+		{"-7.5 % 2", Rem(decimal.RequireFromString("-7.5"), decimal.NewFromInt(2)), "-1.5"},
+		{"-7 % 2.0", Rem(decimal.NewFromInt(-7), decimal.RequireFromString("2.0")), "-1.0"},
+		{"7 % -3", Rem(decimal.NewFromInt(7), decimal.NewFromInt(-3)), "1"},
+		{"6.00 % 3", Rem(decimal.RequireFromString("6.00"), decimal.NewFromInt(3)), "0.00"},
 		{"carry adds a digit", Add(decimal.RequireFromString("9999999999999999999999999999"), decimal.RequireFromString("0.5")), "1.000000000000000000000000000E+28"},
 	} {
 		want := decimal.RequireFromString(tt.want)

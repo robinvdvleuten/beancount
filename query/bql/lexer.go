@@ -81,10 +81,22 @@ func (l *Lexer) Next() Token {
 		return tok(RBRACKET)
 	case '=':
 		return tok(EQ)
+	case '%':
+		return tok(PERCENT)
 	case '!':
 		if l.pos < len(l.source) && l.source[l.pos] == '=' {
 			l.advance()
 			return tok(NE)
+		}
+		if l.pos < len(l.source) && l.source[l.pos] == '~' {
+			l.advance()
+			return tok(NOTTILDE)
+		}
+		return tok(ILLEGAL)
+	case '?':
+		if l.pos < len(l.source) && l.source[l.pos] == '~' {
+			l.advance()
+			return tok(QTILDE)
 		}
 		return tok(ILLEGAL)
 	case '<':

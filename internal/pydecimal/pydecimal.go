@@ -66,6 +66,19 @@ func Mul(a, b decimal.Decimal) decimal.Decimal {
 	return round(a.Mul(b))
 }
 
+// Rem is Python's decimal % in its default context: the remainder of the
+// quotient truncated toward zero, so it takes the dividend's sign
+// (-7.5 % 2 = -1.5), at the smaller of the two exponents. The divisor must
+// not be zero.
+func Rem(a, b decimal.Decimal) decimal.Decimal {
+	exponent := min(a.Exponent(), b.Exponent())
+	ca := a.Coefficient()
+	ca.Mul(ca, pow10(int(a.Exponent()-exponent)))
+	cb := b.Coefficient()
+	cb.Mul(cb, pow10(int(b.Exponent()-exponent)))
+	return round(decimal.NewFromBigInt(ca.Rem(ca, cb), exponent))
+}
+
 // round rounds an exact result half-even to precision significant digits.
 // A result that fits, the only kind most ledgers produce, is returned as is.
 func round(d decimal.Decimal) decimal.Decimal {
