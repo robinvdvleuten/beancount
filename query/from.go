@@ -8,7 +8,10 @@ import (
 )
 
 // compiledFrom is the compiled FROM clause of a SELECT or PRINT statement:
-// an entry-level filter plus summarization transforms.
+// a filter expression plus summarization transforms. PRINT keeps the
+// entries its expression is true for (entries); a SELECT joins its
+// expression, compiled over postings, into WHERE, as beanquery does, and
+// reads only the transforms here.
 type compiledFrom struct {
 	Expr    cexpr
 	OpenOn  *ast.Date
@@ -17,8 +20,9 @@ type compiledFrom struct {
 	Clear   bool
 }
 
-// compileFrom compiles a FROM clause, whose expression sees env, an entry
-// environment. A statement without one compiles to nil.
+// compileFrom compiles a FROM clause, whose expression sees env: the
+// postings table for a SELECT, the entries table for PRINT. A statement
+// without one compiles to nil.
 func (c *compiler) compileFrom(from *bql.From, env *environment) (*compiledFrom, error) {
 	if from == nil {
 		return nil, nil
@@ -66,7 +70,7 @@ func (from *compiledFrom) entries(ctx context.Context, qctx *Context) (*Context,
 				return nil, nil, err
 			}
 		}
-		if from.keeps(qctx, entry) {
+		if truthy(from.Expr.eval(&evalRow{Ctx: qctx, Entry: entry})) {
 			kept = append(kept, entry)
 		}
 	}
@@ -81,9 +85,4 @@ func (from *compiledFrom) transformed(qctx *Context) (*Context, []ast.Directive)
 		return qctx, entries
 	}
 	return applyFromTransforms(qctx, entries, from)
-}
-
-// keeps reports whether the clause's filter expression keeps entry.
-func (from *compiledFrom) keeps(qctx *Context, entry ast.Directive) bool {
-	return from == nil || from.Expr == nil || truthy(from.Expr.eval(&evalRow{Ctx: qctx, Entry: entry}))
 }

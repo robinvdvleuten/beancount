@@ -60,8 +60,8 @@ type Target struct {
 	Text string
 }
 
-// From is the FROM clause: an optional entry-level filter expression plus
-// optional summarization transforms.
+// From is the FROM clause: an optional filter expression plus optional
+// summarization transforms.
 type From struct {
 	position
 	Expr    Expr

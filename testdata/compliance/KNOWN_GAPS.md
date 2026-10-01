@@ -141,11 +141,6 @@ lands:
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
-- #582: a SELECT's FROM expression reads the postings table in beanquery, and
-  the entry columns in ours (bean-query 2.3.6's): `SELECT account FROM
-  account ~ 'Cash'` returns rows in beanquery, and ours reports
-  `column "account" is not supported in FROM clause`. PRINT's FROM reads
-  entries in both.
 - #583: beanquery reserves no `AT`, `OPEN`, `CLOSE`, `CLEAR` or `ON`: they are
   names outside the clauses they start. `SELECT open` is `column "open"
   not found in table "postings"` there, and a syntax error after `open`
@@ -163,9 +158,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   white space (Python's `\s`), such as U+00A0, as white space, ours only
   space, tab, `\r` and `\n`: `$'SELECT account,\vdate'` returns rows in
   beanquery and is a syntax error at offset 15 in ours.
-- #582: `SELECT account FROM OPEN ON 2020-01-01 CLOSE` (CLOSE without a date
-  after OPEN ON) fails in beanquery with a Python `TypeError`, nothing on
-  stdout and exit status 1; ours prints the rows.
 - #590: beanquery's list constants are syntax errors in ours:
   `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
 - #593: beanquery's functions `round`, `substr`, `splitcomp`,
@@ -335,7 +327,13 @@ compare the lines errors are on:
   positions with equal sort keys (`1.00 BRL`, `1.00 ARS`, `1.00 COP`)
   orders those pivot columns by Python's set iteration order there, which
   changes with `PYTHONHASHSEED`; here they keep the order the rows first
-  show them in.
+  show them in. `OPEN ON` with a dateless `CLOSE` (`SELECT date, account
+  FROM OPEN ON 2024-01-01 CLOSE`) is a `TypeError: '>' not supported
+  between instances of 'datetime.date' and 'bool'` there, as the compiler
+  compares the OPEN date with the `True` a dateless CLOSE parses to; each
+  clause alone works there, a dateless CLOSE closing at the end of the
+  ledger, so here the two run together and print the rows (#582,
+  `query/from_open_on_close.bql`, listed in `queryGaps`).
 
 - **BQL errors without a node**: beanquery's shell underlines the node a
   compile error names, but raises some errors without one and then prints

@@ -88,6 +88,7 @@ var errorFixtures = map[string]string{
 	"err_empty_from": `error: syntax error
 | SELECT account FROM WHERE account ~ 'Assets'
 |                          ^`,
+	"err_from_aggregate":         `error: aggregates are not allowed in FROM clause`,
 	"err_from_close_before_open": `error: CLOSE date must follow OPEN date`,
 	"err_from_context": `error: column "bogus" not found in table "postings"
 | SELECT account FROM bogus

@@ -36,7 +36,11 @@ type cexpr interface {
 // during resolution and are not rendered.
 type compiledSelect struct {
 	Targets []compiledTarget
-	Where   cexpr
+	// Where filters the posting rows: FROM's expression and WHERE, joined
+	// like beanquery's EvalAnd([c_from_expr, c_where]).
+	Where cexpr
+	// From holds the FROM transforms (OPEN, CLOSE, CLEAR); a SELECT's
+	// expression is joined into Where.
 	From    *compiledFrom
 	GroupBy []int
 	// Having is the index of the hidden HAVING target, or -1.
@@ -88,7 +92,9 @@ type compiler struct {
 func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 	compiled := &compiledSelect{Distinct: sel.Distinct, Limit: sel.Limit, Having: -1}
 
-	from, err := c.compileFrom(sel.From, fromEnv)
+	// Like beanquery, a SELECT's FROM expression compiles against the
+	// postings table, before the targets.
+	from, err := c.compileFrom(sel.From, targetsEnv)
 	if err != nil {
 		return nil, err
 	}
@@ -139,6 +145,15 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 			return nil, statementErrorf("aggregates are not allowed in WHERE clause")
 		}
 		compiled.Where = expr
+	}
+	// Like beanquery, FROM's expression filters the posting rows, ahead of
+	// WHERE in one conjunction.
+	if from != nil && from.Expr != nil {
+		if compiled.Where == nil {
+			compiled.Where = from.Expr
+		} else {
+			compiled.Where = &cAnd{l: from.Expr, r: compiled.Where}
+		}
 	}
 
 	if err := c.resolveGroupBy(sel, compiled); err != nil {
@@ -508,11 +523,6 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 	case *bql.Ident:
 		def, ok := c.env.columns[node.Name]
 		if !ok {
-			// beanquery reads a SELECT's FROM clause over postings, and we
-			// over entries (KNOWN_GAPS.md).
-			if _, posting := postingColumns[node.Name]; posting && c.env == fromEnv {
-				return nil, compileErrorf(node, `column "%s" is not supported in FROM clause`, node.Name)
-			}
 			return nil, compileErrorf(node, `column "%s" not found in table "%s"`, node.Name, c.env.table)
 		}
 		return &cColumn{def: def}, nil

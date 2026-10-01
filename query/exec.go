@@ -72,11 +72,10 @@ func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*tab
 
 // scanRows applies the FROM transforms to the directive stream, flattens
 // the transactions into posting rows, one per booked position (see
-// postingPositions), and visits each row that FROM's filter expression and
-// WHERE keep. Every row shares one running inventory for the lazy balance
+// postingPositions), and visits each row that Where (FROM's expression and
+// WHERE) keeps. Every row shares one running inventory for the lazy balance
 // column. It returns last, the last row of the table: after FROM's
-// transforms but before its filter expression and WHERE, which beanquery
-// joins into one filter. It is nil for an empty table.
+// transforms but before Where. It is nil for an empty table.
 func scanRows(ctx context.Context, qctx *Context, compiled *compiledSelect, visit func(*evalRow)) (last *evalRow, err error) {
 	qctx, entries := compiled.From.transformed(qctx)
 	running := newInventory()
@@ -94,8 +93,6 @@ func scanRows(ctx context.Context, qctx *Context, compiled *compiledSelect, visi
 		if !ok {
 			continue
 		}
-		kept := compiled.From.keeps(qctx, entry)
-
 		for _, posting := range txn.Postings {
 			positions := postingPositions(qctx, posting)
 			if len(positions) == 0 {
@@ -105,7 +102,7 @@ func scanRows(ctx context.Context, qctx *Context, compiled *compiledSelect, visi
 			for _, position := range positions {
 				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position, running: running}
 				last = row
-				if !kept || compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
+				if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
 					continue
 				}
 				visit(row)

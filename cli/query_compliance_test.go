@@ -123,7 +123,8 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"negative_zero": "#408, a deliberate deviation: booking gives a zero residual no sign",
+	"from_open_on_close": "#582, a deliberate deviation: beanquery's compiler crashes comparing OPEN's date with a dateless CLOSE",
+	"negative_zero":      "#408, a deliberate deviation: booking gives a zero residual no sign",
 }
 
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query

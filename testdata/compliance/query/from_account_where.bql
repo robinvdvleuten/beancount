@@ -1,0 +1,1 @@
+SELECT date, account, number FROM account ~ 'Assets' WHERE number > 1000

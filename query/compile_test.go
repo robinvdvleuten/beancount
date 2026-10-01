@@ -277,17 +277,25 @@ func TestCompileClauseEnvironments(t *testing.T) {
 	mustCompile(t, ctx, "SELECT account, sum(number) + 1 GROUP BY account")
 }
 
-func TestCompileFromUsesEntryEnvironment(t *testing.T) {
+func TestCompileFromEnvironments(t *testing.T) {
 	ctx := newTestContext(t)
 
-	// account is a posting column, not available in the FROM filter
-	// (beanquery's is; KNOWN_GAPS.md).
-	err := compileFails(t, ctx, "SELECT date FROM account ~ 'Assets'")
-	assert.Equal(t, `column "account" is not supported in FROM clause`, err.Error())
-
-	// has_account is the predicate for that, in every clause.
+	// Like beanquery, a SELECT's FROM expression sees the postings table,
+	// and joins WHERE behind it.
+	compiled := mustCompile(t, ctx, "SELECT date FROM account ~ 'Assets' WHERE number > 1")
+	_, ok := compiled.Where.(*cAnd)
+	assert.True(t, ok, "FROM and WHERE join into one conjunction")
+	compiled = mustCompile(t, ctx, "SELECT date FROM number > 1")
+	assert.NotZero(t, compiled.Where)
 	mustCompile(t, ctx, "SELECT date FROM has_account('Assets')")
-	mustCompile(t, ctx, "SELECT has_account('Assets') WHERE has_account('Cash')")
+
+	// An aggregate still fails there, before the targets compile.
+	err := compileFails(t, ctx, "SELECT bogus FROM count(*) > 1")
+	assert.Equal(t, `aggregates are not allowed in FROM clause`, err.Error())
+
+	// PRINT's FROM reads the entries table.
+	err = compileFails(t, ctx, "PRINT FROM account ~ 'Assets'")
+	assert.Equal(t, `column "account" not found in table "entries"`, err.Error())
 }
 
 func TestCompileFunctionOverloads(t *testing.T) {

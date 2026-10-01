@@ -1,0 +1,1 @@
+SELECT date, account FROM OPEN ON 2024-01-01 CLOSE

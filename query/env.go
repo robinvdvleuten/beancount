@@ -72,7 +72,7 @@ type columnDef struct {
 // official targets environment.
 var wildcardColumns = []string{"date", "flag", "payee", "narration", "position"}
 
-// entryColumns is the FROM environment: columns on directives.
+// entryColumns is PRINT's FROM environment: columns on directives.
 var entryColumns = map[string]*columnDef{
 	"date":        {tDate, func(row *evalRow) any { return row.Entry.Date() }},
 	"year":        {tInt, func(row *evalRow) any { return int64(row.Entry.Date().Year()) }},
@@ -174,12 +174,9 @@ type environment struct {
 }
 
 var (
-	// targetsEnv compiles SELECT targets, WHERE, GROUP BY, ORDER BY and
-	// PIVOT BY.
+	// targetsEnv compiles a SELECT's FROM expression, targets, WHERE,
+	// GROUP BY, ORDER BY and PIVOT BY, over postings.
 	targetsEnv = &environment{columns: postingColumns, table: "postings"}
-	// fromEnv compiles a SELECT's FROM clause, over entries; beanquery's
-	// errors name the postings table there.
-	fromEnv = &environment{columns: entryColumns, table: "postings"}
 	// printFromEnv compiles PRINT's FROM clause, over entries.
 	printFromEnv = &environment{columns: entryColumns, table: "entries"}
 )

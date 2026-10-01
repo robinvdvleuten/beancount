@@ -50,9 +50,14 @@ func TestExecuteWhere(t *testing.T) {
 	assert.Equal(t, 2, len(result.Rows))
 }
 
-func TestExecuteFromFiltersEntries(t *testing.T) {
+func TestExecuteFromFiltersPostings(t *testing.T) {
 	result := runQuery(t, "SELECT date, account FROM month = 2")
 	assert.Equal(t, 2, len(result.Rows))
+
+	// Like beanquery, FROM's expression sees the posting columns and keeps
+	// rows, not whole transactions.
+	result = runQuery(t, "SELECT date, account FROM month = 2 AND account ~ 'Income'")
+	assert.Equal(t, 1, len(result.Rows))
 }
 
 func TestExecuteGroupBySum(t *testing.T) {
