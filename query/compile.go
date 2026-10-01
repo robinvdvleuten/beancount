@@ -159,16 +159,12 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 	if err := c.resolveGroupBy(sel, compiled); err != nil {
 		return nil, err
 	}
+	// Like beanquery, the targets, GROUP BY and HAVING make a query an
+	// aggregate query, and ORDER BY does not: an aggregate there in a
+	// query that does not group is never computed and orders as NULL.
+	compiled.HasAgg = slices.ContainsFunc(compiled.Targets, func(target compiledTarget) bool { return target.IsAgg })
 	if err := c.resolveOrderBy(sel, compiled); err != nil {
 		return nil, err
-	}
-
-	compiled.HasAgg = false
-	for _, target := range compiled.Targets {
-		if target.IsAgg {
-			compiled.HasAgg = true
-			break
-		}
 	}
 	compiled.Aggs = c.aggs
 

@@ -98,9 +98,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   ours (`SELECT round(number)` prints `200` there and is `no function
   matches "round(decimal)"` here), and ours has a `ymonth` that
   beanquery has not.
-- #592: `SELECT account ORDER BY sum(number)`, an aggregate in ORDER BY
-  without GROUP BY, prints the rows in ledger order in beanquery; ours
-  reports the GROUP-BY coverage error.
 - beanquery's `meta`, `entry` and `accounts` columns are missing in ours,
   and with them the only values beanquery takes a subscript or a
   Transaction attribute on: `SELECT meta['x']` and `SELECT
@@ -177,7 +174,10 @@ compare the lines errors are on:
   a position by `Position.sortkey`, an amount by currency then number, an
   inventory by its sorted positions, a set by inclusion, and `max()` with
   the named tuples' `>`), `HAVING` on an
-  aggregate, a grouped query's targets outside the group key (HAVING's, an
+  aggregate, an aggregate in the ORDER BY of a query whose targets and
+  GROUP BY do not aggregate ordering as NULL, so the rows keep ledger order
+  (`SELECT account ORDER BY sum(number)`), a grouped query's targets
+  outside the group key (HAVING's, an
   ORDER BY expression's) reading their columns from the table's last row,
   after FROM's transforms and before its filter expression and WHERE, as
   beanquery's do, `PIVOT BY` with beanquery's pivoted layout (a
