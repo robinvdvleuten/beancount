@@ -21,6 +21,10 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_regex_invalid":      `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_invalid_grep": `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_lookahead":    `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
+	"err_integer_overflow":   `error: integer overflow`,
 	"err_between_types": `error: operator "int BETWEEN str AND int" not supported
 | SELECT 1 BETWEEN 'a' AND 2
 |        ^^^^^^^^^^^^^^^^^^^`,

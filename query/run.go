@@ -47,10 +47,11 @@ type statement interface {
 // for it: a SELECT, BALANCES or JOURNAL result table in format, with every
 // amount column split into a number column per currency when numberify is
 // set, and PRINT's directives as beancount text.
-// A statement that does not parse or compile writes nothing and returns an
-// *Error. Like beanquery's shell, a text without a statement, such as an
-// empty one, writes nothing. Run returns another error only for an unknown
-// format, a qctx without an AST, a cancelled ctx, or a failed write.
+// A statement that does not parse or compile, or fails while it runs,
+// writes nothing and returns an *Error. Like beanquery's shell, a text
+// without a statement, such as an empty one, writes nothing. Run returns
+// another error only for an unknown format, a qctx without an AST, a
+// cancelled ctx, or a failed write.
 func Run(ctx context.Context, qctx *Context, text string, format Format, numberify bool, w io.Writer) error {
 	if _, ok := renderers[format]; !ok {
 		return fmt.Errorf("unknown output format %q", format)
@@ -81,6 +82,22 @@ func Run(ctx context.Context, qctx *Context, text string, format Format, numberi
 		offset := min(parseErr.Pos.Offset, len(text))
 		return &Error{message: "syntax error", text: text, hasNode: true, start: offset, end: offset}
 	}
+	return compileAndRun(ctx, qctx, parsed, text, output{w: w, format: format, numberify: numberify})
+}
+
+// compileAndRun compiles and runs a parsed statement. A statement that
+// fails while it runs, where beanquery raises a Python exception, writes
+// nothing and returns an *Error without a node.
+func compileAndRun(ctx context.Context, qctx *Context, parsed bql.Statement, text string, out output) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			failure, ok := r.(evalError)
+			if !ok {
+				panic(r)
+			}
+			err = &Error{message: failure.message, text: text}
+		}
+	}()
 	stmt, err := compile(qctx, parsed)
 	if err != nil {
 		var queryErr *Error
@@ -89,7 +106,18 @@ func Run(ctx context.Context, qctx *Context, text string, format Format, numberi
 		}
 		return err
 	}
-	return stmt.run(ctx, qctx, output{w: w, format: format, numberify: numberify})
+	return stmt.run(ctx, qctx, out)
+}
+
+// evalError is a statement failing while it runs: an invalid regular
+// expression, or an integer that overflows.
+type evalError struct{ message string }
+
+// fail aborts the statement being run, which Run reports as an *Error
+// with message and no node. Run executes a statement before it writes
+// any of it, so a failure leaves nothing written.
+func fail(format string, args ...any) {
+	panic(evalError{message: fmt.Sprintf(format, args...)})
 }
 
 // run executes a compiled SELECT and renders its result. Like beanquery's
@@ -106,7 +134,7 @@ func (c *compiledSelect) run(ctx context.Context, qctx *Context, out output) err
 }
 
 // Error is a statement that does not parse or compile, in beanquery's
-// words.
+// words, or one that fails while it runs.
 type Error struct {
 	message string
 	text    string

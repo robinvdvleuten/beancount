@@ -2,7 +2,6 @@ package query
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -232,10 +231,7 @@ var functions = map[string]*funcDef{
 			if !ok {
 				return false
 			}
-			re, err := regexp.Compile("(?i)" + args[0].(string))
-			if err != nil {
-				return false
-			}
+			re := mustCompilePattern("(?i)", args[0].(string))
 			for _, account := range entry.Accounts() {
 				if re.MatchString(string(account)) {
 					return true
@@ -436,10 +432,7 @@ var functions = map[string]*funcDef{
 	}},
 	"grep": {overloads: []funcOverload{
 		{[]dtype{tString, tString}, tString, func(_ *evalRow, args []any) any {
-			re, err := regexp.Compile(args[0].(string))
-			if err != nil {
-				return nil
-			}
+			re := mustCompilePattern("", args[0].(string))
 			if match := re.FindString(args[1].(string)); match != "" {
 				return match
 			}
@@ -448,10 +441,7 @@ var functions = map[string]*funcDef{
 	}},
 	"grepn": {overloads: []funcOverload{
 		{[]dtype{tString, tString, tInt}, tString, func(_ *evalRow, args []any) any {
-			re, err := regexp.Compile(args[0].(string))
-			if err != nil {
-				return nil
-			}
+			re := mustCompilePattern("", args[0].(string))
 			groups := re.FindStringSubmatch(args[1].(string))
 			n := int(args[2].(int64))
 			if groups == nil || n < 0 || n >= len(groups) {
@@ -462,19 +452,13 @@ var functions = map[string]*funcDef{
 	}},
 	"subst": {overloads: []funcOverload{
 		{[]dtype{tString, tString, tString}, tString, func(_ *evalRow, args []any) any {
-			re, err := regexp.Compile(args[0].(string))
-			if err != nil {
-				return nil
-			}
+			re := mustCompilePattern("", args[0].(string))
 			return re.ReplaceAllString(args[2].(string), args[1].(string))
 		}},
 	}},
 	"findfirst": {overloads: []funcOverload{
 		{[]dtype{tString, tSet}, tString, func(_ *evalRow, args []any) any {
-			re, err := regexp.Compile(args[0].(string))
-			if err != nil {
-				return nil
-			}
+			re := mustCompilePattern("", args[0].(string))
 			elems, _ := stringElements(args[1])
 			for _, elem := range elems {
 				if re.MatchString(elem) {

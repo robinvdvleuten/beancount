@@ -1,12 +1,19 @@
 package query
 
 import (
+	"errors"
+	"fmt"
+	"math"
 	"regexp"
+	"regexp/syntax"
+	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
 )
@@ -64,8 +71,7 @@ var operators = func() map[bql.TokenType]*operatorDef {
 		// one, case-sensitively.
 		bql.QTILDE: {name: "matches", signatures: []opSignature{
 			{l: tString, r: tString, result: tBool, eval: func(l, r any) any {
-				re, err := regexp.Compile(l.(string))
-				return err == nil && re.MatchString(r.(string))
+				return mustCompilePattern("", l.(string)).MatchString(r.(string))
 			}},
 		}},
 	}
@@ -102,9 +108,9 @@ var operators = func() map[bql.TokenType]*operatorDef {
 		integer func(l, r int64) int64
 		dec     func(l, r decimal.Decimal) any
 	}{
-		bql.PLUS:     {"add", func(l, r int64) int64 { return l + r }, func(l, r decimal.Decimal) any { return pydecimal.Add(l, r) }},
-		bql.MINUS:    {"sub", func(l, r int64) int64 { return l - r }, func(l, r decimal.Decimal) any { return pydecimal.Sub(l, r) }},
-		bql.ASTERISK: {"mul", func(l, r int64) int64 { return l * r }, func(l, r decimal.Decimal) any { return pydecimal.Mul(l, r) }},
+		bql.PLUS:     {"add", addInt, func(l, r decimal.Decimal) any { return pydecimal.Add(l, r) }},
+		bql.MINUS:    {"sub", subInt, func(l, r decimal.Decimal) any { return pydecimal.Sub(l, r) }},
+		bql.ASTERISK: {"mul", mulInt, func(l, r decimal.Decimal) any { return pydecimal.Mul(l, r) }},
 		bql.SLASH:    {"div", nil, divide},
 	} {
 		dec := func(l, r any) any {
@@ -169,6 +175,37 @@ var operators = func() map[bql.TokenType]*operatorDef {
 	}}
 	return ops
 }()
+
+// addInt, subInt and mulInt are integer arithmetic. Python's integers do
+// not overflow and ours do, so one that would fails the statement rather
+// than wrap around (KNOWN_GAPS.md).
+func addInt(l, r int64) int64 {
+	sum := l + r
+	if (l >= 0) == (r >= 0) && (sum >= 0) != (l >= 0) {
+		failIntegerOverflow()
+	}
+	return sum
+}
+
+func subInt(l, r int64) int64 {
+	difference := l - r
+	if (l >= 0) != (r >= 0) && (difference >= 0) != (l >= 0) {
+		failIntegerOverflow()
+	}
+	return difference
+}
+
+func mulInt(l, r int64) int64 {
+	product := l * r
+	if l != 0 && (product/l != r || l == -1 && r == math.MinInt64) {
+		failIntegerOverflow()
+	}
+	return product
+}
+
+func failIntegerOverflow() {
+	fail("integer overflow")
+}
 
 // betweenGroups are the types BETWEEN compares with each other, beanquery's
 // _comparable: its three operands must all be in one group.
@@ -244,21 +281,50 @@ var unaryOperators = map[bql.TokenType]*unaryOperatorDef{
 				}
 				return int64(0)
 			}
-			return -x.(int64)
+			return subInt(0, x.(int64))
 		}},
 		{x: tDecimal, result: tDecimal, eval: func(x any) any { return x.(decimal.Decimal).Neg() }},
 	}},
 }
 
-// matcher is ~ against pattern: Python's re.search with re.IGNORECASE,
-// RE2's syntax standing in for Python's (#589), and false for a pattern
-// that does not compile.
+// matcher is ~ against pattern: Python's re.search with re.IGNORECASE. A
+// pattern that does not compile fails the statement once it is used.
 func matcher(pattern string) func(s string) bool {
-	re, err := regexp.Compile("(?i)" + pattern)
-	if err != nil {
-		return func(string) bool { return false }
+	re, err := compilePattern("(?i)", pattern)
+	return func(s string) bool {
+		if err != nil {
+			fail("%s", err)
+		}
+		return re.MatchString(s)
 	}
-	return re.MatchString
+}
+
+// compilePattern compiles pattern, behind flags, as Python's re module
+// would, RE2's syntax standing in for Python's: a pattern that does not
+// compile is an error, as it is a re.error in beanquery, and so is one
+// that uses Python syntax RE2 lacks, such as a lookaround or a
+// backreference (KNOWN_GAPS.md).
+func compilePattern(flags, pattern string) (*regexp.Regexp, error) {
+	re, err := regexp.Compile(flags + pattern)
+	if err != nil {
+		reason := err.Error()
+		var syntaxErr *syntax.Error
+		if errors.As(err, &syntaxErr) {
+			reason = string(syntaxErr.Code)
+		}
+		return nil, fmt.Errorf("invalid regular expression %s: %s", pyrepr.String(pattern), reason)
+	}
+	return re, nil
+}
+
+// mustCompilePattern is compilePattern, failing the statement for a
+// pattern that does not compile.
+func mustCompilePattern(flags, pattern string) *regexp.Regexp {
+	re, err := compilePattern(flags, pattern)
+	if err != nil {
+		fail("%s", err)
+	}
+	return re
 }
 
 // untypedOperators builds AND, OR and IN, which take operands of any type,
@@ -308,10 +374,11 @@ func (c *cOr) eval(row *evalRow) any {
 	return result
 }
 
-// cIn is Python's in, NULL when either operand is: membership of a set, or
-// a case-sensitive substring of a string. A left operand that is not a
-// string is never in either; in beanquery, 1 IN 'abc' is a TypeError
-// (#589).
+// cIn is Python's in, NULL when either operand is: a value equal to a
+// list's element by Python's ==, membership of a set, or a case-sensitive
+// substring of a string. A left operand that is not a string is never in a
+// set or a string, where 1 IN 'abc' is a TypeError in beanquery
+// (KNOWN_GAPS.md).
 type cIn struct{ l, r cexpr }
 
 func (c *cIn) typ() dtype { return tBool }
@@ -368,8 +435,7 @@ func addDays(d *ast.Date, days int64) *ast.Date {
 }
 
 // casts are the types beanquery casts an untyped (object) operand to, with
-// the cast function it applies (types.MAP); each is NULL-strict. Python's
-// parsing of decimals and dates accepts more than ours (#589).
+// the cast function it applies (types.MAP); each is NULL-strict.
 var casts = map[dtype]func(v any) any{
 	tBool:    func(v any) any { return truthy(v) },
 	tDate:    castDate,
@@ -387,11 +453,10 @@ func castDecimal(v any) any {
 		}
 		return decimal.Zero
 	case string:
-		d, err := decimal.NewFromString(strings.TrimSpace(val))
-		if err != nil {
-			return nil
+		if d, ok := parsePyDecimal(val); ok {
+			return d
 		}
-		return d
+		return nil
 	}
 	if d, ok := asDecimal(v); ok {
 		return d
@@ -399,15 +464,73 @@ func castDecimal(v any) any {
 	return nil
 }
 
-// castDate is beanquery's date(): a date, or a string spelled YYYY-MM-DD
-// as one, anything else NULL.
+// pyDecimalPattern is the finite numbers Python's Decimal() reads, once
+// parsePyDecimal has normalized the string.
+var pyDecimalPattern = regexp.MustCompile(`^[+-]?(\d+\.?\d*|\.\d+)([eE][+-]?\d+)?$`)
+
+// parsePyDecimal reads s as Python's Decimal(s) does: white space around
+// it, underscores anywhere in it and digits of any script. Python's NaN
+// and Infinity have no decimal here, so they read as no number
+// (KNOWN_GAPS.md).
+func parsePyDecimal(s string) (decimal.Decimal, bool) {
+	s = asciiDigits(strings.ReplaceAll(strings.TrimFunc(s, bql.IsSpace), "_", ""))
+	if !pyDecimalPattern.MatchString(s) {
+		return decimal.Decimal{}, false
+	}
+	d, err := decimal.NewFromString(s)
+	return d, err == nil
+}
+
+// asciiDigits replaces every decimal digit of another script with its
+// ASCII digit, as Python's int() and Decimal() read them.
+func asciiDigits(s string) string {
+	return strings.Map(func(r rune) rune {
+		if r > unicode.MaxASCII && unicode.IsDigit(r) {
+			if digit, ok := digitValue(r); ok {
+				return '0' + digit
+			}
+		}
+		return r
+	}, s)
+}
+
+// digitValue is the value of a Unicode decimal digit: each range of
+// unicode.Nd holds whole runs of ten digits, from zero to nine.
+func digitValue(r rune) (rune, bool) {
+	for _, rng := range unicode.Nd.R16 {
+		if lo, hi := rune(rng.Lo), rune(rng.Hi); r >= lo && r <= hi {
+			return (r - lo) % 10, true
+		}
+	}
+	for _, rng := range unicode.Nd.R32 {
+		if lo, hi := rune(rng.Lo), rune(rng.Hi); r >= lo && r <= hi {
+			return (r - lo) % 10, true
+		}
+	}
+	return 0, false
+}
+
+// pyDatePattern is what Python's strptime(s, '%Y-%m-%d') matches: a
+// four-digit year, a month and a day of one or two digits, the day's
+// tens digit possibly a space.
+var pyDatePattern = regexp.MustCompile(`^(\d{4})-(1[0-2]|0[1-9]|[1-9])-(3[01]|[12]\d|0[1-9]|[1-9]| [1-9])$`)
+
+// castDate is beanquery's date(): a date, or a string strptime reads with
+// '%Y-%m-%d' as one (2023-2-1 too), anything else NULL.
 func castDate(v any) any {
 	switch val := v.(type) {
 	case *ast.Date:
 		return val
 	case string:
-		t, err := time.Parse("2006-01-02", val)
-		if err != nil {
+		match := pyDatePattern.FindStringSubmatch(asciiDigits(val))
+		if match == nil {
+			return nil
+		}
+		year, _ := strconv.Atoi(match[1])
+		month, _ := strconv.Atoi(match[2])
+		day, _ := strconv.Atoi(strings.TrimSpace(match[3]))
+		t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+		if year < 1 || t.Day() != day {
 			return nil
 		}
 		return &ast.Date{Time: t}

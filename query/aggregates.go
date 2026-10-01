@@ -133,7 +133,7 @@ type sumIntAcc struct {
 
 func (a *sumIntAcc) update(v any) {
 	if n, ok := v.(int64); ok {
-		a.total += n
+		a.total = addInt(a.total, n)
 	}
 }
 func (a *sumIntAcc) finalize() any { return a.total }

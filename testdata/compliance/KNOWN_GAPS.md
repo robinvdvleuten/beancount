@@ -104,17 +104,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   entry.narration` run there and are `column ... not found` in ours.
   Attribute access on the types ours has (position, amount, cost, date)
   matches.
-- #589: `~` takes Python's regular expressions in beanquery and RE2's in
-  ours: `account ~ 'Cash(?=)'` keeps 6 rows there and none in ours, and
-  `account ~ '['` fails there with `re.error` and keeps no rows in ours.
-  Python's integers do not overflow: `100000000000 * 100000000000` is
-  `10000000000000000000000` there and wraps around in ours, and
-  `SELECT -9223372036854775808` prints the number there and is a syntax
-  error in ours, whose unsigned 9223372036854775808 does not fit. Casting an
-  untyped operand parses more there: the metadata strings `"1_000"` and
-  `"NaN"` are decimals and `"2023-2-1"` a date in beanquery, and NULL in
-  ours. `1 IN account` fails there with a `TypeError` and is FALSE in
-  ours, and `1 NOT IN account` TRUE.
 
 Differences in message text only, which the suites cannot see since they
 compare the lines errors are on:
@@ -243,6 +232,38 @@ compare the lines errors are on:
   `#c`, `#a #b`, `#a`, `#a #d`, `#a #c`, `#a #b` and `#a #c` puts the
   `#b` one sixth there and first here. Exact parity would need a port of
   CPython's timsort.
+
+- **BQL regular expressions** (#589): `~`, `!~`, `?~`, `grep()`,
+  `grepn()`, `subst()`, `findfirst()` and `has_account()` take Python's
+  `re` syntax in beanquery and RE2's here, which has no lookarounds or
+  backreferences. A pattern that does not compile fails the statement in
+  both, the first time a row evaluates it, but RE2 words the error apart
+  from Python: `account ~ '['` is `error: invalid regular expression '[':
+  missing closing ]` here and `unterminated character set at position 0`
+  there (`query/err_regex_invalid.bql`), and a pattern only Python reads,
+  such as the lookahead in `account ~ 'Cash(?=)'`, fails here and keeps
+  six rows there (`query/err_regex_lookahead.bql`). Porting Python's
+  regular expression engine is not worth it for patterns that rarely need
+  more than RE2 gives; failing tells the user, where matching nothing
+  would mislead.
+
+- **BQL integers** (#589): Python's integers do not overflow, and ours are
+  64-bit. An integer sum, difference, product, negation or `sum()` that
+  would overflow fails the statement with `error: integer overflow`
+  rather than wrap around (`100000000000 * 100000000000` is
+  `10000000000000000000000` there, `query/err_integer_overflow.bql`), and
+  an integer literal beyond 9223372036854775807 is a syntax error, so
+  `SELECT -9223372036854775808` prints the number there and fails here.
+  No ledger value comes near these bounds. Casting an untyped operand
+  reads what Python's `Decimal()` and `strptime('%Y-%m-%d')` read
+  (`"1_000"`, `" 7 "`, `"2023-2-1"`), but Python's `NaN` and `Infinity`
+  have no decimal here and cast to NULL.
+
+- **BQL `IN` on a non-string**: `1 IN account` (or `1 IN 2`) fails with a
+  Python `TypeError` in beanquery; here `IN` a string or a set is FALSE
+  and `NOT IN` TRUE for any left operand that is not a string, which
+  neither holds. `IN` a list (`1 IN (1.0, 2)`) compares with Python's
+  `==` in both.
 
 - **BQL Python exceptions**: where beanquery fails with a Python exception
   rather than a query error, we answer instead. `PIVOT BY` on a query
