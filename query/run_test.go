@@ -124,6 +124,11 @@ var errorFixtures = map[string]string{
 | SELECT account WHERE
 |                     ^`,
 	"err_where_aggregate": `error: aggregates are not allowed in WHERE clause`,
+	"err_python_whitespace": "error: column \"bogus\" not found in table \"postings\"\n" +
+		"| SELECT\u00a0account,\n" +
+		"| \n" +
+		"| bogus\n" +
+		"| ^^^^^",
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

@@ -3,6 +3,8 @@ package bql
 import (
 	"bytes"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
 )
@@ -156,23 +158,34 @@ func (l *Lexer) scanString(quote byte, start, line, col int) Token {
 	return Token{Type: STRING, Start: start, End: l.pos, Line: line, Column: col}
 }
 
-// skipWhitespace skips white space and an end-of-line comment.
+// skipWhitespace skips white space, what beanquery's \s matches (IsSpace),
+// and an end-of-line comment.
 func (l *Lexer) skipWhitespace() {
 	for l.pos < len(l.source) {
-		switch l.source[l.pos] {
-		case ' ', '\t', '\r', '\n':
-			l.advance()
-		case ';':
+		if l.source[l.pos] == ';' {
 			if !l.atComment() {
 				return
 			}
 			for l.pos < len(l.source) && l.source[l.pos] != '\n' {
 				l.advance()
 			}
-		default:
+			continue
+		}
+		r, size := utf8.DecodeRune(l.source[l.pos:])
+		if !IsSpace(r) {
 			return
 		}
+		for range size {
+			l.advance()
+		}
 	}
+}
+
+// IsSpace reports whether r is white space to Python: what str.isspace
+// and a str pattern's \s match, which adds \x1c to \x1f to Go's white
+// space.
+func IsSpace(r rune) bool {
+	return unicode.IsSpace(r) || r >= '\x1c' && r <= '\x1f'
 }
 
 // atComment reports whether the ; at the current position starts

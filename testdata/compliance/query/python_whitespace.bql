@@ -1,0 +1,1 @@
+SELECT account,date,narration,flag,payee, number LIMIT　2

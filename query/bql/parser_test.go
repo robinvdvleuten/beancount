@@ -518,6 +518,22 @@ func TestParseErrorOffset(t *testing.T) {
 	}
 }
 
+// TestParsePythonWhitespace checks that, like beanquery's lexer, white
+// space is what Python's \s matches, and nothing more.
+func TestParsePythonWhitespace(t *testing.T) {
+	for _, space := range []string{"\v", "\f", "\x1c", "\x1d", "\x1e", "\x1f", "\u0085", "\u00a0", "\u1680", "\u2000", "\u2028", "\u2029", "\u202f", "\u3000"} {
+		stmt, err := Parse("SELECT account," + space + "date" + space + "LIMIT 1")
+		assert.NoError(t, err, "%q", space)
+		assert.Equal(t, 2, len(stmt.(*Select).Targets), "%q", space)
+	}
+
+	// A zero-width space is not white space.
+	_, err := Parse("SELECT account,\u200bdate")
+	parseErr, ok := err.(*ParseError)
+	assert.True(t, ok)
+	assert.Equal(t, 15, parseErr.Pos.Offset)
+}
+
 func TestParseHaving(t *testing.T) {
 	stmt, err := Parse("SELECT account GROUP BY account HAVING count(account) > 1")
 	assert.NoError(t, err)

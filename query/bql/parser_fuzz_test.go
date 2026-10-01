@@ -42,6 +42,7 @@ func FuzzParseQuery(f *testing.F) {
 		"SELECT 1; bogus",
 		"SELECT 1;\n; comment\n",
 		"SELECT\n  account\nORDER BY account",
+		"SELECT account,\vdate\u00a0LIMIT\u20281",
 
 		// Edge cases
 		"",

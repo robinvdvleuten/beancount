@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/query/bql"
@@ -63,7 +62,7 @@ func Run(ctx context.Context, qctx *Context, text string, format Format, numberi
 	// The shell strips the text and runs nothing when it does not start
 	// with a command name (cmd.parseline): an empty text, or one starting
 	// with ;, ( or a comment.
-	text = strings.TrimFunc(text, isPySpace)
+	text = strings.TrimFunc(text, bql.IsSpace)
 	if text == "" || !isCommandChar(text[0]) {
 		return nil
 	}
@@ -146,7 +145,7 @@ func (e *Error) Report() string {
 	lines := splitLines(e.text)
 	for i, line := range lines {
 		last := pos < len(line) || i == len(lines)-1
-		stripped := strings.TrimRightFunc(line, isPySpace)
+		stripped := strings.TrimRightFunc(line, bql.IsSpace)
 		if !last && leading && stripped == "" {
 			pos -= len(line)
 			continue
@@ -199,12 +198,6 @@ func splitLines(text string) []string {
 // digit, _ or a dot.
 func isCommandChar(c byte) bool {
 	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '.' || c == '?'
-}
-
-// isPySpace reports whether Python's str.isspace holds for r, which adds
-// \x1c to \x1f to Go's white space.
-func isPySpace(r rune) bool {
-	return unicode.IsSpace(r) || r >= '\x1c' && r <= '\x1f'
 }
 
 // expandTabs replaces each tab with the spaces up to the next multiple of

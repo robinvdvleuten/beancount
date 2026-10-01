@@ -127,10 +127,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 - #586: a decimal after LIMIT (`SELECT account LIMIT 1.5`) is a syntax error in
   both, with beanquery's caret under the `5` (offset 23) and ours under
   `LIMIT`.
-- #585: beanquery's lexer takes `\v`, `\f`, `\x1c` to `\x1f` and other Unicode
-  white space (Python's `\s`), such as U+00A0, as white space, ours only
-  space, tab, `\r` and `\n`: `$'SELECT account,\vdate'` returns rows in
-  beanquery and is a syntax error at offset 15 in ours.
 - #590: beanquery's list constants are syntax errors in ours:
   `SELECT (1, 2)` prints `[1, 2]` there, and `'a' IN ('a', 'b')` is TRUE.
 - #593: beanquery's functions `round`, `substr`, `splitcomp`,
