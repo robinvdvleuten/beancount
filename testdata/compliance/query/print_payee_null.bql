@@ -1,0 +1,1 @@
+PRINT FROM payee IS NULL AND narration IS NOT NULL

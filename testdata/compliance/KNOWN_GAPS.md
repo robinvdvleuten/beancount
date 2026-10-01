@@ -115,9 +115,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   and `frozenset({'Assets:Cash', 'Expenses:Food'})` here.
 - #587: beanquery's `%`, `!~`, `?~`, `NOT IN` and `BETWEEN` operators are
   syntax errors in ours: `SELECT 7 % 3` prints `1` there.
-- #588: a transaction without a payee has a NULL `payee` in beanquery and
-  an empty string in ours: `SELECT payee IS NULL` is TRUE there and FALSE
-  in ours. Both render the column empty.
 - #589: `~` takes Python's regular expressions in beanquery and RE2's in
   ours: `account ~ 'Cash(?=)'` keeps 6 rows there and none in ours, and
   `account ~ '['` fails there with `re.error` and keeps no rows in ours.
@@ -190,7 +187,9 @@ compare the lines errors are on:
   and LIMIT), functions that give NULL for any NULL argument, `str()`
   printing `TRUE` and `FALSE`, `count()` of a value skipping NULLs,
   `coalesce()` of one type only, `has_account()` in every clause,
-  `length()` counting code points, a posting's own `lineno`, `filename` and
+  `length()` counting code points, a NULL `payee` for a transaction
+  written without one (an empty narration, never NULL, for one without
+  strings), a posting's own `lineno`, `filename` and
   `location` (NULL for a posting summarization creates), a lazy `balance`
   that a row joins the first time it reads the column (so WHERE sees the
   current posting, and a row WHERE short-circuits before reading it never

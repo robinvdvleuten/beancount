@@ -1,0 +1,1 @@
+SELECT date, account, payee, payee IS NULL AS p, narration IS NULL AS n, str(payee) AS s, length(payee) AS l, description, narration ~ payee AS m

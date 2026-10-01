@@ -83,7 +83,7 @@ var entryColumns = map[string]*columnDef{
 	"lineno":      {tInt, func(row *evalRow) any { return int64(row.Entry.Position().Line) }},
 	"id":          {tString, func(row *evalRow) any { return entryID(row.Entry) }},
 	"flag":        {tString, txnColumn(func(txn *ast.Transaction) any { return txn.Flag })},
-	"payee":       {tString, txnColumn(func(txn *ast.Transaction) any { return txn.Payee.String() })},
+	"payee":       {tString, txnColumn(payeeValue)},
 	"narration":   {tString, txnColumn(func(txn *ast.Transaction) any { return txn.Narration.String() })},
 	"description": {tString, txnColumn(descriptionValue)},
 	"tags":        {tSet, txnColumn(func(txn *ast.Transaction) any { return tagSet(txn) })},
@@ -158,7 +158,7 @@ var postingColumns = map[string]*columnDef{
 	"type":        {tString, func(row *evalRow) any { return string(row.Entry.Kind()) }},
 	"id":          {tString, func(row *evalRow) any { return entryID(row.Entry) }},
 	"flag":        {tString, func(row *evalRow) any { return row.Txn.Flag }},
-	"payee":       {tString, func(row *evalRow) any { return row.Txn.Payee.String() }},
+	"payee":       {tString, func(row *evalRow) any { return payeeValue(row.Txn) }},
 	"narration":   {tString, func(row *evalRow) any { return row.Txn.Narration.String() }},
 	"description": {tString, func(row *evalRow) any { return descriptionValue(row.Txn) }},
 	"tags":        {tSet, func(row *evalRow) any { return tagSet(row.Txn) }},
@@ -212,6 +212,17 @@ func costColumn(eval func(c *costValue) any) func(row *evalRow) any {
 		}
 		return eval(row.Position.Cost)
 	}
+}
+
+// payeeValue is the payee column: NULL for a transaction written without a
+// payee, as beancount holds it (None), and the string otherwise, empty for
+// an empty payee written as "". Narration has no such NULL: beancount
+// gives a transaction without strings an empty narration.
+func payeeValue(txn *ast.Transaction) any {
+	if txn.Payee.HasRaw() || !txn.Payee.IsEmpty() {
+		return txn.Payee.String()
+	}
+	return nil
 }
 
 func descriptionValue(txn *ast.Transaction) any {
