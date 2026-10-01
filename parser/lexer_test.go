@@ -765,10 +765,23 @@ func TestBeancountV2CharacterClasses(t *testing.T) {
 }
 
 func TestTransactionFlagTokens(t *testing.T) {
-	lexer := NewLexer([]byte(" # & ? % P S T C U R M"), "test.beancount")
+	lexer := NewLexer([]byte(" # & ? %\n"), "test.beancount")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
-	assert.Equal(t, []TokenType{FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, FLAG, EOF}, tokenTypes(tokens))
+	assert.Equal(t, []TokenType{FLAG, FLAG, FLAG, FLAG, EOF}, tokenTypes(tokens))
+}
+
+func TestCapitalLetterTokens(t *testing.T) {
+	// Like beancount v3's CAPITAL token, [A-Z]/[ \t\n], a capital letter
+	// before whitespace is a currency or a flag: an IDENT. Before anything
+	// else, or at the end of the input, it is an invalid token.
+	tokens, err := NewLexer([]byte(" P V\tM Z\n"), "test.beancount").ScanAll()
+	assert.NoError(t, err)
+	assert.Equal(t, []TokenType{IDENT, IDENT, IDENT, IDENT, EOF}, tokenTypes(tokens))
+
+	tokens, err = NewLexer([]byte("V,P}V"), "test.beancount").ScanAll()
+	assert.NoError(t, err)
+	assert.Equal(t, []TokenType{ILLEGAL, COMMA, ILLEGAL, RBRACE, ILLEGAL, EOF}, tokenTypes(tokens))
 }
 
 func TestNonDirectiveLinesAreComments(t *testing.T) {
@@ -802,7 +815,7 @@ func TestColumnOneFlagLines(t *testing.T) {
 		"#tag": TAG, "#1": TAG, "#-x": TAG, "#a b": TAG, "#tag rest": TAG,
 		"USD": IDENT, "STOCK x": IDENT, "PX foo": IDENT, "P1 x": IDENT,
 		"Tx:Y z": ACCOUNT, "Pa:B": ACCOUNT,
-		"#": FLAG, "!": EXCLAIM, "M": FLAG, ":": COLON, "*": ASTERISK,
+		"#": FLAG, "!": EXCLAIM, "M": IDENT, ":": COLON, "*": ASTERISK,
 	}
 	for line, first := range tokensFor {
 		t.Run(line, func(t *testing.T) {

@@ -24,7 +24,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	if p.match(TXN) {
 		// Explicit 'txn' keyword defaults to cleared (*) and does not allow
 		// an additional flag token on the same line.
-		if p.peek().Line == pos.Line && (p.check(ASTERISK) || p.check(EXCLAIM) || p.check(FLAG)) {
+		if p.peek().Line == pos.Line && (p.check(ASTERISK) || p.check(EXCLAIM) || isFlagToken(p.peek())) {
 			tok := p.peek()
 			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 		}
@@ -33,7 +33,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		txn.Flag = "*"
 	} else if p.match(EXCLAIM) {
 		txn.Flag = "!"
-	} else if p.check(FLAG) {
+	} else if isFlagToken(p.peek()) {
 		txn.Flag = p.advance().String(p.source)
 	} else {
 		return nil, p.error("expected transaction flag or 'txn'")
@@ -245,7 +245,14 @@ func (p *Parser) shouldConsumeIndentedBlankLine() bool {
 }
 
 func (p *Parser) isPostingStartToken(tok Token) bool {
-	return tok.Type == ASTERISK || tok.Type == EXCLAIM || tok.Type == ACCOUNT
+	return tok.Type == ASTERISK || tok.Type == EXCLAIM || tok.Type == ACCOUNT || isFlagToken(tok)
+}
+
+// isFlagToken reports whether tok is a flag other than * and !: a FLAG
+// (#, &, ?, %) or a capital letter, beancount v3's CAPITAL, which the lexer
+// reads as a one-letter IDENT since it is a currency too.
+func isFlagToken(tok Token) bool {
+	return tok.Type == FLAG || (tok.Type == IDENT && tok.Len() == 1)
 }
 
 // parsePosting parses a single posting:
@@ -265,6 +272,8 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 		posting.Flag = "*"
 	} else if p.match(EXCLAIM) {
 		posting.Flag = "!"
+	} else if isFlagToken(p.peek()) {
+		posting.Flag = p.advance().String(p.source)
 	}
 
 	// Account (required)

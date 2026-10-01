@@ -1,0 +1,24 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 * "x"
+  Assets:A  1 V
+  Assets:B
+2020-01-02 commodity V
+2020-01-03 V "flag"
+  Assets:A  1 USD
+  Assets:B
+2020-01-04 * "posting flags"
+  P Assets:A  1 USD
+  V Assets:A  1 P
+  & Assets:B  -1 USD
+  # Assets:B
+2020-01-05 price V 1 P
+2020-01-07 * "cost"
+  Assets:A  1 V {1 P }
+  Assets:B
+2020-01-08 * "price"
+  Assets:A  1 V @ 1 P
+  Assets:B
+2020-01-09 P "p flag"
+  Assets:A  1 USD
+  Assets:B

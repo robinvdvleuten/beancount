@@ -37,12 +37,12 @@ const (
 	STRING  // "quoted string"
 	NUMBER  // 123.45 or -123.45
 	EXPRESSION
-	IDENT // USD, TRUE, FALSE, currency codes
+	IDENT // USD, TRUE, FALSE, currency codes, a capital letter (V) that may be a flag
 
 	// Special literals
 	TAG  // #tag
 	LINK // ^link
-	FLAG // transaction flag (#, &, ?, %, P, S, T, C, U, R, M)
+	FLAG // transaction flag (#, &, ?, %); a capital letter flag is an IDENT
 
 	// Symbols
 	ASTERISK // *

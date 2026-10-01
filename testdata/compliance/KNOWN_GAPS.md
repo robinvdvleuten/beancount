@@ -93,12 +93,6 @@ limits:
 Probed against bean-check 3.2.3, each without a fixture until its issue
 lands:
 
-- #565: a single capital letter followed by whitespace is bean-check's
-  `CAPITAL` token, new in v3, which its grammar reads as a currency
-  (`1 V`, `commodity V`, `price V 1 USD`) or as a transaction flag
-  (`2020-01-02 V "x"`). We read only `P`, `S`, `T`, `C`, `U`, `R` and `M`
-  as flags, never as a currency, and report any other single letter as an
-  invalid token.
 - #566: a currency ending in `-` (`price BA- 1 USD`) passes bean-check
   3.2.3; we report an invalid token.
 - #566: a bare currency as a `custom` value (`custom "x" USD`,

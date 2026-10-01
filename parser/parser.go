@@ -442,8 +442,11 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 	pos := p.tokenPositionFromPeek()
 
 	// LL(1) lookahead - dispatch via registry
+	if isFlagToken(directiveTok) {
+		return p.parseTransaction(pos, date)
+	}
 	switch directiveTok.Type {
-	case TXN, ASTERISK, EXCLAIM, FLAG:
+	case TXN, ASTERISK, EXCLAIM:
 		return p.parseTransaction(pos, date)
 	case BALANCE:
 		return p.parseBalance(pos, date)

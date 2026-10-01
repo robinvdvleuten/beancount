@@ -527,11 +527,14 @@ func TestParseTransactionRejectsMalformedCost(t *testing.T) {
 }
 
 func TestParseAllTransactionFlags(t *testing.T) {
-	for _, flag := range []string{"*", "!", "P", "#", "&", "?", "%", "S", "T", "C", "U", "R", "M"} {
+	for _, flag := range []string{"*", "!", "P", "#", "&", "?", "%", "S", "T", "C", "U", "R", "M", "V", "Z"} {
 		t.Run(flag, func(t *testing.T) {
-			tree, err := ParseString(context.Background(), "2000-01-01 "+flag+" \"flag\"\n")
+			tree, err := ParseString(context.Background(), "2000-01-01 "+flag+" \"flag\"\n  "+flag+" Assets:A  1 V\n  Assets:B\n")
 			assert.NoError(t, err)
-			assert.Equal(t, flag, tree.Directives[0].(*ast.Transaction).Flag)
+			txn := tree.Directives[0].(*ast.Transaction)
+			assert.Equal(t, flag, txn.Flag)
+			assert.Equal(t, flag, txn.Postings[0].Flag)
+			assert.Equal(t, "V", txn.Postings[0].Amount.Currency)
 		})
 	}
 }

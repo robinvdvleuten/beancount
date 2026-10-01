@@ -599,8 +599,11 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 	}
 
 	value := l.source[start:l.pos]
-	if len(value) == 1 && isLetterTransactionFlag(value[0]) {
-		return Token{FLAG, start, l.pos, line, col}
+	if len(value) == 1 && isUppercaseLetter(value[0]) && l.whitespaceAhead() {
+		// Like beancount v3's CAPITAL token, a capital letter before
+		// whitespace, which its grammar reads as a currency or a flag:
+		// an IDENT, which the parser takes as a flag where one goes.
+		return Token{IDENT, start, l.pos, line, col}
 	}
 	if isASCII(value) && !isValidCurrencyLiteral(value) {
 		return Token{ILLEGAL, start, l.pos, line, col}
@@ -775,8 +778,10 @@ func isValidInAccountOrIdent(ch byte) bool {
 	return isLetter(ch) || isDigit(ch) || isUTF8Byte(ch) || ch == ':' || ch == '-' || ch == '_' || ch == '.' || ch == '\''
 }
 
-func isLetterTransactionFlag(ch byte) bool {
-	return ch == 'P' || ch == 'S' || ch == 'T' || ch == 'C' || ch == 'U' || ch == 'R' || ch == 'M'
+// whitespaceAhead reports whether a space, a tab or a line break comes
+// next, the trailing context of beancount v3's CAPITAL token.
+func (l *Lexer) whitespaceAhead() bool {
+	return l.pos < len(l.source) && (l.source[l.pos] == ' ' || l.source[l.pos] == '\t' || l.lineBreakLenAt(l.pos) > 0)
 }
 
 func isASCII(value []byte) bool {

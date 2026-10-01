@@ -1,0 +1,7 @@
+; beancount v3's CAPITAL token needs whitespace after its letter: a capital
+; letter before a comma or a brace is an invalid token.
+2020-01-01 open Assets:A V,P
+2020-01-01 open Assets:B
+2020-01-02 * "cost"
+  Assets:B  1 HOOL {1 P}
+  Assets:B
