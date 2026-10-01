@@ -116,9 +116,6 @@ lands:
   (`Assets:😀x`) is `Invalid account name` in bean-check, which keeps the
   posting and reports the account as unknown; we report a syntax error and
   drop the transaction.
-- #570: a `documents` root reached through a symlink discovers nothing
-  here, and a ledger path starting with `//` keeps it in beancount's file
-  and document names, where we collapse it.
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
@@ -360,6 +357,13 @@ compare the lines errors are on:
   (`link/l.beancount` against `real/l.beancount`; on macOS also `/tmp`
   against `/private/tmp`). No fixture: the suites run from a physical
   directory.
+
+- **Leading `//` in a ledger path** (#570): beancount keeps a path as the
+  OS gives it, so loading `//abs/main.beancount` keeps `//abs/…` in its
+  file names and discovered document paths; we clean the path to
+  `/abs/…`. A `documents` root reached through a symlink is discovered as
+  in beancount, through the symlink (a loader test; no fixture, since a
+  symlink in the repository is not portable).
 
 - **Failed balance assertion wording** (#524): a balance assertion that
   fails reads `Balance mismatch for <account>:` with `Expected:` and

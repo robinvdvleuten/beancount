@@ -306,9 +306,18 @@ func discoverDocuments(tree *ast.AST, rootFile string) []error {
 			accounts = tree.Enrich().Accounts
 		}
 
-		_ = filepath.WalkDir(dir, func(path string, entry fs.DirEntry, err error) error {
+		// Like os.walk, the walk follows a root that is a symlink (the
+		// trailing separator makes WalkDir resolve it) and keeps the root
+		// as written in each path, but does not descend into a symlinked
+		// directory inside the tree, nor take one for a file.
+		_ = filepath.WalkDir(dir+string(filepath.Separator), func(path string, entry fs.DirEntry, err error) error {
 			if err != nil || entry.IsDir() {
 				return nil
+			}
+			if entry.Type()&fs.ModeSymlink != 0 {
+				if target, err := os.Stat(path); err == nil && target.IsDir() {
+					return nil
+				}
 			}
 			match := documentFilenamePattern.FindStringSubmatch(entry.Name())
 			if match == nil {

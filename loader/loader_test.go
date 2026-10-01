@@ -763,6 +763,52 @@ option "documents" "docs"
 	assert.Equal(t, "2020-03-14", docs[0].Date().String())
 }
 
+func TestDocumentsDiscoveryThroughSymlinkedRoot(t *testing.T) {
+	// Like beancount's os.walk: a root that is a symlink is followed and
+	// kept as written in each path; a symlink to a file is a document, but
+	// a symlinked directory inside the tree is neither entered nor taken
+	// for a file.
+	tmpDir := t.TempDir()
+	realDir := filepath.Join(tmpDir, "real", "Assets", "Cash")
+	elsewhere := filepath.Join(tmpDir, "elsewhere")
+	assert.NoError(t, os.MkdirAll(realDir, 0o755))
+	assert.NoError(t, os.MkdirAll(filepath.Join(elsewhere, "Assets", "Cash"), 0o755))
+	assert.NoError(t, os.WriteFile(filepath.Join(realDir, "2020-01-05.stmt.pdf"), nil, 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(elsewhere, "2020-01-07.x.pdf"), nil, 0o644))
+	assert.NoError(t, os.WriteFile(filepath.Join(elsewhere, "Assets", "Cash", "2020-01-09.deep.pdf"), nil, 0o644))
+	for link, target := range map[string]string{
+		filepath.Join(tmpDir, "link"):                     filepath.Join(tmpDir, "real"),
+		filepath.Join(realDir, "2020-01-06.dir"):          elsewhere,
+		filepath.Join(realDir, "linked"):                  elsewhere,
+		filepath.Join(realDir, "2020-01-08.filelink.pdf"): filepath.Join(elsewhere, "2020-01-07.x.pdf"),
+	} {
+		if err := os.Symlink(target, link); err != nil {
+			t.Skipf("symlinks are unsupported: %v", err)
+		}
+	}
+
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`option "documents" "link"
+2020-01-01 open Assets:Cash
+`), 0o644))
+
+	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), mainFile)
+	assert.NoError(t, err)
+	assert.Equal(t, 0, len(result.Diagnostics))
+
+	var paths []string
+	for _, directive := range result.AST.Directives {
+		if doc, ok := directive.(*ast.Document); ok {
+			paths = append(paths, doc.PathToDocument.Value)
+		}
+	}
+	linkedDir := filepath.Join(tmpDir, "link", "Assets", "Cash")
+	assert.Equal(t, []string{
+		filepath.Join(linkedDir, "2020-01-05.stmt.pdf"),
+		filepath.Join(linkedDir, "2020-01-08.filelink.pdf"),
+	}, paths)
+}
+
 func TestDocumentsDiscoveryMissingRoot(t *testing.T) {
 	tmpDir := t.TempDir()
 	mainFile := filepath.Join(tmpDir, "main.beancount")
