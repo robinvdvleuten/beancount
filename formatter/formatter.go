@@ -1318,6 +1318,13 @@ func (f *run) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 
 	lastVerbatimLine := 0
 	for _, m := range metadata {
+		for _, c := range m.Comments {
+			if f.PreserveComments && !f.verbatimLines[c.Position().Line] &&
+				!f.writeTriviaLine(c.Position(), buf) {
+				buf.WriteString(strings.Repeat(" ", f.Indentation))
+				f.formatComment(c, buf)
+			}
+		}
 		// bean-format leaves metadata lines untouched; preserve the original
 		// line (indentation and spacing) whenever the entry owns it. A single
 		// source line may hold several metadata entries; emit it only once.

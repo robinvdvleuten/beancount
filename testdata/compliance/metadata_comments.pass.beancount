@@ -1,0 +1,53 @@
+; Indented comment lines may come before, between and after the metadata
+; lines of any dated directive: beancount's lexer skips them.
+2020-01-01 open Assets:A
+  ; before
+  key: "v"
+  ; between
+  other: "w"
+  ; after
+2020-01-01 open Assets:B
+  ; before
+  key: "v"
+2020-01-01 open Equity:Opening
+2020-01-01 commodity USD
+  ; before
+  name: "US Dollar"
+    ; deeper
+  other: "w"
+
+2020-01-02 pad Assets:A Equity:Opening
+  ; before
+  key: "v"
+2020-01-03 balance Assets:A 1 USD
+  ; before
+  key: "v"
+2020-01-03 note Assets:A "n"
+  ; before
+  key: "v"
+2020-01-03 event "location" "home"
+  ; before
+  key: "v"
+2020-01-03 query "q" "select 1"
+  ; before
+  key: "v"
+2020-01-03 price USD 1 EUR
+  ; before
+  key: "v"
+2020-01-03 custom "budget" "x"
+  ; before
+  key: "v"
+
+2020-01-04 * "x"
+  ; before
+  key: "v"
+  ; between
+  other: "w"
+  ; after
+  Assets:A  1 USD
+    ; before
+    pk: "p"
+  Assets:B
+2020-02-01 close Assets:B
+  ; before
+  key: "v"

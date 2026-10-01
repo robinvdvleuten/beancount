@@ -448,6 +448,9 @@ const ImportIDKey = "import-id"
 type Metadata struct {
 	Key   string
 	Value *MetadataValue
+	// Comments are the indented comment lines right above the entry,
+	// which beancount skips; the formatter keeps them.
+	Comments []*Comment
 
 	pos Position
 }

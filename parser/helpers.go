@@ -439,12 +439,18 @@ func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 
 	// Metadata lines are key: value where key can be IDENT or any keyword
 	for {
-		keyTok := p.peek()
-		if !p.isMetadataKeyStart(keyTok) {
+		// Like beancount's lexer, which skips them, indented comment lines
+		// may come before a metadata line; they lead it.
+		leading := p.indentedCommentsBeforeMetadata()
+		if !p.isMetadataKeyAt(leading) {
 			break
 		}
+		var comments []*ast.Comment
+		for range leading {
+			comments = append(comments, p.parseComment())
+		}
 
-		p.advance() // consume key
+		keyTok := p.advance() // consume key
 		if err := p.consume(COLON, "expected ':'"); err != nil {
 			return nil, err
 		}
@@ -456,8 +462,9 @@ func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 		}
 
 		md := &ast.Metadata{
-			Key:   keyTok.String(p.source),
-			Value: value,
+			Key:      keyTok.String(p.source),
+			Value:    value,
+			Comments: comments,
 		}
 		md.SetPosition(tokenPosition(keyTok, p.filename))
 		metadata = append(metadata, md)
@@ -479,9 +486,27 @@ func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 	return metadata, nil
 }
 
+// indentedCommentsBeforeMetadata counts the indented comment lines at the
+// parser's position that an indented metadata line follows, with no blank
+// line between; it is 0 when none do.
+func (p *Parser) indentedCommentsBeforeMetadata() int {
+	n := 0
+	for {
+		tok := p.peekAhead(n)
+		if tok.Type != COMMENT || tok.Column <= 1 || (n == 0 && p.continuesPreviousLine()) {
+			break
+		}
+		n++
+	}
+	if n == 0 || p.peekAhead(n).Column <= 1 || !p.isMetadataKeyAt(n) {
+		return 0
+	}
+	return n
+}
+
 // parseMetadataKey parses the key of a pushmeta or popmeta and its colon.
 func (p *Parser) parseMetadataKey() (string, error) {
-	if !p.isMetadataKeyStart(p.peek()) {
+	if !p.isMetadataKeyStart() {
 		return "", p.errorAtEndOfPrevious("expected metadata key")
 	}
 	key := p.advance().String(p.source)
@@ -489,17 +514,23 @@ func (p *Parser) parseMetadataKey() (string, error) {
 	return key, nil
 }
 
-// isMetadataKeyStart reports whether tok is a metadata key, as beancount's
-// lexer matches one, directly followed by its colon.
-func (p *Parser) isMetadataKeyStart(tok Token) bool {
+// isMetadataKeyStart reports whether the next token is a metadata key, as
+// beancount's lexer matches one, directly followed by its colon.
+func (p *Parser) isMetadataKeyStart() bool {
+	return p.isMetadataKeyAt(0)
+}
+
+// isMetadataKeyAt is isMetadataKeyStart for the token n ahead.
+func (p *Parser) isMetadataKeyAt(n int) bool {
+	tok, colon := p.peekAhead(n), p.peekAhead(n+1)
 	// The official lexer requires keys of at least two characters
 	// ([a-z][a-zA-Z0-9-_]+), a keyword included; a single-letter key is an
 	// invalid token, and a currency before a colon (/ESZ24:) is no key.
 	return (tok.Type == IDENT || p.isKeyword(tok.Type)) &&
 		tok.Len() >= 2 &&
 		isLowercaseLetter(p.source[tok.Start]) &&
-		p.peekAhead(1).Type == COLON &&
-		tok.Column+tok.Len() == p.peekAhead(1).Column
+		colon.Type == COLON &&
+		tok.Column+tok.Len() == colon.Column
 }
 
 // parseMetadataValue parses a typed metadata value. Beancount supports 8 value types:

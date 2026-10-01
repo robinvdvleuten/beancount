@@ -442,3 +442,18 @@ func TestParseInlineCommentAfterStringSpanningLines(t *testing.T) {
 		})
 	}
 }
+
+func TestParseCommentsLeadingMetadata(t *testing.T) {
+	source := "2020-01-01 open Assets:A\n  ; one\n    ; two\n  key: \"v\"\n  ; trailing\n\n  ; after blank\n"
+	tree, err := ParseString(context.Background(), source)
+	assert.Error(t, err, "an indented line after a blank line is no continuation")
+
+	open := tree.Directives[0].(*ast.Open)
+	assert.Equal(t, 1, len(open.Metadata))
+	comments := open.Metadata[0].Comments
+	assert.Equal(t, 2, len(comments))
+	assert.Equal(t, "; one", comments[0].Content)
+	assert.Equal(t, "; two", comments[1].Content)
+	assert.Equal(t, 1, len(tree.Comments), "a comment no metadata follows stays top-level")
+	assert.Equal(t, "; trailing", tree.Comments[0].Content)
+}

@@ -85,6 +85,15 @@ func (s *sourceView) markStart(pos ast.Position) {
 	}
 }
 
+// markMetadata records the lines a metadata entry and the comments leading
+// it start.
+func (s *sourceView) markMetadata(m *ast.Metadata) {
+	for _, c := range m.Comments {
+		s.markStart(c.Position())
+	}
+	s.markStart(m.Position())
+}
+
 // markStarts records the lines every node of tree starts. A blank line
 // starts its line whatever its column.
 func (s *sourceView) markStarts(tree *ast.AST) {
@@ -118,7 +127,7 @@ func (s *sourceView) markStarts(tree *ast.AST) {
 	for _, d := range tree.Directives {
 		s.markStart(ast.Position{Line: d.Position().Line, Column: 1})
 		for _, m := range d.GetMetadata() {
-			s.markStart(m.Position())
+			s.markMetadata(m)
 		}
 		txn, ok := d.(*ast.Transaction)
 		if !ok {
@@ -130,7 +139,7 @@ func (s *sourceView) markStarts(tree *ast.AST) {
 		for _, p := range txn.Postings {
 			s.markStart(p.Position())
 			for _, m := range p.Metadata {
-				s.markStart(m.Position())
+				s.markMetadata(m)
 			}
 		}
 		for _, item := range txn.BodyItems {

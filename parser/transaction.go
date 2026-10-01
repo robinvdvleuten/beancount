@@ -228,8 +228,10 @@ func (p *Parser) startsIndentedMetadataLine() bool {
 	if p.isAtEnd() {
 		return false
 	}
-	tok := p.peek()
-	return tok.Type != NEWLINE && tok.Column > 1 && p.isMetadataKeyStart(tok)
+	// Indented comment lines may lead the metadata line.
+	n := p.indentedCommentsBeforeMetadata()
+	tok := p.peekAhead(n)
+	return tok.Type != NEWLINE && tok.Column > 1 && p.isMetadataKeyAt(n)
 }
 
 func (p *Parser) shouldConsumeIndentedBlankLine() bool {
