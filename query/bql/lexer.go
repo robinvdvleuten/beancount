@@ -1,6 +1,7 @@
 package bql
 
 import (
+	"bytes"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -155,15 +156,32 @@ func (l *Lexer) scanString(quote byte, start, line, col int) Token {
 	return Token{Type: STRING, Start: start, End: l.pos, Line: line, Column: col}
 }
 
+// skipWhitespace skips white space and an end-of-line comment.
 func (l *Lexer) skipWhitespace() {
 	for l.pos < len(l.source) {
 		switch l.source[l.pos] {
 		case ' ', '\t', '\r', '\n':
 			l.advance()
+		case ';':
+			if !l.atComment() {
+				return
+			}
+			for l.pos < len(l.source) && l.source[l.pos] != '\n' {
+				l.advance()
+			}
 		default:
 			return
 		}
 	}
+}
+
+// atComment reports whether the ; at the current position starts
+// beanquery's end-of-line comment, ;[^\n]*?$ without re.MULTILINE: one that
+// runs to the end of the text, or to a newline that ends it. Any other ;
+// is a token, which may end the statement.
+func (l *Lexer) atComment() bool {
+	newline := bytes.IndexByte(l.source[l.pos:], '\n')
+	return newline < 0 || l.pos+newline == len(l.source)-1
 }
 
 func (l *Lexer) advance() {

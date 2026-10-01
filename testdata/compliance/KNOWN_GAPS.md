@@ -124,11 +124,6 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
   not found in table "postings"` there, and a syntax error after `open`
   in ours; `SELECT account AS clear` runs there and is a syntax error in
   ours.
-- #584: beanquery runs a statement up to its first `;` and ignores the rest:
-  `SELECT 1; bogus` prints the result of `SELECT 1`. Ours reports a
-  syntax error at what follows the `;`.
-- #584: an empty query (`bean-query ledger.beancount ""`) prints nothing and
-  exits 0; ours reports `no query given` and exits 1.
 - #586: a decimal after LIMIT (`SELECT account LIMIT 1.5`) is a syntax error in
   both, with beanquery's caret under the `5` (offset 23) and ours under
   `LIMIT`.

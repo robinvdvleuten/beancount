@@ -34,7 +34,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	if err := cmd.File.EnsureContents(); err != nil {
 		return err
 	}
-	queryText := strings.TrimSpace(strings.Join(cmd.Query, " "))
+	queryText := strings.Join(cmd.Query, " ")
 
 	runCtx := context.Background()
 
@@ -76,8 +76,9 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	format := query.Format(cmd.Format)
 
 	// Without a query argument, a terminal gets the interactive shell and
-	// piped stdin is read as a single query, like bean-query.
-	if queryText == "" {
+	// piped stdin is read as a single query, like bean-query. An empty
+	// query, given or piped, prints nothing (query.Run).
+	if len(cmd.Query) == 0 {
 		if cmd.File.Filename != "<stdin>" && term.IsTerminal(int(os.Stdin.Fd())) {
 			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, ctx.Stderr, validationErrors, loadResult.Sources)
 		}
@@ -85,10 +86,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 		if err != nil {
 			return fmt.Errorf("failed to read query from stdin: %w", err)
 		}
-		queryText = strings.TrimSpace(string(piped))
-		if queryText == "" {
-			return fmt.Errorf("no query given")
-		}
+		queryText = string(piped)
 	}
 
 	if cmd.Output != "" {

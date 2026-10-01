@@ -83,6 +83,17 @@ func TestQueryOutputFile(t *testing.T) {
 	assert.True(t, errors.Is(err, fs.ErrNotExist), "want no empty.txt, got %v", err)
 }
 
+// TestQueryEmpty checks that, like bean-query, an empty query prints
+// nothing and succeeds, without reading a query from stdin.
+func TestQueryEmpty(t *testing.T) {
+	for _, query := range []string{"", "  ", ";"} {
+		stdout, stderr, err := runCommand(t, "query", "../testdata/compliance/query/ledger.beancount", query)
+		assert.NoError(t, err, query)
+		assert.Equal(t, "", stdout, query)
+		assert.Equal(t, "", stderr, query)
+	}
+}
+
 func TestQueryShellEOF(t *testing.T) {
 	ctx := context.Background()
 	ldr := loader.New(loader.WithFollowIncludes())

@@ -334,6 +334,37 @@ func TestParseTrailingSemicolon(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestParseSemicolonComment checks beanquery's end-of-line comment: a ;
+// whose rest of the text holds no newline, or one that ends it, starts a
+// comment; any other ; is a token, which only the end may follow.
+func TestParseSemicolonComment(t *testing.T) {
+	for _, query := range []string{
+		"SELECT 1; bogus",
+		"SELECT 1;;",
+		"SELECT 1; SELECT bogus\n",
+		"SELECT 1;\n;",
+		"SELECT 1;\n; bogus",
+	} {
+		_, err := Parse(query)
+		assert.NoError(t, err, query)
+	}
+
+	for _, tc := range []struct {
+		query  string
+		offset int
+	}{
+		{"SELECT 1;\nbogus", 10},
+		{"SELECT 1 ; x\n , 2", 11},
+		{"SELECT 1; x\n\n", 10},
+		{"SELECT ; 1", 10},
+	} {
+		_, err := Parse(tc.query)
+		parseErr, ok := err.(*ParseError)
+		assert.True(t, ok, tc.query)
+		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
+	}
+}
+
 func TestParseBalances(t *testing.T) {
 	stmt, err := Parse("BALANCES AT cost FROM year = 2014")
 	assert.NoError(t, err)

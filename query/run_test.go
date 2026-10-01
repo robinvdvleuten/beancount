@@ -124,6 +124,10 @@ var errorFixtures = map[string]string{
 | SELECT account WHERE
 |                     ^`,
 	"err_where_aggregate": `error: aggregates are not allowed in WHERE clause`,
+	"err_semicolon_newline": `error: syntax error
+| SELECT DISTINCT account;
+| SELECT bogus
+| ^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

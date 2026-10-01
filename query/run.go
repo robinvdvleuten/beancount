@@ -49,14 +49,23 @@ type statement interface {
 // amount column split into a number column per currency when numberify is
 // set, and PRINT's directives as beancount text.
 // A statement that does not parse or compile writes nothing and returns an
-// *Error. Run returns another error only for an unknown format, a qctx
-// without an AST, a cancelled ctx, or a failed write.
+// *Error. Like beanquery's shell, a text without a statement, such as an
+// empty one, writes nothing. Run returns another error only for an unknown
+// format, a qctx without an AST, a cancelled ctx, or a failed write.
 func Run(ctx context.Context, qctx *Context, text string, format Format, numberify bool, w io.Writer) error {
 	if _, ok := renderers[format]; !ok {
 		return fmt.Errorf("unknown output format %q", format)
 	}
 	if qctx.AST == nil {
 		return errors.New("query context has no AST")
+	}
+
+	// The shell strips the text and runs nothing when it does not start
+	// with a command name (cmd.parseline): an empty text, or one starting
+	// with ;, ( or a comment.
+	text = strings.TrimFunc(text, isPySpace)
+	if text == "" || !isCommandChar(text[0]) {
+		return nil
 	}
 
 	timer := telemetry.FromContext(ctx).Start("query.run")
@@ -183,6 +192,13 @@ func splitLines(text string) []string {
 		lines = append(lines, text[start:])
 	}
 	return lines
+}
+
+// isCommandChar reports whether c is one of the shell's identchars, which
+// a command name is made of, or the ? it reads as help: an ASCII letter or
+// digit, _ or a dot.
+func isCommandChar(c byte) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '.' || c == '?'
 }
 
 // isPySpace reports whether Python's str.isspace holds for r, which adds

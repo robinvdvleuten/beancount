@@ -39,6 +39,8 @@ func FuzzParseQuery(f *testing.F) {
 		// Pivot, semicolons, multi-line
 		"SELECT account, year(date), sum(position) GROUP BY 1, 2 PIVOT BY account, year",
 		"SELECT * ;",
+		"SELECT 1; bogus",
+		"SELECT 1;\n; comment\n",
 		"SELECT\n  account\nORDER BY account",
 
 		// Edge cases
