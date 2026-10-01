@@ -497,6 +497,13 @@ func TestParseErrorOffset(t *testing.T) {
 		{"SELECT account LIMIT", 15},
 		{"SELECT account LIMIT -1", 15},
 		{"SELECT account LIMIT +1", 15},
+		{"SELECT account LIMIT .5", 15},
+		// LIMIT's integer takes the digits before a dot, and the
+		// statement fails at the dot or the letter after them.
+		{"SELECT account LIMIT 1.5", 22},
+		{"SELECT account LIMIT 12.5", 23},
+		{"SELECT account LIMIT 1.", 22},
+		{"SELECT account LIMIT 1e2", 22},
 		{"SELECT account ORDER BY account ASC LIMIT x", 36},
 		{"SELECT account GROUP account", 15},
 		{"SELECT account ORDER", 15},

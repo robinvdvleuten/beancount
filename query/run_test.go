@@ -129,6 +129,9 @@ var errorFixtures = map[string]string{
 		"| \n" +
 		"| bogus\n" +
 		"| ^^^^^",
+	"err_limit_decimal": `error: syntax error
+| SELECT account LIMIT 1.5
+|                       ^`,
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

@@ -247,6 +247,11 @@ func (p *parser) parseSelect() (*Select, error) {
 		// Numbers carry no sign, so a negative limit never reaches the
 		// executor: LIMIT -1 is a syntax error, as in beanquery.
 		tok := p.cur
+		if tok.Type == DECIMAL && isDigit(p.source[tok.Start]) {
+			// The integer rule takes the digits before the dot, and the
+			// statement fails at the dot: LIMIT 1.5 is a syntax error there.
+			return nil, p.dotErrorf(tok, "expected an integer LIMIT, found %s", p.describe(tok))
+		}
 		if tok.Type != INTEGER {
 			return nil, p.clauseErrorf(clause, "LIMIT")
 		}
@@ -491,11 +496,17 @@ func (p *parser) parseClauseItem() (Expr, error) {
 	case tok.Type == DECIMAL && isDigit(p.source[tok.Start]):
 		// The integer rule takes the digits before the dot, and the item
 		// fails at the dot: GROUP BY 1.0 is a syntax error.
-		digits := strings.IndexByte(tok.String(p.source), '.')
-		dot := Token{Type: DECIMAL, Start: tok.Start + digits, End: tok.End, Line: tok.Line, Column: tok.Column + digits}
-		return nil, p.errorf(dot, "expected an integer column index, found %s", p.describe(tok))
+		return nil, p.dotErrorf(tok, "expected an integer column index, found %s", p.describe(tok))
 	}
 	return p.parseExpr()
+}
+
+// dotErrorf reports the decimal tok, which starts with digits, at its dot,
+// where beanquery's integer rule leaves off.
+func (p *parser) dotErrorf(tok Token, format string, args ...any) *ParseError {
+	digits := strings.IndexByte(tok.String(p.source), '.')
+	dot := Token{Type: DECIMAL, Start: tok.Start + digits, End: tok.End, Line: tok.Line, Column: tok.Column + digits}
+	return p.errorf(dot, format, args...)
 }
 
 // Expression precedence, low to high: OR, AND, NOT, comparison, additive,
