@@ -60,8 +60,8 @@ beancount has no tolerance at all, so it reports the 1E-27 USD an
 interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
-The printer (BQL `PRINT`, `import`, error context) follows beancount
-2.3.6's `printer.py` until #560, with these known differences from
+The printer (BQL `PRINT`, `import`, `doctor missing_open`, error context)
+follows beancount 3.2.3's `printer.py`, with these known differences from
 `bean-query`'s `PRINT`:
 
 - `PRINT` ignores `option "render_commas" "TRUE"`: bean-query prints
@@ -71,13 +71,6 @@ The printer (BQL `PRINT`, `import`, error context) follows beancount
   kind.
 - A number in metadata prints in fixed notation (`0.0000001`), where
   Python's `str` gives `1E-7`.
-- A document's tags and links print 2.3.6's way (`#a#b^link1`), where
-  bean-query spaces them (`#a #b ^link1`, `print_document_pushed_tags`).
-  A note's tags and links print as bean-query prints them (`"hello" #trip ^link1`,
-  `print_note_pushed_tag`).
-- The metadata the `implicit_prices` plugin adds to its prices
-  (`__implicit_prices__: "from_cost"`) prints; bean-query leaves it out
-  (`print_implicit_prices*`, `from_open_kept_entries`).
 - Like `printer.py`, the printer does not escape `note`, `event`, `query`,
   `document` and `custom` strings or cost labels. So `import` output with a
   `"` in one of them fails its re-parse.

@@ -364,12 +364,12 @@ func (p *printer) balance(b *ast.Balance, buf *strings.Builder) {
 		buf.WriteString(parsedNumber(b.Amount.Value))
 	}
 	buf.WriteByte(' ')
+	// Like beancount v3's printer, a tolerance prints whenever it is
+	// written, "~ 0" included.
 	if b.Tolerance != nil {
-		if tolerance, err := decimal.NewFromString(b.Tolerance.Value); err != nil || !tolerance.IsZero() {
-			buf.WriteString("~ ")
-			buf.WriteString(parsedNumber(b.Tolerance.Value))
-			buf.WriteByte(' ')
-		}
+		buf.WriteString("~ ")
+		buf.WriteString(parsedNumber(b.Tolerance.Value))
+		buf.WriteByte(' ')
 	}
 	buf.WriteString(currency)
 	if diff, ok := p.diffs[b]; ok && !diff.IsZero() {
@@ -395,14 +395,12 @@ func (p *printer) note(n *ast.Note, buf *strings.Builder) {
 
 func (p *printer) document(d *ast.Document, buf *strings.Builder) {
 	buf.WriteString(d.Date().String() + " document " + string(d.Account) + ` "` + d.ResolvedPath() + `"`)
-	if len(d.Tags) > 0 || len(d.Links) > 0 {
-		buf.WriteByte(' ')
-		for _, tag := range sortedUnique(d.Tags) {
-			buf.WriteString("#" + string(tag))
-		}
-		for _, link := range sortedUnique(d.Links) {
-			buf.WriteString("^" + string(link))
-		}
+	// Like beancount v3's printer: tags, then links, each after a space.
+	for _, tag := range sortedUnique(d.Tags) {
+		buf.WriteString(" #" + string(tag))
+	}
+	for _, link := range sortedUnique(d.Links) {
+		buf.WriteString(" ^" + string(link))
 	}
 	buf.WriteByte('\n')
 	writeMetadata(d.Metadata, metadataIndent, buf)
@@ -473,9 +471,15 @@ func (p *printer) custom(c *ast.Custom, buf *strings.Builder) {
 
 // writeMetadata writes metadata lines, like beancount's write_metadata: a
 // string, account, currency, tag or link value is a quoted string, and a
-// missing value is left empty after "key: ".
+// missing value is left empty after "key: "; a key starting with "__" is
+// left out.
 func writeMetadata(metadata []*ast.Metadata, indent string, buf *strings.Builder) {
 	for _, m := range metadata {
+		// Like beancount v3's printer, a key starting with "__" is
+		// internal (__implicit_prices__) and does not print.
+		if strings.HasPrefix(m.Key, "__") {
+			continue
+		}
 		buf.WriteString(indent)
 		buf.WriteString(m.Key)
 		buf.WriteString(": ")

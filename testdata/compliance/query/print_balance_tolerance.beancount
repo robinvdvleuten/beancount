@@ -1,0 +1,7 @@
+; Like beancount v3's printer, a balance prints its tolerance whenever one
+; is written, a zero one included; v2 skipped "~ 0".
+2020-01-01 open Assets:Cash USD
+2020-01-02 balance Assets:Cash 0 ~ 0 USD
+2020-01-03 balance Assets:Cash 0.00 ~ 0.000 USD
+2020-01-04 balance Assets:Cash 0 ~ 0.01 USD
+2020-01-05 balance Assets:Cash 0 USD

@@ -29,7 +29,7 @@ func parseOne(t *testing.T, source string) ast.Directive {
 	return directives[0]
 }
 
-// The expected texts below are what bean-query 2.3.6's print (beancount's
+// The expected texts below are what bean-query's PRINT (beancount 3.2.3's
 // printer.print_entries) writes for the same directives.
 func TestSprintDirectiveKinds(t *testing.T) {
 	tests := []struct {
@@ -78,6 +78,13 @@ func TestSprintDirectiveKinds(t *testing.T) {
 			want:   "2020-01-04 balance Assets:Cash                                     -1302.00 ~ 0.01 USD\n",
 		},
 		{
+			// beancount v3 prints a tolerance whenever it is set; v2 left
+			// out a zero one.
+			name:   "BalanceWithZeroTolerance",
+			source: "2020-01-04 balance Assets:Cash  0.00 ~ 0.000 USD\n",
+			want:   "2020-01-04 balance Assets:Cash                                     0.00 ~ 0.000 USD\n",
+		},
+		{
 			name:   "Pad",
 			source: "2020-01-07 pad Assets:Pound Equity:O\n",
 			want:   "2020-01-07 pad Assets:Pound Equity:O\n",
@@ -88,15 +95,16 @@ func TestSprintDirectiveKinds(t *testing.T) {
 			want:   "2020-01-05 note Assets:Cash \"a \"b\" c\"\n",
 		},
 		{
-			// beancount v3's printer; bean-query 2.3.6 rejects the syntax.
+			// beancount v2 neither parsed nor printed a note's tags and links.
 			name:   "NoteSortsTagsThenLinks",
 			source: "2020-01-05 note Assets:Cash \"hello\" ^l2 #t2 ^l1 #t1 #t2\n  key: \"value\"\n",
 			want:   "2020-01-05 note Assets:Cash \"hello\" #t1 #t2 ^l1 ^l2\n  key: \"value\"\n",
 		},
 		{
-			name:   "DocumentSortsTagsAndLinksWithoutSpaces",
+			// beancount v3 spaces them; v2 printed "#t1#t2^l1".
+			name:   "DocumentSortsTagsThenLinks",
 			source: "2020-01-06 document Assets:Cash \"/tmp/x.pdf\" #t2 #t1 ^l1\n",
-			want:   "2020-01-06 document Assets:Cash \"/tmp/x.pdf\" #t1#t2^l1\n",
+			want:   "2020-01-06 document Assets:Cash \"/tmp/x.pdf\" #t1 #t2 ^l1\n",
 		},
 		{
 			name:   "Price",
@@ -239,6 +247,21 @@ func TestSprintMetadata(t *testing.T) {
 			"  Assets:Cash  1 USD\n"+
 			"    pmeta: 1\n"+
 			"  Equity:O\n", Sprint(parseOne(t, source)))
+	})
+
+	t.Run("LeavesOutDunderKeys", func(t *testing.T) {
+		// Like beancount v3, a key starting with "__" is internal, such as
+		// the __implicit_prices__ the implicit_prices plugin adds, and
+		// does not print. No source can write one.
+		price := parseOne(t, "2020-01-05 price HOOL 120 USD\n").(*ast.Price)
+		price.Metadata = []*ast.Metadata{
+			ast.NewMetadata("__implicit_prices__", "from_cost"),
+			ast.NewMetadata("_single", "kept"),
+			ast.NewMetadata("key", "kept"),
+		}
+		assert.Equal(t, "2020-01-05 price HOOL                                  120 USD\n"+
+			"  _single: \"kept\"\n"+
+			"  key: \"kept\"\n", Sprint(price))
 	})
 
 	t.Run("OnACommodity", func(t *testing.T) {

@@ -123,13 +123,7 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"from_open_kept_entries":          "#560: beanquery's printer hides __implicit_prices__ metadata",
-	"print_document_pushed_tags":      "#560: beanquery's printer spaces a document's tags and links",
-	"print_implicit_price_scale":      "#560: beanquery's printer hides __implicit_prices__ metadata",
-	"print_implicit_price_zero_units": "#560: beanquery's printer hides __implicit_prices__ metadata",
-	"print_implicit_prices":           "#560: beanquery's printer hides __implicit_prices__ metadata",
-	"print_implicit_prices_precision": "#560: beanquery's printer hides __implicit_prices__ metadata",
-	"negative_zero":                   "#408, a deliberate deviation: booking gives a zero residual no sign",
+	"negative_zero": "#408, a deliberate deviation: booking gives a zero residual no sign",
 }
 
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query
