@@ -189,6 +189,40 @@ option "account_unrealized_gains" "中文"
 	}, got)
 }
 
+func TestSummaryAccounts(t *testing.T) {
+	cfg, errs := ParseOptions(parser.MustParseString(context.Background(), ""))
+	assert.Zero(t, errs)
+	earnings, balances, conversions := cfg.PreviousAccounts()
+	assert.Equal(t, []string{"Equity:Earnings:Previous", "Equity:Opening-Balances", "Equity:Conversions:Previous"},
+		[]string{earnings, balances, conversions})
+	earnings, conversions = cfg.CurrentAccounts()
+	assert.Equal(t, []string{"Equity:Earnings:Current", "Equity:Conversions:Current"}, []string{earnings, conversions})
+
+	// Like beancount, the equity root joins the options when they are
+	// read, whichever comes first.
+	tree, err := parser.ParseBytesWithFilename(context.Background(), "ledger.beancount", []byte(`option "account_previous_balances" "Opening"
+option "account_previous_earnings" "Retained:Before"
+option "account_previous_conversions" "Conv:Before"
+option "account_current_earnings" "Retained:Now"
+option "account_current_conversions" "conv"
+option "name_equity" "Capital"
+`))
+	assert.NoError(t, err)
+	cfg, errs = ParseOptions(tree)
+	earnings, balances, conversions = cfg.PreviousAccounts()
+	assert.Equal(t, []string{"Capital:Retained:Before", "Capital:Opening", "Capital:Conv:Before"},
+		[]string{earnings, balances, conversions})
+	earnings, conversions = cfg.CurrentAccounts()
+	assert.Equal(t, []string{"Capital:Retained:Now", "Capital:Conversions:Current"}, []string{earnings, conversions})
+	var got []string
+	for _, err := range errs {
+		got = append(got, err.Error())
+	}
+	assert.Equal(t, []string{
+		"ledger.beancount:5: Error for option 'account_current_conversions': Invalid leaf account name: 'conv'",
+	}, got)
+}
+
 func TestToleranceMultiplier(t *testing.T) {
 	tests := []struct {
 		name   string

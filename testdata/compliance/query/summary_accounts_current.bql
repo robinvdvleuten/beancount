@@ -1,0 +1,1 @@
+SELECT account, sum(position) FROM CLOSE CLEAR WHERE account ~ '^Equity' GROUP BY account ORDER BY account

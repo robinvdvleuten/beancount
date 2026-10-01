@@ -1,0 +1,7 @@
+; The account_previous_* and account_current_* options must be leaf
+; account names, as account_unrealized_gains must.
+option "account_previous_balances" "opening"
+option "account_previous_earnings" "Earnings:"
+option "account_previous_conversions" ""
+option "account_current_earnings" "Retained:now"
+option "account_current_conversions" "It's"

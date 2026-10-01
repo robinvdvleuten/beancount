@@ -65,6 +65,50 @@ type Config struct {
 	// AccountUnrealizedGains is the leaf account unrealized gains post
 	// to, under the income root. Nothing reads it yet.
 	AccountUnrealizedGains string
+
+	// SummaryAccounts are the leaf accounts, under the equity root, that
+	// summarizing a period posts to (BQL's FROM OPEN ON, CLOSE and
+	// CLEAR). PreviousAccounts and CurrentAccounts join them to the root.
+	SummaryAccounts SummaryAccounts
+}
+
+// SummaryAccounts holds the account_previous_* and account_current_*
+// options, each a leaf account under the equity root.
+type SummaryAccounts struct {
+	// PreviousBalances (account_previous_balances) holds the balances
+	// brought forward from before a period.
+	PreviousBalances string
+	// PreviousEarnings (account_previous_earnings) holds the income and
+	// expenses of before a period.
+	PreviousEarnings string
+	// PreviousConversions (account_previous_conversions) holds the
+	// conversions of before a period.
+	PreviousConversions string
+	// CurrentEarnings (account_current_earnings) holds the income and
+	// expenses of a period that is cleared.
+	CurrentEarnings string
+	// CurrentConversions (account_current_conversions) holds the
+	// conversions of a period that is closed.
+	CurrentConversions string
+}
+
+// PreviousAccounts returns the accounts summarizing before a period, under
+// the equity root, like beancount's options.get_previous_accounts.
+func (c *Config) PreviousAccounts() (earnings, balances, conversions string) {
+	return c.equityAccount(c.SummaryAccounts.PreviousEarnings),
+		c.equityAccount(c.SummaryAccounts.PreviousBalances),
+		c.equityAccount(c.SummaryAccounts.PreviousConversions)
+}
+
+// CurrentAccounts returns the accounts summarizing a period, under the
+// equity root, like beancount's options.get_current_accounts.
+func (c *Config) CurrentAccounts() (earnings, conversions string) {
+	return c.equityAccount(c.SummaryAccounts.CurrentEarnings),
+		c.equityAccount(c.SummaryAccounts.CurrentConversions)
+}
+
+func (c *Config) equityAccount(leaf string) string {
+	return c.AccountNames.Equity + ":" + leaf
 }
 
 // New returns configuration populated with official defaults.
@@ -75,7 +119,14 @@ func New() *Config {
 		Title:         "Beancount",
 		// Like beancount's default for account_unrealized_gains.
 		AccountUnrealizedGains: "Earnings:Unrealized",
-		DisplayPrecision:       make(map[string]decimal.Decimal),
+		SummaryAccounts: SummaryAccounts{
+			PreviousBalances:    "Opening-Balances",
+			PreviousEarnings:    "Earnings:Previous",
+			PreviousConversions: "Conversions:Previous",
+			CurrentEarnings:     "Earnings:Current",
+			CurrentConversions:  "Conversions:Current",
+		},
+		DisplayPrecision: make(map[string]decimal.Decimal),
 		AccountNames: &AccountNames{
 			Assets:      "Assets",
 			Liabilities: "Liabilities",
@@ -364,11 +415,12 @@ func (c *Config) apply(name, value string) error {
 			return err
 		}
 		c.DisplayPrecision[currency] = example
-	case "account_unrealized_gains":
+	case "account_unrealized_gains", "account_previous_balances", "account_previous_earnings",
+		"account_previous_conversions", "account_current_earnings", "account_current_conversions":
 		if !isValidLeafAccount(value) {
 			return beancountError("Invalid leaf account name: " + pyrepr.String(value))
 		}
-		c.AccountUnrealizedGains = value
+		*c.leafAccountOption(name) = value
 	case "infer_tolerance_from_cost":
 		// Like beancount's boolean options without a converter.
 		lower := strings.ToLower(value)
@@ -383,6 +435,18 @@ func (c *Config) apply(name, value string) error {
 		}
 	}
 	return nil
+}
+
+// leafAccountOption returns the field a leaf account option sets.
+func (c *Config) leafAccountOption(name string) *string {
+	return map[string]*string{
+		"account_unrealized_gains":     &c.AccountUnrealizedGains,
+		"account_previous_balances":    &c.SummaryAccounts.PreviousBalances,
+		"account_previous_earnings":    &c.SummaryAccounts.PreviousEarnings,
+		"account_previous_conversions": &c.SummaryAccounts.PreviousConversions,
+		"account_current_earnings":     &c.SummaryAccounts.CurrentEarnings,
+		"account_current_conversions":  &c.SummaryAccounts.CurrentConversions,
+	}[name]
 }
 
 // beancountError is an option error in beancount's own words, which start

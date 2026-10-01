@@ -35,10 +35,11 @@ func applyFromTransforms(qctx *Context, entries []ast.Directive, from *compiledF
 }
 
 // openTransform summarizes all transactions before the open date: their
-// conversion entry books into Equity:Conversions:Previous, income and
-// expenses balances collapse into Equity:Earnings:Previous, and every
+// conversion entry books into the previous-conversions account, income and
+// expenses balances collapse into the previous-earnings account, and every
 // balance-sheet account's inventory becomes an S-flagged opening transaction
-// at the day before the open date, posted against Equity:Opening-Balances.
+// at the day before the open date, posted against the previous-balances
+// account (Config.PreviousAccounts, Equity:Opening-Balances by default).
 // Of the other directives before the open date only the active opens and
 // the last prices stay, sorted in among the opening transactions.
 func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) []ast.Directive {
@@ -56,15 +57,15 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 		}
 	}
 
+	earnings, opening, conversions := qctx.config().PreviousAccounts()
 	openingDate := &ast.Date{Time: openDate.AddDate(0, 0, -1)}
-	if conversion := conversionTransaction(qctx, before, openingDate, equityAccount(qctx, "Conversions:Previous")); conversion != nil {
+	if conversion := conversionTransaction(qctx, before, openingDate, conversions); conversion != nil {
 		bookTransaction(qctx, accounts, conversion)
 	}
 
 	// Collapse income and expenses into the previous-earnings account, like
 	// beancount's transfer entries: accounts in sorted order, each position
 	// adding its cost value, so the earnings positions keep beancount's order.
-	earnings := equityAccount(qctx, "Earnings:Previous")
 	for _, account := range sortedAccounts(accounts) {
 		typ, ok := accountType(qctx, account)
 		if !ok || (typ != ast.AccountTypeIncome && typ != ast.AccountTypeExpenses) {
@@ -81,7 +82,6 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 		delete(accounts, account)
 	}
 
-	opening := equityAccount(qctx, "Opening-Balances")
 	summary := append(activeOpens(before), lastPrices(before)...)
 	for _, account := range sortedAccounts(accounts) {
 		inventory := accounts[account]
@@ -155,7 +155,8 @@ func lastPrices(entries []ast.Directive) []ast.Directive {
 }
 
 // closeTransform truncates the stream at the close date, keeping entries
-// strictly before it, and appends the conversion entry for what is left:
+// strictly before it, and appends the conversion entry for what is left,
+// into the current-conversions account (Config.CurrentAccounts):
 // at the day before the close date, or at the last entry's date for a bare
 // CLOSE (nil closeDate).
 func closeTransform(qctx *Context, entries []ast.Directive, closeDate *ast.Date) []ast.Directive {
@@ -176,7 +177,8 @@ func closeTransform(qctx *Context, entries []ast.Directive, closeDate *ast.Date)
 	if closeDate != nil {
 		date = &ast.Date{Time: closeDate.AddDate(0, 0, -1)}
 	}
-	if conversion := conversionTransaction(qctx, kept, date, equityAccount(qctx, "Conversions:Current")); conversion != nil {
+	_, conversions := qctx.config().CurrentAccounts()
+	if conversion := conversionTransaction(qctx, kept, date, conversions); conversion != nil {
 		kept = append(kept[:len(kept):len(kept)], conversion)
 	}
 	return kept
@@ -225,7 +227,8 @@ func conversionTransaction(qctx *Context, entries []ast.Directive, date *ast.Dat
 }
 
 // clearTransform appends T-flagged transactions at the last entry date that
-// transfer every income and expenses balance to Equity:Earnings:Current.
+// transfer every income and expenses balance to the current-earnings
+// account (Config.CurrentAccounts, Equity:Earnings:Current by default).
 func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 	if len(entries) == 0 {
 		return entries
@@ -242,7 +245,7 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 		}
 	}
 
-	earnings := equityAccount(qctx, "Earnings:Current")
+	earnings, _ := qctx.config().CurrentAccounts()
 	transferDate := &ast.Date{Time: lastDate}
 	result := entries
 	for _, account := range sortedAccounts(accounts) {
@@ -325,15 +328,6 @@ func sortedAccounts(accounts map[string]*inventoryValue) []string {
 // conversionCurrency is beancount's default conversion_currency option, the
 // imaginary currency pricing conversion entries at zero.
 const conversionCurrency = "NOTHING"
-
-// equityAccount joins the configured equity root with a sub-account name.
-func equityAccount(qctx *Context, sub string) string {
-	root := "Equity"
-	if qctx != nil && qctx.Config != nil && qctx.Config.AccountNames != nil {
-		root = qctx.Config.AccountNames.Equity
-	}
-	return root + ":" + sub
-}
 
 // numberString renders a decimal preserving its scale.
 func numberString(d decimal.Decimal) string {

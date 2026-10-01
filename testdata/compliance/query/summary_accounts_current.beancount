@@ -1,0 +1,14 @@
+option "account_current_earnings" "Retained:Now"
+option "account_current_conversions" "Conv:Now"
+
+2024-01-01 open Assets:Cash
+2024-01-01 open Income:Salary
+2024-01-01 open Assets:Eur
+
+2024-01-02 * "pay"
+  Assets:Cash  100 USD
+  Income:Salary
+
+2024-01-03 * "fx"
+  Assets:Eur  90 EUR @ 1.1 USD
+  Assets:Cash
