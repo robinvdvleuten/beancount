@@ -19,20 +19,24 @@ var (
 // ErrorRenderer renders errors with terminal styling and source context.
 type ErrorRenderer struct {
 	sources map[string][]byte
+	print   []printer.Option    // how a directive under an error is printed
 	lines   map[string][]string // each source split into lines, on first use
 }
 
 // NewErrorRenderer creates a renderer that shows an error in the context of
-// the source its position names, looked up by filename in sources.
-func NewErrorRenderer(sources map[string][]byte) *ErrorRenderer {
-	return &ErrorRenderer{sources: sources, lines: make(map[string][]string)}
+// the source its position names, looked up by filename in sources, and an
+// error about a directive with the directive printed with opts. Pass
+// printer.WithBookedPositions(Ledger.BookedPositions) to print a
+// transaction's postings as booked, as bean-check does.
+func NewErrorRenderer(sources map[string][]byte, opts ...printer.Option) *ErrorRenderer {
+	return &ErrorRenderer{sources: sources, print: opts, lines: make(map[string][]string)}
 }
 
 // Render formats a single error with styling and context: like bean-check,
 // an error about a directive shows the directive under it.
 func (r *ErrorRenderer) Render(err error) string {
 	if e, ok := err.(interface{ GetDirective() ast.Directive }); ok {
-		if context := directiveContext(e.GetDirective()); context != "" {
+		if context := directiveContext(e.GetDirective(), r.print...); context != "" {
 			return errorStyle.Render(err.Error()) + "\n\n" + context
 		}
 	}
@@ -162,12 +166,12 @@ func caretPadding(line string, byteColumn int) int {
 // directiveContext renders a directive as context lines under an error, as
 // beancount prints it, or "" when there is no directive. Every line is
 // indented, so none starts with an error's path:line:.
-func directiveContext(directive ast.Directive) string {
+func directiveContext(directive ast.Directive, opts ...printer.Option) string {
 	if directive == nil {
 		return ""
 	}
 	var buf strings.Builder
-	for line := range strings.Lines(printer.Sprint(directive)) {
+	for line := range strings.Lines(printer.Sprint(directive, opts...)) {
 		buf.WriteString("   ")
 		buf.WriteString(errContextStyle.Render(strings.TrimSuffix(line, "\n")))
 		buf.WriteByte('\n')

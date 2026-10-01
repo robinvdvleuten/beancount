@@ -1,0 +1,21 @@
+; An error's transaction is printed with its postings as booked: a total
+; cost per unit and dated, a reduction one posting per lot.
+2020-01-01 open Assets:A USD
+2020-01-01 open Assets:B
+2020-01-01 open Equity:E
+
+2020-01-07 txn "x"
+  Assets:A  2 HOOL {{11.00 USD}} @@ 12.00 USD
+  Equity:E
+
+2020-01-08 txn "buy"
+  Assets:B  2 HOOL {10 USD}
+  Equity:E
+
+2020-01-09 txn "buy"
+  Assets:B  3 HOOL {12 USD}
+  Equity:E
+
+2020-01-10 txn "sell"
+  Assets:B  -5 HOOL {}
+  Assets:C

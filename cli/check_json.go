@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
 )
@@ -19,7 +20,7 @@ func (cmd *CheckCmd) writeJSON(ctx context.Context, stdout io.Writer, loadResult
 	var errs []error
 	switch joined := loadErr.(type) {
 	case nil:
-		loadErrors, validationErrors, err := ledgerErrors(ctx, loadResult)
+		loadErrors, validationErrors, err := ledgerErrors(ctx, ledger.New(), loadResult)
 		if err != nil {
 			return err
 		}

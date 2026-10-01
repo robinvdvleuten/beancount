@@ -2,7 +2,9 @@ package cli
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -192,6 +194,47 @@ func TestCheckShowsADroppedGroupUnderItsBookingError(t *testing.T) {
 		"     Assets:Brokerage      -5 HOOL {}\n"+
 		"     Assets:Cash       600.00 USD\n"+
 		"     Income:Gains      -75.00 USD\n")
+}
+
+func TestCheckShowsBookedPostingsUnderAnError(t *testing.T) {
+	// Like bean-check, an error's transaction shows its postings as booked:
+	// a total cost per unit and dated, a reduction one posting per lot.
+	path, err := filepath.Abs(filepath.Join(complianceDir, "booked_context.fail.beancount"))
+	assert.NoError(t, err)
+	want := map[int]string{
+		7: "   2020-01-07 * \"x\"\n" +
+			"     Assets:A       2 HOOL {5.50 USD, 2020-01-07} @ 6.00 USD\n" +
+			"     Equity:E  -11.00 USD\n",
+		19: "   2020-01-10 * \"sell\"\n" +
+			"     Assets:B  -2 HOOL {10 USD, 2020-01-08}\n" +
+			"     Assets:B  -3 HOOL {12 USD, 2020-01-09}\n" +
+			"     Assets:C  56 USD\n",
+	}
+	assert.Equal(t, want, errorContexts(path, runOurCheck(t, path)))
+
+	if !hasOfficialTool(t, "bean-check", 3) {
+		return
+	}
+	out, _ := exec.Command("bean-check", path).CombinedOutput()
+	assert.Equal(t, want, errorContexts(path, string(out)))
+}
+
+// errorContexts returns the context lines printed under each error in
+// check's output that is reported in path, keyed by the error's line.
+func errorContexts(path, output string) map[int]string {
+	contexts := map[int]string{}
+	current := 0
+	for line := range strings.Lines(output) {
+		if rest, ok := strings.CutPrefix(line, path+":"); ok {
+			number, _, _ := strings.Cut(rest, ":")
+			current, _ = strconv.Atoi(number)
+			continue
+		}
+		if current != 0 && strings.HasPrefix(line, "   ") {
+			contexts[current] += line
+		}
+	}
+	return contexts
 }
 
 func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {

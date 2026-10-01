@@ -16,6 +16,7 @@ import (
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -98,11 +99,13 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
 		printInfof(stderr, "%s", warning)
 	}
-	renderer := NewErrorRenderer(loadResult.Sources)
-	loadErrors, validationErrors, err := ledgerErrors(ctx, loadResult)
+	l := ledger.New()
+	loadErrors, validationErrors, err := ledgerErrors(ctx, l, loadResult)
 	if err != nil {
 		return 0, err
 	}
+	// Like bean-check, an error's transaction shows its postings as booked.
+	renderer := NewErrorRenderer(loadResult.Sources, printer.WithBookedPositions(l.BookedPositions))
 	for _, loadErr := range loadErrors {
 		// A syntax error in the main file is shown in its source context,
 		// like a failed load.
@@ -130,12 +133,12 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 	return len(loadErrors), nil
 }
 
-// ledgerErrors processes the loaded AST and returns the errors check
-// reports, in its order: the fatal load diagnostics, then the validation
-// errors.
-func ledgerErrors(ctx context.Context, loadResult *loader.LoadResult) (loadErrors, validationErrors []error, err error) {
+// ledgerErrors processes the loaded AST into l and returns the errors
+// check reports, in its order: the fatal load diagnostics, then the
+// validation errors.
+func ledgerErrors(ctx context.Context, l *ledger.Ledger, loadResult *loader.LoadResult) (loadErrors, validationErrors []error, err error) {
 	loadErrors = diagnostic.Errors(loadResult.Diagnostics)
-	if err := ledger.New().Process(ctx, loadResult.AST); err != nil {
+	if err := l.Process(ctx, loadResult.AST); err != nil {
 		var validation *ledger.ValidationErrors
 		if !errors.As(err, &validation) {
 			return nil, nil, err

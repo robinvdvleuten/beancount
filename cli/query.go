@@ -18,6 +18,7 @@ import (
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/query"
 )
 
@@ -61,7 +62,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	l := ledger.New()
 	if err := l.Process(runCtx, tree); err != nil {
 		if stdErrors.As(err, &validationErrors) {
-			renderer := NewErrorRenderer(loadResult.Sources)
+			renderer := NewErrorRenderer(loadResult.Sources, printer.WithBookedPositions(l.BookedPositions))
 			_, _ = fmt.Fprintln(ctx.Stderr, renderer.RenderAll(validationErrors.Errors))
 		} else {
 			return err
@@ -168,7 +169,7 @@ func runShell(ctx context.Context, qctx *query.Context, format query.Format, num
 				_, _ = fmt.Fprintln(out, "(no errors)")
 				continue
 			}
-			renderer := NewErrorRenderer(sources)
+			renderer := NewErrorRenderer(sources, printer.WithBookedPositions(qctx.Ledger.BookedPositions))
 			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors.Errors))
 			continue
 		}
