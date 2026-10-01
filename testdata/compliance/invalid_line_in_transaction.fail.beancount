@@ -1,0 +1,26 @@
+; An invalid line continuing a directive is a syntax error inside it, which
+; drops the whole directive: no unbalanced transaction is reported, and the
+; account whose open is dropped is unknown. After a blank line it continues
+; nothing.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+  garbage
+2020-01-01 open Assets:D
+
+  garbage
+
+2020-01-02 * "x"
+  Assets:A  1 USD
+  garbage
+  Assets:B  -1 USD
+
+2020-01-03 * "y"
+  Assets:A  1 USD
+  Assets:B  -1 USD
+  ; a comment
+  garbage
+
+2020-01-04 * "z"
+  Assets:C  1 USD
+  Assets:D  -1 USD

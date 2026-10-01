@@ -1,0 +1,7 @@
+; An account whose name the lexer reads but whose component the account
+; pattern rejects is reported and still read: the transaction stays, and
+; refers to an account never opened.
+2020-01-01 open Assets:A
+2020-01-02 * "x"
+  Assets:A  1 USD
+  Assets:😀x  -1 USD

@@ -90,16 +90,6 @@ limits:
 
 ## Open gaps (no fixture yet)
 
-Probed against bean-check 3.2.3, each without a fixture until its issue
-lands:
-
-- #567: an invalid line in a transaction's body drops the whole
-  transaction in bean-check; we drop the line and report the rest as
-  `Transaction does not balance`. An account with an invalid component
-  (`Assets:😀x`) is `Invalid account name` in bean-check, which keeps the
-  posting and reports the account as unknown; we report a syntax error and
-  drop the transaction.
-
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
 - #593: beanquery's functions `round`, `substr`, `splitcomp`,

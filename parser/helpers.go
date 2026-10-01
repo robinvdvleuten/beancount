@@ -37,9 +37,13 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	// Intern account name for memory efficiency
 	accountStr := p.internIdent(tok)
 
+	// Like beancount, an account its lexer reads but its account pattern
+	// rejects is reported and still read, so the directive stays.
 	var account ast.Account
 	if err := account.Capture([]string{accountStr}); err != nil {
-		return "", p.errorAtToken(tok, "invalid account: %v", err)
+		pos := tokenPosition(tok, p.filename)
+		p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "invalid account name %s: %v", accountStr, err))
+		account = ast.Account(accountStr)
 	}
 
 	return account, nil

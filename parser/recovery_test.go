@@ -125,3 +125,34 @@ func TestUndatedLineEndsAtItsLine(t *testing.T) {
 		})
 	}
 }
+
+// TestInvalidLineDropsTheDirectiveItContinues pins beancount's recovery from
+// an invalid indented line: it is a syntax error inside the directive it
+// continues, comments between them included, which is dropped whole. After
+// a blank line it continues nothing.
+func TestInvalidLineDropsTheDirectiveItContinues(t *testing.T) {
+	source := "2020-01-01 open Assets:A\n\n  garbage\n2020-01-01 open Assets:B\n  ; c\n  garbage\n" +
+		"2020-01-02 * \"x\"\n  Assets:A  1 USD\n  garbage\n  Assets:B  -1 USD\n2020-01-03 open Assets:C\n"
+	tree, err := ParseString(context.Background(), source)
+	assert.Error(t, err)
+
+	var kept []string
+	for _, d := range tree.Directives {
+		kept = append(kept, d.Date().String()+" "+string(d.Kind()))
+	}
+	assert.Equal(t, []string{"2020-01-01 open", "2020-01-03 open"}, kept)
+}
+
+// TestInvalidAccountNameKeepsTheDirective pins beancount's builder, which
+// reports an account its lexer reads but its account pattern rejects and
+// keeps the directive.
+func TestInvalidAccountNameKeepsTheDirective(t *testing.T) {
+	tree, err := ParseString(context.Background(), "2020-01-02 * \"x\"\n  Assets:A  1 USD\n  Assets:\U0001F600x  -1 USD\n")
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	assert.Equal(t, 1, len(syntaxErrs))
+	assert.Equal(t, 3, syntaxErrs[0].Pos.Line)
+	assert.Equal(t, 1, len(tree.Directives))
+	assert.Equal(t, ast.Account("Assets:\U0001F600x"), tree.Directives[0].(*ast.Transaction).Postings[1].Account)
+}

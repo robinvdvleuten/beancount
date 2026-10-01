@@ -56,6 +56,11 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		tokType := tok.Type
 		continuesDirective := tokType == COMMENT && tok.Column > 1 && tok.Line == continuationLine
 		if tok.Column > 1 && tokType != NEWLINE && tokType != EOF && !continuesDirective {
+			// A line continuing a dated directive that is none of its
+			// lines is a syntax error inside it: like beancount, drop it.
+			if tok.Line == continuationLine && len(tree.Directives) > 0 {
+				tree.Directives = tree.Directives[:len(tree.Directives)-1]
+			}
 			p.recover(p.errorAtToken(tok, "unexpected indentation"))
 			continuationLine = 0
 			continue
