@@ -331,21 +331,13 @@ func TestParseCustom(t *testing.T) {
 	assert.Equal(t, "budget", custom.Type.Value)
 }
 
-func TestParseCustomIdentAsString(t *testing.T) {
-	input := `2024-01-01 custom "ticker" HOOL`
-
-	result, err := ParseString(context.Background(), input)
-	assert.NoError(t, err)
-	assert.Equal(t, 1, len(result.Directives))
-
-	custom, ok := result.Directives[0].(*ast.Custom)
-	assert.True(t, ok)
-	assert.Equal(t, 1, len(custom.Values))
-
-	// A lone IDENT (not TRUE/FALSE) should be stored as String, not Number
-	assert.NotEqual(t, (*string)(nil), custom.Values[0].String)
-	assert.Equal(t, "HOOL", *custom.Values[0].String)
-	assert.Equal(t, (*string)(nil), custom.Values[0].Number)
+func TestParseCustomRejectsCurrency(t *testing.T) {
+	// Like beancount's grammar, a custom takes no bare currency.
+	for _, value := range []string{"HOOL", "/ESZ24", "V", "NULL"} {
+		_, err := ParseString(context.Background(), `2024-01-01 custom "ticker" `+value+"\n")
+		assert.Error(t, err, value)
+		assert.Contains(t, err.Error(), "unexpected "+value+" in custom values")
+	}
 }
 
 func TestParseCustomAccountValue(t *testing.T) {

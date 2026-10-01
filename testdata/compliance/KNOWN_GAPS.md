@@ -93,11 +93,6 @@ limits:
 Probed against bean-check 3.2.3, each without a fixture until its issue
 lands:
 
-- #566: a currency ending in `-` (`price BA- 1 USD`) passes bean-check
-  3.2.3; we report an invalid token.
-- #566: a bare currency as a `custom` value (`custom "x" USD`,
-  `custom "x" /ESZ24`) is `syntax error, unexpected CURRENCY` in bean-check
-  (`USD` in 2.3.6 too); we accept it as a string.
 - #567: an invalid line in a transaction's body drops the whole
   transaction in bean-check; we drop the line and report the rest as
   `Transaction does not balance`. An account with an invalid component

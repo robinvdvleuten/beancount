@@ -1,0 +1,9 @@
+; BA- is the currency BA and a minus, which nothing may follow here.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 commodity BA-
+2020-01-02 * "x"
+  Assets:A  1 BA-
+  Assets:B
+2020-01-03 price BA_ 1 USD
+2020-01-03 price B- 1 USD

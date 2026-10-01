@@ -606,6 +606,14 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 		return Token{IDENT, start, l.pos, line, col}
 	}
 	if isASCII(value) && !isValidCurrencyLiteral(value) {
+		// Like flex's longest match, a currency starting the word is a
+		// token of its own (BA- is BA and a minus), and the rest is
+		// lexed after it.
+		if n := currencyPrefixLen(value); n > 0 {
+			l.pos = start + n
+			l.column = col + n
+			return Token{IDENT, start, l.pos, line, col}
+		}
 		return Token{ILLEGAL, start, l.pos, line, col}
 	}
 
@@ -815,6 +823,21 @@ func isValidCurrencyLiteral(value []byte) bool {
 		}
 	}
 	return true
+}
+
+// currencyPrefixLen returns the length of the longest currency starting
+// value, as beancount v3's lexer matches one, or 0 when none does.
+func currencyPrefixLen(value []byte) int {
+	if !isUppercaseLetter(value[0]) {
+		return 0
+	}
+	end := 0
+	for i := 1; i < len(value) && isCurrencyChar(value[i]); i++ {
+		if isUppercaseLetter(value[i]) || isDigit(value[i]) {
+			end = i + 1
+		}
+	}
+	return end
 }
 
 // slashCurrencyLen returns the length of the currency starting with the

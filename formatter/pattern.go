@@ -177,7 +177,11 @@ func postingRest(afterAccount string, p *ast.Posting) string {
 // leaves the line as written.
 func datedLayout(line string, owned bool, head, text, lastNumber, currency string) lineLayout {
 	if currency != "" && !gluedToCurrency(line, lastNumber, currency) {
-		if prefix, number, ok := datedAmountLayout(head, text); ok {
+		// The source may glue the amount text to the subject: BA- 1 USD
+		// is BA's price at - 1, whose minus bean-format reads as part of
+		// the prefix.
+		glued := text != "" && strings.Contains(line, head[strings.LastIndexByte(head, ' ')+1:]+text[:1])
+		if prefix, number, ok := datedAmountLayout(head, text, glued); ok {
 			return lineLayout{
 				kind:        alignLine,
 				prefix:      prefix,
@@ -196,16 +200,23 @@ func datedLayout(line string, owned bool, head, text, lastNumber, currency strin
 // a plainly spelled number and the currency: head plus any text before
 // that number is the prefix. In "100.00 ~ 0.05" the tolerance is aligned,
 // in "50 + 50" the "+ 50". It reports false when no suffix is a number.
-func datedAmountLayout(head, text string) (prefix, number string, ok bool) {
+//
+// glued says the source spells text right after head, with no space
+// between, so no number starts text: its start belongs to the prefix.
+func datedAmountLayout(head, text string, glued bool) (prefix, number string, ok bool) {
+	separator := " "
+	if glued {
+		separator = ""
+	}
 	// Candidate numbers start after a run of spaces; the prefix before
 	// them is right-trimmed, like bean-format's prefix.rstrip().
 	for i := 0; i < len(text); i++ {
-		if i > 0 && text[i-1] != ' ' || text[i] == ' ' {
+		if i > 0 && text[i-1] != ' ' || text[i] == ' ' || i == 0 && glued {
 			continue
 		}
 		if suffix := text[i:]; alignedNumber.MatchString(suffix) {
 			if before := strings.TrimRight(text[:i], " "); before != "" {
-				return head + " " + before, suffix, true
+				return head + separator + before, suffix, true
 			}
 			return head, suffix, true
 		}

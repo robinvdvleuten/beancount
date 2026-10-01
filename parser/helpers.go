@@ -665,18 +665,14 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 		return &ast.CustomValue{Date: date}, nil
 
 	case IDENT:
+		// beancount's grammar takes no NULL and no bare currency among a
+		// custom's values, only its booleans.
 		ident := p.internIdent(tok)
-		if ident == "NULL" {
-			// beancount's grammar takes no NULL among a custom's values
-			return nil, p.errorAtToken(tok, "unexpected NULL")
+		if ident != "TRUE" && ident != "FALSE" {
+			return nil, p.errorAtToken(tok, "unexpected %s in custom values", tok.String(p.source))
 		}
 		p.advance()
-		switch ident {
-		case "TRUE", "FALSE":
-			return &ast.CustomValue{BooleanValue: &ident}, nil
-		default:
-			return &ast.CustomValue{String: &ident}, nil
-		}
+		return &ast.CustomValue{BooleanValue: &ident}, nil
 
 	case ACCOUNT:
 		account := p.internIdent(tok)

@@ -759,9 +759,10 @@ func TestBeancountV2CharacterClasses(t *testing.T) {
 	lexer := NewLexer([]byte("BRK.A O'BRIEN USD_ #trip/2020 ^invoice.2020\n"), "test.beancount")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
-	assert.Equal(t, []TokenType{IDENT, IDENT, ILLEGAL, TAG, LINK, EOF}, tokenTypes(tokens))
+	assert.Equal(t, []TokenType{IDENT, IDENT, IDENT, ILLEGAL, TAG, LINK, EOF}, tokenTypes(tokens))
 	assert.Equal(t, "BRK.A", tokens[0].String(lexer.source))
-	assert.Equal(t, "#trip/2020", tokens[3].String(lexer.source))
+	assert.Equal(t, "USD", tokens[2].String(lexer.source))
+	assert.Equal(t, "#trip/2020", tokens[4].String(lexer.source))
 }
 
 func TestTransactionFlagTokens(t *testing.T) {
@@ -880,7 +881,11 @@ func TestLexerCurrencies(t *testing.T) {
 		{"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF", []TokenType{IDENT, EOF}, ""},
 		{long, []TokenType{IDENT, EOF}, ""},
 		{"A'._-B'._-C'._-D'._-E'._-F'._-G9", []TokenType{IDENT, EOF}, ""},
-		{"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF.", []TokenType{ILLEGAL, EOF}, ""},
+		{"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF.", []TokenType{IDENT, ILLEGAL, EOF}, "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF"},
+		{"BA-", []TokenType{IDENT, ILLEGAL, EOF}, "BA"},
+		{"BA- 1", []TokenType{IDENT, EXPRESSION, NUMBER, EOF}, "BA"},
+		{"BA_", []TokenType{IDENT, ILLEGAL, EOF}, "BA"},
+		{"B-", []TokenType{ILLEGAL, EOF}, "B-"},
 
 		{"/ESZ24", []TokenType{IDENT, EOF}, ""},
 		{"/E", []TokenType{IDENT, EOF}, ""},

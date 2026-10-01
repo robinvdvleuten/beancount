@@ -66,13 +66,13 @@ func TestDatedAmountLayout(t *testing.T) {
 		"(2 * 3)":       {"H", "(2 * 3)"},
 		"(-1-2)":        {"H", "(-1-2)"},
 	} {
-		prefix, number, ok := datedAmountLayout("H", text)
+		prefix, number, ok := datedAmountLayout("H", text, false)
 		assert.True(t, ok, text)
 		assert.Equal(t, want, [2]string{prefix, number}, text)
 	}
 	// Only one operator between two numbers, in one pair of parentheses.
 	for _, text := range []string{"((1 + 2) * 3)", "(1 + 2 + 3)", "( 1 * 2 )"} {
-		_, _, ok := datedAmountLayout("H", text)
+		_, _, ok := datedAmountLayout("H", text, false)
 		assert.False(t, ok, text)
 	}
 }

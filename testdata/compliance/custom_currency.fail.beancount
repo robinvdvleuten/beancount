@@ -1,0 +1,8 @@
+; A custom takes no bare currency among its values: bean-check reports a
+; syntax error and drops the directive. An amount is fine.
+2020-01-01 open Assets:A
+2020-01-01 custom "x" USD
+2020-01-01 custom "x" /ESZ24
+2020-01-01 custom "x" V
+2020-01-01 custom "x" "a" USD
+2020-01-01 custom "x" TRUE 1 USD Assets:A 2020-01-01 "s" 2

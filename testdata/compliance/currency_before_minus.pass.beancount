@@ -1,0 +1,4 @@
+; A currency ends in a letter or a digit: like flex's longest match, BA-
+; is the currency BA and a minus, so this is BA's price at -1 USD.
+2020-01-01 price BA- 1 USD
+2020-01-02 price BA-- 1 USD
