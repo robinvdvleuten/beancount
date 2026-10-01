@@ -654,8 +654,7 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction) []error {
 			}
 		}
 		if !allowed {
-			errs = append(errs, NewCurrencyConstraintError(
-				txn, posting.Account, currency, account.ConstraintCurrencies))
+			errs = append(errs, NewCurrencyConstraintError(txn, posting.Account, currency))
 		}
 	}
 

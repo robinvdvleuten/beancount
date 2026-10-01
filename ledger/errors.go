@@ -359,10 +359,10 @@ func NewAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details
 }
 
 // NewCurrencyConstraintError creates an error for a posting in a currency its
-// account does not allow.
-func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account, currency string, allowedCurrencies []string) *Diagnostic {
+// account does not allow, worded as beancount words it.
+func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account, currency string) *Diagnostic {
 	return newError("CurrencyConstraintError", txn, account,
-		"Currency %s not allowed for account %s (allowed: %v)", currency, account, allowedCurrencies)
+		"Invalid currency %s for account '%s'", currency, account)
 }
 
 // NewPadCostError creates an error for a pad that fills a currency its

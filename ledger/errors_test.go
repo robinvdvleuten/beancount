@@ -79,7 +79,7 @@ func TestErrorKinds(t *testing.T) {
 		{NewInvalidMetadataError(txn, account, "k", nil, "duplicate key"), "InvalidMetadataError", 10, txn},
 		{NewInsufficientInventoryError(txn, account, details), "InsufficientInventoryError", 10, txn},
 		{NewAmbiguousBookingError(txn, account, details), "AmbiguousBookingError", 10, txn},
-		{NewCurrencyConstraintError(txn, account, "EUR", []string{"USD"}), "CurrencyConstraintError", 10, txn},
+		{NewCurrencyConstraintError(txn, account, "EUR"), "CurrencyConstraintError", 10, txn},
 		{NewUnusedPadWarning(pad), "UnusedPadWarning", 10, pad},
 		{NewDocumentFileError(document), "DocumentFileError", 10, document},
 		{NewInvalidDirectivePriceError("price currency cannot be empty", price), "InvalidDirectivePriceError", 10, price},
@@ -136,4 +136,22 @@ func TestMergeCostErrorReadsAsBeancounts(t *testing.T) {
 	assert.Equal(t, 1, len(validationErrors.Errors))
 	assert.Equal(t, "MergeCostError", kindOf(validationErrors.Errors[0]))
 	assert.Equal(t, "Cost merging is not supported yet", validationErrors.Errors[0].(*Diagnostic).message)
+}
+
+func TestCurrencyConstraintErrorReadsAsBeancounts(t *testing.T) {
+	// A posting in a currency its account's open does not allow is reported
+	// in bean-check's words, without the allowed currencies.
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:Euro EUR
+2020-01-01 open Equity:O
+2020-01-10 * "x"
+  Assets:Euro  5 USD
+  Equity:O
+`)
+	l := New()
+	var validationErrors *ValidationErrors
+	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
+	assert.Equal(t, 1, len(validationErrors.Errors))
+	assert.Equal(t, "CurrencyConstraintError", kindOf(validationErrors.Errors[0]))
+	assert.Equal(t, "Invalid currency USD for account 'Assets:Euro'", validationErrors.Errors[0].(*Diagnostic).message)
 }
