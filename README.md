@@ -6,8 +6,8 @@ A [Beancount](https://beancount.github.io/) toolkit written in Go, for bookkeepi
 
 - **Built for agents.** The ledger is a text file, so the agent edits it like code, and you review each change as a `git diff`. Errors give the file, the line, and a reason, plus exit code `1`.
 - **Extend in plain Go.** Write importers, house rules, and reports with the `loader`, `ast`, `ledger`, `formatter`, `printer`, and `query` packages. You get typed directives, typed errors, and a source position on each one.
-- **Same answers as the official tools.** 155 ledger fixtures run through both `bean-check` and this tool. 93 BQL queries must match `bean-query` output byte for byte, in both text and CSV. The rare differences are listed in [`KNOWN_GAPS.md`](testdata/compliance/KNOWN_GAPS.md).
-- **Quick enough to run after every edit.** On a 59,000-line ledger, `beancount check` takes 0.16 s, against 0.69 s for `bean-check` 2.3.6 (Apple M1 Pro).
+- **Same answers as the official tools.** Every ledger fixture runs through both this tool and `bean-check` from Beancount 3.2.3. Every BQL query fixture is compared byte for byte with beanquery 0.2.0, Beancount 3's `bean-query`, in both text and CSV. The rare differences are listed in [`KNOWN_GAPS.md`](testdata/compliance/KNOWN_GAPS.md).
+- **Quick enough to run after every edit.** On a 59,000-line ledger, `beancount check` takes 0.19 s, against 1.34 s for `bean-check` 3.2.3, which has to reparse the ledger after each edit (Apple M1 Pro).
 - **Clean diffs.** `beancount format` aligns amounts with the same rules as `bean-format`, so agent edits and hand edits look the same.
 - **One binary, no Python.** Linux, macOS, and Windows builds, Homebrew, and a Docker image. There is also a local web editor for you to review the books.
 
@@ -185,7 +185,7 @@ beancount query ledger.beancount 'JOURNAL "Checking"'
 beancount query -f csv -m ledger.beancount "SELECT account, sum(position) GROUP BY account"
 ```
 
-It supports the full `SELECT` syntax: `FROM` with `OPEN`/`CLOSE`/`CLEAR`, `WHERE`, `GROUP BY`, `ORDER BY`, `LIMIT`, and `DISTINCT`. It also has the aggregate and simple functions and the `BALANCES`, `JOURNAL`, and `PRINT` shortcuts. Leave out the query to start an interactive shell, or pipe one in:
+It supports beanquery's `SELECT` syntax: `FROM` with `OPEN`/`CLOSE`/`CLEAR`, `WHERE`, `GROUP BY` with `HAVING`, `ORDER BY` with a direction per term, `PIVOT BY`, `LIMIT`, and `DISTINCT`. It also has the aggregate and simple functions and the `BALANCES`, `JOURNAL`, and `PRINT` shortcuts. Leave out the query to start an interactive shell, or pipe one in:
 
 ```sh
 echo "SELECT payee, narration WHERE 'trip' IN tags" | beancount query ledger.beancount
