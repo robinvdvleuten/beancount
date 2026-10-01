@@ -76,6 +76,43 @@ func TestBookDecidesReductionOrAugmentation(t *testing.T) {
 	}
 }
 
+// TestHoldsOtherSignAgreesWithTheLots checks the per-sign lot counts that
+// decide a reduction without a scan against a scan of the lots, as lots are
+// added, reduced, emptied, cloned and left at zero units.
+func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
+	scan := func(inv *Inventory, commodity string, units decimal.Decimal) bool {
+		for _, lot := range inv.lots[commodity] {
+			if lot.Amount.Sign() != units.Sign() {
+				return true
+			}
+		}
+		return false
+	}
+	check := func(inv *Inventory) {
+		t.Helper()
+		for _, commodity := range []string{"HOOL", "ACME"} {
+			for _, units := range []string{"-1", "0", "1"} {
+				assert.Equal(t, scan(inv, commodity, mustParseDec(units)), inv.holdsOtherSign(commodity, mustParseDec(units)), commodity+" "+units)
+			}
+		}
+	}
+
+	inv := holding(t, "2024-01-01", "10 HOOL {5 USD}", "2 HOOL {6 USD}", "0 ACME {1 USD}")
+	check(inv)
+	_, reduced, err := inv.book(testPosting(t, "-12 HOOL {}"), BookingFIFO)
+	assert.NoError(t, err)
+	assert.True(t, reduced)
+	check(inv)
+	inv.augment(testPosting(t, "-3 HOOL {7 USD}"), newTestDate("2024-01-02"))
+	check(inv)
+	cloned := inv.clone()
+	cloned.augment(testPosting(t, "3 HOOL {7 USD}"), newTestDate("2024-01-02"))
+	check(cloned)
+	check(inv)
+	assert.True(t, inv.holdsOtherSign("HOOL", mustParseDec("1")))
+	assert.False(t, cloned.holdsOtherSign("HOOL", mustParseDec("1")))
+}
+
 func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 	at := func(units, number, date, label string) BookedPosition {
 		return BookedPosition{

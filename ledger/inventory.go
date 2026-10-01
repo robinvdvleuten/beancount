@@ -20,7 +20,15 @@ type Inventory struct {
 	// Map: commodity -> lot key -> the lot's position in lots, so adding to
 	// a lot takes a lookup rather than a scan of every lot
 	index map[string]map[lotKey]int
+	// Map: commodity -> how many of its lots hold negative, zero and
+	// positive units, so deciding whether a posting reduces the inventory
+	// takes a lookup rather than a scan of every lot
+	signs map[string]signCounts
 }
+
+// signCounts counts a commodity's lots by the sign of their units:
+// negative, zero and positive.
+type signCounts [3]int
 
 type lotReduction struct {
 	lot *lot
@@ -189,7 +197,27 @@ func NewInventory() *Inventory {
 	return &Inventory{
 		lots:  make(map[string][]*lot),
 		index: make(map[string]map[lotKey]int),
+		signs: make(map[string]signCounts),
 	}
+}
+
+// countLot adds delta to the count of a commodity's lots holding units of
+// amount's sign.
+func (inv *Inventory) countLot(commodity string, amount decimal.Decimal, delta int) {
+	counts := inv.signs[commodity]
+	counts[amount.Sign()+1] += delta
+	if counts == (signCounts{}) {
+		delete(inv.signs, commodity)
+		return
+	}
+	inv.signs[commodity] = counts
+}
+
+// holdsOtherSign reports whether the inventory holds a lot of commodity
+// whose units' sign differs from units'.
+func (inv *Inventory) holdsOtherSign(commodity string, units decimal.Decimal) bool {
+	counts := inv.signs[commodity]
+	return counts[0]+counts[1]+counts[2] > counts[units.Sign()+1]
 }
 
 // clone returns a copy of the inventory whose lots can change without
@@ -199,6 +227,7 @@ func (inv *Inventory) clone() *Inventory {
 	cloned := &Inventory{
 		lots:  make(map[string][]*lot, len(inv.lots)),
 		index: make(map[string]map[lotKey]int, len(inv.index)),
+		signs: maps.Clone(inv.signs),
 	}
 	for commodity, lots := range inv.lots {
 		// One allocation per commodity rather than per lot: a scratch
@@ -226,7 +255,9 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 	if i, ok := inv.index[commodity][key]; ok {
 		lot := inv.lots[commodity][i]
 		reduced := !lot.Amount.IsZero() && lot.Amount.IsNegative() != amount.IsNegative()
+		inv.countLot(commodity, lot.Amount, -1)
 		lot.Amount = pydecimal.Add(lot.Amount, amount)
+		inv.countLot(commodity, lot.Amount, 1)
 		if lot.Amount.IsZero() {
 			inv.removeLot(commodity, lot)
 		}
@@ -242,6 +273,7 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 	}
 	positions[newLot.key] = len(inv.lots[commodity])
 	inv.lots[commodity] = append(inv.lots[commodity], newLot)
+	inv.countLot(commodity, amount, 1)
 	return false
 }
 
@@ -275,36 +307,21 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 // others, and like beancount the inventory takes it (augment) only once its
 // transaction is booked, so the transaction's own postings never reduce it.
 func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (positions []BookedPosition, reduced bool, err error) {
-	if posting.Cost == nil || posting.Amount == nil || posting.Amount.Value == "" {
-		return nil, false, nil
-	}
-	units, err := ParseAmount(posting.Amount)
-	if err != nil {
-		return nil, false, nil // A malformed number drops its transaction before Booking
-	}
-	method = defaultBookingMethod(method)
-	if method == BookingNONE || units.IsZero() {
-		return nil, false, nil
-	}
-
-	// Like beancount's is_reduced_by, the posting reduces when the inventory
-	// holds its commodity with the opposite sign. Like its book_reductions,
-	// it is booked only against the lots held at cost: units held without
-	// cost make it a reduction but are never booked against.
-	commodity := posting.Amount.Currency
-	reduces := false
-	var lots []*lot
-	for _, lot := range inv.lots[commodity] {
-		if lot.Amount.Sign() == units.Sign() {
-			continue
-		}
-		reduces = true
-		if lot.Spec != nil && lot.Spec.Cost != nil {
-			lots = append(lots, lot)
-		}
-	}
+	units, reduces := inv.reducedBy(posting, method)
 	if !reduces {
 		return nil, false, nil
+	}
+	method = defaultBookingMethod(method)
+
+	// Like beancount's book_reductions, the posting is booked only against
+	// the lots held at cost: units held without cost make it a reduction
+	// but are never booked against.
+	commodity := posting.Amount.Currency
+	var lots []*lot
+	for _, lot := range inv.lots[commodity] {
+		if lot.Amount.Sign() != units.Sign() && lot.Spec != nil && lot.Spec.Cost != nil {
+			lots = append(lots, lot)
+		}
 	}
 	spec, err := postingLotSpec(posting)
 	if err != nil {
@@ -352,6 +369,25 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 	return booked, true, nil
 }
 
+// reducedBy reports whether book would book a posting as a reduction, and
+// its units: like beancount's is_reduced_by, a posting at cost with units
+// reduces when the inventory holds its commodity with the opposite sign,
+// unless its account books with NONE. It changes nothing, so it can be
+// asked of an inventory shared with others.
+func (inv *Inventory) reducedBy(posting *ast.Posting, method BookingMethod) (decimal.Decimal, bool) {
+	if posting.Cost == nil || posting.Amount == nil || posting.Amount.Value == "" {
+		return decimal.Decimal{}, false
+	}
+	units, err := ParseAmount(posting.Amount)
+	if err != nil {
+		return decimal.Decimal{}, false // A malformed number drops its transaction before Booking
+	}
+	if defaultBookingMethod(method) == BookingNONE || units.IsZero() {
+		return decimal.Decimal{}, false
+	}
+	return units, inv.holdsOtherSign(posting.Amount.Currency, units)
+}
+
 // augment adds a posting that book did not book as a reduction, once its
 // transaction is booked and its numbers are complete, like beancount's
 // add_position: at cost, to the lot its spec names, per unit (a total or
@@ -397,6 +433,7 @@ func (inv *Inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosi
 // removeLot removes a lot from the inventory, keeping the others in order.
 // It builds a new slice, since GetLots hands the old one out.
 func (inv *Inventory) removeLot(commodity string, lotToRemove *lot) {
+	inv.countLot(commodity, lotToRemove.Amount, -1)
 	lots := inv.lots[commodity]
 	if len(lots) == 1 {
 		delete(inv.lots, commodity)
@@ -636,7 +673,9 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 
 func (inv *Inventory) applyReduction(plan *reductionPlan) {
 	for _, reduction := range plan.reductions {
+		inv.countLot(plan.commodity, reduction.lot.Amount, -1)
 		reduction.lot.Amount = pydecimal.Add(reduction.lot.Amount, reduction.amount)
+		inv.countLot(plan.commodity, reduction.lot.Amount, 1)
 		if reduction.lot.Amount.IsZero() {
 			inv.removeLot(plan.commodity, reduction.lot)
 		}

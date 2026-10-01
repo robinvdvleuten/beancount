@@ -497,15 +497,24 @@ type scratchInventories struct {
 	own    map[string]*Inventory
 }
 
+// view returns the inventory the group books account against, read-only:
+// its own copy once made, or else the one it would copy.
+func (s *scratchInventories) view(account ast.Account) *Inventory {
+	if inv, ok := s.own[string(account)]; ok {
+		return inv
+	}
+	if inv, ok := s.staged[string(account)]; ok {
+		return inv
+	}
+	return s.booker.inventory(account)
+}
+
+// get returns the group's own copy of account's inventory, to book into.
 func (s *scratchInventories) get(account ast.Account) *Inventory {
 	if inv, ok := s.own[string(account)]; ok {
 		return inv
 	}
-	base, ok := s.staged[string(account)]
-	if !ok {
-		base = s.booker.inventory(account)
-	}
-	inv := base.clone()
+	inv := s.view(account).clone()
 	s.own[string(account)] = inv
 	return inv
 }
@@ -518,12 +527,18 @@ func (s *scratchInventories) get(account ast.Account) *Inventory {
 func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scratch *scratchInventories) (map[*ast.Posting][]BookedPosition, []error) {
 	reductions := make(map[*ast.Posting][]BookedPosition)
 	for _, posting := range group.postings {
-		// Only a posting at cost can reduce. Skipping the rest here spares
-		// cloning their accounts' inventories; book still decides.
+		// Only a reduction changes the inventory here, so only one clones
+		// its account's: an augmentation leaves it as it is, and copying
+		// every lot for each would make a ledger that only adds lots
+		// quadratic.
 		if posting.Cost == nil {
 			continue
 		}
-		positions, reduced, err := scratch.get(posting.Account).book(posting, b.method(posting.Account))
+		method := b.method(posting.Account)
+		if _, reduces := scratch.view(posting.Account).reducedBy(posting, method); !reduces {
+			continue
+		}
+		positions, reduced, err := scratch.get(posting.Account).book(posting, method)
 		if err != nil {
 			return nil, []error{newBookingError(txn, posting.Account, err)}
 		}
