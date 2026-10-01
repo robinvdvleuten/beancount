@@ -21,6 +21,30 @@ const fixtureDir = "../testdata/compliance/query"
 // for a fixture listed in queryGaps (cli/query_compliance_test.go) until
 // its gap closes.
 var errorFixtures = map[string]string{
+	"err_balance_where_equal": `error: operator "equal(inventory, inventory)" not supported
+| SELECT count(date) WHERE balance = balance
+|                          ^^^^^^^^^^^^^^^^^`,
+	"err_balance_where_not_equal": `error: operator "notequal(inventory, inventory)" not supported
+| SELECT account WHERE balance != balance
+|                      ^^^^^^^^^^^^^^^^^^`,
+	"err_compare_mixed_types_equality": `error: operator "notequal(int, str)" not supported
+| SELECT year != '2023' AS a
+|        ^^^^^^^^^^^^^^`,
+	"err_compare_mixed_types_ordering": `error: operator "less(int, str)" not supported
+| SELECT date WHERE year < '2024'
+|                   ^^^^^^^^^^^^^`,
+	"err_compare_number_string_from": `error: operator "equal(int, str)" not supported
+| SELECT date, narration FROM year = '2023'
+|                             ^^^^^^^^^^^^^`,
+	"err_compare_number_string_where": `error: operator "equal(int, str)" not supported
+| SELECT date, narration WHERE year = '2023'
+|                              ^^^^^^^^^^^^^`,
+	"err_group_by_aggregate_expr": `error: operator "notequal(int, date)" not supported
+| SELECT account GROUP BY count('x') != 2014-01-01
+|                         ^^^^^^^^^^^^^^^^^^^^^^^^`,
+	"err_metadata_not_equal_null": `error: operator "notequal(object, NULL)" not supported
+| SELECT date, any_meta('category') AS category WHERE any_meta('category') != NULL
+|                                                     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^`,
 	"err_aggregate_arg_count": `error: no function matches "sum(decimal, int)" name and argument types
 | SELECT sum(number, 1)
 |        ^^^^^^^^^^^^^^`,
@@ -49,9 +73,8 @@ var errorFixtures = map[string]string{
 	"err_function_arg_types": `error: no function matches "bogusfn(date, position, amount, set, decimal, bool, nonetype)" name and argument types
 | SELECT bogusfn(date, position, units(position), tags, 2.7, TRUE, NULL)
 |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^`,
-	"err_group_by_aggregate_expr": `error: GROUP-BY expressions may not be aggregates: "NotEqual(left=Function(fname='count', operands=[Constant(value='x')]), right=Constant(value=datetime.date(2014, 1, 1)))"`,
-	"err_group_by_inventory":      `error: GROUP-BY a non-hashable type is not supported: "Column(name='balance')"`,
-	"err_group_coverage":          `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "date"`,
+	"err_group_by_inventory": `error: GROUP-BY a non-hashable type is not supported: "Column(name='balance')"`,
+	"err_group_coverage":     `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "date"`,
 	"err_having": `error: the HAVING clause is not supported yet
 | SELECT account GROUP BY account HAVING count(account) > 1
 |                                        ^^^^^^^^^^^^^^^^^^`,

@@ -1,0 +1,1 @@
+SELECT cost_number > 1 AND TRUE AS a, cost_number > 1 OR FALSE AS b, cost_number > 1 OR TRUE AS c, NOT cost_number > 1 AS d, FALSE AND cost_number > 1 AS e, 'a' IN 'abc' AS f, account IN account AS g, 'x' IN tags AS h

@@ -1,0 +1,1 @@
+SELECT date, any_meta('category') = 'drinks' AS d, any_meta('category') ~ 'GRO' AS g, any_meta('category') + 1 AS n WHERE NOT any_meta('category') IS NULL

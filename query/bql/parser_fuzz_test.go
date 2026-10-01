@@ -19,6 +19,7 @@ func FuzzParseQuery(f *testing.F) {
 		"SELECT * WHERE account ~ 'Expenses' AND 'trip' IN tags",
 		"SELECT year(date), month(date), parent(account)",
 		"SELECT * WHERE date >= 2014-01-01 AND date < 2015-01-01",
+		"SELECT * WHERE meta('x') IS NULL OR NOT cost_date IS NOT NULL",
 		`SELECT "double", 'single', 42, 3.14, TRUE, FALSE, NULL`,
 
 		// FROM transforms

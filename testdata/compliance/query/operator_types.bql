@@ -1,0 +1,1 @@
+SELECT date + 1 AS a, date - 1 AS b, 1 + date AS c, date - 2023-01-01 AS d, 'x:' + account AS e, cost_date = date AS f, cost_number IS NULL AS g, 7 / 2 AS h, number * 2 AS i, number / 0 AS j LIMIT 4

@@ -40,6 +40,7 @@ const (
 	OR
 	NOT
 	IN
+	IS
 	TRUE
 	FALSE
 	NULL
@@ -101,6 +102,7 @@ var tokenNames = map[TokenType]string{
 	OR:    "OR",
 	NOT:   "NOT",
 	IN:    "IN",
+	IS:    "IS",
 	TRUE:  "TRUE",
 	FALSE: "FALSE",
 	NULL:  "NULL",
@@ -162,6 +164,7 @@ var keywords = map[string]TokenType{
 	"AND":      AND,
 	"OR":       OR,
 	"NOT":      NOT,
+	"IS":       IS,
 	"IN":       IN,
 	"TRUE":     TRUE,
 	"FALSE":    FALSE,

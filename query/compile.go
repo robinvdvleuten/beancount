@@ -2,11 +2,9 @@ package query
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/query/bql"
 	"github.com/shopspring/decimal"
@@ -231,10 +229,19 @@ func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect) (
 			return idx, nil
 		}
 	}
+	// Like beanquery, compile the item, reporting its own errors, before
+	// checking it for aggregates.
+	expr, err := c.compileExpr(item)
+	if err != nil {
+		return 0, err
+	}
 	if c.isAggregate(item) {
 		return 0, statementErrorf(`GROUP-BY expressions may not be aggregates: "%s"`, pyExprRepr(item))
 	}
-	return c.resolveTargetRef(item, compiled, "GROUP-BY")
+	if idx, ok := targetMatching(item, compiled); ok {
+		return idx, nil
+	}
+	return c.hiddenTarget(item, expr, compiled), nil
 }
 
 // resolveOrderBy maps ORDER BY expressions to target indices, appending
@@ -266,25 +273,39 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, cla
 		}
 	}
 
-	key := exprKey(item)
-	for i, target := range compiled.Targets {
-		if target.key == key {
-			return i, nil
-		}
+	if idx, ok := targetMatching(item, compiled); ok {
+		return idx, nil
 	}
-
 	expr, err := c.compileExpr(item)
 	if err != nil {
 		return 0, err
 	}
+	return c.hiddenTarget(item, expr, compiled), nil
+}
+
+// targetMatching finds the target whose expression item matches
+// structurally.
+func targetMatching(item bql.Expr, compiled *compiledSelect) (int, bool) {
+	key := exprKey(item)
+	for i, target := range compiled.Targets {
+		if target.key == key {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// hiddenTarget appends item, compiled to expr, as a hidden target and
+// returns its index.
+func (c *compiler) hiddenTarget(item bql.Expr, expr cexpr, compiled *compiledSelect) int {
 	compiled.Targets = append(compiled.Targets, compiledTarget{
 		Type:   expr.typ(),
 		Hidden: true,
 		IsAgg:  c.isAggregate(item),
 		expr:   expr,
-		key:    key,
+		key:    exprKey(item),
 	})
-	return len(compiled.Targets) - 1, nil
+	return len(compiled.Targets) - 1
 }
 
 // targetName names a target's column like beanquery's get_target_name: by
@@ -345,6 +366,8 @@ func (c *compiler) columnsAndAggregates(e bql.Expr) (columns int, aggs []*bql.Ca
 			}
 		case *bql.Unary:
 			walk(node.X)
+		case *bql.IsNull:
+			walk(node.X)
 		case *bql.Binary:
 			walk(node.L)
 			walk(node.R)
@@ -397,7 +420,7 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 	case *bql.Bool:
 		return &cLiteral{v: node.Value, t: tBool}, nil
 	case *bql.Null:
-		return &cLiteral{v: nil, t: tAny}, nil
+		return &cLiteral{v: nil, t: tNull}, nil
 
 	case *bql.Ident:
 		def, ok := c.env.columns[node.Name]
@@ -419,6 +442,13 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 
 	case *bql.Unary:
 		return c.compileUnary(node)
+
+	case *bql.IsNull:
+		x, err := c.compileExpr(node.X)
+		if err != nil {
+			return nil, err
+		}
+		return &cIsNull{x: x, not: node.Not}, nil
 
 	case *bql.Binary:
 		return c.compileBinary(node)
@@ -466,18 +496,8 @@ func argTypeList(args []cexpr) string {
 	names := make([]string, len(args))
 	for i, arg := range args {
 		names[i] = strings.ToLower(arg.typ().String())
-		if isNullLiteral(arg) {
-			names[i] = "nonetype"
-		}
 	}
 	return strings.Join(names, ", ")
-}
-
-// isNullLiteral reports whether e is the NULL constant, whose Python type
-// is NoneType rather than object.
-func isNullLiteral(e cexpr) bool {
-	lit, ok := e.(*cLiteral)
-	return ok && lit.v == nil
 }
 
 func (c *compiler) compileUnary(node *bql.Unary) (cexpr, error) {
@@ -491,6 +511,10 @@ func (c *compiler) compileUnary(node *bql.Unary) (cexpr, error) {
 	return &cNot{x: x}, nil
 }
 
+// compileBinary compiles a binary operation. AND, OR and IN take operands
+// of any type; any other operator must have a signature for its operands'
+// types, as in beanquery, which casts an untyped (object) operand to the
+// other operand's type first, an integer promoted to a decimal.
 func (c *compiler) compileBinary(node *bql.Binary) (cexpr, error) {
 	l, err := c.compileExpr(node.L)
 	if err != nil {
@@ -501,18 +525,48 @@ func (c *compiler) compileBinary(node *bql.Binary) (cexpr, error) {
 		return nil, err
 	}
 
-	t := tBool
-	switch node.Op {
-	case bql.PLUS, bql.MINUS, bql.ASTERISK:
-		if l.typ() == tInt && r.typ() == tInt {
-			t = tInt
-		} else {
-			t = tDecimal
-		}
-	case bql.SLASH:
-		t = tDecimal
+	if untyped, ok := untypedOperators[node.Op]; ok {
+		return untyped(l, r), nil
 	}
-	return &cBinary{op: node.Op, l: l, r: r, t: t}, nil
+	def := operators[node.Op]
+	for {
+		if sig := def.match(l.typ(), r.typ()); sig != nil {
+			return newOperator(sig, l, r), nil
+		}
+		if l.typ() == tAny && r.typ() != tAny {
+			if cast := castOperand(l, r.typ()); cast != nil {
+				l = cast
+				continue
+			}
+		} else if r.typ() == tAny && l.typ() != tAny {
+			if cast := castOperand(r, l.typ()); cast != nil {
+				r = cast
+				continue
+			}
+		}
+		return nil, compileErrorf(node, `operator "%s(%s, %s)" not supported`, def.name, operandTypeName(l.typ()), operandTypeName(r.typ()))
+	}
+}
+
+// castOperand casts an untyped operand to the type of the other, or
+// returns nil when beanquery has no cast to it.
+func castOperand(x cexpr, to dtype) cexpr {
+	if to == tInt {
+		to = tDecimal
+	}
+	if cast, ok := casts[to]; ok {
+		return &cCast{x: x, to: to, cast: cast}
+	}
+	return nil
+}
+
+// operandTypeName names a type as beanquery's operator errors do
+// (types.name): lower-cased, and NULL for the NULL literal.
+func operandTypeName(t dtype) string {
+	if t == tNull {
+		return "NULL"
+	}
+	return strings.ToLower(t.String())
 }
 
 // decimalLiteral renders a decimal constant with the digits it was written
@@ -554,6 +608,11 @@ func pyExprRepr(e bql.Expr) string {
 		return fmt.Sprintf("Function(fname=%s, operands=[%s])", pyrepr.String(strings.ToLower(node.Func)), strings.Join(operands, ", "))
 	case *bql.Unary:
 		return fmt.Sprintf("Not(operand=%s)", pyExprRepr(node.X))
+	case *bql.IsNull:
+		if node.Not {
+			return fmt.Sprintf("IsNotNull(operand=%s)", pyExprRepr(node.X))
+		}
+		return fmt.Sprintf("IsNull(operand=%s)", pyExprRepr(node.X))
 	case *bql.Binary:
 		if node.Op == bql.AND || node.Op == bql.OR {
 			args := make([]string, 0, 2)
@@ -671,106 +730,64 @@ type cNot struct {
 func (c *cNot) typ() dtype            { return tBool }
 func (c *cNot) eval(row *evalRow) any { return !truthy(c.x.eval(row)) }
 
-type cBinary struct {
-	op   bql.TokenType
+// cIsNull is X IS NULL, or X IS NOT NULL.
+type cIsNull struct {
+	x   cexpr
+	not bool
+}
+
+func (c *cIsNull) typ() dtype { return tBool }
+func (c *cIsNull) eval(row *evalRow) any {
+	return (c.x.eval(row) == nil) != c.not
+}
+
+// cOperator is a typed binary operation; like beanquery's, it is NULL when
+// either operand is.
+type cOperator struct {
+	sig  *opSignature
 	l, r cexpr
-	t    dtype
+	// bound is the operation on a literal right operand, prepared once.
+	bound func(l any) any
 }
 
-func (c *cBinary) typ() dtype { return c.t }
-
-func (c *cBinary) eval(row *evalRow) any {
-	switch c.op {
-	case bql.AND:
-		return truthy(c.l.eval(row)) && truthy(c.r.eval(row))
-	case bql.OR:
-		return truthy(c.l.eval(row)) || truthy(c.r.eval(row))
+func newOperator(sig *opSignature, l, r cexpr) *cOperator {
+	op := &cOperator{sig: sig, l: l, r: r}
+	if lit, ok := r.(*cLiteral); ok && sig.bind != nil && lit.v != nil {
+		op.bound = sig.bind(lit.v)
 	}
+	return op
+}
 
+func (c *cOperator) typ() dtype { return c.sig.result }
+
+func (c *cOperator) eval(row *evalRow) any {
 	l := c.l.eval(row)
-	r := c.r.eval(row)
-
-	switch c.op {
-	case bql.EQ:
-		// NULL equals NULL, matching Python's None == None.
-		if l == nil || r == nil {
-			return l == nil && r == nil
-		}
-		return valuesEqual(l, r)
-	case bql.NE:
-		if l == nil || r == nil {
-			return l != nil || r != nil
-		}
-		return !valuesEqual(l, r)
-	case bql.LT, bql.LTE, bql.GT, bql.GTE:
-		if l == nil || r == nil {
-			return false
-		}
-		cmp := compareValues(l, r)
-		switch c.op {
-		case bql.LT:
-			return cmp < 0
-		case bql.LTE:
-			return cmp <= 0
-		case bql.GT:
-			return cmp > 0
-		default:
-			return cmp >= 0
-		}
-	case bql.TILDE:
-		ls, lok := l.(string)
-		rs, rok := r.(string)
-		if !lok || !rok {
-			return false
-		}
-		matched, err := regexp.MatchString(rs, ls)
-		return err == nil && matched
-	case bql.IN:
-		elem, ok := l.(string)
-		if !ok {
-			return false
-		}
-		set, ok := r.(setValue)
-		if !ok {
-			return false
-		}
-		return set.Contains(elem)
-	case bql.PLUS, bql.MINUS, bql.ASTERISK, bql.SLASH:
-		return c.evalArithmetic(l, r)
-	}
-	return nil
-}
-
-func (c *cBinary) evalArithmetic(l, r any) any {
-	if li, lok := l.(int64); lok {
-		if ri, rok := r.(int64); rok && c.op != bql.SLASH {
-			switch c.op {
-			case bql.PLUS:
-				return li + ri
-			case bql.MINUS:
-				return li - ri
-			case bql.ASTERISK:
-				return li * ri
-			}
-		}
-	}
-	ld, lok := asDecimal(l)
-	rd, rok := asDecimal(r)
-	if !lok || !rok {
+	if l == nil {
 		return nil
 	}
-	switch c.op {
-	case bql.PLUS:
-		return pydecimal.Add(ld, rd)
-	case bql.MINUS:
-		return pydecimal.Sub(ld, rd)
-	case bql.ASTERISK:
-		return pydecimal.Mul(ld, rd)
-	case bql.SLASH:
-		if rd.IsZero() {
-			return nil
-		}
-		return pydecimal.Quo(ld, rd)
+	if c.bound != nil {
+		return c.bound(l)
 	}
-	return nil
+	r := c.r.eval(row)
+	if r == nil {
+		return nil
+	}
+	return c.sig.eval(l, r)
+}
+
+// cCast is the cast beanquery applies to an untyped operand.
+type cCast struct {
+	x    cexpr
+	to   dtype
+	cast func(any) any
+}
+
+func (c *cCast) typ() dtype { return c.to }
+
+func (c *cCast) eval(row *evalRow) any {
+	v := c.x.eval(row)
+	if v == nil {
+		return nil
+	}
+	return c.cast(v)
 }

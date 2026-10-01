@@ -173,6 +173,20 @@ Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 - #582: `SELECT account FROM OPEN ON 2020-01-01 CLOSE` (CLOSE without a date
   after OPEN ON) fails in beanquery with a Python `TypeError`, nothing on
   stdout and exit status 1; ours prints the rows.
+- #587: beanquery's `%`, `!~`, `?~`, `NOT IN` and `BETWEEN` operators are
+  syntax errors in ours: `SELECT 7 % 3` prints `1` there.
+- #588: a transaction without a payee has a NULL `payee` in beanquery and
+  an empty string in ours: `SELECT payee IS NULL` is TRUE there and FALSE
+  in ours. Both render the column empty.
+- #589: `~` takes Python's regular expressions in beanquery and RE2's in
+  ours: `account ~ 'Cash(?=)'` keeps 6 rows there and none in ours, and
+  `account ~ '['` fails there with `re.error` and keeps no rows in ours.
+  Python's integers do not overflow: `100000000000 * 100000000000` is
+  `10000000000000000000000` there and wraps around in ours. Casting an
+  untyped operand parses more there: the metadata strings `"1_000"` and
+  `"NaN"` are decimals and `"2023-2-1"` a date in beanquery, and NULL in
+  ours. `1 IN account` fails there with a `TypeError` and is FALSE in
+  ours.
 
 Differences in message text only, which the suites cannot see since they
 compare the lines errors are on:
@@ -210,12 +224,16 @@ compare the lines errors are on:
   sub-columns, CSV with Python's QUOTE_MINIMAL and CRLF that pads number,
   amount, position and inventory cells and leaves the others as they are,
   numberify in text too, nothing printed for an empty text result,
-  implicit GROUP BY, and a statement that does not parse or compile
-  reported on stderr with exit status 1, in the words and with the caret
-  lines of beanquery's interactive shell (one-shot `bean-query` prints a
-  Python traceback instead). Still to follow beanquery (`queryGaps` in
-  `cli/query_compliance_test.go` lists every fixture): operator typing
-  (#573); grammar (#574: `count(*)`, unary minus on any expression,
+  implicit GROUP BY, operators type-checked when the query compiles
+  (`operator "less(int, str)" not supported` for `year < '2024'`), an
+  untyped (object) operand cast to the other operand's type, NULL
+  operands giving NULL, AND and OR with beanquery's NULL handling
+  (`NULL AND FALSE` is NULL), `IS [NOT] NULL`, and a statement that does
+  not parse or compile reported on stderr with exit status 1, in the words
+  and with the caret lines of beanquery's interactive shell (one-shot
+  `bean-query` prints a Python traceback instead). Still to follow
+  beanquery (`queryGaps` in `cli/query_compliance_test.go` lists every
+  fixture): grammar (#574: `count(*)`, unary minus on any expression,
   `number -1` as a subtraction, digits in identifiers); per-term ORDER BY
   directions (#575); `HAVING` and `PIVOT BY` (#576); and functions (#577:
   every function NULL-strict, one-argument `root`, `has_account` in WHERE,
@@ -240,17 +258,6 @@ compare the lines errors are on:
   types the column as boolean, so `sum(1 = 1)` over four rows renders
   `TRUE` and `sum(false)` renders `FALSE`. We reject it:
   `error: no function matches "sum(bool)" name and argument types` (#422).
-
-- **BQL comparisons of mixed types**: bean-query rejects a comparison
-  between types it has no operator for when it compiles the query
-  (`operator "less(int, str)" not supported` for `year < '2024'`, also
-  `=` and `!=`, and between an amount, position or inventory and another
-  type). We run the query instead: `=` and `!=` compare numbers and
-  booleans by value (`1.0 = 1` and `(1 = 1) = 1` are TRUE) and hold any
-  other values of different types unequal (`1 = '1'` is FALSE), and `<`,
-  `<=`, `>` and `>=` compare the two values' string forms (`year < '2024'`
-  is TRUE for 2023). The `query/compare_*.bql` fixtures are in `queryGaps`
-  until #573 types operators.
 
 - **BQL errors without a node**: beanquery's shell underlines the node a
   compile error names, but raises some errors without one and then prints

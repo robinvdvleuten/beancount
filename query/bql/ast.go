@@ -137,6 +137,15 @@ type Unary struct {
 
 func (*Unary) expr() {}
 
+// IsNull is X IS NULL, or X IS NOT NULL when Not is set.
+type IsNull struct {
+	position
+	X   Expr
+	Not bool
+}
+
+func (*IsNull) expr() {}
+
 // Binary is a binary operation. Op is one of AND, OR, EQ, NE, LT, LTE, GT,
 // GTE, TILDE, IN, PLUS, MINUS, ASTERISK, SLASH.
 type Binary struct {

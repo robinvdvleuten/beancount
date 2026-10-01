@@ -1,0 +1,1 @@
+SELECT year != '2023' AS a

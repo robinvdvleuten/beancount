@@ -510,6 +510,13 @@ func (p *parser) parseComparison() (Expr, error) {
 			return nil, err
 		}
 		return &Binary{position: p.node(start), Op: tok.Type, L: left, R: right}, nil
+	case IS:
+		p.next()
+		negated := p.accept(NOT)
+		if _, err := p.expect(NULL, "IS NULL"); err != nil {
+			return nil, err
+		}
+		return &IsNull{position: p.node(start), X: left, Not: negated}, nil
 	}
 	return left, nil
 }

@@ -1,0 +1,1 @@
+SELECT cost_number > 100 AS a, cost_number != 1 AS b, position

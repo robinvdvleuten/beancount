@@ -6,7 +6,6 @@ package query
 
 import (
 	"fmt"
-	"reflect"
 	"sort"
 	"strings"
 
@@ -17,11 +16,11 @@ import (
 )
 
 // dtype identifies the static type of a compiled expression. It drives
-// function overload resolution at compile time and column formatting in the
-// renderers. Runtime values are Go values: bool, int64, decimal.Decimal,
-// string, *ast.Date, setValue, *amountValue, *positionValue and
-// *inventoryValue; NULL is nil. Only numberify's output holds a
-// negativeZero, for the renderers.
+// function overload and operator resolution at compile time and column
+// formatting in the renderers, where tNull renders like tAny. Runtime
+// values are Go values: bool, int64, decimal.Decimal, string, *ast.Date,
+// setValue, *amountValue, *positionValue and *inventoryValue; NULL is nil.
+// Only numberify's output holds a negativeZero, for the renderers.
 type dtype uint8
 
 const (
@@ -35,6 +34,7 @@ const (
 	tAmount
 	tPosition
 	tInventory
+	tNull // the NULL literal, Python's NoneType
 )
 
 var dtypeNames = map[dtype]string{
@@ -48,6 +48,7 @@ var dtypeNames = map[dtype]string{
 	tAmount:    "Amount",
 	tPosition:  "Position",
 	tInventory: "Inventory",
+	tNull:      "NoneType",
 }
 
 func (t dtype) String() string {
@@ -263,33 +264,6 @@ func asDecimal(v any) (decimal.Decimal, bool) {
 		return val, true
 	}
 	return decimal.Decimal{}, false
-}
-
-// valuesEqual is Python's == on two non-NULL values: numbers equal by value,
-// a boolean counting as the integer 1 or 0 (bool subclasses int), and values
-// of any other differing types never equal, so year = '2023' is false.
-func valuesEqual(l, r any) bool {
-	ln, lok := asNumber(l)
-	rn, rok := asNumber(r)
-	if lok || rok {
-		return lok && rok && ln.Equal(rn)
-	}
-	if reflect.TypeOf(l) != reflect.TypeOf(r) {
-		return false
-	}
-	return compareValues(l, r) == 0
-}
-
-// asNumber coerces a value Python treats as a number to a decimal: an
-// integer, a decimal, or a boolean.
-func asNumber(v any) (decimal.Decimal, bool) {
-	if b, ok := v.(bool); ok {
-		if b {
-			return decimal.NewFromInt(1), true
-		}
-		return decimal.Zero, true
-	}
-	return asDecimal(v)
 }
 
 // compareValues orders two values of compatible types, returning -1, 0, or 1.

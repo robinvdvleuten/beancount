@@ -267,6 +267,11 @@ func TestCompileClauseEnvironments(t *testing.T) {
 		"SELECT account ORDER BY 5":                                  "invalid ORDER-BY column index 5",
 		"SELECT account GROUP BY count(date) = 1 OR TRUE OR FALSE":   `GROUP-BY expressions may not be aggregates: "Or(args=[Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=1)), Constant(value=True), Constant(value=False)])"`,
 		"SELECT account GROUP BY (count(date) = 1 OR TRUE) OR FALSE": `GROUP-BY expressions may not be aggregates: "Or(args=[Or(args=[Equal(left=Function(fname='count', operands=[Column(name='date')]), right=Constant(value=1)), Constant(value=True)]), Constant(value=False)])"`,
+		"SELECT (1 = 1) = 1":                                         `operator "equal(bool, int)" not supported`,
+		"SELECT weight = 1":                                          `operator "equal(amount, int)" not supported`,
+		"SELECT position < 'x'":                                      `operator "less(position, str)" not supported`,
+		"SELECT balance = 1":                                         `operator "equal(inventory, int)" not supported`,
+		"SELECT NULL = NULL":                                         `operator "equal(NULL, NULL)" not supported`,
 		"SELECT account GROUP BY first(account) IN tags":             `GROUP-BY expressions may not be aggregates: "In(left=Function(fname='first', operands=[Column(name='account')]), right=Column(name='tags'))"`,
 	} {
 		assert.Equal(t, want, compileFails(t, ctx, query).Error(), query)

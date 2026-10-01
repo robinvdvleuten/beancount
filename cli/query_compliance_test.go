@@ -123,17 +123,6 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"balance_where_aggregate":         "#573: beanquery rejects = between inventories",
-	"balance_where_equal":             "#573: beanquery rejects = between inventories",
-	"balance_where_inventory":         "#573: beanquery rejects = between inventories",
-	"balance_where_not_equal":         "#573: beanquery rejects != between inventories",
-	"balance_where_rows":              "#573: beanquery rejects = between inventories",
-	"compare_mixed_types_equality":    "#573: beanquery rejects != between int and str",
-	"compare_mixed_types_ordering":    "#573: beanquery rejects < between int and str",
-	"compare_number_string_from":      "#573: beanquery rejects = between int and str",
-	"compare_number_string_where":     "#573: beanquery rejects = between int and str",
-	"err_group_by_aggregate_expr":     "#573: beanquery rejects != between int and date first",
-	"metadata":                        "#573: beanquery rejects != NULL for IS NOT NULL",
 	"err_identifier_digits":           "#574: identifiers take digits",
 	"err_signed_number_after_operand": "#574: number -1 is a subtraction",
 	"err_syntax_near":                 "#574: count(*) is accepted",
