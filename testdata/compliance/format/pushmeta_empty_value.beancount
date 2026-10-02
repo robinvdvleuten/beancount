@@ -1,0 +1,12 @@
+; An empty pushmeta value ends at its own line, with or without an inline
+; comment; pushed metadata, empty or not, stays out of the transaction.
+2020-01-01 open Assets:A
+pushmeta pempty:
+pushmeta pcomment: ; nothing before the comment
+pushmeta pvalue: "v"
+2020-01-02 * "x"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+popmeta pvalue:
+popmeta pcomment:
+popmeta pempty:

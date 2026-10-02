@@ -1,0 +1,10 @@
+; An empty pushmeta value ends at its own line, with or without an inline
+; comment, and pushes None.
+2020-01-01 open Assets:A
+pushmeta pempty:
+pushmeta pcomment: ; nothing before the comment
+2020-01-02 * "x"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+popmeta pcomment:
+popmeta pempty:

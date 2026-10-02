@@ -574,3 +574,18 @@ func TestParseCustomRejectsNull(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "unexpected NULL")
 }
+
+func TestParsePushmetaEmptyValue(t *testing.T) {
+	source := "pushmeta ka:\npushmeta kb: ; comment\n2020-01-02 * \"x\"\n  Assets:A  1 USD\n  Assets:A  -1 USD\n"
+
+	result, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, 2, len(result.Pushmetas))
+	assert.Equal(t, 1, len(result.Directives))
+
+	for _, pm := range result.Pushmetas {
+		assert.Equal(t, "", pm.Value)
+		assert.True(t, pm.Null, "an empty value pushes None")
+	}
+	assert.NotZero(t, result.Pushmetas[1].GetComment())
+}

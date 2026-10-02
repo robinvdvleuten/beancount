@@ -373,7 +373,6 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 	// Parse the value like any metadata value, then rewind: the source text
 	// is kept for the formatter.
 	start := p.pos
-	first := p.peek()
 	value, err := p.parseMetadataValue(pos.Line)
 	single := err == nil
 	if next := p.peek(); next.Type != EOF && next.Type != COMMENT && next.Line == pos.Line {
@@ -386,9 +385,10 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 
 	pm := &ast.Pushmeta{
 		Key:       key,
-		Value:     p.parseRestOfLineUntilComment(),
+		Value:     p.parseRestOfLineUntilComment(pos.Line),
 		MetaValue: value,
-		Null:      single && value == nil && first.Type == NONE,
+		// NULL, or no value at all, which beancount pushes as None too.
+		Null: single && value == nil,
 	}
 	pm.SetPosition(pos)
 	if err := p.finishHeader(pm, pos.Offset); err != nil {

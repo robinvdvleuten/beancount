@@ -1318,6 +1318,11 @@ func (f *run) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 
 	lastVerbatimLine := 0
 	for _, m := range metadata {
+		// Metadata without a position was pushed (pushmeta), not written
+		// on the directive; bean-format leaves it out.
+		if m.Position().Line == 0 {
+			continue
+		}
 		for _, c := range m.Comments {
 			if f.PreserveComments && !f.verbatimLines[c.Position().Line] &&
 				!f.writeTriviaLine(c.Position(), buf) {

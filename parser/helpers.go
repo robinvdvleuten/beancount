@@ -702,10 +702,9 @@ func (p *Parser) isKeyword(typ TokenType) bool {
 	}
 }
 
-// parseRestOfLineUntilComment reads tokens until end of line or an inline comment.
-func (p *Parser) parseRestOfLineUntilComment() string {
-	currentLine := p.peek().Line
-
+// parseRestOfLineUntilComment reads the tokens left on line, up to an inline
+// comment; none when the next token is on a later line.
+func (p *Parser) parseRestOfLineUntilComment(currentLine int) string {
 	var buf strings.Builder
 	for !p.isAtEnd() && p.peek().Line == currentLine {
 		if p.peek().Type == COMMENT {

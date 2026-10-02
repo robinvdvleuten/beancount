@@ -1,0 +1,7 @@
+; PRINT renders an empty pushmeta value empty, as the None beancount pushes.
+2020-01-01 open Assets:A
+pushmeta pempty:
+2020-01-02 * "x"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+popmeta pempty:
