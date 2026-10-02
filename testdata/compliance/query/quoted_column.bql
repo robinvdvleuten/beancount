@@ -1,0 +1,1 @@
+SELECT "account", "date".year LIMIT 1

@@ -95,6 +95,25 @@ func TestParseFunctionCallNoArgs(t *testing.T) {
 	assert.Zero(t, len(call.Args))
 }
 
+// A quoted identifier followed by ( names a function, as written but for
+// each doubled quote; "" is a string.
+func TestParseQuotedFunctionCall(t *testing.T) {
+	stmt, err := Parse(`SELECT "LEN""gth"('ab'), "sum"(*), "length" ('x')`)
+	assert.NoError(t, err)
+
+	targets := stmt.(*Select).Targets
+	call := targets[0].Expr.(*Call)
+	assert.Equal(t, `LEN"gth`, call.Func)
+	assert.Equal(t, "ab", call.Args[0].(*Str).Value)
+	start, end := call.Span()
+	assert.Equal(t, [2]int{7, 23}, [2]int{start, end})
+	assert.Equal(t, "sum", targets[1].Expr.(*Call).Func)
+	assert.Equal(t, "length", targets[2].Expr.(*Call).Func)
+
+	_, err = Parse(`SELECT ""(1)`)
+	assert.Error(t, err)
+}
+
 func TestParseWherePrecedence(t *testing.T) {
 	// NOT binds tighter than AND, AND tighter than OR.
 	stmt, err := Parse("SELECT * WHERE a = 1 OR b = 2 AND NOT c = 3")
@@ -178,6 +197,8 @@ func TestParseLiterals(t *testing.T) {
 	targets := stmt.(*Select).Targets
 	assert.Equal(t, "double", targets[0].Expr.(*Str).Value)
 	assert.Equal(t, "single", targets[1].Expr.(*Str).Value)
+	assert.True(t, targets[0].Expr.(*Str).DoubleQuoted)
+	assert.False(t, targets[1].Expr.(*Str).DoubleQuoted)
 	assert.Equal(t, int64(42), targets[2].Expr.(*Int).Value)
 	assert.Equal(t, "3.14", targets[3].Expr.(*Dec).Value.String())
 	assert.Equal(t, "2014-01-01", targets[4].Expr.(*DateLit).Value.String())

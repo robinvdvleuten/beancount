@@ -187,10 +187,13 @@ type Between struct {
 
 func (*Between) expr() {}
 
-// Str is a string literal.
+// Str is a string literal. DoubleQuoted records that it was written in
+// double quotes, which beanquery's compiler reads as a column when its value
+// names one.
 type Str struct {
 	position
-	Value string
+	Value        string
+	DoubleQuoted bool
 }
 
 func (*Str) expr() {}

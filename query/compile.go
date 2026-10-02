@@ -121,7 +121,7 @@ func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 			Type:  expr.typ(),
 			IsAgg: c.isAggregate(target.Expr),
 			expr:  expr,
-			key:   exprKey(target.Expr),
+			key:   c.exprKey(target.Expr),
 		})
 		// Like beanquery, check each target's aggregates once it compiles.
 		columns, aggs := c.columnsAndAggregates(target.Expr)
@@ -282,7 +282,7 @@ func (c *compiler) resolveHaving(sel *bql.Select, compiled *compiledSelect) erro
 		Hidden: true,
 		IsAgg:  true,
 		expr:   expr,
-		key:    exprKey(sel.Having),
+		key:    c.exprKey(sel.Having),
 	})
 	compiled.Having = len(compiled.Targets) - 1
 	return nil
@@ -310,7 +310,7 @@ func (c *compiler) resolveGroupByItem(item bql.Expr, compiled *compiledSelect, v
 	if c.isAggregate(item) {
 		return 0, statementErrorf(`GROUP-BY expressions may not be aggregates: "%s"`, pyExprRepr(item))
 	}
-	if idx, ok := targetMatching(item, compiled); ok {
+	if idx, ok := c.targetMatching(item, compiled); ok {
 		return idx, nil
 	}
 	return c.hiddenTarget(item, expr, compiled), nil
@@ -358,7 +358,7 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, lim
 		}
 	}
 
-	if idx, ok := targetMatching(item, compiled); ok {
+	if idx, ok := c.targetMatching(item, compiled); ok {
 		return idx, nil
 	}
 	expr, err := c.compileExpr(item)
@@ -370,8 +370,8 @@ func (c *compiler) resolveTargetRef(item bql.Expr, compiled *compiledSelect, lim
 
 // targetMatching finds the target whose expression item matches
 // structurally.
-func targetMatching(item bql.Expr, compiled *compiledSelect) (int, bool) {
-	key := exprKey(item)
+func (c *compiler) targetMatching(item bql.Expr, compiled *compiledSelect) (int, bool) {
+	key := c.exprKey(item)
 	for i, target := range compiled.Targets {
 		if target.key == key {
 			return i, true
@@ -388,7 +388,7 @@ func (c *compiler) hiddenTarget(item bql.Expr, expr cexpr, compiled *compiledSel
 		Hidden: true,
 		IsAgg:  c.isAggregate(item),
 		expr:   expr,
-		key:    exprKey(item),
+		key:    c.exprKey(item),
 	})
 	return len(compiled.Targets) - 1
 }
@@ -443,8 +443,12 @@ func (c *compiler) columnsAndAggregates(e bql.Expr) (columns int, aggs []*bql.Ca
 		switch node := e.(type) {
 		case *bql.Ident:
 			columns++
+		case *bql.Str:
+			if c.quotedColumn(node) != nil {
+				columns++
+			}
 		case *bql.Call:
-			if aggregates[strings.ToLower(node.Func)] != nil {
+			if aggregates[node.Func] != nil {
 				aggs = append(aggs, node)
 				return
 			}
@@ -511,6 +515,9 @@ func checkGroupCoverage(sel *bql.Select, compiled *compiledSelect) error {
 func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 	switch node := e.(type) {
 	case *bql.Str:
+		if def := c.quotedColumn(node); def != nil {
+			return &cColumn{def: def}, nil
+		}
 		return &cLiteral{v: node.Value, t: tString}, nil
 	case *bql.Int:
 		return &cLiteral{v: node.Value, t: tInt}, nil
@@ -583,7 +590,7 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 }
 
 func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
-	name := strings.ToLower(node.Func)
+	name := node.Func
 
 	// Like bean-query, compile the arguments before resolving the function.
 	args := make([]cexpr, len(node.Args))
@@ -801,17 +808,28 @@ var pyOpClasses = map[bql.TokenType]string{
 // parse tree, which some of its errors quote: an index is its number, a
 // name is Column(name='x'), a call is Function(fname='f', operands=[...]).
 func pyExprRepr(e bql.Expr) string {
+	return exprRepr(e, nil)
+}
+
+// exprRepr is pyExprRepr, but renders a string for which column returns
+// a column as that Column.
+func exprRepr(e bql.Expr, column func(*bql.Str) *columnDef) string {
+	repr := func(e bql.Expr) string { return exprRepr(e, column) }
 	switch node := e.(type) {
+	case *bql.Str:
+		if column != nil && column(node) != nil {
+			return fmt.Sprintf("Column(name=%s)", pyrepr.String(node.Value))
+		}
 	case *bql.Ident:
 		return fmt.Sprintf("Column(name=%s)", pyrepr.String(node.Name))
 	case *bql.Call:
 		operands := make([]string, len(node.Args))
 		for i, arg := range node.Args {
-			operands[i] = pyExprRepr(arg)
+			operands[i] = repr(arg)
 		}
-		return fmt.Sprintf("Function(fname=%s, operands=[%s])", pyrepr.String(strings.ToLower(node.Func)), strings.Join(operands, ", "))
+		return fmt.Sprintf("Function(fname=%s, operands=[%s])", pyrepr.String(node.Func), strings.Join(operands, ", "))
 	case *bql.Unary:
-		return fmt.Sprintf("%s(operand=%s)", unaryOperators[node.Op].pyClass, pyExprRepr(node.X))
+		return fmt.Sprintf("%s(operand=%s)", unaryOperators[node.Op].pyClass, repr(node.X))
 	case *bql.Asterisk:
 		return "Asterisk()"
 	case *bql.ColumnIndex:
@@ -819,24 +837,24 @@ func pyExprRepr(e bql.Expr) string {
 		return strconv.FormatInt(node.Value, 10)
 	case *bql.IsNull:
 		if node.Not {
-			return fmt.Sprintf("IsNotNull(operand=%s)", pyExprRepr(node.X))
+			return fmt.Sprintf("IsNotNull(operand=%s)", repr(node.X))
 		}
-		return fmt.Sprintf("IsNull(operand=%s)", pyExprRepr(node.X))
+		return fmt.Sprintf("IsNull(operand=%s)", repr(node.X))
 	case *bql.Between:
-		return fmt.Sprintf("Between(operand=%s, lower=%s, upper=%s)", pyExprRepr(node.X), pyExprRepr(node.Lower), pyExprRepr(node.Upper))
+		return fmt.Sprintf("Between(operand=%s, lower=%s, upper=%s)", repr(node.X), repr(node.Lower), repr(node.Upper))
 	case *bql.Binary:
 		if node.Op == bql.AND || node.Op == bql.OR {
 			args := make([]string, 0, 2)
 			for _, arg := range logicalArgs(node) {
-				args = append(args, pyExprRepr(arg))
+				args = append(args, repr(arg))
 			}
 			return fmt.Sprintf("%s(args=[%s])", pyOpClasses[node.Op], strings.Join(args, ", "))
 		}
-		return fmt.Sprintf("%s(left=%s, right=%s)", pyOpClasses[node.Op], pyExprRepr(node.L), pyExprRepr(node.R))
+		return fmt.Sprintf("%s(left=%s, right=%s)", pyOpClasses[node.Op], repr(node.L), repr(node.R))
 	case *bql.Attribute:
-		return fmt.Sprintf("Attribute(operand=%s, name=%s)", pyExprRepr(node.X), pyrepr.String(node.Name))
+		return fmt.Sprintf("Attribute(operand=%s, name=%s)", repr(node.X), pyrepr.String(node.Name))
 	case *bql.Subscript:
-		return fmt.Sprintf("Subscript(operand=%s, key=%s)", pyExprRepr(node.X), pyrepr.String(node.Key))
+		return fmt.Sprintf("Subscript(operand=%s, key=%s)", repr(node.X), pyrepr.String(node.Key))
 	}
 	return fmt.Sprintf("Constant(value=%s)", pyConstantRepr(e))
 }
@@ -884,9 +902,21 @@ func constantValue(e bql.Expr) any {
 }
 
 // exprKey builds a canonical key for structural expression matching, used
-// to resolve GROUP-BY and ORDER-BY items against the targets list.
-func exprKey(e bql.Expr) string {
-	return pyExprRepr(e)
+// to resolve GROUP-BY and ORDER-BY items against the targets list. Like
+// beanquery, which matches the compiled expressions, a double-quoted
+// string that names a column matches that column.
+func (c *compiler) exprKey(e bql.Expr) string {
+	return exprRepr(e, c.quotedColumn)
+}
+
+// quotedColumn is the column a double-quoted string compiles to, like
+// beanquery's _constant: the one of the current table its value names, or
+// nil when it names none and stays a string.
+func (c *compiler) quotedColumn(node *bql.Str) *columnDef {
+	if !node.DoubleQuoted {
+		return nil
+	}
+	return c.env.columns[node.Value]
 }
 
 // Compiled expression nodes.

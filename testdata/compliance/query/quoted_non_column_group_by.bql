@@ -1,0 +1,1 @@
+SELECT "nope", count(*) GROUP BY "nope"

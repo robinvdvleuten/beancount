@@ -1,0 +1,1 @@
+SELECT account WHERE "account" ~ 'Cash' LIMIT 2

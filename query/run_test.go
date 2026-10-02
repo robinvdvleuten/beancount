@@ -272,6 +272,13 @@ var errorFixtures = map[string]string{
 	"err_string_doubled_double_quote": `error: syntax error
 | SELECT "a""b"
 |           ^`,
+	"err_quoted_function_doubled_quote": `error: no function matches "len"gth(str)" name and argument types
+| SELECT "len""gth"('ab')
+|        ^^^^^^^^^^^^^^^^`,
+	"err_quoted_function_case": `error: no function matches "LENGTH(str)" name and argument types
+| SELECT "LENGTH"('ab')
+|        ^^^^^^^^^^^^^^`,
+	"err_quoted_column_mixed_aggregate": `error: mixed aggregates and non-aggregates are not allowed`,
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

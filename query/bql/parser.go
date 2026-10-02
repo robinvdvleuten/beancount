@@ -713,6 +713,23 @@ func (p *parser) listAhead() bool {
 	return lexer.Next().Type == COMMA
 }
 
+// quotedCallAhead reports whether the current token starts a quoted
+// identifier followed by the ( of a function call: the double-quoted
+// strings that run on without a gap, holding more than "".
+func (p *parser) quotedCallAhead() bool {
+	if !p.atQuotedIdent() {
+		return false
+	}
+	lexer := *p.lexer
+	start, end := p.cur.Start, p.cur.End
+	tok := lexer.Next()
+	for tok.Type == STRING && tok.Start == end && p.source[tok.Start] == '"' {
+		end = tok.End
+		tok = lexer.Next()
+	}
+	return tok.Type == LPAREN && end-start > 2
+}
+
 // callAhead reports whether the token after the current one is the ( of
 // a function call.
 func (p *parser) callAhead() bool {
@@ -816,9 +833,17 @@ func (p *parser) parsePrimary() (Expr, error) {
 
 // parseAtom parses beanquery's atom: a function call, a constant (a
 // literal or a list) or a column name. Like beanquery's grammar, which
-// tries a function call first, NULL followed by ( names a function.
+// tries a function call first, NULL followed by ( names a function, and so
+// does a quoted identifier, kept as written.
 func (p *parser) parseAtom() (Expr, error) {
 	tok := p.cur
+	if p.quotedCallAhead() {
+		name, err := p.quotedIdent()
+		if err != nil {
+			return nil, err
+		}
+		return p.parseCall(tok.Start, name)
+	}
 	if _, ok := literalTypes[tok.Type]; ok && (tok.Type != NULL || !p.callAhead()) {
 		return p.parseLiteral()
 	}
@@ -835,34 +860,40 @@ func (p *parser) parseAtom() (Expr, error) {
 		if p.cur.Type != LPAREN {
 			return &Ident{position: p.node(tok.Start), Name: name}, nil
 		}
-		p.next() // (
-		call := &Call{Func: name}
-		if p.cur.Type == ASTERISK {
-			// Like beanquery's grammar, any function takes * as its only
-			// argument; the compiler decides which accept it.
-			star := p.cur
-			p.next()
-			if p.cur.Type != RPAREN {
-				// beanquery backs out of the * alternative to the start
-				// of the *.
-				return nil, p.errorf(star, "expected ) after *, found %s", p.describe(p.cur))
-			}
-			call.Args = []Expr{&Asterisk{position: p.node(star.Start)}}
-		} else if p.cur.Type != RPAREN {
-			args, err := p.parseExprList()
-			if err != nil {
-				return nil, err
-			}
-			call.Args = args
-		}
-		if _, err := p.expect(RPAREN, "function call"); err != nil {
-			return nil, err
-		}
-		call.position = p.node(tok.Start)
-		return call, nil
+		return p.parseCall(tok.Start, name)
 	}
 
 	return nil, p.nameErrorf(tok, "expected expression, found %s", p.describe(tok))
+}
+
+// parseCall parses a function call's arguments, its ( the current token,
+// for the function name that starts at start.
+func (p *parser) parseCall(start int, name string) (Expr, error) {
+	p.next() // (
+	call := &Call{Func: name}
+	if p.cur.Type == ASTERISK {
+		// Like beanquery's grammar, any function takes * as its only
+		// argument; the compiler decides which accept it.
+		star := p.cur
+		p.next()
+		if p.cur.Type != RPAREN {
+			// beanquery backs out of the * alternative to the start
+			// of the *.
+			return nil, p.errorf(star, "expected ) after *, found %s", p.describe(p.cur))
+		}
+		call.Args = []Expr{&Asterisk{position: p.node(star.Start)}}
+	} else if p.cur.Type != RPAREN {
+		args, err := p.parseExprList()
+		if err != nil {
+			return nil, err
+		}
+		call.Args = args
+	}
+	if _, err := p.expect(RPAREN, "function call"); err != nil {
+		return nil, err
+	}
+	call.position = p.node(start)
+	return call, nil
 }
 
 // parseLiteral parses the literal at the current token, one of
@@ -872,7 +903,7 @@ func (p *parser) parseLiteral() (Expr, error) {
 	switch tok.Type {
 	case STRING:
 		p.next()
-		return &Str{position: p.node(tok.Start), Value: stripQuotes(tok.String(p.source))}, nil
+		return &Str{position: p.node(tok.Start), Value: stripQuotes(tok.String(p.source)), DoubleQuoted: p.source[tok.Start] == '"'}, nil
 
 	case INTEGER:
 		p.next()
