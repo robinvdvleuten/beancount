@@ -1,0 +1,1 @@
+SELECT date, account /* the account */, position WHERE /* only */ account ~ "Assets" ORDER BY date

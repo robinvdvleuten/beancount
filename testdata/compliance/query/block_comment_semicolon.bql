@@ -1,0 +1,1 @@
+SELECT 1 /* ; */, 2; /* after the end-of-line comment

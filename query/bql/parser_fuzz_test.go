@@ -46,6 +46,8 @@ func FuzzParseQuery(f *testing.F) {
 		"SELECT * ;",
 		"SELECT 1; bogus",
 		"SELECT 1;\n; comment\n",
+		"/* a */ SELECT /* b\n */ 1 /**/ + 2 /* ; */",
+		"SELECT 1 /* unterminated",
 		"SELECT\n  account\nORDER BY account",
 		"SELECT account,\vdate\u00a0LIMIT\u20281",
 

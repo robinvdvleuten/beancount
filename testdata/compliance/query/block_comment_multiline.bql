@@ -1,0 +1,7 @@
+SELECT
+  /* first
+     * multi-line
+     */
+  account,
+  sum(position) /* total
+*/ GROUP BY account

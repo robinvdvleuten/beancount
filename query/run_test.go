@@ -227,6 +227,9 @@ var errorFixtures = map[string]string{
 | SELECT DISTINCT account;
 | SELECT bogus
 | ^`,
+	"err_block_comment_unterminated": `error: syntax error
+| SELECT 1 /* closed */ + /* never closed
+|                         ^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

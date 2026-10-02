@@ -397,6 +397,34 @@ func TestParseSemicolonComment(t *testing.T) {
 	}
 }
 
+// TestParseBlockComment checks beanquery's block comment: /* to the first
+// */, across lines, is white space wherever white space may go, and a
+// target's text keeps a comment between its tokens. An unterminated /* is
+// no comment, so its / is a token.
+func TestParseBlockComment(t *testing.T) {
+	stmt, err := Parse("/* a */ SELECT /* b */ 1 /* c\n */ + 2, 3/**/*/**/4 /* ; */ /* d */")
+	assert.NoError(t, err)
+	targets := stmt.(*Select).Targets
+	assert.Equal(t, 2, len(targets))
+	assert.Equal(t, "1 /* c\n */ + 2", targets[0].Text)
+	assert.Equal(t, "3/**/*/**/4", targets[1].Text)
+
+	for _, tc := range []struct {
+		query  string
+		offset int
+	}{
+		{"SELECT /* x", 7},
+		{"SELECT 1 /*/ 2", 10},
+		{"SELECT 1 /* x */*/ 2", 17},
+		{"SELECT 1 /* a */ /* b", 18},
+	} {
+		_, err := Parse(tc.query)
+		parseErr, ok := err.(*ParseError)
+		assert.True(t, ok, tc.query)
+		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
+	}
+}
+
 func TestParseBalances(t *testing.T) {
 	stmt, err := Parse("BALANCES AT cost FROM year = 2014")
 	assert.NoError(t, err)

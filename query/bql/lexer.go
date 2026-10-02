@@ -178,9 +178,15 @@ func (l *Lexer) scanString(quote byte, start, line, col int) Token {
 }
 
 // skipWhitespace skips white space, what beanquery's \s matches (IsSpace),
-// and an end-of-line comment.
+// an end-of-line comment and a block comment, in any order.
 func (l *Lexer) skipWhitespace() {
 	for l.pos < len(l.source) {
+		if end := l.blockCommentEnd(); end > 0 {
+			for l.pos < end {
+				l.advance()
+			}
+			continue
+		}
 		if l.source[l.pos] == ';' {
 			if !l.atComment() {
 				return
@@ -205,6 +211,22 @@ func (l *Lexer) skipWhitespace() {
 // space.
 func IsSpace(r rune) bool {
 	return unicode.IsSpace(r) || r >= '\x1c' && r <= '\x1f'
+}
+
+// blockCommentEnd returns the offset just past the block comment at the
+// current position, or 0 when none starts there. beanquery's comments
+// pattern, /\*([^*]|[\r\n]|(\*+([^*\/]|[\r\n])))*\*+/, ends a comment at
+// the first */ after its /*, across lines; an unterminated /* is no
+// comment, so its / is a token and the parser reports the syntax error.
+func (l *Lexer) blockCommentEnd() int {
+	if !bytes.HasPrefix(l.source[l.pos:], []byte("/*")) {
+		return 0
+	}
+	end := bytes.Index(l.source[l.pos+2:], []byte("*/"))
+	if end < 0 {
+		return 0
+	}
+	return l.pos + 2 + end + 2
 }
 
 // atComment reports whether the ; at the current position starts
