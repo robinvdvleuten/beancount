@@ -914,6 +914,19 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 	}
 }
 
+// lexerRejects reports whether beancount's lexer, too, rejects an invalid
+// token: a word, a number or date it cannot convert, an unterminated string
+// or a stray character. The rest are characters it lexes as tokens of their
+// own (an unmatched parenthesis in an expression, a lone sign, a slash or a
+// pipe), which only its grammar rejects.
+func (p *Parser) lexerRejects(tok Token) bool {
+	switch p.source[tok.Start] {
+	case '(', ')', '+', '-', '/', '|':
+		return false
+	}
+	return true
+}
+
 func (p *Parser) error(format string, args ...any) error {
 	tok := p.peek()
 	return p.errorAtToken(tok, format, args...)

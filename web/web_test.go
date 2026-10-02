@@ -165,7 +165,7 @@ func TestAPISource(t *testing.T) {
 	})
 
 	t.Run("PutWithParseErrorStillSavesFile", func(t *testing.T) {
-		invalidContent := "this is not valid beancount syntax @@@"
+		invalidContent := "garbage @@@"
 		requestBody := map[string]string{
 			"source": invalidContent,
 		}
@@ -259,7 +259,7 @@ func TestAPISourceIncludeParseErrorStillSavesFile(t *testing.T) {
 	mux, err := server.setupRouter()
 	assert.NoError(t, err)
 
-	invalidContent := "this is not valid beancount syntax @@@"
+	invalidContent := "garbage @@@"
 	requestBody := map[string]string{
 		"filepath": includeFile,
 		"source":   invalidContent,

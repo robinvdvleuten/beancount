@@ -1022,7 +1022,8 @@ func TestLoadBytesResultRecoversFromSyntaxErrors(t *testing.T) {
 	result, err := New(WithSyntaxRecovery()).LoadBytesResult(context.Background(), "<stdin>", data)
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result.AST.Directives))
-	assert.Equal(t, 2, len(result.Diagnostics))
+	// Like beancount's lexer, each invalid word is one (more, junk).
+	assert.Equal(t, 3, len(result.Diagnostics))
 	assert.Equal(t, data, result.Sources["<stdin>"])
 
 	// Without it, the first one fails the load.

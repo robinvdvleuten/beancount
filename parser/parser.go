@@ -173,7 +173,9 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 // recover records a syntax error and skips to the next line that starts in
 // column 1, dropping the rest of the directive the error is in, like
-// beancount's grammar. Parsing resumes there.
+// beancount's grammar. Parsing resumes there. Like beancount's lexer, which
+// reports each invalid token whatever the grammar is doing, every invalid
+// token it skips past the error is reported too.
 func (p *Parser) recover(err error) {
 	var parseErr *ParseError
 	if !errors.As(err, &parseErr) {
@@ -184,6 +186,12 @@ func (p *Parser) recover(err error) {
 		tok := p.peek()
 		if tok.Line > parseErr.Pos.Line && tok.Column == 1 {
 			return
+		}
+		if tok.Type == ILLEGAL && tok.Start > parseErr.Pos.Offset && p.lexerRejects(tok) {
+			var skipped *ParseError
+			if errors.As(p.errorAtToken(tok, ""), &skipped) {
+				p.errs = append(p.errs, skipped)
+			}
 		}
 		p.advance()
 	}

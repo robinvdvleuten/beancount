@@ -657,6 +657,14 @@ func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 	if tokType == IDENT && (l.pos >= len(l.source) || l.source[l.pos] != ':') {
 		tokType = ILLEGAL
 	}
+	// beancount's key has two characters at least ([a-z][a-zA-Z0-9\-_]+:):
+	// its lexer rejects a one-letter key up to the next whitespace (a:).
+	if tokType == IDENT && l.pos-start == 1 {
+		for l.pos < len(l.source) && !isWhitespaceOrLineBreak(l.source[l.pos]) {
+			l.advance()
+		}
+		tokType = ILLEGAL
+	}
 	return Token{tokType, start, l.pos, line, col}
 }
 
@@ -905,4 +913,10 @@ func isNonDirectiveLineFlag(ch byte) bool {
 		return true
 	}
 	return false
+}
+
+// isWhitespaceOrLineBreak reports whether ch ends an invalid token in
+// beancount's lexer, which skips an invalid token up to [ \t\n\r].
+func isWhitespaceOrLineBreak(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r'
 }

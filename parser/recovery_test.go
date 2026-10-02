@@ -3,6 +3,7 @@ package parser
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -35,7 +36,8 @@ option "title"
 	for _, e := range syntaxErrs {
 		lines = append(lines, e.Pos.Line)
 	}
-	assert.Equal(t, []int{3, 7, 8, 13}, lines)
+	// Like beancount's lexer, each invalid word of line 7 is an error.
+	assert.Equal(t, []int{3, 7, 7, 7, 7, 8, 13}, lines)
 
 	var kept []string
 	for _, d := range tree.Directives {
@@ -155,4 +157,39 @@ func TestInvalidAccountNameKeepsTheDirective(t *testing.T) {
 	assert.Equal(t, 3, syntaxErrs[0].Pos.Line)
 	assert.Equal(t, 1, len(tree.Directives))
 	assert.Equal(t, ast.Account("Assets:\U0001F600x"), tree.Directives[0].(*ast.Transaction).Postings[1].Account)
+}
+
+// TestSkippedInvalidTokensAreReported pins beancount's lexer, which reports
+// every invalid token whatever the grammar does with it: each invalid token
+// past a directive's first syntax error is an error too, a one-letter key
+// (a:) among them, while what the grammar alone rejects (a lone sign, an
+// unmatched parenthesis) and valid lines in the dropped directive are not.
+func TestSkippedInvalidTokensAreReported(t *testing.T) {
+	source := `2020-01-02 * "x"
+  a: "x"
+  Assets:A  1 USD
+    ok: "valid"
+    b: "y"
+  Assets:A  -1 USD -
+  Assets:A  (1 USD
+  garbage garbage2
+2020-01-03 * "y"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+`
+	tree, err := ParseString(context.Background(), source)
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	var got []string
+	for _, e := range syntaxErrs {
+		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Message))
+	}
+	assert.Equal(t, []string{
+		`2:3 invalid token "a:"`,
+		`5:5 invalid token "b:"`,
+		`8:3 invalid token "garbage"`,
+		`8:11 invalid token "garbage2"`,
+	}, got)
+	assert.Equal(t, 1, len(tree.Directives))
 }

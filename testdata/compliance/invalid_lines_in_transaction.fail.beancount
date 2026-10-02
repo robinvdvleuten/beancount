@@ -1,0 +1,24 @@
+; Like beancount's lexer, every invalid token in a transaction is reported,
+; not only the first: a one-letter metadata key (a:) and an invalid word,
+; on whichever line of the dropped transaction they stand. The valid
+; postings and metadata it drops report nothing, and the next transaction
+; is kept.
+2020-01-01 open Assets:A
+2020-01-02 * "x"
+  a: "x"
+  b: "y"
+  Assets:A  1 USD
+    c: "z"
+    ok: "valid"
+  Assets:A  -1 USD
+2020-01-03 * "y"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+2020-01-04 * "x"
+  garbage
+  Assets:A  1 USD
+  garbage2
+  Assets:A  -1 USD
+2020-01-05 * "y"
+  Assets:A  1 USD
+  Assets:A  -1 USD
