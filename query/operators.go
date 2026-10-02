@@ -160,7 +160,7 @@ var operators = func() map[bql.TokenType]*operatorDef {
 	ops[bql.MINUS].signatures = append(ops[bql.MINUS].signatures,
 		opSignature{l: tDate, r: tInt, result: tDate, eval: func(l, r any) any { return addDays(l.(*ast.Date), -r.(int64)) }},
 		opSignature{l: tDate, r: tDate, result: tInt, eval: func(l, r any) any {
-			return int64(l.(*ast.Date).Sub(r.(*ast.Date).Time) / (24 * time.Hour))
+			return daysBetween(r.(*ast.Date), l.(*ast.Date))
 		}},
 	)
 

@@ -209,8 +209,7 @@ var functions = map[string]*funcDef{
 	}},
 	"date_diff": {overloads: []funcOverload{
 		{[]dtype{tDate, tDate}, tInt, func(_ *evalRow, args []any) any {
-			a, b := args[0].(*ast.Date), args[1].(*ast.Date)
-			return int64(a.Sub(b.Time).Hours() / 24)
+			return daysBetween(args[1].(*ast.Date), args[0].(*ast.Date))
 		}},
 	}},
 
