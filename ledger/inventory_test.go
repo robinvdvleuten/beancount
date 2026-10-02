@@ -78,11 +78,12 @@ func TestBookDecidesReductionOrAugmentation(t *testing.T) {
 
 // TestHoldsOtherSignAgreesWithTheLots checks the per-sign lot counts that
 // decide a reduction without a scan against a scan of the lots, as lots are
-// added, reduced, emptied, cloned and left at zero units.
+// added, reduced, emptied and cloned. Like beancount's same_sign, zero units
+// count as non-negative.
 func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
 	scan := func(inv *Inventory, commodity string, units decimal.Decimal) bool {
 		for _, lot := range inv.lots[commodity] {
-			if lot.Amount.Sign() != units.Sign() {
+			if lot.Amount.IsNegative() != units.IsNegative() {
 				return true
 			}
 		}
@@ -111,6 +112,18 @@ func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
 	check(inv)
 	assert.True(t, inv.holdsOtherSign("HOOL", mustParseDec("1")))
 	assert.False(t, cloned.holdsOtherSign("HOOL", mustParseDec("1")))
+}
+
+// TestZeroUnitsHoldNoLot checks that, like beancount's add_amount, zero
+// units leave no lot, so a later sale opens a short lot (#600).
+func TestZeroUnitsHoldNoLot(t *testing.T) {
+	inv := holding(t, "2024-01-01", "0 HOOL {5 USD}")
+	assert.True(t, inv.IsEmpty())
+
+	positions, reduced, err := inv.book(testPosting(t, "-1 HOOL {5 USD}"), BookingSTRICT)
+	assert.NoError(t, err)
+	assert.False(t, reduced)
+	assert.Zero(t, positions)
 }
 
 func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {

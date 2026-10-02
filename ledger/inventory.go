@@ -20,15 +20,24 @@ type Inventory struct {
 	// Map: commodity -> lot key -> the lot's position in lots, so adding to
 	// a lot takes a lookup rather than a scan of every lot
 	index map[string]map[lotKey]int
-	// Map: commodity -> how many of its lots hold negative, zero and
-	// positive units, so deciding whether a posting reduces the inventory
-	// takes a lookup rather than a scan of every lot
+	// Map: commodity -> how many of its lots hold negative and
+	// non-negative units, so deciding whether a posting reduces the
+	// inventory takes a lookup rather than a scan of every lot
 	signs map[string]signCounts
 }
 
 // signCounts counts a commodity's lots by the sign of their units:
-// negative, zero and positive.
-type signCounts [3]int
+// negative and non-negative, as beancount's same_sign tells them apart.
+type signCounts [2]int
+
+// signIndex is the signCounts slot of amount's sign: like beancount's
+// same_sign, zero counts as non-negative.
+func signIndex(amount decimal.Decimal) int {
+	if amount.IsNegative() {
+		return 0
+	}
+	return 1
+}
 
 type lotReduction struct {
 	lot *lot
@@ -205,7 +214,7 @@ func NewInventory() *Inventory {
 // amount's sign.
 func (inv *Inventory) countLot(commodity string, amount decimal.Decimal, delta int) {
 	counts := inv.signs[commodity]
-	counts[amount.Sign()+1] += delta
+	counts[signIndex(amount)] += delta
 	if counts == (signCounts{}) {
 		delete(inv.signs, commodity)
 		return
@@ -214,10 +223,9 @@ func (inv *Inventory) countLot(commodity string, amount decimal.Decimal, delta i
 }
 
 // holdsOtherSign reports whether the inventory holds a lot of commodity
-// whose units' sign differs from units'.
+// whose units' sign differs from units', as beancount's same_sign tells.
 func (inv *Inventory) holdsOtherSign(commodity string, units decimal.Decimal) bool {
-	counts := inv.signs[commodity]
-	return counts[0]+counts[1]+counts[2] > counts[units.Sign()+1]
+	return inv.signs[commodity][1-signIndex(units)] > 0
 }
 
 // clone returns a copy of the inventory whose lots can change without
@@ -246,15 +254,15 @@ func (inv *Inventory) clone() *Inventory {
 
 // AddLot adds an amount with a specific cost basis and reports whether it
 // reduced the lot: the inventory held the lot with the opposite sign, like
-// beancount's Inventory.add_amount returning Booking.REDUCED. A lot of zero
-// units, which a zero-units posting leaves, counts as not held: beancount
-// never creates one.
+// beancount's Inventory.add_amount returning Booking.REDUCED. Like
+// add_amount, it never holds a lot of zero units: zero units added to a lot
+// it does not hold leave it unchanged.
 func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
 	// Find existing lot with matching spec
 	key := spec.key()
 	if i, ok := inv.index[commodity][key]; ok {
 		lot := inv.lots[commodity][i]
-		reduced := !lot.Amount.IsZero() && lot.Amount.IsNegative() != amount.IsNegative()
+		reduced := signIndex(lot.Amount) != signIndex(amount)
 		inv.countLot(commodity, lot.Amount, -1)
 		lot.Amount = pydecimal.Add(lot.Amount, amount)
 		inv.countLot(commodity, lot.Amount, 1)
@@ -264,7 +272,9 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 		return reduced
 	}
 
-	// Create new lot
+	if amount.IsZero() {
+		return false
+	}
 	newLot := &lot{Commodity: commodity, Amount: amount, Spec: spec, key: key}
 	positions, ok := inv.index[commodity]
 	if !ok {
@@ -319,7 +329,7 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 	commodity := posting.Amount.Currency
 	var lots []*lot
 	for _, lot := range inv.lots[commodity] {
-		if lot.Amount.Sign() != units.Sign() && lot.Spec != nil && lot.Spec.Cost != nil {
+		if signIndex(lot.Amount) != signIndex(units) && lot.Spec != nil && lot.Spec.Cost != nil {
 			lots = append(lots, lot)
 		}
 	}
