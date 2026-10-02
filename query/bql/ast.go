@@ -5,6 +5,8 @@
 package bql
 
 import (
+	"math/big"
+
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
 )
@@ -44,7 +46,9 @@ type Select struct {
 	// PivotBy is empty or holds exactly two items, each a target name
 	// (Ident) or a 1-based index (ColumnIndex).
 	PivotBy []Expr
-	Limit   *int64
+	// Limit is any integer, as beanquery's grammar takes it; the
+	// executor fails one beyond int64 (Python's sys.maxsize).
+	Limit *big.Int
 }
 
 func (*Select) stmt() {}

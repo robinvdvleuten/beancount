@@ -192,6 +192,7 @@ var errorFixtures = map[string]string{
 		"| \n" +
 		"| bogus\n" +
 		"| ^^^^^",
+	"err_limit_beyond_int64": `error: Stop argument for islice() must be None or an integer: 0 <= x <= sys.maxsize.`,
 	"err_limit_decimal": `error: syntax error
 | SELECT account LIMIT 1.5
 |                       ^`,

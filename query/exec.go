@@ -54,8 +54,15 @@ func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*tab
 	if compiled.Distinct {
 		output = distinctRows(output)
 	}
-	if compiled.Limit != nil && int64(len(output)) > *compiled.Limit {
-		output = output[:*compiled.Limit]
+	if compiled.Limit != nil {
+		// beanquery hands LIMIT to itertools.islice, which takes no stop
+		// beyond sys.maxsize, so such a limit fails once the rows are in.
+		if !compiled.Limit.IsInt64() {
+			fail("Stop argument for islice() must be None or an integer: 0 <= x <= sys.maxsize.")
+		}
+		if limit := compiled.Limit.Int64(); int64(len(output)) > limit {
+			output = output[:limit]
+		}
 	}
 
 	result := &table{Rows: output, Display: qctx.Ledger.DisplayContext()}

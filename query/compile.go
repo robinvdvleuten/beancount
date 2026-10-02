@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"math/big"
 	"slices"
 	"strconv"
 	"strings"
@@ -48,7 +49,7 @@ type compiledSelect struct {
 	OrderBy []orderKey
 	// Pivot holds the two PIVOT BY targets, or nothing.
 	Pivot    []int
-	Limit    *int64
+	Limit    *big.Int
 	Distinct bool
 	HasAgg   bool
 	Aggs     []*cAgg

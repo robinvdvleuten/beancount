@@ -317,7 +317,7 @@ func TestCompileDistinctAndLimit(t *testing.T) {
 	ctx := newTestContext(t)
 	compiled := mustCompile(t, ctx, "SELECT DISTINCT account LIMIT 5")
 	assert.True(t, compiled.Distinct)
-	assert.Equal(t, int64(5), *compiled.Limit)
+	assert.Equal(t, int64(5), compiled.Limit.Int64())
 }
 
 func TestCompileNoMatchingFunction(t *testing.T) {

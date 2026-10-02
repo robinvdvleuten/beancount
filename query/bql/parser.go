@@ -2,6 +2,7 @@ package bql
 
 import (
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -264,11 +265,13 @@ func (p *parser) parseSelect() (*Select, error) {
 			return nil, p.clauseErrorf(clause, "LIMIT")
 		}
 		p.next()
-		limit, err := strconv.ParseInt(tok.String(p.source), 10, 64)
-		if err != nil {
+		// Like beanquery's parser, LIMIT takes any integer; one beyond
+		// int64 fails the statement when it runs.
+		limit, ok := new(big.Int).SetString(tok.String(p.source), 10)
+		if !ok {
 			return nil, p.errorf(tok, "invalid LIMIT value %q", tok.String(p.source))
 		}
-		sel.Limit = &limit
+		sel.Limit = limit
 	}
 
 	sel.end = p.prevEnd

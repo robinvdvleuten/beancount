@@ -62,7 +62,7 @@ func TestParseSelectCaseInsensitiveKeywords(t *testing.T) {
 	assert.Equal(t, 1, len(sel.GroupBy))
 	assert.Equal(t, 1, len(sel.OrderBy))
 	assert.True(t, sel.OrderBy[0].Desc)
-	assert.Equal(t, int64(10), *sel.Limit)
+	assert.Equal(t, int64(10), sel.Limit.Int64())
 }
 
 func TestParseFunctionCall(t *testing.T) {
