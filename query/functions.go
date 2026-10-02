@@ -561,12 +561,22 @@ var functions = map[string]*funcDef{
 	"grepn": {overloads: []funcOverload{
 		{[]dtype{tString, tString, tInt}, tString, func(_ *evalRow, args []any) any {
 			re := mustCompilePattern("", args[0].(string))
-			groups := re.FindStringSubmatch(args[1].(string))
-			n := int(args[2].(int64))
-			if groups == nil || n < 0 || n >= len(groups) {
+			s := args[1].(string)
+			loc := re.FindStringSubmatchIndex(s)
+			if loc == nil {
 				return nil
 			}
-			return groups[n]
+			// Like Python's match.group(n), a group the pattern does not
+			// have fails the statement, while one that did not take part
+			// in the match is NULL.
+			n := args[2].(int64)
+			if n < 0 || n >= int64(len(loc)/2) {
+				fail("no such group")
+			}
+			if loc[2*n] < 0 {
+				return nil
+			}
+			return s[loc[2*n]:loc[2*n+1]]
 		}},
 	}},
 	"subst": {overloads: []funcOverload{

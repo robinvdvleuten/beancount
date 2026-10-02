@@ -1,0 +1,1 @@
+SELECT account, grepn('(Food)', account, 0) AS whole, grepn('(Food)|(X)', account, 2) IS NULL AS unmatched, grepn('(Zzz)', account, 5) IS NULL AS nomatch WHERE account ~ 'Food'

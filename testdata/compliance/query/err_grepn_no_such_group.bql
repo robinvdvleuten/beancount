@@ -1,0 +1,1 @@
+SELECT grepn('(Food)', account, 2) WHERE account = 'Expenses:Food:Coffee'
