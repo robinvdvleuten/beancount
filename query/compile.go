@@ -610,7 +610,10 @@ func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
 		return special(node, args)
 	}
 	if def := functions[name]; def != nil {
-		if overload := def.matchOverload(argTypes); overload != nil {
+		if overload, sig := def.matchOverload(argTypes); overload != nil {
+			for i, base := range sig {
+				args[i] = asBase(args[i], base)
+			}
 			return &cCall{overload: overload, args: args}, nil
 		}
 	}
@@ -679,11 +682,11 @@ func (c *compiler) compileUnary(node *bql.Unary) (cexpr, error) {
 	if !ok {
 		return nil, compileErrorf(node, "unsupported unary operator")
 	}
-	sig := def.match(x.typ())
+	sig, base := def.match(x.typ())
 	if sig == nil {
 		return nil, compileErrorf(node, `operator "%s(%s)" not supported`, def.name, operandTypeName(x.typ()))
 	}
-	return &cUnary{sig: sig, x: x}, nil
+	return &cUnary{sig: sig, x: asBase(x, base)}, nil
 }
 
 // compileBinary compiles a binary operation. AND, OR and IN take operands

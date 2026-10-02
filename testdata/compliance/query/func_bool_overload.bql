@@ -1,0 +1,1 @@
+SELECT int(TRUE) AS a, int(FALSE) AS b, decimal(TRUE) AS c, int(TRUE AND FALSE) AS d LIMIT 1

@@ -377,3 +377,24 @@ func TestCompileKeepsRepeatedTargetNames(t *testing.T) {
 	}
 	assert.Equal(t, []string{"account", "account", "n", "n", "n"}, names)
 }
+
+// TestMatchOverloadBoolBases checks that function lookup tries a bool
+// argument's bases in beanquery's order: a bool overload wins over an int
+// one whatever order they are registered in, and an int one takes a bool
+// when no bool overload does.
+func TestMatchOverloadBoolBases(t *testing.T) {
+	def := &funcDef{overloads: []funcOverload{
+		{params: []dtype{tInt, tInt}, result: tInt},
+		{params: []dtype{tBool, tInt}, result: tBool},
+	}}
+	overload, sig := def.matchOverload([]dtype{tBool, tBool})
+	assert.Equal(t, &def.overloads[1], overload)
+	assert.Equal(t, []dtype{tBool, tInt}, sig)
+
+	overload, sig = def.matchOverload([]dtype{tInt, tBool})
+	assert.Equal(t, &def.overloads[0], overload)
+	assert.Equal(t, []dtype{tInt, tInt}, sig)
+
+	overload, _ = def.matchOverload([]dtype{tString, tBool})
+	assert.Zero(t, overload)
+}

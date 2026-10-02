@@ -56,9 +56,9 @@ func dateFromYMD(year, month, day int64) any {
 
 // funcOverload is one typed signature of a simple function. tAny parameters
 // match any argument type but the * of count(*), and tObject parameters an
-// object-typed value or NULL; other parameters need that exact type, so like
-// bean-query an object-typed value or NULL only fits a tAny or tObject
-// parameter.
+// object-typed value or NULL; other parameters need that exact type, or
+// one of its bases (matchOverload), so like bean-query an object-typed
+// value or NULL only fits a tAny or tObject parameter.
 type funcOverload struct {
 	params []dtype
 	result dtype
@@ -70,26 +70,36 @@ type funcDef struct {
 	overloads []funcOverload
 }
 
-// matchOverload selects the first overload compatible with the argument
-// types.
-func (d *funcDef) matchOverload(argTypes []dtype) *funcOverload {
-	for i := range d.overloads {
-		o := &d.overloads[i]
-		if len(o.params) != len(argTypes) {
-			continue
-		}
-		ok := true
-		for j, param := range o.params {
-			if !paramAccepts(param, argTypes[j]) {
-				ok = false
-				break
+// matchOverload selects the overload for the argument types as
+// beanquery's types.function_lookup does: for each combination of the
+// argument types' bases (lookupSignature), the first overload that takes
+// it. It returns the overload and the combination, the type each argument
+// is taken as (asBase).
+func (d *funcDef) matchOverload(argTypes []dtype) (*funcOverload, []dtype) {
+	var overload *funcOverload
+	sig := lookupSignature(argTypes, func(sig []dtype) bool {
+		for i := range d.overloads {
+			if o := &d.overloads[i]; o.accepts(sig) {
+				overload = o
+				return true
 			}
 		}
-		if ok {
-			return o
+		return false
+	})
+	return overload, sig
+}
+
+// accepts reports whether the overload takes arguments of types argTypes.
+func (o *funcOverload) accepts(argTypes []dtype) bool {
+	if len(o.params) != len(argTypes) {
+		return false
+	}
+	for j, param := range o.params {
+		if !paramAccepts(param, argTypes[j]) {
+			return false
 		}
 	}
-	return nil
+	return true
 }
 
 // paramAccepts reports whether a parameter of type param takes an argument

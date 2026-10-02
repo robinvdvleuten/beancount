@@ -441,3 +441,65 @@ func inventoryString(inv *inventoryValue, number func(decimal.Decimal) string) s
 	}
 	return strings.Join(parts, ", ")
 }
+
+// typeBases is beanquery's types._bases for t: the types an operand of
+// type t fits when a function or operator is looked up, t itself first.
+// A bool also fits an int, as Python's bool subclasses int.
+func typeBases(t dtype) []dtype {
+	if t == tBool {
+		return []dtype{tBool, tInt}
+	}
+	return []dtype{t}
+}
+
+// lookupSignature is beanquery's types.function_lookup: it tries each
+// combination of the argument types' bases in itertools.product order (the
+// last argument varying fastest) and returns the first combination match
+// accepts, or nil when none does.
+func lookupSignature(argTypes []dtype, match func(sig []dtype) bool) []dtype {
+	sig := make([]dtype, len(argTypes))
+	var try func(i int) bool
+	try = func(i int) bool {
+		if i == len(argTypes) {
+			return match(sig)
+		}
+		for _, base := range typeBases(argTypes[i]) {
+			sig[i] = base
+			if try(i + 1) {
+				return true
+			}
+		}
+		return false
+	}
+	if try(0) {
+		return sig
+	}
+	return nil
+}
+
+// asBase adapts an operand looked up as base, one of its type's bases, so
+// that it evaluates to a value of that type: a bool taken as an int is
+// its int value, as Python's True is 1.
+func asBase(x cexpr, base dtype) cexpr {
+	if x.typ() == tBool && base == tInt {
+		return &cBoolAsInt{x: x}
+	}
+	return x
+}
+
+// cBoolAsInt is a bool operand taken as an int.
+type cBoolAsInt struct {
+	x cexpr
+}
+
+func (c *cBoolAsInt) typ() dtype { return tInt }
+
+func (c *cBoolAsInt) eval(row *evalRow) any {
+	switch c.x.eval(row) {
+	case true:
+		return int64(1)
+	case false:
+		return int64(0)
+	}
+	return nil
+}

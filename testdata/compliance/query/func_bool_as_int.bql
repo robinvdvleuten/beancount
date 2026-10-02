@@ -1,0 +1,1 @@
+SELECT date(2023, TRUE, 1) AS a, date_add(2023-01-01, TRUE) AS b, substr('abc', FALSE, TRUE) AS c, root('A:B:C', TRUE) AS d, splitcomp('a:b', ':', TRUE) AS e, round(1.5, TRUE) AS f, round(TRUE) AS g, round(TRUE, TRUE) AS h, safediv(1.0, FALSE) AS i, -TRUE AS j, -FALSE AS k LIMIT 1
