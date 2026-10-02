@@ -54,39 +54,3 @@ func (a *Account) IsOpen(date *ast.Date) bool {
 func (a *Account) IsClosed() bool {
 	return a.CloseDate != nil
 }
-
-// GetPostingsInPeriod returns postings within [start, end] inclusive, so a
-// period with start == end holds that one day's postings.
-func (a *Account) GetPostingsInPeriod(start, end ast.Date) []*AccountPosting {
-	var result []*AccountPosting
-	for _, posting := range a.Postings {
-		txnDate := posting.Transaction.Date()
-		if !txnDate.Before(start.Time) && !txnDate.After(end.Time) {
-			result = append(result, posting)
-		}
-	}
-	return result
-}
-
-// GetBalanceBetween returns the sum of this account's postings dated within
-// [start, end] inclusive, where a nil bound leaves that side open: with only
-// end, it is the balance at the end of that day.
-func (a *Account) GetBalanceBetween(start, end *ast.Date) *Balance {
-	balance := NewBalance()
-	for _, posting := range a.Postings {
-		date := posting.Transaction.Date()
-		if start != nil && date.Before(start.Time) || end != nil && date.After(end.Time) {
-			continue
-		}
-		if posting.Posting.Amount == nil {
-			continue
-		}
-
-		amount, err := ParseAmount(posting.Posting.Amount)
-		if err != nil {
-			continue
-		}
-		balance.Add(posting.Posting.Amount.Currency, amount)
-	}
-	return balance
-}

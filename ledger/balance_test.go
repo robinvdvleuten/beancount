@@ -8,7 +8,6 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
-	"github.com/shopspring/decimal"
 )
 
 // TestAccountPostings_SimpleTransaction verifies that postings are recorded correctly
@@ -39,128 +38,6 @@ func TestAccountPostings_SimpleTransaction(t *testing.T) {
 	assert.Equal(t, account.Name, assets)
 	assert.Equal(t, len(account.Postings), 1)
 	assert.Equal(t, account.Postings[0].Posting.Account, assets)
-}
-
-// TestGetPostingsInPeriod_MultipleTransactions verifies period filtering
-// correctly includes transactions within [start, end].
-func TestGetPostingsInPeriod_MultipleTransactions(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-	expenses, _ := ast.NewAccount("Expenses:Food")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-	date3Txn, _ := ast.NewDate("2024-03-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			ast.NewOpen(date1, assets, nil, ""),
-			ast.NewOpen(date1, equity, nil, ""),
-			ast.NewOpen(date1, expenses, nil, ""),
-			ast.NewTransaction(date1, "Opening", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("1000", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date2, "Food", ast.WithPostings(
-				ast.NewPosting(expenses, ast.WithAmount("50", "USD")),
-				ast.NewPosting(assets),
-			)),
-			ast.NewTransaction(date3Txn, "More food", ast.WithPostings(
-				ast.NewPosting(expenses, ast.WithAmount("75", "USD")),
-				ast.NewPosting(assets),
-			)),
-		},
-	})
-
-	expensesAccount := l.Accounts()[string(expenses)]
-	assert.True(t, expensesAccount != nil, "expenses account should exist")
-	assert.Equal(t, expensesAccount.Name, expenses)
-
-	// Query period [2024-02-01, 2024-02-28] - should get one posting
-	periodStart, _ := ast.NewDate("2024-02-01")
-	periodEnd, _ := ast.NewDate("2024-02-28")
-	postings := expensesAccount.GetPostingsInPeriod(*periodStart, *periodEnd)
-	assert.Equal(t, len(postings), 1)
-	assert.Equal(t, postings[0].Transaction.Date(), date2)
-}
-
-// TestGetPostingsInPeriod_OneDay verifies that a period with start == end
-// holds only that day's postings.
-func TestGetPostingsInPeriod_OneDay(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-	date3, _ := ast.NewDate("2024-03-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			ast.NewOpen(date1, assets, nil, ""),
-			ast.NewOpen(date1, equity, nil, ""),
-			ast.NewTransaction(date1, "First", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date2, "Second", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("200", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date3, "Third", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("300", "USD")),
-				ast.NewPosting(equity),
-			)),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-
-	postings := account.GetPostingsInPeriod(*date2, *date2)
-	assert.Equal(t, len(postings), 1) // Second transaction only
-}
-
-// TestGetBalanceBetween verifies open-ended bounds: up to and including a
-// date, from a date on, and a one-day period.
-func TestGetBalanceBetween(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-	date3, _ := ast.NewDate("2024-03-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			ast.NewOpen(date1, assets, nil, ""),
-			ast.NewOpen(date1, equity, nil, ""),
-			ast.NewTransaction(date1, "First", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date2, "Second", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("200", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date3, "Third", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("300", "USD")),
-				ast.NewPosting(equity),
-			)),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-
-	balance := account.GetBalanceBetween(nil, date2)
-	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(300))) // 100 + 200
-
-	balance = account.GetBalanceBetween(date2, nil)
-	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(500))) // 200 + 300
-
-	balance = account.GetBalanceBetween(date2, date2)
-	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(200)))
 }
 
 func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {
