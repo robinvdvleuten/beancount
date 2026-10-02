@@ -629,6 +629,30 @@ func TestFormatDirectives(t *testing.T) {
 		assert.Equal(t, expected, buf.String())
 	})
 
+	t.Run("PushedMetadataKeepsSourceOrder", func(t *testing.T) {
+		// Pushed keys come first once applied, and an own key that was
+		// pushed takes the pushed key's place; the source order stands.
+		source := `pushmeta pnull: "s"
+pushmeta third: TRUE
+2020-01-02 * "x"
+  mnone: NULL
+  #tag
+  third: "own"
+  extra: 3
+  Assets:A  1 USD
+  Assets:A  -1 USD
+popmeta pnull:
+popmeta third:
+`
+		tree := parser.MustParseString(context.Background(), source)
+		assert.Equal(t, 0, len(ast.ApplyPushPopDirectives(tree)))
+
+		var buf bytes.Buffer
+		err := New().Format(context.Background(), tree, []byte(source), &buf)
+		assert.NoError(t, err)
+		assert.Equal(t, strings.Replace(source, "  1 USD", "   1 USD", 1), buf.String())
+	})
+
 	t.Run("Popmeta", func(t *testing.T) {
 		source := `popmeta trip:`
 		ast := parser.MustParseString(context.Background(), source)

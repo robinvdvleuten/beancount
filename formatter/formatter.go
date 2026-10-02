@@ -1041,7 +1041,10 @@ func (f *run) formatTransactionBody(t *ast.Transaction, buf *strings.Builder) {
 // the first posting in source order. Like bean-format, tag/link lines are
 // kept as written.
 func (f *run) formatLeadingTransactionBody(t *ast.Transaction, buf *strings.Builder) {
-	metadata := t.Metadata
+	// Pushed metadata (no position) comes first, and an own entry whose key
+	// was pushed takes the pushed key's place: restore source order.
+	metadata := slices.DeleteFunc(slices.Clone(t.Metadata), func(m *ast.Metadata) bool { return m.Position().Line == 0 })
+	slices.SortStableFunc(metadata, func(a, b *ast.Metadata) int { return a.Position().Line - b.Position().Line })
 	for _, line := range t.BodyTagsLinks {
 		split := 0
 		for split < len(metadata) && metadata[split].Position().Line < line.Position().Line {

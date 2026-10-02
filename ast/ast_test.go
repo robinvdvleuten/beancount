@@ -1,6 +1,7 @@
 package ast
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -453,4 +454,43 @@ func TestApplyPushPopDirectivesReportsImbalance(t *testing.T) {
 		"f.beancount:2: Unbalanced pushed tag: 'trip'",
 		"f.beancount:5: Unbalanced metadata key 'key'; leftover metadata 'v, w'",
 	}, got)
+}
+
+// Like beancount, a transaction's metadata holds the pushed keys first, in
+// push order (a key popped off entirely and pushed again goes last), then its
+// own; an own key that was pushed takes the pushed key's place.
+func TestApplyPushPopDirectivesMetadataOrder(t *testing.T) {
+	date, _ := NewDate("2024-01-01")
+	own := func(line int, key string) *Metadata {
+		s := NewRawString(key)
+		m := &Metadata{Key: key, Value: &MetadataValue{StringValue: &s}}
+		m.SetPosition(Position{Line: line})
+		return m
+	}
+
+	first := newTransactionForTest(4, date)
+	first.Metadata = []*Metadata{own(5, "mine"), own(6, "b")}
+	second := newTransactionForTest(9, date)
+
+	tree := &AST{
+		Pushmetas: []*Pushmeta{
+			newPushmetaForTest(1, "a", "1"),
+			newPushmetaForTest(2, "b", "2"),
+			newPushmetaForTest(3, "c", "3"),
+			newPushmetaForTest(8, "a", "4"),
+		},
+		Popmetas:   []*Popmeta{newPopmetaForTest(7, "a"), newPopmetaForTest(10, "a"), newPopmetaForTest(11, "b"), newPopmetaForTest(12, "c")},
+		Directives: []Directive{first, second},
+	}
+	assert.Equal(t, 0, len(ApplyPushPopDirectives(tree)))
+
+	describe := func(txn *Transaction) []string {
+		var got []string
+		for _, m := range txn.Metadata {
+			got = append(got, fmt.Sprintf("%s=%s@%d", m.Key, m.Value, m.Position().Line))
+		}
+		return got
+	}
+	assert.Equal(t, []string{"a=1@0", "b=b@6", "c=3@0", "mine=mine@5"}, describe(first))
+	assert.Equal(t, []string{"b=2@0", "c=3@0", "a=4@0"}, describe(second))
 }

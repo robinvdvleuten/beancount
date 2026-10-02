@@ -1,0 +1,12 @@
+2020-01-01 open Assets:A
+pushmeta pnull: "s"
+pushmeta third: TRUE
+2020-01-02 * "x"
+  mnone: NULL
+  #tag
+  third: "own"
+  extra: 3
+  Assets:A  1 USD
+  Assets:A  -1 USD
+popmeta pnull:
+popmeta third:

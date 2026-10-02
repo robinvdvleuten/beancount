@@ -279,6 +279,11 @@ func ApplyPushPopDirectives(ast *AST) []error {
 			key := item.popmeta.Key
 			if stack := activeMetadata[key]; len(stack) > 0 {
 				activeMetadata[key] = stack[:len(stack)-1]
+				// Like beancount's dict of active keys, a key popped
+				// off entirely leaves the order; pushed again, it goes last.
+				if len(stack) == 1 {
+					metadataKeys = slices.DeleteFunc(metadataKeys, func(k string) bool { return k == key })
+				}
 			} else {
 				errs = append(errs, &PushPopError{
 					Pos:     item.popmeta.Position(),
@@ -294,16 +299,9 @@ func ApplyPushPopDirectives(ast *AST) []error {
 				}
 			}
 
-			// Like beancount, only transactions receive pushed metadata:
-			// each key's innermost value, unless set explicitly.
-			if txn, ok := item.directive.(*Transaction); ok {
-				for _, key := range metadataKeys {
-					stack := activeMetadata[key]
-					if len(stack) == 0 || slices.ContainsFunc(txn.Metadata, func(m *Metadata) bool { return m.Key == key }) {
-						continue
-					}
-					txn.AddMetadata(&Metadata{Key: key, Value: stack[len(stack)-1].metadataValue()})
-				}
+			// Like beancount, only transactions receive pushed metadata.
+			if txn, ok := item.directive.(*Transaction); ok && len(metadataKeys) > 0 {
+				txn.Metadata = withPushedMetadata(txn.Metadata, metadataKeys, activeMetadata)
 			}
 		}
 	}
@@ -430,4 +428,23 @@ func SortDirectives(ast *AST) error {
 	// after its transaction stays after it.
 	slices.SortStableFunc(ast.Directives, compareDirectives)
 	return nil
+}
+
+// withPushedMetadata returns a transaction's metadata as beancount builds it:
+// each pushed key's innermost value first, in push order, then the
+// transaction's own entries. An own entry whose key was pushed takes the
+// pushed key's place, as a Python dict update keeps a key's position.
+func withPushedMetadata(own []*Metadata, keys []string, active map[string][]*Pushmeta) []*Metadata {
+	merged := make([]*Metadata, 0, len(keys)+len(own))
+	rest := slices.Clone(own)
+	for _, key := range keys {
+		if i := slices.IndexFunc(rest, func(m *Metadata) bool { return m.Key == key }); i >= 0 {
+			merged = append(merged, rest[i])
+			rest = slices.Delete(rest, i, i+1)
+			continue
+		}
+		stack := active[key]
+		merged = append(merged, &Metadata{Key: key, Value: stack[len(stack)-1].metadataValue()})
+	}
+	return append(merged, rest...)
 }
