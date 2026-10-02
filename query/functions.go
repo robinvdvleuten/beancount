@@ -478,14 +478,14 @@ var functions = map[string]*funcDef{
 		{[]dtype{tBool}, tInt, castIntArg},
 		{[]dtype{tDecimal}, tInt, castIntArg},
 		{[]dtype{tString}, tInt, castIntArg},
-		{[]dtype{tAny}, tInt, castIntArg},
+		{[]dtype{tObject}, tInt, castIntArg},
 	}},
 	"decimal": {overloads: []funcOverload{
 		{[]dtype{tDecimal}, tDecimal, castDecimalArg},
 		{[]dtype{tInt}, tDecimal, castDecimalArg},
 		{[]dtype{tBool}, tDecimal, castDecimalArg},
 		{[]dtype{tString}, tDecimal, castDecimalArg},
-		{[]dtype{tAny}, tDecimal, castDecimalArg},
+		{[]dtype{tObject}, tDecimal, castDecimalArg},
 	}},
 	"bool": {overloads: []funcOverload{
 		{[]dtype{tAny}, tBool, func(_ *evalRow, args []any) any {

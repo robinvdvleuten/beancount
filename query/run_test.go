@@ -34,6 +34,12 @@ var errorFixtures = map[string]string{
 	"err_date_int": `error: no function matches "date(int)" name and argument types
 | SELECT date(1)
 |        ^^^^^^^`,
+	"err_int_date": `error: no function matches "int(date)" name and argument types
+| SELECT int(2023-01-01)
+|        ^^^^^^^^^^^^^^^`,
+	"err_decimal_date": `error: no function matches "decimal(date)" name and argument types
+| SELECT decimal(2023-01-01)
+|        ^^^^^^^^^^^^^^^^^^^`,
 	"err_ymonth": `error: no function matches "ymonth(date)" name and argument types
 | SELECT ymonth(date)
 |        ^^^^^^^^^^^^`,
