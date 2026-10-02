@@ -223,6 +223,19 @@ var errorFixtures = map[string]string{
 	"err_subscript": `error: column type is not subscriptable
 | SELECT position.units['x']
 |        ^^^^^^^^^^^^^^^^^^^`,
+	"err_subscript_doubled_quote": `error: column type is not subscriptable
+| SELECT position.units['x''y']
+|        ^^^^^^^^^^^^^^^^^^^^^^`,
+	"err_quoted_ident_empty": `error: syntax error
+| SELECT 1 AS ""
+|             ^`,
+	"err_attribute_doubled_quote": `error: structured type has no attribute "y"ear"
+| SELECT date."y""ear"
+|        ^^^^^^^^^^^^^`,
+	"err_pivot_doubled_quote": `error: PIVOT BY column Column(name='acc"ount') is not in the targets list`,
+	"err_string_doubled_double_quote": `error: syntax error
+| SELECT "a""b"
+|           ^`,
 	"err_semicolon_newline": `error: syntax error
 | SELECT DISTINCT account;
 | SELECT bogus

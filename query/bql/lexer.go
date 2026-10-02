@@ -162,19 +162,32 @@ func (l *Lexer) scanNumber(start, line, col int) Token {
 	return Token{Type: typ, Start: start, End: l.pos, Line: line, Column: col}
 }
 
-// scanString scans a quoted string literal. Both single and double quotes are
-// accepted, without escape sequences, matching the official BQL lexer.
+// scanString scans a quoted string, beanquery's string rule:
+//
+//	"[^"]*"|'(?:[^']|'')*'
+//
+// A single-quoted string runs on over a doubled quote, a double-quoted one
+// ends at its first closing quote. There are no escape sequences, and the
+// token keeps the raw text, doubled quotes included, which is the string's
+// value. A doubled quote in a quoted identifier ("a""b") lexes as adjacent
+// strings, which the parser joins (parser.quotedIdent).
 func (l *Lexer) scanString(quote byte, start, line, col int) Token {
 	l.advance() // opening quote
-	for l.pos < len(l.source) && l.source[l.pos] != quote {
-		l.advance()
+	for l.pos < len(l.source) {
+		if l.source[l.pos] != quote {
+			l.advance()
+			continue
+		}
+		if quote == '\'' && l.pos+1 < len(l.source) && l.source[l.pos+1] == '\'' {
+			l.advance()
+			l.advance()
+			continue
+		}
+		l.advance() // closing quote
+		return Token{Type: STRING, Start: start, End: l.pos, Line: line, Column: col}
 	}
-	if l.pos >= len(l.source) {
-		// Unterminated string; report the whole remainder as illegal.
-		return Token{Type: ILLEGAL, Start: start, End: l.pos, Line: line, Column: col}
-	}
-	l.advance() // closing quote
-	return Token{Type: STRING, Start: start, End: l.pos, Line: line, Column: col}
+	// Unterminated string; report the whole remainder as illegal.
+	return Token{Type: ILLEGAL, Start: start, End: l.pos, Line: line, Column: col}
 }
 
 // skipWhitespace skips white space, what beanquery's \s matches (IsSpace),

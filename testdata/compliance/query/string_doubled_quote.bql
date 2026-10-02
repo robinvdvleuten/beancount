@@ -1,0 +1,1 @@
+SELECT 'it''s', '''', 'a''''b', '' AS e, "it''s" AS d LIMIT 1

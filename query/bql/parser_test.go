@@ -738,3 +738,41 @@ func TestParseMultilineQuery(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(stmt.(*Select).Targets))
 }
+
+// TestParseDoubledQuotes checks beanquery's doubled quotes: a single-quoted
+// string runs on over two single quotes and keeps them in its value, as
+// beanquery's raw text does, while a quoted identifier reads "" as one
+// quote and a double-quoted string ends at its first closing quote.
+func TestParseDoubledQuotes(t *testing.T) {
+	stmt, err := Parse(`SELECT 'it''s', '''', '', 'a''''b' AS "a""b", x."y""" AS """" PIVOT BY "a""b", """"`)
+	assert.NoError(t, err)
+	sel := stmt.(*Select)
+
+	assert.Equal(t, "it''s", sel.Targets[0].Expr.(*Str).Value)
+	assert.Equal(t, "''", sel.Targets[1].Expr.(*Str).Value)
+	assert.Equal(t, "", sel.Targets[2].Expr.(*Str).Value)
+	assert.Equal(t, "a''''b", sel.Targets[3].Expr.(*Str).Value)
+	assert.Equal(t, `a"b`, sel.Targets[3].As)
+	assert.Equal(t, `y"`, sel.Targets[4].Expr.(*Attribute).Name)
+	assert.Equal(t, `x."y"""`, sel.Targets[4].Text)
+	assert.Equal(t, `"`, sel.Targets[4].As)
+	assert.Equal(t, `a"b`, sel.PivotBy[0].(*Ident).Name)
+	assert.Equal(t, `"`, sel.PivotBy[1].(*Ident).Name)
+
+	for _, tc := range []struct {
+		query  string
+		offset int
+	}{
+		{`SELECT "a""b"`, 10},
+		{`SELECT 1 AS ""`, 12},
+		{`SELECT 1 AS "a" "b"`, 16},
+		{`SELECT x.""`, 9},
+		{"SELECT 'x''", 7},
+		{"SELECT 'a' 'b'", 11},
+	} {
+		_, err := Parse(tc.query)
+		parseErr, ok := err.(*ParseError)
+		assert.True(t, ok, tc.query)
+		assert.Equal(t, tc.offset, parseErr.Pos.Offset, tc.query)
+	}
+}

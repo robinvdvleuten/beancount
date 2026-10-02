@@ -284,9 +284,12 @@ func (p *parser) parseTarget() (Target, error) {
 	if p.accept(AS) {
 		// Like bean-query, a double-quoted alias is kept as written and
 		// any other is lowercased.
-		if p.cur.Type == STRING && p.source[p.cur.Start] == '"' {
-			target.As = stripQuotes(p.cur.String(p.source))
-			p.next()
+		if p.atQuotedIdent() {
+			name, err := p.quotedIdent()
+			if err != nil {
+				return Target{}, err
+			}
+			target.As = name
 			return target, nil
 		}
 		tok := p.cur
@@ -480,9 +483,12 @@ func (p *parser) parsePivotItem() (Expr, error) {
 		return &Ident{position: p.node(tok.Start), Name: strings.ToLower(tok.String(p.source))}, nil
 	case STRING:
 		// beanquery's identifier rule takes a double-quoted name too.
-		if p.source[tok.Start] == '"' {
-			p.next()
-			return &Ident{position: p.node(tok.Start), Name: stripQuotes(tok.String(p.source))}, nil
+		if p.atQuotedIdent() {
+			name, err := p.quotedIdent()
+			if err != nil {
+				return nil, err
+			}
+			return &Ident{position: p.node(tok.Start), Name: name}, nil
 		}
 	}
 	return nil, p.nameErrorf(tok, "expected a PIVOT BY column, found %s", p.describe(tok))
@@ -765,13 +771,16 @@ func (p *parser) parsePrimary() (Expr, error) {
 			switch {
 			case isName(name):
 				x = &Attribute{X: x, Name: strings.ToLower(name.String(p.source))}
-			case name.Type == STRING && p.source[name.Start] == '"':
-				// A quoted identifier, kept as written.
-				x = &Attribute{X: x, Name: stripQuotes(name.String(p.source))}
+				p.next()
+			case p.atQuotedIdent():
+				quoted, err := p.quotedIdent()
+				if err != nil {
+					return nil, err
+				}
+				x = &Attribute{X: x, Name: quoted}
 			default:
 				return nil, p.nameErrorf(name, "expected an attribute name, found %s", p.describe(name))
 			}
-			p.next()
 			x.(*Attribute).position = p.node(start)
 		case tok.Type == DECIMAL && p.source[tok.Start] == '.':
 			// The dot of .5 starts an attribute, whose name cannot
@@ -923,6 +932,32 @@ func numberText(text string) string {
 		return "0." + rest
 	}
 	return text
+}
+
+// atQuotedIdent reports whether the current token starts a quoted
+// identifier: a double-quoted string where beanquery's identifier rule
+// applies.
+func (p *parser) atQuotedIdent() bool {
+	return p.cur.Type == STRING && p.source[p.cur.Start] == '"'
+}
+
+// quotedIdent consumes beanquery's quoted identifier, "((?:[^"]|"")+)",
+// and returns its name, kept as written but for each doubled quote, which
+// stands for one. The lexer scans "a""b" as the adjacent strings "a" and
+// "b", so the identifier runs on over every double-quoted string that
+// starts where the last one ends. An empty one ("") is a syntax error.
+func (p *parser) quotedIdent() (string, error) {
+	tok := p.cur
+	end := tok.End
+	p.next()
+	for p.cur.Type == STRING && p.cur.Start == end && p.source[p.cur.Start] == '"' {
+		end = p.cur.End
+		p.next()
+	}
+	if end-tok.Start == 2 {
+		return "", p.errorf(tok, "expected a quoted identifier, found %s", p.describe(tok))
+	}
+	return strings.ReplaceAll(string(p.source[tok.Start+1:end-1]), `""`, `"`), nil
 }
 
 func stripQuotes(s string) string {

@@ -1,0 +1,1 @@
+SELECT account, 'a''b' AS x WHERE 'it''s' ~ 'it''s' AND account ~ 'Ass''ets|Assets' LIMIT 2
