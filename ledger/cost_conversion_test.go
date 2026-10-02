@@ -120,6 +120,7 @@ func TestValidateTotalCost(t *testing.T) {
 			expectError: true,
 		},
 		{
+			// Like beancount, {{}} is an empty cost, as {} is.
 			name: "TotalCostMissingCostAmount",
 			posting: &ast.Posting{
 				Account: "Assets:Stock",
@@ -129,7 +130,7 @@ func TestValidateTotalCost(t *testing.T) {
 					Amount:  nil,
 				},
 			},
-			expectError: true,
+			expectError: false,
 		},
 		{
 			name: "TotalCostZeroQuantity",

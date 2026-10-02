@@ -1,0 +1,32 @@
+; Total braces without an amount are an empty cost, as in beancount, so
+; Booking reports what it would report for {}.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:B
+
+2020-01-02 * "lot one"
+  Assets:A  10 HOOL {10 USD}
+  Assets:Cash  -100 USD
+
+2020-01-03 * "lot two"
+  Assets:A  5 HOOL {12 USD}
+  Assets:Cash  -60 USD
+
+2020-02-01 * "reduction matching both lots"
+  Assets:A  -2 HOOL {{}}
+  Assets:Cash  20 USD
+
+2020-02-02 * "augmentation and an auto-posting"
+  Assets:A  1 HOOL {{}}
+  Assets:Cash
+  Assets:Cash  -3 EUR
+
+2020-02-03 * "augmentation and only an auto-posting"
+  Assets:A  1 HOOL {{2020-01-01}}
+  Assets:Cash
+
+2020-02-04 * "augmentation of a new commodity and only an auto-posting"
+  Assets:B  1 GOOG {{}}
+  Assets:Cash
+
+2020-03-01 balance Assets:A 15 HOOL

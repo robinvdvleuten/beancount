@@ -207,9 +207,12 @@ func TestParseCost(t *testing.T) {
 			hasError: true,
 		},
 		{
-			name:     "TotalCostDateOnly",
-			input:    "{{2020-02-01}}",
-			hasError: true,
+			name:  "TotalCostDateOnly",
+			input: "{{2020-02-01}}",
+			expected: &ast.Cost{
+				IsTotal: true,
+				Date:    &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+			},
 		},
 		{
 			name:  "MergeCost",
@@ -226,7 +229,12 @@ func TestParseCost(t *testing.T) {
 		{
 			name:     "TotalEmptyCost",
 			input:    "{{}}",
-			hasError: true,
+			expected: &ast.Cost{IsTotal: true},
+		},
+		{
+			name:     "TotalLabelCost",
+			input:    `{{"lot"}}`,
+			expected: &ast.Cost{IsTotal: true, Label: "lot"},
 		},
 		{
 			name:     "TotalMergeCost",
@@ -252,7 +260,7 @@ func TestParseCost(t *testing.T) {
 			},
 		},
 		{
-			name:     "TotalCostWithoutAmount",
+			name:     "TotalCostLeadingComma",
 			input:    "{{, 2020-01-01}}",
 			hasError: true,
 		},

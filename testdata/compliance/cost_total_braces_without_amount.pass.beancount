@@ -1,0 +1,28 @@
+; Total braces without an amount are an empty cost, as in beancount:
+; {{}}, {{2020-01-01}} and {{"label"}} book as {}, {2020-01-01} and
+; {"label"}, augmenting and reducing alike.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "augment, cost interpolated"
+  Assets:A  10 HOOL {{}}
+  Assets:Cash  -100 USD
+
+2020-01-03 * "augment with a date"
+  Assets:A  5 HOOL {{2019-12-31}}
+  Assets:Cash  -60 USD
+
+2020-01-04 * "augment with a label"
+  Assets:A  4 HOOL {{"lot3"}}
+  Assets:Cash  -52 USD
+
+2020-02-01 * "reduce by date"
+  Assets:A  -2 HOOL {{2019-12-31}}
+  Assets:Cash  24 USD
+
+2020-02-02 * "reduce by label, auto-posting"
+  Assets:A  -1 HOOL {{"lot3"}}
+  Assets:Cash
+
+2020-03-01 balance Assets:A 16 HOOL
+2020-03-01 balance Assets:Cash -175 USD

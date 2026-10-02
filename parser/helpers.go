@@ -149,7 +149,8 @@ func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
 
 // parseCost parses a cost specification: {} or a comma-separated list of
 // components (AMOUNT, DATE, LABEL, the merge marker *) in any order, wrapped
-// in {} (per-unit) or {{}} (total). Total cost requires an amount or *.
+// in {} (per-unit) or {{}} (total). Like beancount, total braces need no
+// amount: {{}} and {{2020-01-01}} book as {} and {2020-01-01} do.
 func (p *Parser) parseCost() (*ast.Cost, error) {
 	// Check for {{ or {
 	isTotal := false
@@ -170,11 +171,8 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		closingToken = RDBRACE
 	}
 
-	// Check for empty cost (only valid with single braces)
+	// Check for empty cost: {} or {{}}
 	if p.check(closingToken) {
-		if isTotal {
-			return nil, p.error("empty total cost {{}} is not allowed")
-		}
 		p.advance()
 		return cost, nil
 	}
@@ -239,10 +237,6 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		if !p.match(COMMA) {
 			break
 		}
-	}
-
-	if isTotal && cost.Amount == nil && !cost.IsMerge {
-		return nil, p.error("total cost {{}} requires an amount")
 	}
 
 	// Consume closing brace(s)

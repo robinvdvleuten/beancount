@@ -160,10 +160,21 @@ func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
 
 // fixTotalCost reports a compound cost inside total braces and, like
 // beancount's parser, ignores its per-unit number: {{5 # 3 USD}} and
-// {{# 3 USD}} book as {0 # 3 USD}.
+// {{# 3 USD}} book as {0 # 3 USD}. Total braces without an amount are no
+// total at all, as in beancount: {{}} and {{2020-01-01}} book as {} and
+// {2020-01-01}.
 func fixTotalCost(txn *ast.Transaction, posting *ast.Posting) []error {
 	cost := posting.Cost
-	if cost == nil || !cost.IsTotal || cost.Total == nil {
+	if cost == nil || !cost.IsTotal {
+		return nil
+	}
+	if cost.Amount == nil {
+		fixed := *cost
+		fixed.IsTotal = false
+		posting.Cost = &fixed
+		return nil
+	}
+	if cost.Total == nil {
 		return nil
 	}
 	err := NewTotalCompoundCostError(txn, posting)
@@ -358,16 +369,12 @@ func validateCosts(txn *ast.Transaction) []error {
 			continue
 		}
 
-		// Validate total cost {{}} requirements; {{*}} leaves its number
-		// to Booking, as {*} does.
-		if posting.Cost.IsTotal && (posting.Cost.Amount != nil || !posting.Cost.IsMerge) {
+		// Validate total cost {{}} requirements; total braces without an
+		// amount ({{}}, {{*}}) are no total, and fixTotalCost makes them a
+		// per-unit cost.
+		if posting.Cost.IsTotal && posting.Cost.Amount != nil {
 			if posting.Amount == nil {
 				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires a quantity"))
-				continue
-			}
-
-			if posting.Cost.Amount == nil {
-				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires an amount"))
 				continue
 			}
 
