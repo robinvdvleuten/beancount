@@ -68,12 +68,6 @@ func (a *Account) GetPostingsInPeriod(start, end ast.Date) []*AccountPosting {
 	return result
 }
 
-// GetBalanceInPeriod returns this account's net change within [start, end]
-// inclusive.
-func (a *Account) GetBalanceInPeriod(start, end ast.Date) *Balance {
-	return a.GetBalanceBetween(&start, &end)
-}
-
 // GetBalanceBetween returns the sum of this account's postings dated within
 // [start, end] inclusive, where a nil bound leaves that side open: with only
 // end, it is the balance at the end of that day.

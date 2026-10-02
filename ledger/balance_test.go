@@ -159,74 +159,8 @@ func TestGetBalanceBetween(t *testing.T) {
 	balance = account.GetBalanceBetween(date2, nil)
 	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(500))) // 200 + 300
 
-	balance = account.GetBalanceInPeriod(*date2, *date2)
+	balance = account.GetBalanceBetween(date2, date2)
 	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(200)))
-}
-
-// TestGetBalanceInPeriod_Range verifies period balance calculation.
-func TestGetBalanceInPeriod_Range(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-	date2, _ := ast.NewDate("2024-02-01")
-	date3, _ := ast.NewDate("2024-03-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			ast.NewOpen(date1, assets, nil, ""),
-			ast.NewOpen(date1, equity, nil, ""),
-			ast.NewTransaction(date1, "First", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date2, "Second", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("200", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date3, "Third", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("300", "USD")),
-				ast.NewPosting(equity),
-			)),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-
-	// Period: only transactions in [date2, date3]
-	balance := account.GetBalanceInPeriod(*date2, *date3)
-	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(500))) // 200 + 300
-}
-
-// TestGetBalanceInPeriod_MultiCurrency verifies multi-currency balance calculation.
-func TestGetBalanceInPeriod_MultiCurrency(t *testing.T) {
-	l := New()
-	assets, _ := ast.NewAccount("Assets:Cash")
-	equity, _ := ast.NewAccount("Equity:Opening")
-
-	date1, _ := ast.NewDate("2024-01-01")
-
-	l.MustProcess(context.Background(), &ast.AST{
-		Directives: []ast.Directive{
-			ast.NewOpen(date1, assets, nil, ""),
-			ast.NewOpen(date1, equity, nil, ""),
-			ast.NewTransaction(date1, "USD", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("100", "USD")),
-				ast.NewPosting(equity),
-			)),
-			ast.NewTransaction(date1, "EUR", ast.WithPostings(
-				ast.NewPosting(assets, ast.WithAmount("50", "EUR")),
-				ast.NewPosting(equity),
-			)),
-		},
-	})
-
-	account := l.Accounts()[string(assets)]
-	balance := account.GetBalanceInPeriod(*date1, *date1)
-
-	assert.True(t, balance.Get("USD").Equal(decimal.NewFromInt(100)))
-	assert.True(t, balance.Get("EUR").Equal(decimal.NewFromInt(50)))
 }
 
 func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {

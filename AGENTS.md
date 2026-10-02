@@ -70,7 +70,7 @@ beancount format f.beancount | bean-check /dev/stdin  # round-trip
 
 **Registry dispatch**: dispatch by kind through registry maps, never switch statements. Ledger directives go through `handlerRegistry` in `ledger/handlers.go` (`DirectiveKind` → `Handler` with `Validate`/`Apply`); handlers call the functions in `validation.go` directly, so there is exactly one registry. Build validators with `newValidator(l.accounts, l.opened, l.config)`, the stable read-only map and each account's open wherever the ledger dates it, rather than a copy from `Accounts()`. Query columns, functions, aggregates, operators and the attributes of structured types follow the same rule (`query/env.go`, `functions.go`, `aggregates.go`, `operators.go`, `attributes.go`).
 
-**Owner computes**: the type that owns the data computes on it; coordinators call owner methods and aggregate. `Ledger.GetBalanceTree` calls `Account.GetBalanceInPeriod` instead of walking postings itself.
+**Owner computes**: the type that owns the data computes on it; coordinators call owner methods and aggregate. The booker calls `Inventory.book` and `Inventory.augment` instead of matching lots itself, and the query package's `cost()`, `value()` and `convert()` call `Position.AtCost`, `Ledger.MarketValue` and `Ledger.Convert` instead of looking up prices.
 
 **Lexer newline ownership**: every content-bearing token (including COMMENT) consumes its trailing newline; NEWLINE tokens stand only for blank lines, emitted solely by `scanNextToken()`. `parseComment` strips the newline from the comment's content. Consistent ownership keeps the formatter idempotent around consecutive blank lines and comments.
 
