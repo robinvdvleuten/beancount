@@ -1,0 +1,1 @@
+SELECT cost_date, date, cost_date IS NULL AS undated, count(cost_date) AS n WHERE account = 'Assets:Stock' GROUP BY cost_date, date, undated

@@ -109,7 +109,13 @@ var postingColumns = map[string]*columnDef{
 	"currency":      {tString, unitsColumn(func(units amountValue) any { return units.Currency })},
 	"cost_number":   {tDecimal, costColumn(func(c *costValue) any { return c.Number })},
 	"cost_currency": {tString, costColumn(func(c *costValue) any { return c.Currency })},
-	"cost_date":     {tDate, costColumn(func(c *costValue) any { return c.Date })},
+	// A cost without a date is NULL, not a nil *ast.Date boxed in an any.
+	"cost_date": {tDate, costColumn(func(c *costValue) any {
+		if c.Date == nil {
+			return nil
+		}
+		return c.Date
+	})},
 	// Like beanquery's, cost_label is '' without a cost and NULL for a
 	// cost without a label.
 	"cost_label": {tString, func(row *evalRow) any {
