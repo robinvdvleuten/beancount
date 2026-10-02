@@ -189,8 +189,10 @@ var keywords = map[string]TokenType{
 
 // unreservedKeywords are the keywords beanquery does not reserve
 // (parser.py's KEYWORDS): outside the clauses they start, they are names.
+// NULL is one too, a literal wherever an expression takes one and a name
+// elsewhere (an alias, an attribute, a function).
 var unreservedKeywords = map[TokenType]struct{}{
-	AT: {}, OPEN: {}, CLOSE: {}, CLEAR: {}, ON: {},
+	AT: {}, OPEN: {}, CLOSE: {}, CLEAR: {}, ON: {}, NULL: {},
 }
 
 // reservedKeywords holds the keyword token types that cannot be a name.

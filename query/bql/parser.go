@@ -101,8 +101,9 @@ func (p *parser) nameErrorf(tok Token, format string, args ...any) *ParseError {
 }
 
 // isName reports whether tok can be a name: an identifier, or a keyword
-// beanquery does not reserve (AT, OPEN, CLOSE, CLEAR and ON), which the
-// parser reads as a clause only where one starts.
+// beanquery does not reserve (AT, OPEN, CLOSE, CLEAR, ON and NULL), which
+// the parser reads as a clause only where one starts, or, for NULL, as a
+// literal where an expression takes one.
 func isName(tok Token) bool {
 	_, unreserved := unreservedKeywords[tok.Type]
 	return tok.Type == IDENT || unreserved
@@ -478,7 +479,7 @@ func (p *parser) parsePivotItem() (Expr, error) {
 		if isDigit(p.source[tok.Start]) {
 			return p.parseClauseItem() // fails at the dot
 		}
-	case IDENT, AT, OPEN, CLOSE, CLEAR, ON:
+	case IDENT, AT, OPEN, CLOSE, CLEAR, ON, NULL:
 		p.next()
 		return &Ident{position: p.node(tok.Start), Name: strings.ToLower(tok.String(p.source))}, nil
 	case STRING:
@@ -709,6 +710,13 @@ func (p *parser) listAhead() bool {
 	return lexer.Next().Type == COMMA
 }
 
+// callAhead reports whether the token after the current one is the ( of
+// a function call.
+func (p *parser) callAhead() bool {
+	lexer := *p.lexer
+	return lexer.Next().Type == LPAREN
+}
+
 // parseList parses a list constant, its ( the current token: literals and
 // empty slots separated by commas, of which beanquery keeps the literals
 // but a NULL after the first.
@@ -804,10 +812,11 @@ func (p *parser) parsePrimary() (Expr, error) {
 }
 
 // parseAtom parses beanquery's atom: a function call, a constant (a
-// literal or a list) or a column name.
+// literal or a list) or a column name. Like beanquery's grammar, which
+// tries a function call first, NULL followed by ( names a function.
 func (p *parser) parseAtom() (Expr, error) {
 	tok := p.cur
-	if _, ok := literalTypes[tok.Type]; ok {
+	if _, ok := literalTypes[tok.Type]; ok && (tok.Type != NULL || !p.callAhead()) {
 		return p.parseLiteral()
 	}
 	switch tok.Type {
@@ -816,7 +825,7 @@ func (p *parser) parseAtom() (Expr, error) {
 			return p.parseList()
 		}
 
-	case IDENT, AT, OPEN, CLOSE, CLEAR, ON:
+	case IDENT, AT, OPEN, CLOSE, CLEAR, ON, NULL:
 		p.next()
 		// Identifiers are case-insensitive: bean-query lower-cases them.
 		name := strings.ToLower(tok.String(p.source))

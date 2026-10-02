@@ -201,6 +201,12 @@ var errorFixtures = map[string]string{
 	"err_unreserved_keyword_from": `error: column "on" not found in table "postings"
 | SELECT account FROM on = 1
 |                     ^^`,
+	"err_null_attribute": `error: structured type has no attribute "null"
+| SELECT position.null
+|        ^^^^^^^^^^^^^`,
+	"err_null_function": `error: no function matches "null(str)" name and argument types
+| SELECT null(account)
+|        ^^^^^^^^^^^^^`,
 	"err_list_neg": `error: operator "neg(list)" not supported
 | SELECT -(1, 2)
 |        ^^^^^^^`,

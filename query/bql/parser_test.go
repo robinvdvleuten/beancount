@@ -582,6 +582,9 @@ func TestParseErrorOffset(t *testing.T) {
 		{"SELECT account FROM year = 2023 CLOSE on", 38},
 		{"BALANCES at", 11},
 		{"JOURNAL AT", 10},
+		// So is NULL, where no literal fits.
+		{"SELECT account null", 15},
+		{"SELECT account FROM year = 2023 null", 32},
 		// LIMIT's integer takes the digits before a dot, and the
 		// statement fails at the dot or the letter after them.
 		{"SELECT account LIMIT 1.5", 22},
@@ -709,6 +712,27 @@ func TestParseUnreservedKeywords(t *testing.T) {
 	assert.NotZero(t, balances.From.OpenOn)
 	assert.True(t, balances.From.Close)
 	assert.True(t, balances.From.Clear)
+}
+
+// TestParseNullName checks that NULL, which beanquery does not reserve, is
+// a literal where an expression takes one and a name elsewhere.
+func TestParseNullName(t *testing.T) {
+	stmt, err := Parse("SELECT null, Null(x) AS NULL, position.null, null.x FROM null WHERE x = NULL AND x IS NULL GROUP BY null ORDER BY null PIVOT BY null, x")
+	assert.NoError(t, err)
+	sel := stmt.(*Select)
+	assert.Equal(t, Expr(&Null{position: position{7, 11}}), sel.Targets[0].Expr)
+	assert.Equal(t, "null", sel.Targets[1].Expr.(*Call).Func)
+	assert.Equal(t, "null", sel.Targets[1].As)
+	assert.Equal(t, "null", sel.Targets[2].Expr.(*Attribute).Name)
+	assert.Equal(t, Expr(&Null{position: position{45, 49}}), sel.Targets[3].Expr.(*Attribute).X)
+	assert.Equal(t, Expr(&Null{position: position{57, 61}}), sel.From.Expr)
+	assert.Equal(t, Expr(&Null{position: position{72, 76}}), sel.Where.(*Binary).L.(*Binary).R)
+	assert.Equal(t, Expr(&Null{position: position{100, 104}}), sel.GroupBy[0])
+	assert.Equal(t, "null", sel.PivotBy[0].(*Ident).Name)
+
+	stmt, err = Parse("BALANCES AT null")
+	assert.NoError(t, err)
+	assert.Equal(t, "null", stmt.(*Balances).Summary)
 }
 
 // TestParsePythonWhitespace checks that, like beanquery's lexer, white

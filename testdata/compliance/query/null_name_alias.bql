@@ -1,0 +1,1 @@
+SELECT account AS null, null AS n, NULL IS NULL AS Null LIMIT 2

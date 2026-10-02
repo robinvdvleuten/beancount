@@ -34,6 +34,7 @@ func FuzzParseQuery(f *testing.F) {
 		"SELECT * FROM CLOSE",
 		"SELECT * FROM year = 2014 CLEAR",
 		"SELECT open, close(at) AS clear FROM on OPEN ON 2014-01-01 WHERE at",
+		"SELECT null, null(x) AS null, position.null FROM null WHERE x IS NULL PIVOT BY null, x",
 
 		// Shortcut statements
 		"BALANCES",
