@@ -590,7 +590,10 @@ var functions = map[string]*funcDef{
 			re := mustCompilePattern("", args[0].(string))
 			elems, _ := stringElements(args[1])
 			for _, elem := range elems {
-				if re.MatchString(elem) {
+				// beanquery uses re.match, which anchors the whole pattern
+				// at the start: the leftmost match starts there exactly
+				// when one can.
+				if loc := re.FindStringIndex(elem); loc != nil && loc[0] == 0 {
 					return elem
 				}
 			}

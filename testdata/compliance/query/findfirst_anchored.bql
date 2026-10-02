@@ -1,0 +1,1 @@
+SELECT account, findfirst('Cash', other_accounts) AS mid, findfirst('Assets', other_accounts) AS start, findfirst('Cash|Bank', other_accounts) AS alt, findfirst('Cash|Ass', other_accounts) AS either WHERE account ~ 'Coffee|Salary' ORDER BY account
