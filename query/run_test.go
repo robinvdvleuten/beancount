@@ -40,12 +40,15 @@ var errorFixtures = map[string]string{
 	"err_round_null": `error: no function matches "round(nonetype)" name and argument types
 | SELECT round(NULL)
 |        ^^^^^^^^^^^`,
-	"err_regex_invalid":        `error: invalid regular expression '[': missing closing ]`,
-	"err_regex_invalid_grep":   `error: invalid regular expression '[': missing closing ]`,
-	"err_regex_lookahead":      `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
-	"err_integer_overflow":     `error: integer overflow`,
-	"err_grepn_no_such_group":  `error: no such group`,
-	"err_grepn_negative_group": `error: no such group`,
+	"err_regex_invalid":                 `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_invalid_grep":            `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_lookahead":               `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
+	"err_integer_overflow":              `error: integer overflow`,
+	"err_grepn_no_such_group":           `error: no such group`,
+	"err_grepn_negative_group":          `error: no such group`,
+	"err_subst_invalid_group_reference": `error: invalid group reference 2 at position 2`,
+	"err_subst_unknown_group_name":      `error: unknown group name 'part'`,
+	"err_subst_bad_escape":              `error: bad escape \q at position 1`,
 	"err_between_types": `error: operator "int BETWEEN str AND int" not supported
 | SELECT 1 BETWEEN 'a' AND 2
 |        ^^^^^^^^^^^^^^^^^^^`,

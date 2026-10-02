@@ -1,0 +1,1 @@
+SELECT subst('(Food)', '[\1]', account) AS num, subst('(Food)', '[\g<1>]', account) AS g1, subst('Fo(o)d', '[\g<0>]', account) AS whole, subst('(?P<part>Food)', '[\g<part>]', account) AS named, subst('(Food)', '[$1]', account) AS dollar, subst('(Food)', '[\\]', account) AS backslash, subst('(Food)|(X)', '[\2]', account) AS unmatched WHERE account ~ 'Food'

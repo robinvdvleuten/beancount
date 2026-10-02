@@ -582,7 +582,7 @@ var functions = map[string]*funcDef{
 	"subst": {overloads: []funcOverload{
 		{[]dtype{tString, tString, tString}, tString, func(_ *evalRow, args []any) any {
 			re := mustCompilePattern("", args[0].(string))
-			return re.ReplaceAllString(args[2].(string), args[1].(string))
+			return pySub(re, args[1].(string), args[2].(string))
 		}},
 	}},
 	"findfirst": {overloads: []funcOverload{

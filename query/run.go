@@ -110,8 +110,8 @@ func compileAndRun(ctx context.Context, qctx *Context, parsed bql.Statement, tex
 }
 
 // evalError is a statement failing while it runs: an invalid regular
-// expression, an integer that overflows, or a regular expression group
-// the pattern does not have.
+// expression or subst() replacement, an integer that overflows, or a
+// regular expression group the pattern does not have.
 type evalError struct{ message string }
 
 // fail aborts the statement being run, which Run reports as an *Error

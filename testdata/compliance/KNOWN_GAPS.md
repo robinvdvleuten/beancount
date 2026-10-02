@@ -239,7 +239,9 @@ compare the lines errors are on:
   six rows there (`query/err_regex_lookahead.bql`). Porting Python's
   regular expression engine is not worth it for patterns that rarely need
   more than RE2 gives; failing tells the user, where matching nothing
-  would mislead.
+  would mislead. `subst()`'s replacement is not a pattern: it is
+  read as Python's `re.sub` reads it (`\1`, `\g<name>`, a literal `$`),
+  with Python's messages for an invalid one.
 
 - **BQL integers** (#589): Python's integers do not overflow, and ours are
   64-bit. An integer sum, difference, product, negation or `sum()` that
