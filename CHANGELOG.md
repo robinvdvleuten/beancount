@@ -2,6 +2,96 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.15.0](https://github.com/robinvdvleuten/beancount/compare/v0.14.0...v0.15.0) (2026-10-02)
+
+
+### Features
+
+* follow beancount v3 for check, format and doctor ([2f1d757](https://github.com/robinvdvleuten/beancount/commit/2f1d7570e60037cc3be3760124af02405169f32c))
+* **parser:** read a capital letter as a currency or a flag ([3b9ebea](https://github.com/robinvdvleuten/beancount/commit/3b9ebea3546d77cc9564f2fe68e91dea5fcc33e9)), closes [#565](https://github.com/robinvdvleuten/beancount/issues/565)
+* print directives like beancount v3's printer.py ([13970fb](https://github.com/robinvdvleuten/beancount/commit/13970fbd3e888344adc2a2d3f449fb3ebf894dbd)), closes [#560](https://github.com/robinvdvleuten/beancount/issues/560)
+* **query:** add beanquery 0.2's missing BQL functions ([54ad719](https://github.com/robinvdvleuten/beancount/commit/54ad719a7324858d57a798511bca985145d45ca3)), closes [#593](https://github.com/robinvdvleuten/beancount/issues/593)
+* **query:** add beanquery's meta, entry and accounts columns ([96a456d](https://github.com/robinvdvleuten/beancount/commit/96a456dcce83ba2c2e1664c81dd8db2658da014b))
+* **query:** evaluate BQL functions like beanquery ([5e29dd1](https://github.com/robinvdvleuten/beancount/commit/5e29dd12766915a9c1385025c67a909e085aa135)), closes [#577](https://github.com/robinvdvleuten/beancount/issues/577)
+* **query:** give each ORDER BY term its own direction ([b67467a](https://github.com/robinvdvleuten/beancount/commit/b67467a438bcceafd48438a7ccf3f18d3e16ca00)), closes [#575](https://github.com/robinvdvleuten/beancount/issues/575)
+* **query:** parse attribute and subscript access on columns ([cf00e3c](https://github.com/robinvdvleuten/beancount/commit/cf00e3c4bfd66582305cc78b10e175404ee03936)), closes [#591](https://github.com/robinvdvleuten/beancount/issues/591)
+* **query:** parse count(*), unary minus and digits in names ([fd0b8cc](https://github.com/robinvdvleuten/beancount/commit/fd0b8ccaea7b5e6ed76cc14231f3d95ed9c3ef04)), closes [#574](https://github.com/robinvdvleuten/beancount/issues/574)
+* **query:** parse list constants like (1, 2) ([6e06024](https://github.com/robinvdvleuten/beancount/commit/6e06024cc3a494b96dc41c38bf0840cf90e6449d)), closes [#590](https://github.com/robinvdvleuten/beancount/issues/590)
+* **query:** print errors like the beanquery shell ([7b4db19](https://github.com/robinvdvleuten/beancount/commit/7b4db19c576f0d7ce0514738829bb11d4f1999bd)), closes [#578](https://github.com/robinvdvleuten/beancount/issues/578)
+* **query:** render BQL results like beanquery 0.2.0 ([b69db95](https://github.com/robinvdvleuten/beancount/commit/b69db95a8adb5c3c389545354fc71e7461d55583))
+* **query:** support HAVING and PIVOT BY ([0bab56b](https://github.com/robinvdvleuten/beancount/commit/0bab56b396c190cab6d5cf1f583ca08328704c07)), closes [#576](https://github.com/robinvdvleuten/beancount/issues/576)
+* **query:** support the %, !~, ?~, NOT IN and BETWEEN operators ([4ca0041](https://github.com/robinvdvleuten/beancount/commit/4ca0041abfeb4a6d86942f2becf420d0cb3439a9)), closes [#587](https://github.com/robinvdvleuten/beancount/issues/587)
+* **query:** type-check BQL operators like beanquery ([bb0b3ec](https://github.com/robinvdvleuten/beancount/commit/bb0b3ec02eca01c1257c8da33c2b91bfcae2cf6f)), closes [#573](https://github.com/robinvdvleuten/beancount/issues/573)
+* **web:** add a query page that runs BQL ([2e2b03d](https://github.com/robinvdvleuten/beancount/commit/2e2b03d29d84d900af74ab651f428d35d4aff758)), closes [#546](https://github.com/robinvdvleuten/beancount/issues/546)
+* **web:** add a trial balance page ([7b5feee](https://github.com/robinvdvleuten/beancount/commit/7b5feee0290843b51e6180d92354931446aa770f)), closes [#544](https://github.com/robinvdvleuten/beancount/issues/544)
+* **web:** choose the period of the income statement and balance sheet ([de17183](https://github.com/robinvdvleuten/beancount/commit/de17183ca63817e6d5febb926f61921bbb0c2302)), closes [#545](https://github.com/robinvdvleuten/beancount/issues/545)
+* **web:** pick the reports' Valuation ([b7c751d](https://github.com/robinvdvleuten/beancount/commit/b7c751d23205121c9a22cbc04d678c720753e60f)), closes [#536](https://github.com/robinvdvleuten/beancount/issues/536)
+* **web:** show the ledger's title in the header and browser tab ([be97a58](https://github.com/robinvdvleuten/beancount/commit/be97a5858ce91865b7e8ec5e556478fb96a4f09b)), closes [#540](https://github.com/robinvdvleuten/beancount/issues/540)
+
+
+### Bug Fixes
+
+* **ast:** put pushed metadata before a transaction's own ([de2f5fb](https://github.com/robinvdvleuten/beancount/commit/de2f5fb7d4a62fccdc71837729eaea4e1fa0b587))
+* **cli:** print an error's transaction with its postings as booked ([bdf094f](https://github.com/robinvdvleuten/beancount/commit/bdf094f8c46c74a5877a05dd2402bc25aa21e18f)), closes [#598](https://github.com/robinvdvleuten/beancount/issues/598)
+* **cli:** read only the interpreter from bean-query's shebang ([4de3f0d](https://github.com/robinvdvleuten/beancount/commit/4de3f0db4a112049548ca467d20e71989f54fa57))
+* **config:** check options as bean-check does ([8cc0dfe](https://github.com/robinvdvleuten/beancount/commit/8cc0dfe130f4c62a7bf7b2316ff89364e8f814bf)), closes [#568](https://github.com/robinvdvleuten/beancount/issues/568)
+* **ledger:** hold no lot of zero units ([0199c2d](https://github.com/robinvdvleuten/beancount/commit/0199c2d901f7f1c7338e1a0bb06839cd3447602c))
+* **ledger:** import plugin "beancount.plugins.__init__" as bean-check does ([1f063f8](https://github.com/robinvdvleuten/beancount/commit/1f063f8372a6e47ec5dbd4ca7639642947f260c6)), closes [#569](https://github.com/robinvdvleuten/beancount/issues/569)
+* **ledger:** leave a lot undated when its units are interpolated ([232f40a](https://github.com/robinvdvleuten/beancount/commit/232f40a12693d74ae695907b0d888828126129c7)), closes [#597](https://github.com/robinvdvleuten/beancount/issues/597)
+* **ledger:** link intermediate accounts with one descendant in the balance tree ([7ae207e](https://github.com/robinvdvleuten/beancount/commit/7ae207e5c8616881573481c3d96f6a4d921a807c))
+* **ledger:** word the currency-constraint error as bean-check does ([7704669](https://github.com/robinvdvleuten/beancount/commit/770466949c05f350e7bbdcc6279a7a1bfbb1af6b)), closes [#529](https://github.com/robinvdvleuten/beancount/issues/529)
+* **loader:** discover documents under a symlinked documents root ([398c538](https://github.com/robinvdvleuten/beancount/commit/398c5389335bf900ca119a807915f6033e20901f)), closes [#570](https://github.com/robinvdvleuten/beancount/issues/570)
+* **parser:** accept total braces without an amount ([ae71825](https://github.com/robinvdvleuten/beancount/commit/ae718252a81609626124ceca6baedab467ed3cb4))
+* **parser:** end an empty pushmeta value at its own line ([5e86fca](https://github.com/robinvdvleuten/beancount/commit/5e86fca8dfbd772c7730a72ef44a0d5edca81cb7))
+* **parser:** lex a long run of signs in linear time ([9db152b](https://github.com/robinvdvleuten/beancount/commit/9db152b498fb8127e6250faddebf65ac3fbd53b2)), closes [#571](https://github.com/robinvdvleuten/beancount/issues/571)
+* **parser:** lex NULL, TRUE and FALSE as keywords, never a currency ([1fd5619](https://github.com/robinvdvleuten/beancount/commit/1fd56195c020c099e5080955a32c9ed3b9f2c1be))
+* **parser:** read a merge marker as one cost component among others ([97cb701](https://github.com/robinvdvleuten/beancount/commit/97cb701b721caa175400e5c8f4ce387a85c8b6c4)), closes [#563](https://github.com/robinvdvleuten/beancount/issues/563)
+* **parser:** read a NULL metadata value as None ([7f36f8d](https://github.com/robinvdvleuten/beancount/commit/7f36f8d398a755eadf59f853ce4812303b405a11)), closes [#596](https://github.com/robinvdvleuten/beancount/issues/596)
+* **parser:** recover from an invalid line and an invalid account as beancount does ([74e5060](https://github.com/robinvdvleuten/beancount/commit/74e5060f1e472ed28547b295f2173b16706a09f8)), closes [#567](https://github.com/robinvdvleuten/beancount/issues/567)
+* **parser:** report a duplicate cost component and keep the transaction ([fcffcd0](https://github.com/robinvdvleuten/beancount/commit/fcffcd06b5cee183e34ad734d9c48b170ef7372b))
+* **parser:** report every invalid token a syntax error's recovery skips ([a52081a](https://github.com/robinvdvleuten/beancount/commit/a52081ac93f97d436a6ef7027dde0d524ef06bb3))
+* **parser:** split a currency off the word it starts, and reject one in a custom ([b7ea123](https://github.com/robinvdvleuten/beancount/commit/b7ea1233975de5458b4a62236dbf719c2a24e401)), closes [#566](https://github.com/robinvdvleuten/beancount/issues/566)
+* **parser:** take indented comments among a directive's metadata lines ([9e78024](https://github.com/robinvdvleuten/beancount/commit/9e780240a058b76610b3b72586ff8ae3f2e7fb0d)), closes [#564](https://github.com/robinvdvleuten/beancount/issues/564)
+* **query:** accept a LIMIT beyond int64 as beanquery's parser does ([e1e6d45](https://github.com/robinvdvleuten/beancount/commit/e1e6d45ef8dbfd50278f8acf24878f435efbd8f6))
+* **query:** allow ORDER BY an aggregate without GROUP BY ([406ba8f](https://github.com/robinvdvleuten/beancount/commit/406ba8fb8e1357eb737e240ecc0a1e4658335b05)), closes [#592](https://github.com/robinvdvleuten/beancount/issues/592)
+* **query:** anchor findfirst()'s pattern at the start, like re.match ([83caf09](https://github.com/robinvdvleuten/beancount/commit/83caf09d7ffc06d5a97276b10c249317f28fa7be))
+* **query:** count date differences exactly past 292 years ([fda659c](https://github.com/robinvdvleuten/beancount/commit/fda659c8fd9695f90ee05b22e895395a25b75e23))
+* **query:** evaluate a missing payee as NULL ([69d973b](https://github.com/robinvdvleuten/beancount/commit/69d973bee1555772cb8430bf59a9f183b5042a19)), closes [#588](https://github.com/robinvdvleuten/beancount/issues/588)
+* **query:** evaluate a SELECT's FROM over the postings table ([d9aaaa7](https://github.com/robinvdvleuten/beancount/commit/d9aaaa7114fda3208d07daada2659eaa9d0cafa7)), closes [#582](https://github.com/robinvdvleuten/beancount/issues/582)
+* **query:** fail a list IN a set as unhashable, as beanquery does ([09b9b08](https://github.com/robinvdvleuten/beancount/commit/09b9b08e21a18c4a5773e18df20841c2e9f22bb9))
+* **query:** fail grepn() with a group out of range, as beanquery does ([8686437](https://github.com/robinvdvleuten/beancount/commit/8686437c2f517518a9a18679544a68fd2e59147f))
+* **query:** follow Python's regex, integer and cast semantics ([982cf0f](https://github.com/robinvdvleuten/beancount/commit/982cf0f4dc432c64a2ccd184c0868ed0bde16995)), closes [#589](https://github.com/robinvdvleuten/beancount/issues/589)
+* **query:** leave out only the row's own posting in other_accounts ([9823341](https://github.com/robinvdvleuten/beancount/commit/98233413aba8ba4967a377b5499e560dc03d9b45)), closes [#580](https://github.com/robinvdvleuten/beancount/issues/580)
+* **query:** let a bool argument fit a function's int parameter ([fa1c2b5](https://github.com/robinvdvleuten/beancount/commit/fa1c2b5659ebe7168c1bda72f0a33d63ffb10b5f))
+* **query:** lex beanquery's doubled quotes in strings and quoted identifiers ([c12847d](https://github.com/robinvdvleuten/beancount/commit/c12847d260494c5e21376288c64d84f0c2111dd8))
+* **query:** lex Python's white space in BQL ([d7feb6b](https://github.com/robinvdvleuten/beancount/commit/d7feb6bc4a18f365708fb60b622bf8f39f5cf59a)), closes [#585](https://github.com/robinvdvleuten/beancount/issues/585)
+* **query:** make cost_date NULL for a cost without a date ([3e84528](https://github.com/robinvdvleuten/beancount/commit/3e84528c348ceb359f69e5d2b651a67129034fb8))
+* **query:** make date() match beanquery's overloads ([1a59fe2](https://github.com/robinvdvleuten/beancount/commit/1a59fe298372f4b9ab3d2b334224536f8716b996))
+* **query:** make other_accounts a sorted list like beanquery's ([25a2f3e](https://github.com/robinvdvleuten/beancount/commit/25a2f3e3a90b9ae931e4ab0febcfeeebcf030713)), closes [#595](https://github.com/robinvdvleuten/beancount/issues/595)
+* **query:** order BQL values as beanquery does ([7b44cc0](https://github.com/robinvdvleuten/beancount/commit/7b44cc0f63bd640b1017225567d97274bbd2cae6)), closes [#579](https://github.com/robinvdvleuten/beancount/issues/579)
+* **query:** place the caret at the dot of a decimal after LIMIT ([b81c52e](https://github.com/robinvdvleuten/beancount/commit/b81c52eef252ee8f6645a62fd392f08873517deb)), closes [#586](https://github.com/robinvdvleuten/beancount/issues/586)
+* **query:** read ; as beanquery's end-of-line comment and run nothing for an empty query ([daf2fc1](https://github.com/robinvdvleuten/beancount/commit/daf2fc148321af03e3638823663526c178e02fec)), closes [#584](https://github.com/robinvdvleuten/beancount/issues/584)
+* **query:** read AT, OPEN, CLOSE, CLEAR and ON as names outside their clauses ([0bb8e8b](https://github.com/robinvdvleuten/beancount/commit/0bb8e8b38f22ed2556d8a57303bb36d0d71d1b3e)), closes [#583](https://github.com/robinvdvleuten/beancount/issues/583)
+* **query:** read double-quoted names as function names and columns ([19440cb](https://github.com/robinvdvleuten/beancount/commit/19440cb08f254c93b5d78718ae61b6b4698cd553))
+* **query:** read NULL as a name where beanquery does ([d723fdc](https://github.com/robinvdvleuten/beancount/commit/d723fdc46c0427600be54aece44bc76a3d12e8be))
+* **query:** read subst()'s replacement as Python's re.sub does ([75cf37a](https://github.com/robinvdvleuten/beancount/commit/75cf37aa663321dcede0b35e00e7b3b1315d0ae9))
+* **query:** read the account_previous_* and account_current_* options ([55f9945](https://github.com/robinvdvleuten/beancount/commit/55f99453adaaae5dfeae487510cf5835eb3825dc)), closes [#547](https://github.com/robinvdvleuten/beancount/issues/547)
+* **query:** reject integer arguments to abs() and neg() ([7fede21](https://github.com/robinvdvleuten/beancount/commit/7fede21803bbaf688daf5ac55a67c07f0f0a5e75))
+* **query:** skip /* … */ block comments in BQL ([cec8730](https://github.com/robinvdvleuten/beancount/commit/cec8730f346904150605c5202796b2c90682a327))
+* **query:** take only untyped values in int() and decimal()'s catch-all ([931338e](https://github.com/robinvdvleuten/beancount/commit/931338e61088273bbac371fc7ba1e03abfe5efa6))
+* **web:** close Income and Expenses into Equity on the balance sheet ([0683cec](https://github.com/robinvdvleuten/beancount/commit/0683cec00bb04a8e239e43c6f6c95c923a5ce335)), closes [#535](https://github.com/robinvdvleuten/beancount/issues/535)
+* **web:** give each operating currency a report column ([45cdf97](https://github.com/robinvdvleuten/beancount/commit/45cdf977ac0dad09cc07a978b83f8d89628cb38d)), closes [#539](https://github.com/robinvdvleuten/beancount/issues/539)
+* **web:** keep the current page's sidebar link readable ([e82594e](https://github.com/robinvdvleuten/beancount/commit/e82594eed529b6ac9ab7fdf5e8aa2277532ab2a4))
+* **web:** line up the currency columns of the report tables ([1070244](https://github.com/robinvdvleuten/beancount/commit/10702443d40342a5911811f37068c79d0e2ef9c0))
+* **web:** load the ledger with syntax recovery ([ab07fcc](https://github.com/robinvdvleuten/beancount/commit/ab07fcc7b4da58ad6196a4b8821994cc7a43fcaa)), closes [#537](https://github.com/robinvdvleuten/beancount/issues/537)
+* **web:** reload the balance sheet when the ledger changes ([df22a2a](https://github.com/robinvdvleuten/beancount/commit/df22a2af70f5b02d1e8c3a5124b6d211b197eb61)), closes [#541](https://github.com/robinvdvleuten/beancount/issues/541)
+* **web:** show the file-change toast only for reload events ([527d97d](https://github.com/robinvdvleuten/beancount/commit/527d97de5f1f41a6603def7b6b30f09747bd2ba3))
+
+
+### Performance Improvements
+
+* **ledger:** book an augmentation without cloning its inventory ([d40e7fe](https://github.com/robinvdvleuten/beancount/commit/d40e7fe481bac9ec02f619e1e31c09333f0af27f)), closes [#572](https://github.com/robinvdvleuten/beancount/issues/572)
+
 ## [0.14.0](https://github.com/robinvdvleuten/beancount/compare/v0.13.0...v0.14.0) (2026-09-29)
 
 
