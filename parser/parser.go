@@ -388,7 +388,7 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		Key:       key,
 		Value:     p.parseRestOfLineUntilComment(),
 		MetaValue: value,
-		Null:      single && value == nil && first.Type == IDENT && first.String(p.source) == "NULL",
+		Null:      single && value == nil && first.Type == NONE,
 	}
 	pm.SetPosition(pos)
 	if err := p.finishHeader(pm, pos.Offset); err != nil {

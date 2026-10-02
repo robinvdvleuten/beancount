@@ -37,7 +37,9 @@ const (
 	STRING  // "quoted string"
 	NUMBER  // 123.45 or -123.45
 	EXPRESSION
-	IDENT // USD, TRUE, FALSE, currency codes, a capital letter (V) that may be a flag
+	IDENT // USD, currency codes, a capital letter (V) that may be a flag
+	BOOL  // TRUE or FALSE, a keyword as in beancount v3's lexer, never a currency
+	NONE  // NULL, a keyword as in beancount v3's lexer, never a currency
 
 	// Special literals
 	TAG  // #tag
@@ -91,6 +93,8 @@ var tokenNames = map[TokenType]string{
 	NUMBER:     "NUMBER",
 	EXPRESSION: "EXPRESSION",
 	IDENT:      "IDENT",
+	BOOL:       "BOOL",
+	NONE:       "NONE",
 
 	TAG:  "TAG",
 	LINK: "LINK",

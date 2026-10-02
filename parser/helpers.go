@@ -599,26 +599,18 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 		}
 		return &ast.MetadataValue{Number: &value}, nil
 
+	case NONE:
+		p.advance()
+		return nil, nil
+
+	case BOOL:
+		p.advance()
+		boolVal := tok.String(p.source) == "TRUE"
+		return &ast.MetadataValue{Boolean: &boolVal}, nil
+
 	case IDENT:
-		// Could be Account, Currency, Boolean or NULL
+		// Could be Account or Currency
 		identStr := tok.String(p.source)
-
-		if identStr == "NULL" {
-			p.advance()
-			return nil, nil
-		}
-
-		// Check for Boolean (TRUE/FALSE)
-		if identStr == "TRUE" {
-			p.advance()
-			trueVal := true
-			return &ast.MetadataValue{Boolean: &trueVal}, nil
-		}
-		if identStr == "FALSE" {
-			p.advance()
-			falseVal := false
-			return &ast.MetadataValue{Boolean: &falseVal}, nil
-		}
 
 		// Check for Account (contains colon)
 		if strings.Contains(identStr, ":") {
@@ -668,15 +660,15 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 		}
 		return &ast.CustomValue{Date: date}, nil
 
-	case IDENT:
-		// beancount's grammar takes no NULL and no bare currency among a
-		// custom's values, only its booleans.
+	case BOOL:
 		ident := p.internIdent(tok)
-		if ident != "TRUE" && ident != "FALSE" {
-			return nil, p.errorAtToken(tok, "unexpected %s in custom values", tok.String(p.source))
-		}
 		p.advance()
 		return &ast.CustomValue{BooleanValue: &ident}, nil
+
+	case IDENT, NONE:
+		// beancount's grammar takes no NULL and no bare currency among a
+		// custom's values, only its booleans.
+		return nil, p.errorAtToken(tok, "unexpected %s in custom values", tok.String(p.source))
 
 	case ACCOUNT:
 		account := p.internIdent(tok)

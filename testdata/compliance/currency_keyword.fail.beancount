@@ -1,0 +1,59 @@
+; beancount's lexer reads NULL as NONE and TRUE and FALSE as BOOL, keywords
+; that are never a currency: each is a syntax error where a currency goes.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C USD,TRUE
+2020-01-01 open Assets:D NULL
+
+2020-01-03 commodity NULL
+2020-01-03 commodity TRUE
+2020-01-03 commodity FALSE
+2020-01-03 commodity NULL-
+
+2020-01-04 * "posting amount"
+  Assets:A  1 NULL
+  Assets:B
+
+2020-01-04 * "posting amount"
+  Assets:A  1 TRUE
+  Assets:B
+
+2020-01-04 * "posting amount"
+  Assets:A  1 FALSE
+  Assets:B
+
+2020-01-05 * "cost"
+  Assets:A  1 USD {1 TRUE}
+  Assets:B
+
+2020-01-05 * "cost"
+  Assets:A  1 USD {NULL}
+  Assets:B
+
+2020-01-05 * "total cost"
+  Assets:A  1 USD {{1 FALSE}}
+  Assets:B
+
+2020-01-05 * "cost with date"
+  Assets:A  1 USD {2020-01-01, NULL}
+  Assets:B
+
+2020-01-06 * "price"
+  Assets:A  1 USD @ 1 FALSE
+  Assets:B
+
+2020-01-06 * "total price"
+  Assets:A  1 USD @@ 1 TRUE
+  Assets:B
+
+2020-01-07 price USD 1 TRUE
+2020-01-07 price NULL 1 USD
+2020-01-08 balance Assets:A 1 FALSE
+2020-01-08 balance Assets:A 1 ~ 0.1 NULL
+
+2020-01-09 * "metadata amount"
+  key: 1 TRUE
+  Assets:A  1 USD
+  Assets:B
+
+2020-01-10 custom "x" 1 NULL

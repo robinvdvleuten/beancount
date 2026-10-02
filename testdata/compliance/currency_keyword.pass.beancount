@@ -1,0 +1,14 @@
+; TRUE, FALSE and NULL stay metadata values, and TRUE and FALSE custom
+; values, after a number too, where they are a value of their own.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-09 * "metadata"
+  yes: TRUE
+  no: FALSE
+  none: NULL
+  Assets:A  1 USD
+  Assets:B
+
+2020-01-10 custom "x" 1 TRUE
+2020-01-10 custom "x" TRUE 1 FALSE

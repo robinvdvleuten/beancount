@@ -621,12 +621,25 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 		if n := currencyPrefixLen(value); n > 0 {
 			l.pos = start + n
 			l.column = col + n
-			return Token{IDENT, start, l.pos, line, col}
+			return Token{identType(value[:n]), start, l.pos, line, col}
 		}
 		return Token{ILLEGAL, start, l.pos, line, col}
 	}
 
-	return Token{IDENT, start, l.pos, line, col}
+	return Token{identType(value), start, l.pos, line, col}
+}
+
+// identType returns BOOL for TRUE and FALSE and NONE for NULL, which
+// beancount v3's lexer matches as keywords ahead of a currency, so none of
+// them is ever a currency; any other word is an IDENT.
+func identType(word []byte) TokenType {
+	switch string(word) {
+	case "TRUE", "FALSE":
+		return BOOL
+	case "NULL":
+		return NONE
+	}
+	return IDENT
 }
 
 // scanKeywordOrIdent scans a word starting with a lowercase letter. Like

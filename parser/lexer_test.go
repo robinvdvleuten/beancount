@@ -888,6 +888,16 @@ func TestLexerCurrencies(t *testing.T) {
 		{"BA_", []TokenType{IDENT, ILLEGAL, EOF}, "BA"},
 		{"B-", []TokenType{ILLEGAL, EOF}, "B-"},
 
+		// beancount's keywords win over a currency of the same length,
+		// and a longer currency over the keyword.
+		{"TRUE", []TokenType{BOOL, EOF}, ""},
+		{"FALSE", []TokenType{BOOL, EOF}, ""},
+		{"NULL", []TokenType{NONE, EOF}, ""},
+		{"NULL-", []TokenType{NONE, ILLEGAL, EOF}, "NULL"},
+		{"TRUEX", []TokenType{IDENT, EOF}, ""},
+		{"NULL.X", []TokenType{IDENT, EOF}, ""},
+		{"/NULL", []TokenType{IDENT, EOF}, ""},
+
 		{"/ESZ24", []TokenType{IDENT, EOF}, ""},
 		{"/E", []TokenType{IDENT, EOF}, ""},
 		{"/6J", []TokenType{IDENT, EOF}, ""},
