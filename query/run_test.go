@@ -144,6 +144,12 @@ var errorFixtures = map[string]string{
 	"err_function_arg_types": `error: no function matches "bogusfn(date, position, amount, set, decimal, bool, nonetype)" name and argument types
 | SELECT bogusfn(date, position, units(position), tags, 2.7, TRUE, NULL)
 |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^`,
+	"err_abs_int": `error: no function matches "abs(int)" name and argument types
+| SELECT abs(-1)
+|        ^^^^^^^`,
+	"err_neg_int": `error: no function matches "neg(int)" name and argument types
+| SELECT neg(1)
+|        ^^^^^^`,
 	"err_group_by_inventory": `error: GROUP-BY a non-hashable type is not supported: "Column(name='balance')"`,
 	"err_group_coverage":     `error: all non-aggregates must be covered by GROUP-BY clause in aggregate query: the following targets are missing: "date"`,
 	"err_mixed_aggregate":    `error: mixed aggregates and non-aggregates are not allowed`,

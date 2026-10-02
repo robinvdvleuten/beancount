@@ -73,13 +73,6 @@ var functions = map[string]*funcDef{
 		{[]dtype{tDecimal}, tDecimal, func(_ *evalRow, args []any) any {
 			return args[0].(decimal.Decimal).Abs()
 		}},
-		{[]dtype{tInt}, tInt, func(_ *evalRow, args []any) any {
-			v := args[0].(int64)
-			if v < 0 {
-				return -v
-			}
-			return v
-		}},
 		{[]dtype{tPosition}, tPosition, func(_ *evalRow, args []any) any {
 			p := args[0].(*positionValue)
 			return &positionValue{Units: amountValue{Number: p.Units.Number.Abs(), Currency: p.Units.Currency}, Cost: p.Cost}
@@ -97,9 +90,6 @@ var functions = map[string]*funcDef{
 	"neg": {overloads: []funcOverload{
 		{[]dtype{tDecimal}, tDecimal, func(_ *evalRow, args []any) any {
 			return args[0].(decimal.Decimal).Neg()
-		}},
-		{[]dtype{tInt}, tInt, func(_ *evalRow, args []any) any {
-			return -args[0].(int64)
 		}},
 		{[]dtype{tAmount}, tAmount, func(_ *evalRow, args []any) any {
 			a := args[0].(*amountValue)
