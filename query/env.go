@@ -97,6 +97,8 @@ var entryColumns = map[string]*columnDef{
 	"description": {tString, txnColumn(descriptionValue)},
 	"tags":        {tSet, txnColumn(func(txn *ast.Transaction) any { return tagSet(txn) })},
 	"links":       {tSet, txnColumn(func(txn *ast.Transaction) any { return linkSet(txn) })},
+	"meta":        {tDict, func(row *evalRow) any { return entryMeta(row.Entry) }},
+	"accounts":    {tAccountSet, func(row *evalRow) any { return accountSet(row.Entry) }},
 }
 
 // postingColumns is the targets/WHERE environment: columns on posting rows.
@@ -184,6 +186,9 @@ var postingColumns = map[string]*columnDef{
 	"description": {tString, func(row *evalRow) any { return descriptionValue(row.Txn) }},
 	"tags":        {tSet, func(row *evalRow) any { return tagSet(row.Txn) }},
 	"links":       {tSet, func(row *evalRow) any { return linkSet(row.Txn) }},
+	"meta":        {tDict, func(row *evalRow) any { return postingMeta(row.Posting) }},
+	"entry":       {tTransaction, func(row *evalRow) any { return &transactionValue{txn: row.Txn, ctx: row.Ctx} }},
+	"accounts":    {tAccountSet, func(row *evalRow) any { return accountSet(row.Txn) }},
 }
 
 // environment is what one clause compiles against, like one of

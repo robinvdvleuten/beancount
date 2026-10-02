@@ -233,6 +233,29 @@ var errorFixtures = map[string]string{
 	"err_subscript_doubled_quote": `error: column type is not subscriptable
 | SELECT position.units['x''y']
 |        ^^^^^^^^^^^^^^^^^^^^^^`,
+	"err_subscript_transaction": `error: column type is not subscriptable
+| SELECT entry['x']
+|        ^^^^^^^^^^`,
+	"err_attribute_meta": `error: column type is not structured
+| SELECT meta.x
+|        ^^^^^^`,
+	"err_attribute_entry_postings": `error: structured type has no attribute "postings"
+| SELECT entry.postings
+|        ^^^^^^^^^^^^^^`,
+	"err_operator_dict": `error: operator "add(dict, int)" not supported
+| SELECT meta + 1
+|        ^^^^^^^^`,
+	"err_function_metadata": `error: no function matches "length(metadata)" name and argument types
+| SELECT length(entry.meta)
+|        ^^^^^^^^^^^^^^^^^^`,
+	"err_operator_transaction": `error: operator "equal(transaction, transaction)" not supported
+| SELECT entry = entry
+|        ^^^^^^^^^^^^^`,
+	"err_operator_account_set": `error: operator "equal(set[str], set[str])" not supported
+| SELECT accounts = accounts
+|        ^^^^^^^^^^^^^^^^^^^`,
+	"err_group_by_metadata": `error: GROUP-BY a non-hashable type is not supported: "Attribute(operand=Column(name='entry'), name='meta')"`,
+	"err_group_by_meta":     `error: GROUP-BY a non-hashable type is not supported: "Column(name='meta')"`,
 	"err_quoted_ident_empty": `error: syntax error
 | SELECT 1 AS ""
 |             ^`,

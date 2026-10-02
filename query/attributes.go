@@ -10,10 +10,10 @@ type attributeDef struct {
 }
 
 // structures maps each structured type to its attributes, as beanquery's
-// types.Structure subclasses for the types ours has (Position, Amount,
-// Cost and date) list their columns. beanquery's Transaction, the entry
-// column's type, has no counterpart here (KNOWN_GAPS.md).
+// types.Structure subclasses (Position, Amount, Cost, Transaction and
+// date) list their columns.
 var structures = map[dtype]map[string]attributeDef{
+	tTransaction: transactionAttributes,
 	tPosition: {
 		"units": {tAmount, func(v any) any {
 			units := v.(*positionValue).Units
@@ -68,4 +68,21 @@ func (c *cAttribute) eval(row *evalRow) any {
 		return nil
 	}
 	return c.attr.get(v)
+}
+
+// cSubscript reads a key of a dict, NULL for NULL or a missing key, like
+// beanquery's EvalGetItem.
+type cSubscript struct {
+	x   cexpr
+	key string
+}
+
+func (c *cSubscript) typ() dtype { return tAny }
+
+func (c *cSubscript) eval(row *evalRow) any {
+	d, ok := c.x.eval(row).(*dictValue)
+	if !ok {
+		return nil
+	}
+	return d.get(c.key)
 }

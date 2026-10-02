@@ -137,6 +137,10 @@ type Posting struct {
 	PriceTotal  bool   // Captures presence of second @ for total price
 	Price       *Amount
 	Inferred    bool // True if Amount was inferred by the ledger (not parsed)
+	// Automatic is true when Booking interpolated one of the posting's
+	// numbers (units, cost or price), where beancount marks the posting
+	// with its __automatic__ metadata.
+	Automatic bool
 
 	withComment
 	withMetadata

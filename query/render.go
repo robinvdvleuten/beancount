@@ -173,13 +173,17 @@ type columnRenderer interface {
 // columnRenderers maps each column type to its renderer, like beanquery's
 // RENDERERS.
 var columnRenderers = map[dtype]func(ctx *renderContext) columnRenderer{
-	tAny:       func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
-	tInterval:  func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
-	tString:    func(*renderContext) columnRenderer { return &strRenderer{str: valueString} },
-	tInt:       func(*renderContext) columnRenderer { return &strRenderer{str: valueString, right: true} },
-	tBool:      func(*renderContext) columnRenderer { return &boolRenderer{} },
-	tDate:      func(*renderContext) columnRenderer { return &dateRenderer{} },
-	tSet:       func(ctx *renderContext) columnRenderer { return &setRenderer{sep: ctx.listSep} },
+	tAny:        func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
+	tInterval:   func(*renderContext) columnRenderer { return &strRenderer{str: objectString} },
+	tString:     func(*renderContext) columnRenderer { return &strRenderer{str: valueString} },
+	tInt:        func(*renderContext) columnRenderer { return &strRenderer{str: valueString, right: true} },
+	tBool:       func(*renderContext) columnRenderer { return &boolRenderer{} },
+	tDate:       func(*renderContext) columnRenderer { return &dateRenderer{} },
+	tSet:        func(ctx *renderContext) columnRenderer { return &setRenderer{sep: ctx.listSep} },
+	tAccountSet: func(ctx *renderContext) columnRenderer { return &setRenderer{sep: ctx.listSep} },
+	tMetadata: func(*renderContext) columnRenderer {
+		return &strRenderer{str: func(v any) string { return v.(*dictValue).metadataString() }}
+	},
 	tDecimal:   func(*renderContext) columnRenderer { return &decimalRenderer{} },
 	tAmount:    func(ctx *renderContext) columnRenderer { return newAmountRenderer(ctx) },
 	tPosition:  func(ctx *renderContext) columnRenderer { return newPositionRenderer(ctx) },

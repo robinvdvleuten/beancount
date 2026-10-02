@@ -1,0 +1,1 @@
+SELECT first(meta), entry.meta['category'] AS c, count(*) GROUP BY c ORDER BY c

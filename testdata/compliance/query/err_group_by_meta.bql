@@ -1,0 +1,1 @@
+SELECT meta, count(*) GROUP BY meta

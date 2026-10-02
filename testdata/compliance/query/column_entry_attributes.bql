@@ -1,0 +1,1 @@
+SELECT entry.payee, entry.date, entry.flag, entry.tags, entry.links, entry.accounts WHERE entry.meta['category'] = 'drinks' OR 'Liabilities:CreditCard' IN accounts

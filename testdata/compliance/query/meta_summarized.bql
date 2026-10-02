@@ -1,0 +1,1 @@
+SELECT date, entry.meta['filename'], entry.meta['lineno'], meta, entry.narration FROM OPEN ON 2023-03-01 CLOSE ON 2023-06-01 CLEAR

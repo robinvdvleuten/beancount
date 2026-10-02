@@ -22,7 +22,8 @@ import (
 // formatting in the renderers, where tNull renders like tAny. Runtime
 // values are Go values: bool, int64, decimal.Decimal, string, *ast.Date,
 // setValue, listValue, *amountValue, *costValue, *positionValue,
-// *inventoryValue and *intervalValue; NULL is nil.
+// *inventoryValue, *intervalValue, *dictValue and *transactionValue; NULL
+// is nil.
 // Only numberify's output holds a negativeZero, for the renderers.
 type dtype uint8
 
@@ -42,6 +43,14 @@ const (
 	tList     // a list constant, (1, 2)
 	tCost     // a position's cost, position.cost
 	tInterval // interval()'s relative time interval, dateutil's relativedelta
+	tDict     // a meta column, a dict
+	tMetadata // a Transaction's meta, beanquery's Metadata dict
+	// tTransaction is the entry column, beancount's Transaction.
+	tTransaction
+	// tAccountSet is the accounts columns, typed typing.Set[str] in
+	// beanquery, which renders like a set but is no set to its functions
+	// and operators.
+	tAccountSet
 	// tObject is a function parameter type only, beanquery's object: unlike
 	// tAny, its Any, it takes an untyped (tAny) argument or NULL alone.
 	tObject
@@ -63,6 +72,11 @@ var dtypeNames = map[dtype]string{
 	tList:      "list",
 	tCost:      "cost",
 	tInterval:  "relativedelta",
+	tDict:      "dict",
+	tMetadata:  "metadata",
+	// beanquery names a types.Structure by its name.
+	tTransaction: "transaction",
+	tAccountSet:  "set[str]",
 }
 
 func (t dtype) String() string {
@@ -284,6 +298,12 @@ func pyValueRepr(v any) string {
 		return fmt.Sprintf("datetime.date(%d, %d, %d)", val.Year(), val.Month(), val.Day())
 	case listValue:
 		return val.String()
+	case setValue:
+		return valueString(val)
+	case *amountValue:
+		return amountRepr(val)
+	case *dictValue:
+		return val.String()
 	case *costValue:
 		var label any
 		if val.Label != "" {
@@ -326,6 +346,8 @@ func truthy(v any) bool {
 		return val != nil
 	case *inventoryValue:
 		return val != nil && len(val.positions) > 0
+	case *dictValue:
+		return len(val.keys) > 0
 	default:
 		return v != nil
 	}
@@ -376,6 +398,10 @@ func valueString(v any) string {
 	case *costValue:
 		return pyValueRepr(val)
 	case *intervalValue:
+		return val.String()
+	case *dictValue:
+		return val.String()
+	case *transactionValue:
 		return val.String()
 	case *amountValue:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)

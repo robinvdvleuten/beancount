@@ -1,0 +1,29 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:S
+2020-01-01 open Equity:E
+
+2020-01-02 pad Assets:A Equity:E
+  padmeta: "p"
+
+2020-01-03 balance Assets:A 10 USD
+  balmeta: 2.50
+
+2020-01-04 * "Interpolated" #t ^l
+  num: 1.50
+  amt: 3.10 USD
+  big: 0.00000001 BTC
+  dt: 2020-01-01
+  bo: TRUE
+  acc: Assets:A
+  cur: USD
+  tag: #foo
+  empty:
+  str: "it's \"q\""
+  Assets:S 2 STK {}
+    pm: "posting"
+  Assets:A -2.00 USD
+
+2020-01-05 * "Reduce"
+  Assets:S -1 STK {1.00 USD}
+  Assets:A 1.5 USD
+  Equity:E

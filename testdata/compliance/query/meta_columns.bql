@@ -1,0 +1,1 @@
+SELECT date, meta, entry.meta, meta['__automatic__'], meta['pm'], entry.meta['amt'], accounts

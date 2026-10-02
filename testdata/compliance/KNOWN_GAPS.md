@@ -92,12 +92,18 @@ limits:
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
-- beanquery's `meta`, `entry` and `accounts` columns are missing in ours,
-  and with them the only values beanquery takes a subscript or a
-  Transaction attribute on: `SELECT meta['x']` and `SELECT
-  entry.narration` run there and are `column ... not found` in ours.
-  Attribute access on the types ours has (position, amount, cost, date)
-  matches.
+- A transaction's meta lacks the `__tolerances__` beancount's booking
+  records in it (#626), so `entry.meta['__tolerances__']` is NULL, and
+  `str(entry.meta)` and the `entry` column's `Transaction(...)` repr leave
+  the key out. `SELECT entry.meta` matches, since beanquery's renderer
+  hides `__` keys. In that repr, tags and links print sorted, where
+  Python's frozenset prints them in hash order.
+- beanquery types the `accounts` columns `typing.Set[str]`, and any
+  function or `IS NULL` on one fails there with a Python `AttributeError`
+  (`length(accounts)`), as does GROUP BY one. Here they compile as on a
+  set. GROUP BY `entry` fails at runtime there (`unhashable type:
+  'dict'`) and groups here. ORDER BY a meta column is a `TypeError` there
+  and orders by the printed dict here.
 
 Differences in message text only, which the suites cannot see since they
 compare the lines errors are on:

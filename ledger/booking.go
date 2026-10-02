@@ -274,6 +274,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 				copied := *posting
 				copied.Amount = amount
 				copied.Inferred = true
+				copied.Automatic = true
 				delta.Postings = append(delta.Postings, &copied)
 			}
 			delete(groupDelta.InferredAmounts, posting)
@@ -624,14 +625,25 @@ func resolveCostCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Tr
 // layout (BodyItems) is left as written.
 func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
 	txn.Postings = delta.Postings
+	// Like beancount's __automatic__, a posting is Automatic when Booking
+	// interpolated a missing number, not when it only filled in a currency.
 	for posting, amount := range delta.InferredAmounts {
+		if posting.Amount == nil || posting.Amount.Value == "" {
+			posting.Automatic = true
+		}
 		posting.Amount = amount
 		posting.Inferred = true
 	}
 	for posting, cost := range delta.InferredCosts {
+		if cost.Inferred {
+			posting.Automatic = true
+		}
 		posting.Cost = cost
 	}
 	for posting, price := range delta.InferredPrices {
+		if posting.Price == nil || posting.Price.Value == "" {
+			posting.Automatic = true
+		}
 		posting.Price = price
 	}
 }

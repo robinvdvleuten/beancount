@@ -255,8 +255,8 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 		if compiled.Targets[idx].IsAgg {
 			return statementErrorf(`GROUP-BY expressions may not reference aggregates: "%s"`, ref)
 		}
-		// Sets, lists and inventories are unhashable in Python.
-		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList {
+		// Sets, lists, dicts and inventories are unhashable in Python.
+		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList || t == tDict || t == tMetadata {
 			return statementErrorf(`GROUP-BY a non-hashable type is not supported: "%s"`, ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)
@@ -566,12 +566,15 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 		return &cAttribute{x: x, attr: attr}, nil
 
 	case *bql.Subscript:
-		// Only beanquery's dict columns, such as meta, take a subscript;
-		// ours has none (KNOWN_GAPS.md).
-		if _, err := c.compileExpr(node.X); err != nil {
+		// Like beanquery, only a dict, a meta column, takes a subscript.
+		x, err := c.compileExpr(node.X)
+		if err != nil {
 			return nil, err
 		}
-		return nil, compileErrorf(node, "column type is not subscriptable")
+		if t := x.typ(); t != tDict && t != tMetadata {
+			return nil, compileErrorf(node, "column type is not subscriptable")
+		}
+		return &cSubscript{x: x, key: node.Key}, nil
 
 	case *bql.Between:
 		return c.compileBetween(node)

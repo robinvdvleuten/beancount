@@ -1,0 +1,1 @@
+PRINT FROM 'Assets:Cash' IN accounts AND year = 2024

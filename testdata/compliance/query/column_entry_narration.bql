@@ -1,0 +1,1 @@
+SELECT entry.narration LIMIT 1

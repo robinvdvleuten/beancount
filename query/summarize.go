@@ -89,7 +89,7 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 			continue
 		}
 		narration := fmt.Sprintf("Opening balance for '%s' (Summarization)", account)
-		summary = append(summary, balanceTransaction(qctx, openingDate, narration, "S", account, opening, inventory, false))
+		summary = append(summary, balanceTransaction(qctx, openingDate, narration, "S", account, opening, inventory, false, "<summarize>"))
 	}
 	// Like beancount's entry_sortkey: the opening transactions have no
 	// source line, so they sort before a price on the same date.
@@ -223,7 +223,10 @@ func conversionTransaction(qctx *Context, entries []ast.Directive, date *ast.Dat
 		postings = append(postings, leg)
 	}
 	narration := "Conversion for " + objectString(balance)
-	return ast.NewTransaction(date, narration, ast.WithFlag("C"), ast.WithPostings(postings...))
+	txn := ast.NewTransaction(date, narration, ast.WithFlag("C"), ast.WithPostings(postings...))
+	// Like beancount's, the conversion entry's meta names "<conversions>".
+	txn.SetPosition(ast.Position{Filename: "<conversions>", Line: -1})
+	return txn
 }
 
 // clearTransform appends T-flagged transactions at the last entry date that
@@ -258,7 +261,7 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 			continue
 		}
 		narration := fmt.Sprintf("Transfer balance for '%s' (Transfer balance)", account)
-		result = append(result, balanceTransaction(qctx, transferDate, narration, "T", account, earnings, inventory, true))
+		result = append(result, balanceTransaction(qctx, transferDate, narration, "T", account, earnings, inventory, true, "<transfer_balances>"))
 	}
 	return result
 }
@@ -284,7 +287,9 @@ func bookTransaction(qctx *Context, accounts map[string]*inventoryValue, txn *as
 // directly by an equity leg for that position's cost value. When negate is
 // set the account legs carry the negated balance (transfers); otherwise they
 // restate it (opening balances). It records each leg's position in qctx.
-func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account, equity string, inventory *inventoryValue, negate bool) *ast.Transaction {
+// filename is what the entry's meta names, as beancount's: "<summarize>"
+// or "<transfer_balances>", at line 0.
+func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account, equity string, inventory *inventoryValue, negate bool, filename string) *ast.Transaction {
 	positions := inventory.Positions()
 	postings := make([]*ast.Posting, 0, 2*len(positions))
 
@@ -313,7 +318,9 @@ func balanceTransaction(qctx *Context, date *ast.Date, narration, flag, account,
 		postings = append(postings, leg)
 	}
 
-	return ast.NewTransaction(date, narration, ast.WithFlag(flag), ast.WithPostings(postings...))
+	txn := ast.NewTransaction(date, narration, ast.WithFlag(flag), ast.WithPostings(postings...))
+	txn.SetPosition(ast.Position{Filename: filename})
+	return txn
 }
 
 func sortedAccounts(accounts map[string]*inventoryValue) []string {

@@ -70,8 +70,12 @@ func runOurQuery(t *testing.T, fixture queryFixture, format string, numberify bo
 	t.Helper()
 
 	ctx := context.Background()
+	// Like the query command, load the ledger by its absolute path, which
+	// the filename and meta columns name.
+	path, err := filepath.Abs(fixture.ledger)
+	assert.NoError(t, err)
 	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
-	result, err := ldr.Load(ctx, fixture.ledger)
+	result, err := ldr.Load(ctx, path)
 	assert.NoError(t, err)
 
 	l := ledger.New()

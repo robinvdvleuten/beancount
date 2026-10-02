@@ -1,0 +1,1 @@
+SELECT entry.meta, count(*) GROUP BY entry.meta
