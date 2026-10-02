@@ -44,6 +44,8 @@ var errorFixtures = map[string]string{
 	"err_regex_invalid_grep":            `error: invalid regular expression '[': missing closing ]`,
 	"err_regex_lookahead":               `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
 	"err_integer_overflow":              `error: integer overflow`,
+	"err_in_list_set":                   `error: unhashable type: 'list'`,
+	"err_not_in_list_set":               `error: unhashable type: 'list'`,
 	"err_grepn_no_such_group":           `error: no such group`,
 	"err_grepn_negative_group":          `error: no such group`,
 	"err_subst_invalid_group_reference": `error: invalid group reference 2 at position 2`,

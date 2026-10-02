@@ -280,7 +280,8 @@ compare the lines errors are on:
   Python `TypeError` in beanquery; here `IN` a string or a set is FALSE
   and `NOT IN` TRUE for any left operand that is not a string, which
   neither holds. `IN` a list (`1 IN (1.0, 2)`) compares with Python's
-  `==` in both.
+  `==` in both, and a list `IN` a set (`(1, 2) IN tags`) fails as
+  unhashable in both.
 
 - **BQL Python exceptions**: where beanquery fails with a Python exception
   rather than a query error, we answer instead. `PIVOT BY` on a query

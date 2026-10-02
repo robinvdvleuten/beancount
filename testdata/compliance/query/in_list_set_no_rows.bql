@@ -1,0 +1,1 @@
+SELECT account WHERE date < 1900-01-01 AND (1, 2) IN tags

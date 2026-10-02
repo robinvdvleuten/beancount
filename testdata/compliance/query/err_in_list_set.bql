@@ -1,0 +1,1 @@
+SELECT DISTINCT account WHERE (1, 2) IN tags

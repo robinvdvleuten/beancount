@@ -394,9 +394,10 @@ func (c *cOr) eval(row *evalRow) any {
 
 // cIn is Python's in, NULL when either operand is: a value equal to a
 // list's element by Python's ==, membership of a set, or a case-sensitive
-// substring of a string. A left operand that is not a string is never in a
-// set or a string, where 1 IN 'abc' is a TypeError in beanquery
-// (KNOWN_GAPS.md).
+// substring of a string. A list is unhashable, so testing it against a set
+// fails the statement, as Python's TypeError fails beanquery's. Any other
+// left operand that is not a string is never in a set or a string, where
+// 1 IN 'abc' is a TypeError in beanquery (KNOWN_GAPS.md).
 type cIn struct{ l, r cexpr }
 
 func (c *cIn) typ() dtype { return tBool }
@@ -412,6 +413,11 @@ func (c *cIn) eval(row *evalRow) any {
 	}
 	if list, ok := r.(listValue); ok {
 		return list.contains(l)
+	}
+	if _, isList := l.(listValue); isList {
+		if _, isSet := r.(setValue); isSet {
+			fail("unhashable type: 'list'")
+		}
 	}
 	elem, ok := l.(string)
 	if !ok {
