@@ -231,8 +231,11 @@ func beanqueryPython(t *testing.T) string {
 	python := filepath.Join(filepath.Dir(path), "python")
 	if script, err := os.ReadFile(path); err == nil {
 		shebang, _, _ := strings.Cut(string(script), "\n")
-		if interpreter, ok := strings.CutPrefix(shebang, "#!"); ok && strings.HasPrefix(filepath.Base(interpreter), "python") {
-			python = interpreter
+		// The shebang may pass the interpreter flags (pip writes `python -E`).
+		if line, ok := strings.CutPrefix(shebang, "#!"); ok {
+			if fields := strings.Fields(line); len(fields) > 0 && strings.HasPrefix(filepath.Base(fields[0]), "python") {
+				python = fields[0]
+			}
 		}
 	}
 	if output, err := exec.Command(python, "-c", "import beanquery.shell").CombinedOutput(); err != nil {
