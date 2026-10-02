@@ -106,13 +106,19 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 // bookTransaction books txn and reports whether it stays in the ledger.
 func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 	// Beancount v2 reports these while parsing, so they are reported
-	// whether or not the transaction books: a merge cost {*}, a compound
+	// whether or not the transaction books: a merge cost {*}, a component a
+	// cost spec repeats (ignored, as the parser keeps the first), a compound
 	// cost inside total braces, and a price that is negative or a total on
 	// a posting without units, the last three of which it fixes up before
 	// booking.
 	for _, posting := range txn.Postings {
 		if posting.Cost.IsMergeCost() {
 			l.errors = append(l.errors, NewMergeCostError(txn, posting))
+		}
+		if posting.Cost != nil {
+			for _, duplicate := range posting.Cost.Duplicates {
+				l.errors = append(l.errors, NewDuplicateCostComponentError(txn, posting, duplicate))
+			}
 		}
 		l.errors = append(l.errors, fixTotalCost(txn, posting)...)
 		l.errors = append(l.errors, fixPrice(txn, posting)...)

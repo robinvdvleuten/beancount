@@ -1,0 +1,10 @@
+; A cost spec that repeats its date is reported, and the transaction is kept.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD, 2020-01-01, 2020-01-02}
+  Assets:C
+
+2020-01-03 balance Assets:I 1 HOOL
+2020-01-03 balance Assets:C -100 USD

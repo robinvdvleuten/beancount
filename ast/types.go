@@ -95,6 +95,12 @@ type Cost struct {
 	Total    *Amount // Additional total component after '#' in a compound cost
 	Date     *Date
 	Label    string
+
+	// Duplicates holds each component the spec repeats, in source order,
+	// as a Cost of that one component: an Amount (with its Total), a Date,
+	// IsMerge, or else a Label. Like beancount, the first of each kind
+	// counts and Booking reports the rest.
+	Duplicates []*Cost
 }
 
 // IsEmpty returns true if this is an empty cost specification {}.

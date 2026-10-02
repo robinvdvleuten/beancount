@@ -179,57 +179,58 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 		return cost, nil
 	}
 
-	// Parse comma-separated components (amount, date, label) in any order,
-	// matching the official beancount grammar. Duplicates are errors.
+	// Parse comma-separated components (amount, date, label, merge marker)
+	// in any order, matching the official beancount grammar. Like
+	// beancount, the first of each kind counts; a repeated one goes to
+	// Duplicates for Booking to report, and the transaction is kept.
 	hasLabel := false
 	for {
+		// target is where the next component goes: the cost itself, or a
+		// duplicate when the cost already has one of its kind.
+		target := cost
+		duplicate := func(has bool) {
+			if has {
+				target = &ast.Cost{}
+				cost.Duplicates = append(cost.Duplicates, target)
+			}
+		}
 		switch {
 		case p.check(NUMBER) || p.check(EXPRESSION) || p.checkHash():
-			if cost.Amount != nil || cost.Total != nil {
-				return nil, p.error("duplicate cost amount in cost spec")
-			}
-			if err := p.parseCostAmount(cost); err != nil {
+			duplicate(cost.Amount != nil || cost.Total != nil)
+			if err := p.parseCostAmount(target); err != nil {
 				return nil, err
 			}
 
 		case p.check(IDENT):
 			// A currency without a number leaves the number to Booking
 			// (official grammar: maybe_number CURRENCY).
-			if cost.Amount != nil || cost.Total != nil {
-				return nil, p.error("duplicate cost amount in cost spec")
-			}
-			cost.Amount = ast.NewAmount("", p.internCurrency(p.advance()))
+			duplicate(cost.Amount != nil || cost.Total != nil)
+			target.Amount = ast.NewAmount("", p.internCurrency(p.advance()))
 
 		case p.check(DATE):
-			if cost.Date != nil {
-				return nil, p.error("duplicate date in cost spec")
-			}
+			duplicate(cost.Date != nil)
 			date, err := p.parseDate()
 			if err != nil {
 				return nil, err
 			}
-			cost.Date = date
+			target.Date = date
 
 		case p.check(STRING):
-			if hasLabel {
-				return nil, p.error("duplicate label in cost spec")
-			}
+			duplicate(hasLabel)
 			labelTok := p.advance()
 			label, err := p.unquoteString(labelTok.String(p.source))
 			if err != nil {
 				return nil, p.errorAtToken(labelTok, "invalid string literal: %v", err)
 			}
-			cost.Label = label
+			target.Label = label
 			hasLabel = true
 
 		case p.check(ASTERISK):
 			// A merge marker, among the other components as beancount's
 			// grammar takes it, in either braces; Booking reports it.
-			if cost.IsMerge {
-				return nil, p.error("duplicate merge cost in cost spec")
-			}
+			duplicate(cost.IsMerge)
 			p.advance()
-			cost.IsMerge = true
+			target.IsMerge = true
 
 		default:
 			return nil, p.error("expected cost amount, currency, date, label, or '*'")

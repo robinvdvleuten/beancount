@@ -162,19 +162,44 @@ func TestParseCost(t *testing.T) {
 			},
 		},
 		{
-			name:     "DuplicateAmount",
-			input:    "{100.00 USD, 100.00 USD}",
-			hasError: true,
+			name:  "DuplicateAmount",
+			input: "{100.00 USD, 200 USD}",
+			expected: &ast.Cost{
+				Amount:     &ast.Amount{Raw: "100.00", Value: "100.00", Currency: "USD"},
+				Duplicates: []*ast.Cost{{Amount: &ast.Amount{Raw: "200", Value: "200", Currency: "USD"}}},
+			},
 		},
 		{
-			name:     "DuplicateDate",
-			input:    "{2020-02-01, 2020-02-01}",
-			hasError: true,
+			name:  "DuplicateCurrencyOnly",
+			input: "{USD, 100 USD}",
+			expected: &ast.Cost{
+				Amount:     &ast.Amount{Currency: "USD"},
+				Duplicates: []*ast.Cost{{Amount: &ast.Amount{Raw: "100", Value: "100", Currency: "USD"}}},
+			},
 		},
 		{
-			name:     "DuplicateLabel",
-			input:    `{"lot-a", "lot-b"}`,
-			hasError: true,
+			name:  "DuplicateDate",
+			input: "{2020-02-01, 2020-02-02}",
+			expected: &ast.Cost{
+				Date:       &ast.Date{Time: time.Date(2020, 2, 1, 0, 0, 0, 0, time.UTC)},
+				Duplicates: []*ast.Cost{{Date: &ast.Date{Time: time.Date(2020, 2, 2, 0, 0, 0, 0, time.UTC)}}},
+			},
+		},
+		{
+			name:  "DuplicateLabel",
+			input: `{"lot-a", "lot-b", "lot-c"}`,
+			expected: &ast.Cost{
+				Label:      "lot-a",
+				Duplicates: []*ast.Cost{{Label: "lot-b"}, {Label: "lot-c"}},
+			},
+		},
+		{
+			name:  "DuplicateMerge",
+			input: "{*, *}",
+			expected: &ast.Cost{
+				IsMerge:    true,
+				Duplicates: []*ast.Cost{{IsMerge: true}},
+			},
 		},
 		{
 			name:     "TrailingComma",
@@ -227,11 +252,6 @@ func TestParseCost(t *testing.T) {
 			},
 		},
 		{
-			name:     "DuplicateMergeCost",
-			input:    "{*, *}",
-			hasError: true,
-		},
-		{
 			name:     "TotalCostWithoutAmount",
 			input:    "{{, 2020-01-01}}",
 			hasError: true,
@@ -254,11 +274,6 @@ func TestParseCost(t *testing.T) {
 				Date:   &ast.Date{Time: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
 				Label:  "lot",
 			},
-		},
-		{
-			name:     "CurrencyOnlyCostDuplicatesAmount",
-			input:    "{USD, 100 USD}",
-			hasError: true,
 		},
 		{
 			name:     "NumberOnlyCost",

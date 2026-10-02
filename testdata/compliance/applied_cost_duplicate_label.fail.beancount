@@ -1,0 +1,16 @@
+; A cost spec that repeats its label is reported, and the transaction is
+; kept with the first label, which the sale then matches.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD, "a", "b"}
+  Assets:I  1 HOOL {100 USD, "b"}
+  Assets:C
+
+2020-01-03 * "sell"
+  Assets:I  -1 HOOL {"a"}
+  Assets:C  100 USD
+
+2020-01-04 balance Assets:I 1 HOOL
+2020-01-04 balance Assets:C -100 USD

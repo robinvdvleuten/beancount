@@ -1,0 +1,27 @@
+; PRINT shows each cost spec with the first of each component it repeats,
+; as Booking kept it.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100.50 USD, (1+2) USD, "a", "b", 2020-01-01, 2021-01-01, # 2 USD, EUR}
+  Assets:C
+
+2020-01-03 * "currency first"
+  Assets:I  1 HOOL {USD, 10 USD}
+  Assets:C  -10 USD
+
+2020-01-03 * "total braces"
+  Assets:I  2 HOOL {{100 USD, 300 USD}}
+  Assets:C
+
+2020-01-04 balance Assets:I 4 HOOL
+2020-01-04 balance Assets:C -210.50 USD
+
+2020-01-05 * "date and label"
+  Assets:I  1 HOOL {100 USD, 2020-01-01, "a", "b", 2020-01-02}
+  Assets:C
+
+2020-01-06 * "merge"
+  Assets:I  1 HOOL {*, 100 USD, *}
+  Assets:C

@@ -65,6 +65,7 @@ func TestErrorKinds(t *testing.T) {
 		{NewNegativeCostError(txn, posting, decimal.NewFromInt(-1), "USD"), "NegativeCostError", 11, txn},
 		{NewZeroAmountError(txn, posting), "ZeroAmountError", 11, txn},
 		{NewMergeCostError(txn, posting), "MergeCostError", 11, txn},
+		{NewDuplicateCostComponentError(txn, posting, &ast.Cost{Label: "b"}), "DuplicateCostComponentError", 11, txn},
 		{NewCurrencyGroupError(txn, posting, "Too many missing numbers"), "CurrencyGroupError", 11, txn},
 		{NewNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
 		{NewTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},

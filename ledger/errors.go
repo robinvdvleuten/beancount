@@ -301,17 +301,51 @@ func NewTotalCostError(txn *ast.Transaction, posting *ast.Posting, message strin
 // beancount, it blames the posting's line and quotes the compound amount's
 // Python repr.
 func NewTotalCompoundCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+	return newError("TotalCostError", txn, posting.Account,
+		"Per-unit cost may not be specified using total cost syntax: '%s'; ignoring per-unit cost",
+		compoundAmountRepr(posting.Cost)).atPosting(posting)
+}
+
+// NewDuplicateCostComponentError creates an error for a component a cost
+// spec repeats (a Cost of ast.Cost.Duplicates), which beancount reports and
+// ignores, keeping the first. Like beancount, it blames the posting's line
+// and uses its words.
+func NewDuplicateCostComponentError(txn *ast.Transaction, posting *ast.Posting, duplicate *ast.Cost) *Diagnostic {
+	var message string
+	switch {
+	case duplicate.Amount != nil:
+		message = "Duplicate cost: '" + compoundAmountRepr(duplicate) + "'."
+	case duplicate.Date != nil:
+		message = "Duplicate date: '" + duplicate.Date.Format("2006-01-02") + "'."
+	case duplicate.IsMerge:
+		message = "Duplicate merge-cost spec"
+	default:
+		message = "Duplicate label: '" + duplicate.Label + "'."
+	}
+	return newError("DuplicateCostComponentError", txn, posting.Account, "%s", message).atPosting(posting)
+}
+
+// compoundAmountRepr is the Python repr of a cost's amount as beancount's
+// CompoundAmount holds it: a number left out is MISSING, and a total None
+// unless the amount is a compound.
+func compoundAmountRepr(cost *ast.Cost) string {
+	const missing = "<class 'beancount.core.number.MISSING'>"
 	number := func(amount *ast.Amount) string {
+		if amount == nil {
+			return "None"
+		}
 		n, err := ParseAmount(amount)
 		if amount.Value == "" || err != nil {
-			return "<class 'beancount.core.number.MISSING'>"
+			return missing
 		}
 		return "Decimal(" + pyrepr.String(pydecimal.String(n)) + ")"
 	}
-	cost := posting.Cost
-	return newError("TotalCostError", txn, posting.Account,
-		"Per-unit cost may not be specified using total cost syntax: 'CompoundAmount(number_per=%s, number_total=%s, currency=%s)'; ignoring per-unit cost",
-		number(cost.Amount), number(cost.Total), pyrepr.String(cost.Total.Currency)).atPosting(posting)
+	currency := missing
+	if cost.Amount.Currency != "" {
+		currency = pyrepr.String(cost.Amount.Currency)
+	}
+	return fmt.Sprintf("CompoundAmount(number_per=%s, number_total=%s, currency=%s)",
+		number(cost.Amount), number(cost.Total), currency)
 }
 
 // NewInvalidPriceError creates an error for an invalid price specification.

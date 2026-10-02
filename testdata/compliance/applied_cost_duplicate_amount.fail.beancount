@@ -1,0 +1,11 @@
+; A cost spec that repeats its amount is reported, and the transaction is
+; kept with the first amount: the cash interpolated from it balances.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD, 200 USD}
+  Assets:C
+
+2020-01-03 balance Assets:I 1 HOOL
+2020-01-03 balance Assets:C -100 USD

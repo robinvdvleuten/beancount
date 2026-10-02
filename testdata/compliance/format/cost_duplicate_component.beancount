@@ -1,0 +1,11 @@
+; A cost spec that repeats a component keeps all of them when formatted.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD, 200 USD, "a", "b", 2020-01-01, 2020-01-02}
+  Assets:C   -100 USD
+
+2020-01-03 * "merge"
+  Assets:I    1 HOOL {*, 100 USD, *}
+  Assets:C  -100.00 USD

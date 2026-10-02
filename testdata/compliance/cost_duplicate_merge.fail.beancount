@@ -1,0 +1,11 @@
+; A cost spec that repeats the merge marker is reported besides the merge
+; cost itself, and the transaction is kept.
+2020-01-01 open Assets:I
+2020-01-01 open Assets:C
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD, *, *}
+  Assets:C
+
+2020-01-03 balance Assets:I 1 HOOL
+2020-01-03 balance Assets:C -100 USD
