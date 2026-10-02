@@ -29,6 +29,11 @@ var errorFixtures = map[string]string{
 	"err_parse_date_unconverted": `error: unconverted data remains: x`,
 	"err_parse_date_day":         `error: day is out of range for month`,
 	"err_parse_date_unknown":     `error: Unknown string format: x`,
+	"err_date_ymd_overflow":      `error: signed integer is greater than maximum`,
+	"err_date_ymd_underflow":     `error: signed integer is less than minimum`,
+	"err_date_int": `error: no function matches "date(int)" name and argument types
+| SELECT date(1)
+|        ^^^^^^^`,
 	"err_ymonth": `error: no function matches "ymonth(date)" name and argument types
 | SELECT ymonth(date)
 |        ^^^^^^^^^^^^`,

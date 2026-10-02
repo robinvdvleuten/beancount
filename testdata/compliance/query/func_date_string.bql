@@ -1,0 +1,1 @@
+SELECT date('2023-2-1') AS unpadded, date('2023-02- 3') AS spaced, date('2023-02-30') AS feb30, date('2023-02-1x') AS trailing, date(' 2023-02-01') AS leading, date(2023-01-05) AS d, date(NULL) AS n LIMIT 1

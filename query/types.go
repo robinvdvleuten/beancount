@@ -42,6 +42,9 @@ const (
 	tList     // a list constant, (1, 2)
 	tCost     // a position's cost, position.cost
 	tInterval // interval()'s relative time interval, dateutil's relativedelta
+	// tObject is a function parameter type only, beanquery's object: unlike
+	// tAny, its Any, it takes an untyped (tAny) argument or NULL alone.
+	tObject
 )
 
 var dtypeNames = map[dtype]string{

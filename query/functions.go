@@ -2,6 +2,7 @@ package query
 
 import (
 	"fmt"
+	"math"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -28,11 +29,36 @@ func strValue(v any) string {
 // their one argument.
 func castIntArg(_ *evalRow, args []any) any     { return castInt(args[0]) }
 func castDecimalArg(_ *evalRow, args []any) any { return castDecimal(args[0]) }
+func castDateArg(_ *evalRow, args []any) any    { return castDate(args[0]) }
+
+// dateFromYMD is beanquery's date(year, month, day): Python's
+// datetime.date, NULL for a year, month or day out of its range rather than
+// normalized. Like Python, which reads each as a C int in turn, a number
+// outside a C int's range fails the query.
+func dateFromYMD(year, month, day int64) any {
+	for _, n := range []int64{year, month, day} {
+		if n > math.MaxInt32 {
+			fail("signed integer is greater than maximum")
+		}
+		if n < math.MinInt32 {
+			fail("signed integer is less than minimum")
+		}
+	}
+	if year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 {
+		return nil
+	}
+	t := time.Date(int(year), time.Month(month), int(day), 0, 0, 0, 0, time.UTC)
+	if t.Day() != int(day) {
+		return nil
+	}
+	return &ast.Date{Time: t}
+}
 
 // funcOverload is one typed signature of a simple function. tAny parameters
-// match any argument type but the * of count(*); other parameters need that
-// exact type, so like bean-query an object-typed value or NULL only fits a
-// tAny parameter.
+// match any argument type but the * of count(*), and tObject parameters an
+// object-typed value or NULL; other parameters need that exact type, so like
+// bean-query an object-typed value or NULL only fits a tAny or tObject
+// parameter.
 type funcOverload struct {
 	params []dtype
 	result dtype
@@ -54,7 +80,7 @@ func (d *funcDef) matchOverload(argTypes []dtype) *funcOverload {
 		}
 		ok := true
 		for j, param := range o.params {
-			if param != argTypes[j] && (param != tAny || argTypes[j] == tAsterisk) {
+			if !paramAccepts(param, argTypes[j]) {
 				ok = false
 				break
 			}
@@ -64,6 +90,20 @@ func (d *funcDef) matchOverload(argTypes []dtype) *funcOverload {
 		}
 	}
 	return nil
+}
+
+// paramAccepts reports whether a parameter of type param takes an argument
+// of type arg.
+func paramAccepts(param, arg dtype) bool {
+	switch param {
+	case arg:
+		return true
+	case tAny:
+		return arg != tAsterisk
+	case tObject:
+		return arg == tAny || arg == tNull
+	}
+	return false
 }
 
 // functions is the registry of simple functions, shared by the targets and
@@ -145,15 +185,11 @@ var functions = map[string]*funcDef{
 	}},
 	"date": {overloads: []funcOverload{
 		{[]dtype{tInt, tInt, tInt}, tDate, func(_ *evalRow, args []any) any {
-			return &ast.Date{Time: time.Date(int(args[0].(int64)), time.Month(args[1].(int64)), int(args[2].(int64)), 0, 0, 0, 0, time.UTC)}
+			return dateFromYMD(args[0].(int64), args[1].(int64), args[2].(int64))
 		}},
-		{[]dtype{tString}, tDate, func(_ *evalRow, args []any) any {
-			date := &ast.Date{}
-			if err := date.Capture([]string{args[0].(string)}); err != nil {
-				return nil
-			}
-			return date
-		}},
+		{[]dtype{tDate}, tDate, castDateArg},
+		{[]dtype{tString}, tDate, castDateArg},
+		{[]dtype{tObject}, tDate, castDateArg},
 	}},
 	"date_trunc": {overloads: []funcOverload{
 		{[]dtype{tString, tDate}, tDate, func(_ *evalRow, args []any) any {

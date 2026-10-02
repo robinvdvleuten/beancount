@@ -1,0 +1,1 @@
+SELECT narration, entry_meta('kd') AS kd, date(entry_meta('kd')) AS d WHERE account ~ 'Food'

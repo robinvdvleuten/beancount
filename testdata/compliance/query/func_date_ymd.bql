@@ -1,0 +1,1 @@
+SELECT date(2023, 2, 30) AS feb30, date(2024, 2, 29) AS leap, date(2023, 13, 1) AS m13, date(2023, 0, 1) AS m0, date(2023, 1, 0) AS d0, date(0, 1, 1) AS y0, date(10000, 1, 1) AS y10000, date(-1, 1, 1) AS yneg LIMIT 1
