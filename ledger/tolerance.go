@@ -64,15 +64,16 @@ func (t tolerances) spec(postings []*ast.Posting) transactionTolerances {
 // once booked, when it checks the residual: from every units number,
 // interpolated ones included, and, under infer_tolerance_from_cost, costs
 // per unit with inferred costs resolved and a reduction split per lot.
-func (t tolerances) booked(postings []*ast.Posting, delta *TransactionDelta, reducedPositions map[*ast.Posting][]BookedPosition) transactionTolerances {
+// amounts and costs hold the ones interpolation completed, by posting.
+func (t tolerances) booked(postings []*ast.Posting, amounts map[*ast.Posting]*ast.Amount, costs map[*ast.Posting]*ast.Cost, reducedPositions map[*ast.Posting][]BookedPosition) transactionTolerances {
 	return transactionTolerances{
 		tolerances: t,
-		units:      bookedUnits(postings, delta),
+		units:      bookedUnits(postings, amounts),
 		// Every default, not only those of named currencies: once booked,
 		// a currency with a residual is named by a units, cost or price
 		// amount, so the two agree.
 		defaults: t.options.Defaults,
-		fromCost: t.fromCost(bookedToleranceShares(postings, delta, reducedPositions)),
+		fromCost: t.fromCost(bookedToleranceShares(postings, costs, reducedPositions)),
 	}
 }
 
@@ -237,10 +238,13 @@ func statedUnits(postings []*ast.Posting) map[string][]decimal.Decimal {
 
 // bookedUnits collects every units number per currency once booked,
 // interpolated ones included.
-func bookedUnits(postings []*ast.Posting, delta *TransactionDelta) map[string][]decimal.Decimal {
+func bookedUnits(postings []*ast.Posting, amounts map[*ast.Posting]*ast.Amount) map[string][]decimal.Decimal {
 	booked := make(map[string][]decimal.Decimal)
 	for _, posting := range postings {
-		amount := delta.amountFor(posting)
+		amount := amounts[posting]
+		if amount == nil {
+			amount = posting.Amount
+		}
 		if amount == nil {
 			continue
 		}
@@ -303,7 +307,7 @@ func specToleranceShares(postings []*ast.Posting) []toleranceShare {
 // checks the balance: a cost is its per-unit number, with inferred costs
 // resolved, and a reduction against lots becomes one share per lot, like
 // the booked postings beancount replaces it with.
-func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, reducedPositions map[*ast.Posting][]BookedPosition) []toleranceShare {
+func bookedToleranceShares(postings []*ast.Posting, costs map[*ast.Posting]*ast.Cost, reducedPositions map[*ast.Posting][]BookedPosition) []toleranceShare {
 	var shares []toleranceShare
 	for _, posting := range postings {
 		units, ok := statedUnitsNumber(posting)
@@ -326,7 +330,11 @@ func bookedToleranceShares(postings []*ast.Posting, delta *TransactionDelta, red
 		}
 
 		share := toleranceShare{units: units, price: price}
-		if cost := delta.costFor(posting); cost != nil {
+		cost := costs[posting]
+		if cost == nil {
+			cost = posting.Cost
+		}
+		if cost != nil {
 			share.hasCost = true
 			if number, currency, ok := perUnitCost(&ast.Posting{Amount: posting.Amount, Cost: cost}); ok {
 				share.costNumbers = []decimal.Decimal{number}

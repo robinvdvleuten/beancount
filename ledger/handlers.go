@@ -20,7 +20,7 @@ type Handler interface {
 	// Validate checks a directive without mutating state. It returns the
 	// errors found and the delta to apply (nil when the directive must not
 	// be applied). The delta type is specific to each handler (OpenDelta,
-	// TransactionDelta, etc.).
+	// BalanceDelta, etc.).
 	Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any)
 
 	// Apply mutates ledger state with the delta Validate returned.

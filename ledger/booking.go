@@ -226,12 +226,10 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	specTolerances := b.tolerances.spec(txn.Postings)
 	written := resolveCostCurrencies(txn, groups)
 
-	delta := &TransactionDelta{
-		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-		InferredCosts:   make(map[*ast.Posting]*ast.Cost),
-		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
-		Postings:        make([]*ast.Posting, 0, len(txn.Postings)),
-	}
+	// The booked postings, and what interpolation completed on them, which
+	// commitBooking writes onto txn once every group is booked.
+	postings := make([]*ast.Posting, 0, len(txn.Postings))
+	var completed []interpolatedPosting
 	residuals := make(map[string]decimal.Decimal)
 	autoBooked := false
 	// Like beancount, a transaction changes the inventories only through
@@ -242,15 +240,9 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	for _, group := range groups {
 		scratch := &scratchInventories{booker: b, staged: staged, own: make(map[string]*Inventory)}
 		groupReductions, groupErrs := b.bookReductions(txn, group, scratch)
-		var groupDelta *TransactionDelta
-		var balance *balanceValidation
-		var autoAmounts []*ast.Amount
+		var interpolated *interpolatedGroup
 		if len(groupErrs) == 0 {
-			groupDelta, balance, autoAmounts, groupErrs = b.calculateBalance(txn, group, groupReductions, specTolerances)
-			if len(groupErrs) == 0 && groupDelta == nil {
-				// Missing numbers could not be interpolated.
-				groupErrs = []error{newNotBalancedError(txn, balance.residuals)}
-			}
+			interpolated, groupErrs = interpolate(txn, group, groupReductions, specTolerances)
 		}
 		if len(groupErrs) > 0 {
 			errs = append(errs, groupErrs...)
@@ -261,40 +253,39 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 
 		// The amount-less posting belongs to every group: it is booked once
 		// per amount, as itself the first time and as a copy after that.
-		for _, posting := range group.postings {
-			if groupDelta.Dropped[posting] {
-				delete(groupDelta.InferredAmounts, posting)
+		for _, done := range interpolated.postings {
+			posting := done.posting
+			if done.leftOut {
 				continue
 			}
 			if posting.Amount != nil || posting.Price != nil {
-				delta.Postings = append(delta.Postings, posting)
+				postings = append(postings, posting)
+				if done.amount != nil || done.cost != nil || done.price != nil {
+					completed = append(completed, done)
+				}
 				continue
 			}
-			for _, amount := range autoAmounts {
+			for _, amount := range done.amounts {
 				if !autoBooked {
 					autoBooked = true
-					delta.InferredAmounts[posting] = amount
-					delta.Postings = append(delta.Postings, posting)
+					postings = append(postings, posting)
+					completed = append(completed, interpolatedPosting{posting: posting, amount: amount})
 					continue
 				}
 				copied := *posting
 				copied.Amount = amount
 				copied.Inferred = true
 				copied.Automatic = true
-				delta.Postings = append(delta.Postings, &copied)
+				postings = append(postings, &copied)
 			}
-			delete(groupDelta.InferredAmounts, posting)
 		}
-		maps.Copy(delta.InferredAmounts, groupDelta.InferredAmounts)
-		maps.Copy(delta.InferredCosts, groupDelta.InferredCosts)
-		maps.Copy(delta.InferredPrices, groupDelta.InferredPrices)
-		for currency, residual := range balance.residuals {
+		for currency, residual := range interpolated.residuals {
 			residuals[currency] = pydecimal.Add(residuals[currency], residual)
 		}
 	}
 	if len(errs) > 0 {
 		// Like beancount's, the errors carry the transaction as written:
-		// commitDelta takes the Dropped groups' postings out of txn.
+		// commitBooking takes the Dropped groups' postings out of txn.
 		if written == nil {
 			written = unbooked(txn)
 		}
@@ -304,7 +295,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			}
 		}
 	}
-	commitDelta(txn, delta)
+	commitBooking(txn, postings, completed)
 	maps.Copy(b.inventories, staged)
 
 	// The booked postings other than the reductions, their numbers now
@@ -582,7 +573,7 @@ func newBookingError(txn *ast.Transaction, account ast.Account, err error) error
 }
 
 // unbooked returns a copy of txn as written, before resolveCostCurrencies
-// and commitDelta rewrite its postings and fill in their numbers, for the
+// and commitBooking rewrite its postings and fill in their numbers, for the
 // errors reported on it to carry, so an error shows the postings of the
 // group it dropped.
 func unbooked(txn *ast.Transaction) *ast.Transaction {
@@ -626,403 +617,34 @@ func resolveCostCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Tr
 	return written
 }
 
-// commitDelta writes Booking's results onto the transaction. The processed
-// AST carries booked postings, like beancount's booked entries; the source
-// layout (BodyItems) is left as written.
-func commitDelta(txn *ast.Transaction, delta *TransactionDelta) {
-	txn.Postings = delta.Postings
+// commitBooking writes Booking's results onto the transaction: its booked
+// postings, and the amounts, costs and prices interpolation completed on
+// them. The processed AST carries booked postings, like beancount's booked
+// entries; the source layout (BodyItems) is left as written.
+func commitBooking(txn *ast.Transaction, postings []*ast.Posting, completed []interpolatedPosting) {
+	txn.Postings = postings
 	// Like beancount's __automatic__, a posting is Automatic when Booking
 	// interpolated a missing number, not when it only filled in a currency.
-	for posting, amount := range delta.InferredAmounts {
-		if posting.Amount == nil || posting.Amount.Value == "" {
-			posting.Automatic = true
-		}
-		posting.Amount = amount
-		posting.Inferred = true
-	}
-	for posting, cost := range delta.InferredCosts {
-		if cost.Inferred {
-			posting.Automatic = true
-		}
-		posting.Cost = cost
-	}
-	for posting, price := range delta.InferredPrices {
-		if posting.Price == nil || posting.Price.Value == "" {
-			posting.Automatic = true
-		}
-		posting.Price = price
-	}
-}
-
-// calculateBalance computes a Currency group's weights, infers its missing
-// numbers, rounded to specTolerances, and checks whether it balances. It returns the delta (mutations),
-// the balance state, and the amounts the group books its amount-less posting
-// at, which the caller records; a nil delta without errors means the missing
-// numbers could not be interpolated.
-func (b *booker) calculateBalance(txn *ast.Transaction, group currencyGroup, reductions map[*ast.Posting][]BookedPosition, specTolerances transactionTolerances) (*TransactionDelta, *balanceValidation, []*ast.Amount, []error) {
-	var errs []error
-	pc := classifyPostings(group.postings)
-
-	// Calculate weights for postings with amounts
-	var allWeights []weightSet
-	// Positions that reductions with an amount-less cost spec booked, one
-	// per lot. Every other amount-less cost spec is an augmentation's, whose
-	// cost is inferred from the residual.
-	reducedPositions := make(map[*ast.Posting][]BookedPosition)
-	for _, posting := range pc.withAmounts {
-		// A partial price annotation leaves the posting's weight unknown;
-		// it is resolved from the residual during interpolation below.
-		if posting.Price != nil && isIncompleteAmount(posting.Price) {
-			continue
-		}
-
-		weights, err := calculateWeights(posting)
-		if err != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
-			continue
-		}
-
-		// Check if this is a cost spec without an amount (returns empty weights)
-		if len(weights) == 0 && posting.Cost != nil && !posting.Cost.HasNumber() {
-			// Reductions resolve their weight from the booked lots' cost basis,
-			// matching beancount, which books lots before interpolation. The
-			// spec's date/label (if any) narrows which lots are booked.
-			// Augmentations, NONE's included, are handled in cost inference
-			// below.
-			if positions, ok := reductions[posting]; ok {
-				var weights weightSet
-				for _, position := range positions {
-					weights = append(weights, weight{
-						Amount:   pydecimal.Mul(position.Units, position.Cost.Number),
-						Currency: position.Cost.Currency,
-					})
-				}
-				allWeights = append(allWeights, weights)
-				reducedPositions[posting] = positions
+	for _, done := range completed {
+		posting := done.posting
+		if amount := done.amount; amount != nil {
+			if posting.Amount == nil || posting.Amount.Value == "" {
+				posting.Automatic = true
 			}
-		} else {
-			allWeights = append(allWeights, weights)
+			posting.Amount = amount
+			posting.Inferred = true
 		}
-	}
-
-	if len(errs) > 0 {
-		return nil, nil, nil, errs
-	}
-	if first := tooManyMissing(group, reducedPositions); first != nil {
-		return nil, nil, nil, []error{NewCurrencyGroupError(txn, first,
-			fmt.Sprintf("Too many missing numbers for currency group '%s'", group.currency))}
-	}
-
-	// Balance the weights
-	balance := balanceWeights(allWeights)
-	defer putBalanceMap(balance)
-
-	delta := &TransactionDelta{
-		InferredAmounts: make(map[*ast.Posting]*ast.Amount),
-		InferredCosts:   make(map[*ast.Posting]*ast.Cost),
-		InferredPrices:  make(map[*ast.Posting]*ast.Amount),
-		Dropped:         make(map[*ast.Posting]bool),
-	}
-
-	// A number-only amount or price is not a missing number in beancount:
-	// only its currency is inferred, from the single currency in use. Their
-	// weights are known, so resolve them before counting unknowns.
-	var currencyOnlyAmounts []*ast.Posting
-	for _, posting := range pc.incompleteAmounts {
-		if posting.Amount.Value == "" {
-			currencyOnlyAmounts = append(currencyOnlyAmounts, posting)
-			continue
-		}
-		if len(balance) != 1 {
-			return nil, unbalancedValidation(balance), nil, nil
-		}
-		number, nerr := decimal.NewFromString(posting.Amount.Value)
-		if nerr != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, nerr))
-			return nil, nil, nil, errs
-		}
-		for currency := range balance {
-			delta.InferredAmounts[posting] = &ast.Amount{
-				Value:    posting.Amount.Value,
-				Currency: currency,
+		if cost := done.cost; cost != nil {
+			if cost.Inferred {
+				posting.Automatic = true
 			}
-			balance[currency] = pydecimal.Add(balance[currency], number)
+			posting.Cost = cost
 		}
-	}
-
-	var valuelessPrices []*ast.Posting
-	for _, posting := range pc.incompletePrices {
-		if posting.Price.Value == "" {
-			valuelessPrices = append(valuelessPrices, posting)
-			continue
-		}
-		units, uerr := ParseAmount(posting.Amount)
-		if uerr != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr))
-			return nil, nil, nil, errs
-		}
-		if _, perr := decimal.NewFromString(posting.Price.Value); perr != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Price.Value, perr))
-			return nil, nil, nil, errs
-		}
-		perUnit, _, _ := PerUnitPrice(posting)
-		currency := posting.Price.Currency
-		if currency == "" {
-			if len(balance) != 1 {
-				return nil, unbalancedValidation(balance), nil, nil
+		if price := done.price; price != nil {
+			if posting.Price == nil || posting.Price.Value == "" {
+				posting.Automatic = true
 			}
-			for c := range balance {
-				currency = c
-			}
+			posting.Price = price
 		}
-		weight := pydecimal.Mul(units, perUnit)
-		delta.InferredPrices[posting] = &ast.Amount{Value: posting.Price.Value, Currency: currency}
-		balance[currency] = pydecimal.Add(balance[currency], weight)
-	}
-
-	// Beancount interpolates at most one missing number per transaction;
-	// more unknowns (missing amounts, currency-only amounts or value-less
-	// prices) are "too many missing numbers". A missing cost number next to
-	// one of them is reported by tooManyMissing above.
-	unknowns := len(pc.withoutAmounts) + len(currencyOnlyAmounts) + len(valuelessPrices)
-	if unknowns > 1 {
-		return nil, unbalancedValidation(balance), nil, nil
-	}
-
-	// Beancount allows at most one posting without an amount per
-	// transaction. It absorbs the residual of every weight currency, so it
-	// is booked once per currency with a non-zero residual, in the order the
-	// currencies first appear.
-	var autoPosting *ast.Posting
-	var autoAmounts []*ast.Amount
-	if len(pc.withoutAmounts) == 1 {
-		autoPosting = pc.withoutAmounts[0]
-
-		for _, currency := range residualCurrencies(allWeights, balance) {
-			needed := specTolerances.round(currency, balance[currency].Neg())
-			autoAmounts = append(autoAmounts, &ast.Amount{
-				Value:    formatInferredNumber(needed),
-				Currency: currency,
-			})
-			balance[currency] = pydecimal.Add(balance[currency], needed)
-		}
-
-		if len(autoAmounts) > 0 {
-			delta.InferredAmounts[autoPosting] = autoAmounts[0]
-		}
-	}
-
-	// Complete a currency-only amount: the missing number is the residual
-	// of the currency it balances in. Held at a per-unit cost or at a price,
-	// the units are the residual of that currency divided by it (less a
-	// compound cost's total part), like beancount's interpolate_group.
-	if len(currencyOnlyAmounts) == 1 {
-		posting := currencyOnlyAmounts[0]
-		currency := posting.Amount.Currency
-		weightCurrency, perUnit, total, ok := unitsWeightTerms(posting)
-		if !ok {
-			return nil, unbalancedValidation(balance), nil, nil
-		}
-
-		weight := balance[weightCurrency].Neg()
-		if weight.IsZero() {
-			delta.Dropped[posting] = true
-		}
-		needed := weight
-		if weightCurrency != currency {
-			needed = pydecimal.Quo(pydecimal.Sub(weight, total), perUnit)
-		}
-		needed = specTolerances.round(currency, needed)
-		delta.InferredAmounts[posting] = &ast.Amount{
-			Value:    formatInferredNumber(needed),
-			Currency: currency,
-		}
-		if weightCurrency == currency {
-			balance[currency] = pydecimal.Add(balance[currency], needed)
-		} else {
-			balance[weightCurrency] = pydecimal.Add(balance[weightCurrency], pydecimal.Add(pydecimal.Mul(needed, perUnit), total))
-		}
-	}
-
-	// Complete a value-less price annotation (bare @ or currency-only): the
-	// posting's weight is whatever zeroes the residual, and the price is
-	// derived from it.
-	if len(valuelessPrices) == 1 {
-		posting := valuelessPrices[0]
-		units, err := ParseAmount(posting.Amount)
-		if err != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
-			return nil, nil, nil, errs
-		}
-
-		currency := posting.Price.Currency
-		if currency == "" {
-			if len(balance) != 1 {
-				return nil, unbalancedValidation(balance), nil, nil
-			}
-			for c := range balance {
-				currency = c
-			}
-		}
-
-		weight := balance[currency].Neg()
-		priceNumber := weight.Abs()
-		if !posting.PriceTotal && !units.IsZero() {
-			priceNumber = pydecimal.Quo(weight, units).Abs()
-		}
-		delta.InferredPrices[posting] = &ast.Amount{Value: priceNumber.String(), Currency: currency}
-		balance[currency] = pydecimal.Add(balance[currency], weight)
-	}
-
-	// Infer costs for empty cost specs {}
-	if len(pc.withEmptyCosts) > 0 {
-		// Count empty costs that need inference from the residual: those of
-		// augmentations, whose lots Booking has not resolved.
-		inferableEmptyCosts := 0
-		for _, posting := range pc.withEmptyCosts {
-			if _, err := ParseAmount(posting.Amount); err != nil {
-				continue
-			}
-			if _, reduced := reducedPositions[posting]; !reduced {
-				inferableEmptyCosts++
-			}
-		}
-
-		// Beancount compliance: Cannot infer costs when multiple postings have empty cost specs
-		// This is ambiguous - which posting gets which portion of the residual?
-		if inferableEmptyCosts > 1 {
-			return nil, unbalancedValidation(balance), nil, nil
-		}
-
-		for _, posting := range pc.withEmptyCosts {
-			amount, err := ParseAmount(posting.Amount)
-			if err != nil {
-				continue
-			}
-
-			// Like beancount's interpolate_group, zero units leave the cost
-			// undefined, so the posting is left out of the booked transaction.
-			if amount.IsZero() {
-				delta.Dropped[posting] = true
-				continue
-			}
-			// Infer cost for augmentations; a reduction's comes from its lots.
-			if _, reduced := reducedPositions[posting]; reduced {
-				continue
-			}
-
-			if len(balance) > 1 {
-				// Multiple currencies - ambiguous
-				return nil, unbalancedValidation(balance), nil, nil
-			}
-			// The group's residual, zero when nothing else in the group
-			// weighs, as for {USD} next to postings in other currencies.
-			currency := group.currency
-			residual := balance[currency]
-			// The weight the posting must carry, and the number that gives
-			// it, like beancount's COST_PER and COST_TOTAL; the weight is
-			// then the units at the lot's (rounded) per-unit cost.
-			needed := residual.Neg()
-			cost := posting.Cost
-			completed := *cost
-			completed.Inferred = true
-			var perUnit decimal.Decimal
-			switch {
-			case cost.Total != nil && cost.Total.Value == "":
-				// {5 # USD}: the total is what the per-unit part leaves.
-				per, _ := ParseAmount(cost.Amount)
-				total := pydecimal.Sub(needed, pydecimal.Mul(per, amount))
-				completed.Total = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
-				perUnit = compoundCostNumber(per, total, amount)
-			case cost.Total != nil:
-				// {# 5 USD}: the per-unit number is what the total leaves.
-				total, _ := ParseAmount(cost.Total)
-				per := pydecimal.Quo(pydecimal.Sub(needed, total), amount)
-				completed.Amount = &ast.Amount{Value: formatInferredNumber(per), Currency: currency}
-				perUnit = compoundCostNumber(per, total, amount)
-			case cost.IsTotal:
-				// {{USD}} completes its total, beancount's number_total.
-				completed.Amount = &ast.Amount{Value: formatInferredNumber(needed), Currency: currency}
-				perUnit = pydecimal.Quo(needed, amount.Abs())
-			default:
-				perUnit = pydecimal.Quo(needed, amount)
-				completed.Amount = &ast.Amount{Value: formatInferredNumber(perUnit), Currency: currency}
-			}
-			delta.InferredCosts[posting] = &completed
-			balance[currency] = pydecimal.Add(residual, pydecimal.Mul(amount, perUnit))
-		}
-	}
-
-	// Check if balanced after inference, within the tolerances of the
-	// booked postings: interpolated amounts count, and costs count per
-	// unit, with inferred cost numbers resolved.
-	bookedTolerances := b.tolerances.booked(txn.Postings, delta, reducedPositions)
-	residuals := make(map[string]decimal.Decimal)
-	for currency, residual := range balance {
-		if residual.Abs().GreaterThan(bookedTolerances.of(currency)) {
-			residuals[currency] = residual
-		}
-	}
-
-	validation := &balanceValidation{
-		isBalanced: len(residuals) == 0,
-		residuals:  residuals,
-	}
-
-	return delta, validation, autoAmounts, nil
-}
-
-// tooManyMissing returns the first posting of a Currency group with a missing
-// number when the group has more than one, which beancount cannot
-// interpolate: a missing units number (or no amount at all), a missing cost
-// number (a compound's two count twice) other than on a reduction booked
-// against lots, or a missing price number.
-func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]BookedPosition) *ast.Posting {
-	var first *ast.Posting
-	missing := 0
-	for _, posting := range group.postings {
-		n := 0
-		if posting.Amount == nil || posting.Amount.Value == "" {
-			n++
-		}
-		if _, reduced := reducedPositions[posting]; posting.Cost != nil && !reduced {
-			n += missingCostNumbers(posting.Cost)
-		}
-		if posting.Price != nil && posting.Price.Value == "" {
-			n++
-		}
-		if n > 0 && first == nil {
-			first = posting
-		}
-		missing += n
-	}
-	if missing > 1 {
-		return first
-	}
-	return nil
-}
-
-// missingCostNumbers counts the numbers a cost leaves to Booking, like
-// beancount's COST_PER and COST_TOTAL: its per-unit number (a total cost's
-// number, for total braces), and a compound's total.
-func missingCostNumbers(cost *ast.Cost) int {
-	n := 0
-	if cost.Amount == nil || cost.Amount.Value == "" {
-		n++
-	}
-	if cost.Total != nil && cost.Total.Value == "" {
-		n++
-	}
-	return n
-}
-
-func unbalancedValidation(balance map[string]decimal.Decimal) *balanceValidation {
-	residuals := make(map[string]decimal.Decimal, len(balance))
-	for currency, residual := range balance {
-		residuals[currency] = residual
-	}
-	return &balanceValidation{
-		isBalanced: false,
-		residuals:  residuals,
 	}
 }

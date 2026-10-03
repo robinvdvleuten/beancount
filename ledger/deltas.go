@@ -2,59 +2,13 @@ package ledger
 
 import (
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/shopspring/decimal"
 )
 
-// Delta Types
-//
-// Deltas are pure data structures describing WHAT TO CHANGE, not validation results.
-// They represent the planned mutations resulting from processing directives.
-//
-// Key principles:
-//   - Deltas are immutable after creation
-//   - Deltas contain only mutation plans (no validation state)
-//   - Validation errors are returned separately from deltas
-//   - Deltas can be inspected, logged, or discarded without applying
-
-// TransactionDelta describes mutations from a transaction.
-// This is a pure data structure describing WHAT TO CHANGE, not validation results.
-type TransactionDelta struct {
-	InferredAmounts map[*ast.Posting]*ast.Amount
-	// InferredCosts are the costs Booking completed, with the numbers
-	// it inferred filled in.
-	InferredCosts  map[*ast.Posting]*ast.Cost
-	InferredPrices map[*ast.Posting]*ast.Amount
-	// Postings, when set, replaces the transaction's postings with the booked
-	// ones. Beancount books an amount-less posting once per currency with a
-	// non-zero residual, as a copy of the posting per extra currency, and
-	// drops it when every residual is zero.
-	Postings []*ast.Posting
-	// Dropped holds the postings whose missing units interpolate to a zero
-	// weight, or whose missing cost is on zero units, which beancount leaves
-	// out of the booked transaction.
-	Dropped map[*ast.Posting]bool
-}
-
-// balanceValidation holds validation results from balance calculation.
-// Separated from TransactionDelta to keep deltas pure (only mutations, no validation state).
-type balanceValidation struct {
-	isBalanced bool
-	residuals  map[string]decimal.Decimal
-}
-
-func (d *TransactionDelta) amountFor(posting *ast.Posting) *ast.Amount {
-	if amount := d.InferredAmounts[posting]; amount != nil {
-		return amount
-	}
-	return posting.Amount
-}
-
-func (d *TransactionDelta) costFor(posting *ast.Posting) *ast.Cost {
-	if cost := d.InferredCosts[posting]; cost != nil {
-		return cost
-	}
-	return posting.Cost
-}
+// Deltas are what a directive's handler plans in Validate and hands to its
+// Apply: the changes the directive makes to the ledger's state. They hold
+// no errors, which Validate returns beside them. A transaction has none
+// here: its handler applies what Booking recorded for it (bookedTransaction,
+// booking.go).
 
 // OpenDelta describes changes from opening an account.
 // Stores account properties directly to avoid unnecessary allocations.

@@ -7,10 +7,9 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Balancing is the part of Booking that weighs a Currency group's postings,
-// interpolates its missing numbers, and checks the residual against the
-// transaction's tolerances (booker.calculateBalance, with tolerances from
-// tolerance.go). These are its helpers.
+// Helpers of interpolation (interpolation.go), the part of Booking that
+// weighs a Currency group's postings, interpolates its missing number, and
+// checks the residual against the transaction's tolerances.
 
 // postingClassification groups postings by their characteristics
 // This makes the processing logic clearer and prevents misclassification
