@@ -61,13 +61,13 @@ interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
 **BQL Tables**: SELECT's FROM reads beanquery's `postings`, `entries`,
-`transactions`, `prices`, `events`, `commodities`, `notes` and `documents`
-Tables and the Empty table (`#`). beanquery's other two, `accounts` (#639)
-and `balances` (#638), are not built yet: naming one, as `#balances`,
-`"balances"` or a bare `balances`, fails with `table "balances" is not
-supported` (`err_from_table_balances`, one
-fixture per Table, listed in `queryGaps`), where beanquery reads it. A bare
-`accounts` is a postings column, so `FROM accounts` filters postings in
+`transactions`, `prices`, `events`, `commodities`, `notes`, `documents` and
+`balances` Tables and the Empty table (`#`). beanquery's last one,
+`accounts` (#639), is not built yet: naming it, as `#accounts` or
+`"accounts"`, fails with `table "accounts" is not supported`
+(`err_from_table_accounts`, listed in `queryGaps`), where beanquery reads
+it. A bare `accounts` is a postings column, so `FROM accounts` filters
+postings in both, and a bare `balances` is a keyword, a syntax error in
 both.
 
 The printer (BQL `PRINT`, `import`, `doctor missing_open`, error context)

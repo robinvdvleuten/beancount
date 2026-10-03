@@ -289,9 +289,6 @@ var errorFixtures = map[string]string{
 	"err_from_table_accounts": `error: table "accounts" is not supported
 | SELECT * FROM #accounts
 |               ^^^^^^^^^`,
-	"err_from_table_balances": `error: table "balances" is not supported
-| SELECT * FROM #balances
-|               ^^^^^^^^^`,
 	"err_from_table_case_sensitive": `error: table "Postings" does not exist
 | SELECT date FROM "Postings" LIMIT 1
 |                  ^^^^^^^^^^`,
@@ -350,6 +347,9 @@ var errorFixtures = map[string]string{
 | SELECT tags = links FROM #notes
 |        ^^^^^^^^^^^^`,
 	"err_table_documents_has_account": `error: column "accounts" not found in table "documents"`,
+	"err_table_balances_entry_meta": `error: column "entry" not found in table "balances"
+| SELECT entry_meta('checked') FROM #balances
+|        ^^^^^^^^^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

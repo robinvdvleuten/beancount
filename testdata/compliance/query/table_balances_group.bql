@@ -1,0 +1,1 @@
+SELECT account, count(*), sum(amount), last(tolerance) FROM #balances GROUP BY account ORDER BY account

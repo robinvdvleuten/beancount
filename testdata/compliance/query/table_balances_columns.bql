@@ -1,0 +1,1 @@
+SELECT date, account, discrepancy, tolerance, meta('checked') AS c FROM "balances" WHERE discrepancy IS NOT NULL OR tolerance IS NOT NULL ORDER BY account, date DESC

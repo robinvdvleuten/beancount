@@ -53,6 +53,9 @@ type evalRow struct {
 	// reduction the share booked against one lot. Nil for postings without
 	// an amount.
 	Position *positionValue
+	// Record holds what a row of a Table reads beyond its directive: a
+	// balance assertion's discrepancy.
+	Record any
 }
 
 // balanceValue is the balance column, lazy like beanquery's (its postings
@@ -237,13 +240,14 @@ var tables = map[string]*environment{
 	commoditiesTable.table:  commoditiesTable,
 	notesTable.table:        notesTable,
 	documentsTable.table:    documentsTable,
+	balancesTable.table:     balancesTable,
 }
 
 // unbuiltTables are beanquery's Tables not built yet, which a Table
 // reference reports as not supported rather than as not existing
 // (KNOWN_GAPS.md).
 var unbuiltTables = map[string]bool{
-	"accounts": true, "balances": true,
+	"accounts": true,
 }
 
 // txnColumn wraps a transaction accessor into an entry-environment column

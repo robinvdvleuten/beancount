@@ -134,7 +134,6 @@ var queryGaps = map[string]string{
 	"err_regex_invalid_grep":        "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
 	"err_regex_lookahead":           "#589, a deliberate deviation: RE2 has no lookarounds, so the pattern is invalid here and valid in Python's re",
 	"err_from_table_accounts":       "#639, the accounts Table is not built yet",
-	"err_from_table_balances":       "#638, the balances Table is not built yet",
 	"err_table_notes_group_by_tags": "#636, a deliberate deviation: beanquery fails with a Python TypeError checking whether a frozenset is hashable",
 }
 

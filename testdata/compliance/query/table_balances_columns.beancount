@@ -1,0 +1,14 @@
+2023-01-01 open Assets:Cash
+2023-01-01 open Assets:Bank
+2023-01-01 open Equity:Opening
+
+2023-01-02 * "Open"
+  Assets:Cash  100.00 USD
+  Assets:Bank  250 EUR
+  Equity:Opening
+
+2023-01-03 balance Assets:Cash 100.00 USD
+  checked: "yes"
+2023-01-03 balance Assets:Bank 248 EUR
+2023-01-04 balance Assets:Cash 100.02 ~ 0.01 USD
+2023-01-05 balance Assets:Bank 250.5 ~ 0.5 EUR

@@ -1,0 +1,1 @@
+SELECT date, tolerance, discrepancy FROM #balances WHERE account = 'Assets:Cash' AND tolerance IS NULL

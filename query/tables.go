@@ -114,6 +114,42 @@ var documentsTable = &environment{
 	rows:     directiveRows[*ast.Document],
 }
 
+// balancesTable has one row per balance assertion, a failed one included,
+// with its tolerance when one is written and, when it failed, its
+// discrepancy: the account's actual amount less the asserted one,
+// beancount's diff_amount.
+var balancesTable = &environment{
+	columns: map[string]*columnDef{
+		"meta":    metaColumn,
+		"date":    dateColumn,
+		"account": {tString, func(row *evalRow) any { return string(row.Entry.(*ast.Balance).Account) }},
+		"amount":  {tAmount, func(row *evalRow) any { return directiveAmount(row.Entry.(*ast.Balance).Amount) }},
+		"tolerance": {tDecimal, func(row *evalRow) any {
+			if amount, ok := directiveAmount(row.Entry.(*ast.Balance).Tolerance).(*amountValue); ok {
+				return amount.Number
+			}
+			return nil
+		}},
+		"discrepancy": {tAmount, func(row *evalRow) any { return row.Record }},
+	},
+	table:    "balances",
+	wildcard: []string{"date", "account", "amount", "tolerance", "discrepancy"},
+	rows:     balanceRows,
+}
+
+// balanceRows visits the balances table's rows, each with its discrepancy
+// as its Record.
+func balanceRows(ctx context.Context, qctx *Context, entries []ast.Directive, visit func(*evalRow)) error {
+	differences := balanceDifferences(qctx)
+	return directiveRows[*ast.Balance](ctx, qctx, entries, func(row *evalRow) {
+		balance := row.Entry.(*ast.Balance)
+		if difference, ok := differences[balance]; ok {
+			row.Record = &amountValue{Number: difference, Currency: balance.Amount.Currency}
+		}
+		visit(row)
+	})
+}
+
 var (
 	// tagsColumn and linksColumn are a note's or a document's tags and
 	// links, pushed tags included.
