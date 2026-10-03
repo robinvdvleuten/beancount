@@ -259,7 +259,9 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 			return statementErrorf(`GROUP-BY expressions may not reference aggregates: "%s"`, ref)
 		}
 		// Sets, lists, dicts and inventories are unhashable in Python.
-		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList || t == tDict || t == tMetadata {
+		// beanquery fails with a Python TypeError on a frozenset, whose
+		// type it cannot check (KNOWN_GAPS.md).
+		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList || t == tDict || t == tMetadata || t == tFrozenset {
 			return statementErrorf(`GROUP-BY a non-hashable type is not supported: "%s"`, ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)

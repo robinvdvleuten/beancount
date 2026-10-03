@@ -320,9 +320,6 @@ var errorFixtures = map[string]string{
 	"err_from_table_hash_not_exist": `error: table "nope" does not exist
 | SELECT date FROM #nope LIMIT 1
 |                  ^^^^^`,
-	"err_from_table_notes": `error: table "notes" is not supported
-| SELECT * FROM #notes
-|               ^^^^^^`,
 	"err_from_table_quoted_expression": `error: syntax error
 | SELECT date FROM "year" = 2023 LIMIT 1
 |                         ^`,
@@ -348,6 +345,13 @@ var errorFixtures = map[string]string{
 	"err_table_commodities_any_meta": `error: column "entry" not found in table "commodities"
 | SELECT any_meta('name') FROM #commodities
 |        ^^^^^^^^^^^^^^^^`,
+	"err_table_notes_group_by_tags": `error: GROUP-BY a non-hashable type is not supported: "Column(name='tags')"`,
+	"err_table_notes_function": `error: no function matches "length(frozenset)" name and argument types
+| SELECT length(tags) FROM #notes
+|        ^^^^^^^^^^^^`,
+	"err_table_notes_equal": `error: operator "equal(frozenset, frozenset)" not supported
+| SELECT tags = links FROM #notes
+|        ^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

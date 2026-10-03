@@ -1,0 +1,9 @@
+2023-01-01 open Assets:Cash
+2023-01-01 open Assets:Bank
+2023-01-02 note Assets:Cash "Counted the till" #audit ^n-1
+  who: "me"
+pushtag #trip
+2023-01-03 note Assets:Bank "Called the bank"
+poptag #trip
+2023-01-04 note Assets:Bank "No tags"
+2023-01-05 note Assets:Cash "Linked" ^n-2

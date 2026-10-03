@@ -1,0 +1,1 @@
+SELECT tags, links, comment FROM #notes ORDER BY tags DESC, links

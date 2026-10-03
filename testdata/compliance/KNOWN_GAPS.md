@@ -61,11 +61,11 @@ interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
 **BQL Tables**: SELECT's FROM reads beanquery's `postings`, `entries`,
-`transactions`, `prices`, `events` and `commodities` Tables and the Empty
-table (`#`). beanquery's other four, `accounts` (#639), `balances` (#638),
-`documents` (#637) and `notes` (#636), are not built yet:
-naming one, as `#notes`, `"notes"` or a bare `notes`, fails with
-`table "notes" is not supported` (`err_from_table_notes`, one
+`transactions`, `prices`, `events`, `commodities` and `notes` Tables and
+the Empty table (`#`). beanquery's other three, `accounts` (#639),
+`balances` (#638) and `documents` (#637), are not built yet: naming one,
+as `#documents`, `"documents"` or a bare `documents`, fails with
+`table "documents" is not supported` (`err_from_table_documents`, one
 fixture per Table, listed in `queryGaps`), where beanquery reads it. A bare
 `accounts` is a postings column, so `FROM accounts` filters postings in
 both.
@@ -300,6 +300,15 @@ compare the lines errors are on:
   by the printed form here. `repr()` of a set lists its elements sorted,
   where Python lists them in its hash order, which changes with
   `PYTHONHASHSEED`.
+
+- **BQL frozensets** (#636): the `notes` Table's `tags` and `links` are
+  typed `frozenset` in beanquery, which renders a cell as Python's repr of
+  it, `frozenset({'a', 'b'})`, its elements in hash order, which changes
+  with `PYTHONHASHSEED`. We print them sorted, so fixtures hold at most one
+  element. `GROUP BY tags` is a Python `TypeError` there, which cannot check
+  whether the type is hashable, and `GROUP-BY a non-hashable type is not
+  supported` here (`query/err_table_notes_group_by_tags.bql`, listed in
+  `queryGaps`); an implicit GROUP BY groups by them in both.
 
 - **BQL `IN` on a non-string**: `1 IN account` (or `1 IN 2`) fails with a
   Python `TypeError` in beanquery; here `IN` a string or a set is FALSE

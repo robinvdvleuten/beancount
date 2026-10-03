@@ -51,6 +51,12 @@ const (
 	// beanquery, which renders like a set but is no set to its functions
 	// and operators.
 	tAccountSet
+	// tFrozenset is a note's or a document's tags and links, typed
+	// Optional[frozenset[str]] in beancount, which beanquery keeps as a
+	// type of its own: it holds a setValue, but no function or operator
+	// takes it beyond those that take any type, and a cell renders as
+	// Python's repr of it.
+	tFrozenset
 	// tObject is a function parameter type only, beanquery's object: unlike
 	// tAny, its Any, it takes an untyped (tAny) argument or NULL alone.
 	tObject
@@ -77,6 +83,7 @@ var dtypeNames = map[dtype]string{
 	// beanquery names a types.Structure by its name.
 	tTransaction: "transaction",
 	tAccountSet:  "set[str]",
+	tFrozenset:   "frozenset",
 }
 
 func (t dtype) String() string {

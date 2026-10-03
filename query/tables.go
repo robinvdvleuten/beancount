@@ -83,6 +83,28 @@ func commodityRows(ctx context.Context, qctx *Context, entries []ast.Directive, 
 	return nil
 }
 
+// notesTable has one row per note directive, its pushed tags included.
+var notesTable = &environment{
+	columns: map[string]*columnDef{
+		"meta":    metaColumn,
+		"date":    dateColumn,
+		"account": {tString, func(row *evalRow) any { return string(row.Entry.(*ast.Note).Account) }},
+		"comment": {tString, func(row *evalRow) any { return row.Entry.(*ast.Note).Description.String() }},
+		"tags":    tagsColumn,
+		"links":   linksColumn,
+	},
+	table:    "notes",
+	wildcard: []string{"date", "account", "comment", "tags", "links"},
+	rows:     directiveRows[*ast.Note],
+}
+
+var (
+	// tagsColumn and linksColumn are a note's or a document's tags and
+	// links, pushed tags included.
+	tagsColumn  = &columnDef{tFrozenset, func(row *evalRow) any { return tagSet(row.Entry.(tagged)) }}
+	linksColumn = &columnDef{tFrozenset, func(row *evalRow) any { return linkSet(row.Entry.(tagged)) }}
+)
+
 var (
 	// metaColumn is a directive's meta, typed like beanquery's Metadata
 	// columns, which render without filename and lineno.

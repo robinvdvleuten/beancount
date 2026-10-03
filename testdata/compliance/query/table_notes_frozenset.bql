@@ -1,0 +1,1 @@
+SELECT str(tags) AS s, tags IS NULL AS n, first(links) AS f, max(tags) AS m, count(*) AS c FROM #notes WHERE tags
