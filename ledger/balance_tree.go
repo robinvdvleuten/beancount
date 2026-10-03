@@ -59,6 +59,8 @@ type BalanceNode struct {
 }
 
 // GetBalanceTree returns a hierarchical view of account balances for reporting.
+// It holds every account opened or posted to: an account posted to but
+// never opened has no open date, and its postings count all the same.
 //
 // Parameters:
 //   - types: Account types to include (e.g., Assets, Liabilities). Empty means all types (trial balance).
@@ -88,7 +90,13 @@ type BalanceNode struct {
 // The tree is organized with account types as virtual root nodes. Balances are
 // aggregated bottom-up so parent nodes include the sum of all their descendants.
 func (l *Ledger) GetBalanceTree(types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation, closed bool) (*BalanceTree, error) {
-	return l.newBalanceTree(l.accounts, l.config, types, startDate, endDate, valuation, closed)
+	// Like beancount, a posting to an account never opened is reported and
+	// still applied, so the account counts too, or the tree would not sum
+	// to zero.
+	accounts := make(map[string]*Account, len(l.accounts)+len(l.unopened))
+	maps.Copy(accounts, l.accounts)
+	maps.Copy(accounts, l.unopened)
+	return l.newBalanceTree(accounts, l.config, types, startDate, endDate, valuation, closed)
 }
 
 // unrealizedGainsLeaf is the leaf, under the equity root, of the account

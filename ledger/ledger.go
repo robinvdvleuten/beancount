@@ -359,16 +359,9 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 func (l *Ledger) applyOpen(open *ast.Open, delta *openDelta, cfg *sharedconfig.Config) {
 	accountName := string(delta.account)
 
-	// Extract account type root name (e.g., "Assets" from "Assets:Checking")
-	idx := strings.IndexByte(string(delta.account), ':')
-	accountTypeRoot := ""
-	if idx > 0 {
-		accountTypeRoot = string(delta.account)[:idx]
-	}
-
 	account := &Account{
 		name:                 delta.account,
-		Type:                 accountTypeRoot,
+		Type:                 accountTypeRoot(delta.account),
 		OpenDate:             delta.openDate,
 		constraintCurrencies: delta.constraintCurrencies,
 		metadata:             delta.metadata,
@@ -381,6 +374,15 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *openDelta, cfg *sharedconfig.C
 		delete(l.unopened, accountName)
 	}
 	l.accounts[accountName] = account
+}
+
+// accountTypeRoot returns the root name of an account's type, "Assets" for
+// "Assets:Checking".
+func accountTypeRoot(account ast.Account) string {
+	if idx := strings.IndexByte(string(account), ':'); idx > 0 {
+		return string(account)[:idx]
+	}
+	return ""
 }
 
 // inventory returns what an account holds, posted to before its open too,
@@ -417,7 +419,7 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransactio
 		if !ok {
 			account, ok = l.unopened[accountName]
 			if !ok {
-				account = &Account{name: bp.posting.Account, inventory: newInventory()}
+				account = &Account{name: bp.posting.Account, Type: accountTypeRoot(bp.posting.Account), inventory: newInventory()}
 				l.unopened[accountName] = account
 			}
 		}

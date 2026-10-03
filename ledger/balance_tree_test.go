@@ -6,6 +6,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
@@ -410,4 +411,64 @@ func findRoot(tree *ledger.BalanceTree, name string) *ledger.BalanceNode {
 		}
 	}
 	return nil
+}
+
+// TestGetBalanceTree_UnopenedAccounts pins that an account posted to but
+// never opened, whose postings beancount reports and still applies, is in
+// the tree with the balance a query gives it, so the roots sum to zero.
+func TestGetBalanceTree_UnopenedAccounts(t *testing.T) {
+	source := `
+2024-01-01 open Assets:Cash
+2024-01-01 open Expenses:Food
+
+2024-01-02 * "pay"
+  Assets:Cash               -10 USD
+  Expenses:Unopened           7 USD
+  Expenses:Food:Unopened      3 USD
+
+2024-01-03 * "paid"
+  Income:Unopened           -20 USD
+  Assets:Cash
+`
+	ctx := context.Background()
+	tree, err := parser.ParseBytes(ctx, []byte(source))
+	assert.NoError(t, err)
+	l := ledger.New()
+	_, err = l.Process(ctx, tree)
+	assert.NoError(t, err)
+	assert.Equal(t, 3, len(l.Errors()), "each unopened account is reported")
+
+	balanceTree, err := l.GetBalanceTree(nil, nil, nil, ledger.ValuationUnits, false)
+	assert.NoError(t, err)
+	total := decimal.Zero
+	for _, root := range balanceTree.Roots {
+		total = pydecimal.Add(total, root.Balance.Get("USD"))
+	}
+	assert.True(t, total.IsZero(), "the roots sum to zero, got %s", total)
+
+	expenses := findRoot(balanceTree, "Expenses")
+	assert.Equal(t, "10", expenses.Balance.Get("USD").String())
+	var balances []string
+	var walk func(nodes []*ledger.BalanceNode)
+	walk = func(nodes []*ledger.BalanceNode) {
+		for _, node := range nodes {
+			balances = append(balances, node.Account+" "+node.Balance.Get("USD").String())
+			walk(node.Children)
+		}
+	}
+	walk(balanceTree.Roots)
+	assert.Equal(t, []string{
+		" 10", "Assets:Cash 10",
+		" -20", "Income:Unopened -20",
+		" 10", "Expenses:Food 3", "Expenses:Food:Unopened 3", "Expenses:Unopened 7",
+	}, balances)
+
+	// Closed balances close the unopened Income and Expenses into Equity.
+	closed, err := l.GetBalanceTree([]ast.AccountType{ast.AccountTypeAssets, ast.AccountTypeLiabilities, ast.AccountTypeEquity}, nil, nil, ledger.ValuationUnits, true)
+	assert.NoError(t, err)
+	total = decimal.Zero
+	for _, root := range closed.Roots {
+		total = pydecimal.Add(total, root.Balance.Get("USD"))
+	}
+	assert.True(t, total.IsZero(), "the balance sheet sums to zero, got %s", total)
 }

@@ -528,3 +528,21 @@ func TestAPIBalancesClosed(t *testing.T) {
 		}
 	})
 }
+
+// TestAPIBalancesUnopenedAccount pins that an account posted to but never
+// opened is in the balances, as in a query, so the trial balance sums to
+// zero.
+func TestAPIBalancesUnopenedAccount(t *testing.T) {
+	mux := newTestHandler(t, writeLedger(t, `2024-01-01 open Assets:Cash
+2024-01-02 * "pay"
+  Assets:Cash  -10 USD
+  Expenses:Unopened  10 USD
+`))
+	code, response := getBalances(t, mux, "types=Expenses")
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, 1, len(response.Roots))
+	assert.Equal(t, map[string]string{"USD": "10"}, response.Roots[0].Balance)
+	assert.Equal(t, 1, len(response.Roots[0].Children))
+	assert.Equal(t, "Expenses:Unopened", response.Roots[0].Children[0].Account)
+	assert.Equal(t, map[string]string{"USD": "10"}, response.Roots[0].Children[0].Balance)
+}
