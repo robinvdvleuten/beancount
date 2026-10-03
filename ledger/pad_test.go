@@ -9,6 +9,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
+	"github.com/shopspring/decimal"
 )
 
 func TestPadGeneratesSyntheticTransaction(t *testing.T) {
@@ -420,4 +421,81 @@ func TestPadOnACurrencyHeldWithoutCostReportsNothing(t *testing.T) {
 	_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
 
 	assert.Equal(t, 0, len(l.Errors()), "errors: %v", l.Errors())
+}
+
+// fillCase builds a pad on Assets:Checking from source, a balance
+// assertion of amount on Assets:Checking, and an inventory holding held
+// USD.
+func fillCase(t *testing.T, source ast.Account, amount, held string) (*pads, *ast.Balance, *Inventory) {
+	t.Helper()
+	date, err := ast.NewDate("2020-01-15")
+	assert.NoError(t, err)
+	p := newPads()
+	p.add(ast.NewPad(date, "Assets:Checking", source))
+	inventory := NewInventory()
+	inventory.AddLot("USD", decimal.RequireFromString(held), nil)
+	return p, ast.NewBalance(date, "Assets:Checking", ast.NewAmount(amount, "USD")), inventory
+}
+
+func TestPadsFill(t *testing.T) {
+	tolerance := decimal.RequireFromString("0.005")
+
+	t.Run("pads the difference", func(t *testing.T) {
+		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "250")
+		padding, held, errs := p.fill(balance, inventory, tolerance)
+		assert.Zero(t, errs)
+		assert.True(t, held.Equal(decimal.RequireFromString("1000")), "held %s", held)
+		assert.Equal(t, "P", padding.Flag)
+		assert.Equal(t, "750.00", padding.Postings[0].Amount.Value)
+		assert.Equal(t, "-750.00", padding.Postings[1].Amount.Value)
+		assert.Equal(t, ast.Account("Equity:Opening-Balances"), padding.Postings[1].Account)
+	})
+
+	t.Run("keeps the difference's precision", func(t *testing.T) {
+		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "100", "99.995")
+		padding, _, _ := p.fill(balance, inventory, decimal.Zero)
+		assert.Equal(t, "0.005", padding.Postings[0].Amount.Value)
+	})
+
+	t.Run("pads nothing within tolerance", func(t *testing.T) {
+		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "1000.004")
+		padding, held, errs := p.fill(balance, inventory, tolerance)
+		assert.Zero(t, padding)
+		assert.Zero(t, errs)
+		assert.Equal(t, "1000.004", held.String())
+	})
+
+	t.Run("a self-pad changes nothing", func(t *testing.T) {
+		p, balance, inventory := fillCase(t, "Assets:Checking", "1000.00", "0")
+		padding, held, _ := p.fill(balance, inventory, tolerance)
+		assert.NotZero(t, padding)
+		assert.Equal(t, "0", held.String())
+	})
+
+	t.Run("fills only the first assertion after the pad", func(t *testing.T) {
+		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "0")
+		padding, _, _ := p.fill(balance, inventory, tolerance)
+		p.consume("Assets:Checking", "USD", padding)
+		padding, held, _ := p.fill(balance, inventory, tolerance)
+		assert.Zero(t, padding)
+		assert.Equal(t, "0", held.String())
+	})
+
+	t.Run("a later pad replaces the first", func(t *testing.T) {
+		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "0")
+		first := p.latest["Assets:Checking"].pad
+		date, _ := ast.NewDate("2020-01-10")
+		p.add(ast.NewPad(date, "Assets:Checking", "Income:Other"))
+		padding, _, _ := p.fill(balance, inventory, tolerance)
+		assert.Equal(t, ast.Account("Income:Other"), padding.Postings[1].Account)
+		assert.Equal(t, []*ast.Pad{first}, p.superseded)
+	})
+
+	t.Run("without a pad", func(t *testing.T) {
+		_, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "10")
+		padding, held, errs := newPads().fill(balance, inventory, tolerance)
+		assert.Zero(t, padding)
+		assert.Zero(t, errs)
+		assert.Equal(t, "10", held.String())
+	})
 }

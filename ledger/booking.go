@@ -128,11 +128,17 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 	if booked == nil {
 		return false
 	}
+	l.publishBooking(txn, booked)
+	return true
+}
+
+// publishBooking records a transaction's booking, which Apply replays, and
+// publishes its postings' booked positions (BookedPositions).
+func (l *Ledger) publishBooking(txn *ast.Transaction, booked *bookedTransaction) {
 	l.booked[txn] = booked
 	for _, bp := range booked.postings {
 		l.bookedPositions[bp.posting] = bp.positions
 	}
-	return true
 }
 
 // fixPrice reports and fixes up a posting's price like beancount's parser: a

@@ -8,7 +8,6 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -558,44 +557,6 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	}
 
 	return errs, delta
-}
-
-// padBalance returns a balance assertion's delta and the amount its
-// account holds once padded, from the account's inventory. With a pad whose
-// currency the assertion is the first to reach, the account is padded to
-// the asserted amount: the delta carries the padding transaction, dated at
-// the pad.
-//
-// The padding applies whatever checkBalance finds, as in beancount, whose
-// pad plugin inserts padding before any assertion is checked. Padding a
-// currency the account holds at cost is an error for each such lot, and
-// the padding, without cost, still applies, as in beancount's ops/pad.py.
-func (v *validator) padBalance(balance *ast.Balance, inventory *Inventory, padEntry *ast.Pad, tolerance decimal.Decimal) (*BalanceDelta, decimal.Decimal, []error) {
-	expectedAmount, _ := ParseAmount(balance.Amount)
-	currency := balance.Amount.Currency
-	actualAmount := inventory.Get(currency)
-
-	delta := &BalanceDelta{AccountName: string(balance.Account), Currency: currency}
-	var errs []error
-	if padEntry != nil {
-		difference := pydecimal.Sub(expectedAmount, actualAmount)
-		if difference.Abs().GreaterThan(tolerance) {
-			for range inventory.countAtCost(currency) {
-				errs = append(errs, NewPadCostError(balance, padEntry, inventory))
-			}
-
-			// Like beancount, the padding is the difference as the
-			// subtraction leaves it, with its own exponent.
-			delta.Padding = createPaddingTransaction(padEntry, balance, formatInferredNumber(difference))
-
-			// Padding an account from itself posts both legs to it, so
-			// nothing changes and the assertion fails, as in beancount.
-			if padEntry.AccountPad != balance.Account {
-				actualAmount = pydecimal.Add(actualAmount, difference)
-			}
-		}
-	}
-	return delta, actualAmount, errs
 }
 
 // validateBookedCosts reports booked cost postings with zero units or a

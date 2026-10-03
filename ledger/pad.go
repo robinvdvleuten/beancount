@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
+	"github.com/shopspring/decimal"
 )
 
 // Pads fill balance assertions like beancount's ops/pad.py: a pad pads each
@@ -68,6 +70,45 @@ func (p *pads) consume(account, currency string, padding *ast.Transaction) {
 	}
 }
 
+// fill fills a balance assertion from its account's pad, given the
+// account's inventory and the assertion's tolerance. With a pad whose
+// currency the assertion is the first to reach, and an amount beyond the
+// tolerance, the account is padded to the asserted amount: fill returns the
+// padding transaction, dated at the pad, else nil. It also returns the
+// amount the account holds once padded, which the assertion is checked
+// against. fill only reads the pads; applying the assertion consumes its
+// pad.
+//
+// The padding applies whatever the check finds, as in beancount, whose pad
+// plugin inserts padding before any assertion is checked. Padding a
+// currency the account holds at cost is an error for each such lot, and
+// the padding, without cost, still applies, as in beancount's ops/pad.py.
+func (p *pads) fill(balance *ast.Balance, inventory *Inventory, tolerance decimal.Decimal) (padding *ast.Transaction, held decimal.Decimal, errs []error) {
+	currency := balance.Amount.Currency
+	held = inventory.Get(currency)
+	pad := p.active(string(balance.Account), currency)
+	if pad == nil {
+		return nil, held, nil
+	}
+	expected, _ := ParseAmount(balance.Amount)
+	difference := pydecimal.Sub(expected, held)
+	if difference.Abs().LessThanOrEqual(tolerance) {
+		return nil, held, nil
+	}
+	for range inventory.countAtCost(currency) {
+		errs = append(errs, NewPadCostError(balance, pad, inventory))
+	}
+	// Like beancount, the padding is the difference as the subtraction
+	// leaves it, with its own exponent.
+	padding = createPaddingTransaction(pad, balance, formatInferredNumber(difference))
+	// Padding an account from itself posts both legs to it, so nothing
+	// changes and the assertion fails, as in beancount.
+	if pad.AccountPad != balance.Account {
+		held = pydecimal.Add(held, difference)
+	}
+	return padding, held, errs
+}
+
 // unusedPads returns the pads that inserted no padding, in source order.
 func (p *pads) unusedPads() []*ast.Pad {
 	unused := slices.Clone(p.superseded)
@@ -82,12 +123,18 @@ func (p *pads) unusedPads() []*ast.Pad {
 	return unused
 }
 
-// applyPadding books and applies a padding transaction when its balance
-// assertion is applied.
+// applyPadding applies a padding transaction when its balance assertion is
+// applied. Like beancount's pad plugin, which inserts padding after
+// booking, the padding is not booked: each posting books its units as they
+// are, without cost, which the Ledger publishes like any booked position.
 func (l *Ledger) applyPadding(ctx context.Context, padding *ast.Transaction) {
-	if l.bookTransaction(padding) {
-		l.processDirective(ctx, padding)
+	booked := &bookedTransaction{postings: make([]bookedPosting, len(padding.Postings))}
+	for i, posting := range padding.Postings {
+		positions := []BookedPosition{{Units: MustParseAmount(posting.Amount)}}
+		booked.postings[i] = bookedPosting{posting: posting, commodity: posting.Amount.Currency, positions: positions}
 	}
+	l.publishBooking(padding, booked)
+	l.processDirective(ctx, padding)
 }
 
 // createPaddingTransaction creates the transaction pad inserts to fill

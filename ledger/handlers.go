@@ -99,9 +99,8 @@ func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directiv
 		if tolerance, err := l.tolerances.balance(balance); err != nil {
 			errs = append(errs, err)
 		} else {
-			padEntry := l.pads.active(string(balance.Account), balance.Amount.Currency)
-			padded, held, padErrs := v.padBalance(balance, l.inventory(balance.Account), padEntry, tolerance)
-			delta = padded
+			padding, held, padErrs := l.pads.fill(balance, l.inventory(balance.Account), tolerance)
+			delta = &BalanceDelta{AccountName: string(balance.Account), Currency: balance.Amount.Currency, Padding: padding}
 			errs = append(padErrs, v.checkBalance(balance, held, tolerance)...)
 		}
 	}
