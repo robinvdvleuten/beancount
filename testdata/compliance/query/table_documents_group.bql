@@ -1,0 +1,1 @@
+SELECT account, count(*), min(date) FROM documents OPEN ON 2023-01-11 GROUP BY account ORDER BY account

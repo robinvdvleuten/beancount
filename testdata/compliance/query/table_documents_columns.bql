@@ -1,0 +1,1 @@
+SELECT date, meta('who') AS w, meta, tags FROM "documents" WHERE account = 'Assets:Bank' OR 'food' IN tags ORDER BY date DESC

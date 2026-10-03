@@ -295,9 +295,6 @@ var errorFixtures = map[string]string{
 	"err_from_table_case_sensitive": `error: table "Postings" does not exist
 | SELECT date FROM "Postings" LIMIT 1
 |                  ^^^^^^^^^^`,
-	"err_from_table_documents": `error: table "documents" is not supported
-| SELECT * FROM #documents
-|               ^^^^^^^^^^`,
 	"err_from_table_empty_any_meta": `error: column "meta" not found in table ""
 | SELECT any_meta('x') FROM #
 |        ^^^^^^^^^^^^^`,
@@ -352,6 +349,7 @@ var errorFixtures = map[string]string{
 	"err_table_notes_equal": `error: operator "equal(frozenset, frozenset)" not supported
 | SELECT tags = links FROM #notes
 |        ^^^^^^^^^^^^`,
+	"err_table_documents_has_account": `error: column "accounts" not found in table "documents"`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

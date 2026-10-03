@@ -1,0 +1,9 @@
+option "documents" "docs"
+
+2023-01-01 open Assets:Cash
+2023-01-01 open Assets:Bank
+2023-01-10 document Assets:Cash "docs/Assets/Bank/2023-02-01.statement.pdf" #food ^r-1
+  who: "me"
+pushtag #trip
+2023-01-12 document Assets:Bank "docs/Assets/Bank/2023-02-01.statement.pdf"
+poptag #trip

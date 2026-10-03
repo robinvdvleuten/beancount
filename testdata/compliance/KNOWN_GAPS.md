@@ -61,11 +61,11 @@ interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
 **BQL Tables**: SELECT's FROM reads beanquery's `postings`, `entries`,
-`transactions`, `prices`, `events`, `commodities` and `notes` Tables and
-the Empty table (`#`). beanquery's other three, `accounts` (#639),
-`balances` (#638) and `documents` (#637), are not built yet: naming one,
-as `#documents`, `"documents"` or a bare `documents`, fails with
-`table "documents" is not supported` (`err_from_table_documents`, one
+`transactions`, `prices`, `events`, `commodities`, `notes` and `documents`
+Tables and the Empty table (`#`). beanquery's other two, `accounts` (#639)
+and `balances` (#638), are not built yet: naming one, as `#balances`,
+`"balances"` or a bare `balances`, fails with `table "balances" is not
+supported` (`err_from_table_balances`, one
 fixture per Table, listed in `queryGaps`), where beanquery reads it. A bare
 `accounts` is a postings column, so `FROM accounts` filters postings in
 both.
@@ -301,11 +301,11 @@ compare the lines errors are on:
   where Python lists them in its hash order, which changes with
   `PYTHONHASHSEED`.
 
-- **BQL frozensets** (#636): the `notes` Table's `tags` and `links` are
-  typed `frozenset` in beanquery, which renders a cell as Python's repr of
-  it, `frozenset({'a', 'b'})`, its elements in hash order, which changes
-  with `PYTHONHASHSEED`. We print them sorted, so fixtures hold at most one
-  element. `GROUP BY tags` is a Python `TypeError` there, which cannot check
+- **BQL frozensets** (#636): the `notes` and `documents` Tables' `tags`
+  and `links` are typed `frozenset` in beanquery, which renders a cell as
+  Python's repr of it, `frozenset({'a', 'b'})`, its elements in hash
+  order, which changes with `PYTHONHASHSEED`. We print them sorted, so
+  fixtures hold at most one element. `GROUP BY tags` is a Python `TypeError` there, which cannot check
   whether the type is hashable, and `GROUP-BY a non-hashable type is not
   supported` here (`query/err_table_notes_group_by_tags.bql`, listed in
   `queryGaps`); an implicit GROUP BY groups by them in both.

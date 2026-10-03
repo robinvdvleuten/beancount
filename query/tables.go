@@ -98,6 +98,22 @@ var notesTable = &environment{
 	rows:     directiveRows[*ast.Note],
 }
 
+// documentsTable has one row per document directive, those the documents
+// option discovers and its pushed tags included.
+var documentsTable = &environment{
+	columns: map[string]*columnDef{
+		"meta":     metaColumn,
+		"date":     dateColumn,
+		"account":  {tString, func(row *evalRow) any { return string(row.Entry.(*ast.Document).Account) }},
+		"filename": {tString, func(row *evalRow) any { return row.Entry.(*ast.Document).ResolvedPath() }},
+		"tags":     tagsColumn,
+		"links":    linksColumn,
+	},
+	table:    "documents",
+	wildcard: []string{"date", "account", "filename", "tags", "links"},
+	rows:     directiveRows[*ast.Document],
+}
+
 var (
 	// tagsColumn and linksColumn are a note's or a document's tags and
 	// links, pushed tags included.
