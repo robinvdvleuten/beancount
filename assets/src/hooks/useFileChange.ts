@@ -1,6 +1,6 @@
-import { createSignal, onCleanup, onMount } from "solid-js";
+import { createSignal } from "solid-js";
 import { enter, leave } from "../lib/transition";
-import { meta } from "virtual:globals";
+import { useReloadEvents } from "./useReloadEvents";
 
 interface UseFileChangeOptions {
   /** Returns the last known fingerprint (from save or load) */
@@ -42,20 +42,8 @@ export function useFileChange(options: UseFileChangeOptions) {
     lastSavedFingerprint = fingerprint;
   };
 
-  onMount(() => {
-    // Only connect if watch mode is enabled on the server
-    if (!meta.watching) {
-      return;
-    }
-
-    const eventSource = new EventSource("/api/events");
-
-    eventSource.onmessage = (event: MessageEvent<string>) => {
-      // The server greets each connection with "connected"; only "reload" means a change
-      if (event.data !== "reload") {
-        return;
-      }
-
+  useReloadEvents({
+    onReload: () => {
       // Skip if this is our own save (fingerprint will match)
       const currentFingerprint = options.getLastFingerprint();
       if (lastSavedFingerprint && lastSavedFingerprint === currentFingerprint) {
@@ -67,20 +55,14 @@ export function useFileChange(options: UseFileChangeOptions) {
       if (!pendingReload()) {
         void showToast();
       }
-    };
-
-    eventSource.onopen = () => {
+    },
+    onOpen: () => {
       setConnectionLost(false);
-    };
-
-    eventSource.onerror = () => {
+    },
+    onError: () => {
       console.warn("SSE connection lost, will reconnect...");
       setConnectionLost(true);
-    };
-
-    onCleanup(() => {
-      eventSource.close();
-    });
+    },
   });
 
   return {

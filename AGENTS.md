@@ -125,6 +125,8 @@ Vite + Solid + TypeScript, styled with Tailwind CSS 4 + DaisyUI, built into `web
 const sections = () => FinancialReport.getSections(data()?.roots, ["Assets"])
 ```
 
+**Ledger errors**: `assets/src/lib/errors.ts` holds one store of the ledger's errors (from `GET /api/source`) for every page: the sidebar's "Errors (N)" and the `/errors` page read it, and it refetches after a save and on each live reload (`hooks/useReloadEvents.ts`, the server's reload events, which `useFileChange` reads too). A link to a line is the editor's `?file=` (the root or one of its includes) and `?line=`.
+
 Playwright e2e tests live in `assets/tests/`.
 
 ## Agent skills

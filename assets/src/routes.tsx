@@ -1,6 +1,7 @@
 import { Navigate } from "@solidjs/router";
 import BalanceSheet from "./routes/balance-sheet";
 import Editor from "./routes/editor";
+import Errors from "./routes/errors";
 import IncomeStatement from "./routes/income-statement";
 import Query from "./routes/query";
 import TrialBalance from "./routes/trial-balance";
@@ -43,6 +44,13 @@ const routes = [
     component: Editor,
     info: {
       title: "Editor",
+    },
+  },
+  {
+    path: "/errors",
+    component: Errors,
+    info: {
+      title: "Errors",
     },
   },
 ];

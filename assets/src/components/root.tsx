@@ -1,6 +1,8 @@
-import { type ParentComponent, createEffect, createMemo } from "solid-js";
+import { type ParentComponent, Show, createEffect, createMemo } from "solid-js";
 import { A, useCurrentMatches, useSearchParams } from "@solidjs/router";
 import { withValuation } from "../lib/balances";
+import { ledgerErrors, refetchLedgerErrors } from "../lib/errors";
+import { useReloadEvents } from "../hooks/useReloadEvents";
 import DocumentCurrencyDollarIcon from "heroicons/24/solid/document-currency-dollar.svg?component-solid";
 import { meta } from "virtual:globals";
 
@@ -35,6 +37,11 @@ const Root: ParentComponent = (props) => {
   const [searchParams] = useSearchParams<{ valuation: string }>();
   const reportHref = (path: string) => withValuation(path, searchParams.valuation);
 
+  // Every page shows whether the ledger has errors, so no report is read
+  // from a broken ledger unawares
+  useReloadEvents({ onReload: refetchLedgerErrors });
+  const errorCount = () => ledgerErrors.latest?.errors.length ?? 0;
+
   return (
     <div class="flex h-screen flex-col">
       <header class="flex items-center justify-between border-b border-base-300 px-6 py-2">
@@ -60,6 +67,13 @@ const Root: ParentComponent = (props) => {
             <MenuItem href={reportHref("/trial-balance")}>Trial Balance</MenuItem>
             <MenuItem href="/query">Query</MenuItem>
             <MenuItem href="/editor">Editor</MenuItem>
+            <Show when={errorCount() > 0}>
+              <li>
+                <A href="/errors" class="rounded-none text-error" end>
+                  Errors ({errorCount()})
+                </A>
+              </li>
+            </Show>
           </ul>
         </aside>
         <main class="flex flex-1 flex-col overflow-hidden">{props.children}</main>

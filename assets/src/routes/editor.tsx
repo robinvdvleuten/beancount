@@ -7,15 +7,19 @@ import {
   Match,
   Show,
   For,
+  on,
   onCleanup,
   onMount,
+  untrack,
 } from "solid-js";
 import ArrowDownTrayIcon from "heroicons/24/solid/arrow-down-tray.svg?component-solid";
 import ChevronDownIcon from "heroicons/24/solid/chevron-down.svg?component-solid";
 import type { AccountInfo, EditorError } from "../types";
 import EditorComp from "../components/editor";
+import { useSearchParams } from "@solidjs/router";
 import { meta } from "virtual:globals";
 import { useFileChange } from "../hooks/useFileChange";
+import { refetchLedgerErrors } from "../lib/errors";
 import { useToast } from "../hooks/useToast";
 
 interface Files {
@@ -77,15 +81,34 @@ const Editor: Component = () => {
   let conflictModalRef: HTMLDialogElement | undefined;
   let fileDropdownRef: HTMLDetailsElement | undefined;
 
+  // ?file= and ?line= open the editor at a line, such as an error's
+  const [searchParams] = useSearchParams<{ file?: string; line?: string }>();
+
+  // The requested file when it is the root or one of its includes, else
+  // the root
+  const requestedFile = (files: Files) => {
+    const file = searchParams.file;
+    return file && (file === files.root || files.includes.includes(file)) ? file : files.root;
+  };
+
   // Initialize currentFile, currentFiles, and fingerprint from initial fetch
   createEffect(() => {
     const data = initialData();
     if (data && currentFile() === undefined) {
-      setCurrentFile(data.files.root);
+      setCurrentFile(requestedFile(data.files));
       setCurrentFiles(data.files);
       setFingerprint(data.fingerprint);
     }
   });
+
+  // The requested line, while its file is the one shown
+  const requestedLine = () => {
+    const files = currentFiles();
+    const line = Number(searchParams.line);
+    if (!files || !Number.isInteger(line) || currentFile() !== requestedFile(files))
+      return undefined;
+    return line;
+  };
 
   // Fetch source for a specific file (used when switching files)
   const [fileData, { mutate: mutateFileData }] = createResource(
@@ -163,6 +186,18 @@ const Editor: Component = () => {
     closeFileDropdown();
   };
 
+  // Follow a link to another file while the editor is open
+  createEffect(
+    on(
+      () => searchParams.file,
+      () => {
+        const files = untrack(currentFiles);
+        if (files) handleFileSelect(requestedFile(files));
+      },
+      { defer: true },
+    ),
+  );
+
   const closeFileDropdown = () => {
     if (fileDropdownRef) {
       fileDropdownRef.open = false;
@@ -235,6 +270,9 @@ const Editor: Component = () => {
 
     // Show success toast
     void saveToast.show();
+
+    // The sidebar's error count follows the saved ledger
+    refetchLedgerErrors();
 
     // Reload accounts to pick up new accounts from the saved file
     await refetchAccounts();
@@ -341,6 +379,7 @@ const Editor: Component = () => {
               errors={currentErrors()}
               accounts={accountsData()?.accounts ?? []}
               filepath={currentFile() ?? null}
+              line={requestedLine()}
               onChange={handleValueChange}
               onSaveRequest={handleSaveRequest}
             />

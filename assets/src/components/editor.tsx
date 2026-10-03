@@ -14,6 +14,8 @@ interface EditorProps {
   errors?: EditorError[] | null;
   accounts: AccountInfo[];
   filepath?: string | null;
+  /** A line to scroll to and select once the document holding it shows */
+  line?: number;
   onChange?: (value: string) => void;
   onSaveRequest?: () => void;
 }
@@ -84,6 +86,24 @@ const Editor = (props: EditorProps) => {
         changes: { from: 0, to: currentValue.length, insert: props.value },
       });
     }
+  });
+
+  // Reveal the requested line once per file and line, after the document
+  // holding it is shown
+  let revealed: string | undefined;
+  createEffect(() => {
+    const view = viewRef;
+    const line = props.line;
+    const key = `${props.filepath ?? ""}:${line}`;
+    if (!view || props.value === undefined || line === undefined || key === revealed) return;
+    if (line < 1 || line > view.state.doc.lines) return;
+    const target = view.state.doc.line(line);
+    view.dispatch({
+      selection: { anchor: target.from, head: target.to },
+      effects: EditorView.scrollIntoView(target.from, { y: "center" }),
+    });
+    view.focus();
+    revealed = key;
   });
 
   // Reconfigure extensions when linter, completion or callbacks change
