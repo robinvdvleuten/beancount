@@ -60,11 +60,11 @@ beancount has no tolerance at all, so it reports the 1E-27 USD an
 interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
-**BQL Tables**: SELECT's FROM reads beanquery's `postings` and `entries`
-Tables and the Empty table (`#`). beanquery's other eight, `accounts`
-(#639), `balances` (#638), `commodities` (#635), `documents` (#637),
-`events` (#634), `notes` (#636), `prices` (#633) and `transactions` (#632),
-are not built yet: naming one, as `#prices`, `"prices"` or a bare `prices`,
+**BQL Tables**: SELECT's FROM reads beanquery's `postings`, `entries` and
+`transactions` Tables and the Empty table (`#`). beanquery's other seven,
+`accounts` (#639), `balances` (#638), `commodities` (#635), `documents`
+(#637), `events` (#634), `notes` (#636) and `prices` (#633), are not built
+yet: naming one, as `#prices`, `"prices"` or a bare `prices`,
 fails with `table "prices" is not supported` (`err_from_table_prices`, one
 fixture per Table, listed in `queryGaps`), where beanquery reads it. A bare
 `accounts` is a postings column, so `FROM accounts` filters postings in

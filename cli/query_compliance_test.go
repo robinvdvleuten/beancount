@@ -127,20 +127,19 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"from_open_on_close":          "#582, a deliberate deviation: beanquery's compiler crashes comparing OPEN's date with a dateless CLOSE",
-	"negative_zero":               "#408, a deliberate deviation: booking gives a zero residual no sign",
-	"err_integer_overflow":        "#589, a deliberate deviation: Python's integers do not overflow, and ours fail the statement where they would",
-	"err_regex_invalid":           "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
-	"err_regex_invalid_grep":      "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
-	"err_regex_lookahead":         "#589, a deliberate deviation: RE2 has no lookarounds, so the pattern is invalid here and valid in Python's re",
-	"err_from_table_accounts":     "#639, the accounts Table is not built yet",
-	"err_from_table_balances":     "#638, the balances Table is not built yet",
-	"err_from_table_commodities":  "#635, the commodities Table is not built yet",
-	"err_from_table_documents":    "#637, the documents Table is not built yet",
-	"err_from_table_events":       "#634, the events Table is not built yet",
-	"err_from_table_notes":        "#636, the notes Table is not built yet",
-	"err_from_table_prices":       "#633, the prices Table is not built yet",
-	"err_from_table_transactions": "#632, the transactions Table is not built yet",
+	"from_open_on_close":         "#582, a deliberate deviation: beanquery's compiler crashes comparing OPEN's date with a dateless CLOSE",
+	"negative_zero":              "#408, a deliberate deviation: booking gives a zero residual no sign",
+	"err_integer_overflow":       "#589, a deliberate deviation: Python's integers do not overflow, and ours fail the statement where they would",
+	"err_regex_invalid":          "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
+	"err_regex_invalid_grep":     "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
+	"err_regex_lookahead":        "#589, a deliberate deviation: RE2 has no lookarounds, so the pattern is invalid here and valid in Python's re",
+	"err_from_table_accounts":    "#639, the accounts Table is not built yet",
+	"err_from_table_balances":    "#638, the balances Table is not built yet",
+	"err_from_table_commodities": "#635, the commodities Table is not built yet",
+	"err_from_table_documents":   "#637, the documents Table is not built yet",
+	"err_from_table_events":      "#634, the events Table is not built yet",
+	"err_from_table_notes":       "#636, the notes Table is not built yet",
+	"err_from_table_prices":      "#633, the prices Table is not built yet",
 }
 
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query

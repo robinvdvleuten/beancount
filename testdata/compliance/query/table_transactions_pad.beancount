@@ -1,0 +1,13 @@
+2023-01-01 open Assets:Cash USD
+2023-01-01 open Equity:Opening-Balances USD
+2023-01-01 open Expenses:Food USD
+
+2023-01-01 pad Assets:Cash Equity:Opening-Balances
+2023-01-02 balance Assets:Cash 100 USD
+
+pushtag #trip
+2023-01-03 * "Cafe" "Lunch" ^receipt
+  memo: "noon"
+  Expenses:Food  10 USD
+  Assets:Cash
+poptag #trip

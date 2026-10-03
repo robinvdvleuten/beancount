@@ -344,9 +344,12 @@ var errorFixtures = map[string]string{
 	"err_from_table_quoted_open": `error: syntax error
 | SELECT date FROM "postings" OPEN ON 2024-01-01
 |                             ^`,
-	"err_from_table_transactions": `error: table "transactions" is not supported
-| SELECT * FROM #transactions
-|               ^^^^^^^^^^^^^`,
+	"err_table_transactions_entry_meta": `error: column "entry" not found in table "transactions"
+| SELECT entry_meta('x') FROM #transactions
+|        ^^^^^^^^^^^^^^^`,
+	"err_table_transactions_any_meta": `error: column "entry" not found in table "transactions"
+| SELECT any_meta('x') FROM #transactions
+|        ^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

@@ -1,0 +1,1 @@
+SELECT date, has_account('food') AS f FROM #transactions LIMIT 4

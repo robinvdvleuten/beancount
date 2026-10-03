@@ -1,0 +1,1 @@
+SELECT flag, count(*), first(narration) FROM transactions OPEN ON 2024-01-01 GROUP BY flag ORDER BY flag

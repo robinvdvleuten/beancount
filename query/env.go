@@ -228,9 +228,10 @@ var (
 
 // tables are the Tables a Table reference names, by name.
 var tables = map[string]*environment{
-	postingsTable.table: postingsTable,
-	entriesTable.table:  entriesTable,
-	emptyTable.table:    emptyTable,
+	postingsTable.table:     postingsTable,
+	entriesTable.table:      entriesTable,
+	emptyTable.table:        emptyTable,
+	transactionsTable.table: transactionsTable,
 }
 
 // unbuiltTables are beanquery's Tables not built yet, which a Table
@@ -238,7 +239,7 @@ var tables = map[string]*environment{
 // (KNOWN_GAPS.md).
 var unbuiltTables = map[string]bool{
 	"accounts": true, "balances": true, "commodities": true, "documents": true,
-	"events": true, "notes": true, "prices": true, "transactions": true,
+	"events": true, "notes": true, "prices": true,
 }
 
 // txnColumn wraps a transaction accessor into an entry-environment column

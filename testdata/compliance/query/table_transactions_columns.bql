@@ -1,0 +1,1 @@
+SELECT date, payee, meta, meta('category') AS c FROM "transactions" WHERE 'coffee' IN tags ORDER BY date DESC
