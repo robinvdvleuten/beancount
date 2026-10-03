@@ -1,0 +1,26 @@
+; A price is never inferred for units held at cost: like beancount's
+; interpolate_group, Booking reports it on the posting and still books the
+; group, the reduction weighing at the lot's cost, so the transaction's
+; residual is reported on its own line.
+option "booking_method" "HIFO"
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lot a"
+  Assets:Stock  10 HOOL {10 USD}
+  Equity:Open
+
+2020-01-03 * "Lot b"
+  Assets:Stock  10 HOOL {20 USD, "lotb"}
+  Equity:Open
+
+2020-02-01 * "Reduction at {} with a price without a number"
+  Assets:Cash   0 USD
+  Assets:Stock  -3 HOOL {} @ USD
+
+2020-02-02 * "Augmentation at {} with a price without a number"
+  Assets:Cash   -50 USD
+  Assets:Stock  5 HOOL {} @ USD
+
+2020-03-01 balance Assets:Stock  17 HOOL

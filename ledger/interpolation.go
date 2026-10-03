@@ -63,9 +63,10 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// cost is inferred from the residual.
 	reducedPositions := make(map[*ast.Posting][]BookedPosition)
 	for _, posting := range pc.withAmounts {
-		// A partial price annotation leaves the posting's weight unknown;
-		// it is resolved from the residual during interpolation below.
-		if posting.Price != nil && isIncompleteAmount(posting.Price) {
+		// A partial price annotation leaves the weight of a posting without
+		// cost unknown; it is resolved from the residual during
+		// interpolation below. Held at cost, the posting weighs at its cost.
+		if posting.Cost == nil && posting.Price != nil && isIncompleteAmount(posting.Price) {
 			continue
 		}
 
@@ -205,6 +206,13 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// beancount's interpolate_group, the price is the residual's weight per
 	// unit with its sign dropped, and the posting then weighs its units at
 	// that price, which leaves a residual when the signs disagree.
+	// Like beancount's, a price is never inferred for units held at cost:
+	// the group is still booked, the posting weighing at its cost and its
+	// price left without a number, and its residual reported.
+	if posting := valuelessPrice; posting != nil && posting.Cost != nil {
+		kept = append(kept, newCurrencyGroupError(txn, posting, "Cannot infer price for postings with units held at cost"))
+		valuelessPrice = nil
+	}
 	if posting := valuelessPrice; posting != nil {
 		units, err := ParseAmount(posting.Amount)
 		if err != nil {

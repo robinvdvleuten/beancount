@@ -237,6 +237,13 @@ compare the lines errors are on:
   would divide the residual by the price to find. We report `Cannot infer
   units at a zero price` on the posting and drop its Currency group.
 
+- **A missing price on an augmentation at an explicit cost** (#656):
+  bean-check fails with a Python `AttributeError` on
+  `Assets:Stock  5 HOOL {10 USD} @ USD`, the cost spec it keeps when it
+  cannot infer the price. We report `Cannot infer price for postings with
+  units held at cost` on the posting, as beancount does for a reduction,
+  and book the group with the price left without a number.
+
 - **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
   Python's `bool` subclasses `int`, sums the values as integers and still
   types the column as boolean, so `sum(1 = 1)` over four rows renders

@@ -402,6 +402,22 @@ func TestInterpolate(t *testing.T) {
 			wantErrs: []string{"Cannot infer per-unit cost only from total"},
 		},
 		{
+			// Like beancount, the group is booked with the price left
+			// without a number, the reduction weighing at its lot's cost.
+			name: "a missing price on a reduction at cost",
+			source: lots + `
+2024-01-15 * "Sell"
+  Assets:Stock  -2 HOOL {} @ USD
+  Assets:Cash    0 USD
+`,
+			want: []string{
+				"USD: Assets:Stock",
+				"USD: Assets:Cash",
+				"USD: residual -200 USD",
+			},
+			wantErrs: []string{"Cannot infer price for postings with units held at cost"},
+		},
+		{
 			// beancount fails dividing by zero; the error is never a
 			// transaction that does not balance with no residual.
 			name: "missing units at a zero price",
