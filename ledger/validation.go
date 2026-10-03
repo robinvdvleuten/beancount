@@ -622,7 +622,12 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction) []error {
 	return errs
 }
 
-// validatePrice validates a Price directive for semantic correctness
+// validatePrice validates a Price directive. The parser never produces a
+// price without a commodity, an amount, a currency or a number, so ledger
+// text cannot reach these checks: they guard directives built in Go, a
+// hand-built AST or directives added with ledgerload.Result.With. The
+// Importer protocol carries no price directives, so its host covers none of
+// them.
 func validatePrice(price *ast.Price) []error {
 	var errs []error
 

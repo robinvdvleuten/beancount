@@ -1093,17 +1093,39 @@ func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
 	assert.True(t, rate.IsZero())
 }
 
-func TestLedger_InvalidPriceMissingAmount(t *testing.T) {
-	// Test validatePrice directly with a manually constructed price
+func TestLedger_InvalidBuiltPrice(t *testing.T) {
 	date := newTestDate("2024-01-15")
-
-	price := ast.NewPrice(date, "USD", nil)
-
-	errs := validatePrice(price)
-	assert.True(t, len(errs) > 0)
-
-	ok := kindOf(errs[0]) == "InvalidDirectivePriceError"
-	assert.True(t, ok)
+	tests := []struct {
+		name  string
+		price *ast.Price
+		want  []string
+	}{
+		{"no commodity", ast.NewPrice(date, "", ast.NewAmount("1.08", "CAD")),
+			[]string{"price commodity cannot be empty"}},
+		{"no amount", ast.NewPrice(date, "USD", nil),
+			[]string{"price amount is required"}},
+		{"no currency", ast.NewPrice(date, "USD", ast.NewAmount("1.08", "")),
+			[]string{"price currency cannot be empty"}},
+		{"no number", ast.NewPrice(date, "USD", ast.NewAmount("", "CAD")),
+			[]string{"price amount value cannot be empty"}},
+		{"unparseable number", ast.NewPrice(date, "USD", ast.NewAmount("1.0.8", "CAD")),
+			[]string{`invalid price amount: invalid amount value "1.0.8": can't convert 1.0.8 to decimal: too many .s`}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			l := New()
+			_, err := l.Process(context.Background(), &ast.AST{Directives: []ast.Directive{tt.price}})
+			assert.NoError(t, err)
+			var got []string
+			for _, err := range l.Errors() {
+				assert.Equal(t, "InvalidDirectivePriceError", kindOf(err))
+				got = append(got, err.(*Diagnostic).Message())
+			}
+			assert.Equal(t, tt.want, got)
+			_, found := l.GetPrice(date, "USD", "CAD")
+			assert.False(t, found, "an invalid price is not applied")
+		})
+	}
 }
 
 func TestLedger_PricesWithAccounts(t *testing.T) {

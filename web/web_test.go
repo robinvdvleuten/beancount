@@ -14,7 +14,6 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/parser"
 )
 
 func TestServerStartStopsWhenContextIsCanceled(t *testing.T) {
@@ -608,12 +607,14 @@ func TestJSONSafeSourceErrorWithoutShapeIsALoadError(t *testing.T) {
 }
 
 func TestJSONSafeSourceErrorKeepsLedgerErrors(t *testing.T) {
-	tree := parser.MustParseString(context.Background(), "2024-01-01 price HOOL 1 USD\n")
-	// A price without an amount, which the parser cannot produce, is the
-	// ledger error.
-	tree.Directives[0].(*ast.Price).Amount = nil
+	date, err := ast.NewDate("2024-01-01")
+	assert.NoError(t, err)
+	// A price without an amount, which only a directive built in Go can
+	// hold, is the ledger error.
+	price := ast.NewPrice(date, "HOOL", nil)
+	price.SetPosition(ast.Position{Filename: "main.beancount", Line: 1})
 	l := ledger.New()
-	_, err := l.Process(context.Background(), tree)
+	_, err = l.Process(context.Background(), &ast.AST{Directives: []ast.Directive{price}})
 	assert.NoError(t, err)
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs))
