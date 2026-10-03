@@ -1,0 +1,1 @@
+PRINT FROM 'trip' IN tags OR 'receipt' IN links

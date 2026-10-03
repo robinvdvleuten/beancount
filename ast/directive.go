@@ -260,6 +260,12 @@ func (n *Note) AffectedNodes() []string {
 // Accounts returns the account the note is attached to.
 func (n *Note) Accounts() []Account { return []Account{n.Account} }
 
+// AllTags returns the note's tags, pushed ones included.
+func (n *Note) AllTags() []Tag { return n.Tags }
+
+// AllLinks returns the note's links.
+func (n *Note) AllLinks() []Link { return n.Links }
+
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (n *Note) SetPosition(pos Position) { n.pos = pos }
 
@@ -315,6 +321,12 @@ func (d *Document) ResolvedPath() string {
 
 // Accounts returns the account the document is attached to.
 func (d *Document) Accounts() []Account { return []Account{d.Account} }
+
+// AllTags returns the document's tags, pushed ones included.
+func (d *Document) AllTags() []Tag { return d.Tags }
+
+// AllLinks returns the document's links.
+func (d *Document) AllLinks() []Link { return d.Links }
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (d *Document) SetPosition(pos Position) { d.pos = pos }

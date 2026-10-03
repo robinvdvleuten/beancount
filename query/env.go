@@ -95,8 +95,8 @@ var entryColumns = map[string]*columnDef{
 	"payee":       {tString, txnColumn(payeeValue)},
 	"narration":   {tString, txnColumn(func(txn *ast.Transaction) any { return txn.Narration.String() })},
 	"description": {tString, txnColumn(descriptionValue)},
-	"tags":        {tSet, txnColumn(func(txn *ast.Transaction) any { return tagSet(txn) })},
-	"links":       {tSet, txnColumn(func(txn *ast.Transaction) any { return linkSet(txn) })},
+	"tags":        {tSet, taggedColumn(tagSet)},
+	"links":       {tSet, taggedColumn(linkSet)},
 	"meta":        {tDict, func(row *evalRow) any { return entryMeta(row.Entry) }},
 	"accounts":    {tAccountSet, func(row *evalRow) any { return accountSet(row.Entry) }},
 }
@@ -263,8 +263,27 @@ func descriptionValue(txn *ast.Transaction) any {
 	return narration
 }
 
-func tagSet(txn *ast.Transaction) setValue {
-	tags := txn.AllTags()
+// tagged is a directive with tags and links: a transaction, a note or a
+// document.
+type tagged interface {
+	AllTags() []ast.Tag
+	AllLinks() []ast.Link
+}
+
+// taggedColumn wraps a tags or links accessor into an entry-environment
+// column that, like beanquery's getattr, yields NULL for a directive without
+// tags and links.
+func taggedColumn(eval func(tagged) setValue) func(row *evalRow) any {
+	return func(row *evalRow) any {
+		if entry, ok := row.Entry.(tagged); ok {
+			return eval(entry)
+		}
+		return nil
+	}
+}
+
+func tagSet(entry tagged) setValue {
+	tags := entry.AllTags()
 	set := make(setValue, len(tags))
 	for _, tag := range tags {
 		set[string(tag)] = struct{}{}
@@ -272,8 +291,8 @@ func tagSet(txn *ast.Transaction) setValue {
 	return set
 }
 
-func linkSet(txn *ast.Transaction) setValue {
-	links := txn.AllLinks()
+func linkSet(entry tagged) setValue {
+	links := entry.AllLinks()
 	set := make(setValue, len(links))
 	for _, link := range links {
 		set[string(link)] = struct{}{}
