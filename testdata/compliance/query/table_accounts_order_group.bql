@@ -1,0 +1,1 @@
+SELECT open, close, count(*) AS c FROM #accounts GROUP BY open, close ORDER BY open, 2 DESC

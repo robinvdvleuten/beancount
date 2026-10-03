@@ -127,15 +127,14 @@ func isQueryError(output queryOutput) bool {
 // whose output agrees in both formats, or that names no fixture, fails the
 // query parity suite.
 var queryGaps = map[string]string{
-	"from_open_on_close":                "#582, a deliberate deviation: beanquery's compiler crashes comparing OPEN's date with a dateless CLOSE",
-	"negative_zero":                     "#408, a deliberate deviation: booking gives a zero residual no sign",
-	"err_integer_overflow":              "#589, a deliberate deviation: Python's integers do not overflow, and ours fail the statement where they would",
-	"err_regex_invalid":                 "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
-	"err_regex_invalid_grep":            "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
-	"err_regex_lookahead":               "#589, a deliberate deviation: RE2 has no lookarounds, so the pattern is invalid here and valid in Python's re",
-	"err_table_accounts_order_by_open":  "#639, a deliberate deviation: beanquery fails with a Python TypeError comparing the dicts in two opens",
-	"err_table_accounts_group_by_close": "#639, a deliberate deviation: beanquery fails with a Python TypeError hashing the dict in a close",
-	"err_table_notes_group_by_tags":     "#636, a deliberate deviation: beanquery fails with a Python TypeError checking whether a frozenset is hashable",
+	"from_open_on_close":            "#582, a deliberate deviation: beanquery's compiler crashes comparing OPEN's date with a dateless CLOSE",
+	"negative_zero":                 "#408, a deliberate deviation: booking gives a zero residual no sign",
+	"err_integer_overflow":          "#589, a deliberate deviation: Python's integers do not overflow, and ours fail the statement where they would",
+	"err_regex_invalid":             "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
+	"err_regex_invalid_grep":        "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
+	"err_regex_lookahead":           "#589, a deliberate deviation: RE2 has no lookarounds, so the pattern is invalid here and valid in Python's re",
+	"table_accounts_order_group":    "#641, a deliberate deviation: beanquery fails with a Python TypeError hashing the dict in an open or a close",
+	"err_table_notes_group_by_tags": "#636, a deliberate deviation: beanquery fails with a Python TypeError checking whether a frozenset is hashable",
 }
 
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query

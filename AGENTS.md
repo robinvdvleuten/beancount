@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Conventions for the Go implementation of Beancount. The yardstick is parity with the official beancount v3 tools (3.2.3) and, for BQL, beanquery 0.2.0, v3's `bean-query`. #562's BQL sub-issues are done; the rest of beanquery's behaviours that differ are in KNOWN_GAPS.md. The deliberate deviations are listed in `queryGaps`: signed zero (#408), `OPEN ON` with a dateless `CLOSE` (#582), RE2 for Python's regular expressions and 64-bit integers that fail on overflow (#589), `GROUP BY` a frozenset failing as it compiles (#636), and `ORDER BY` an open or a close and `GROUP BY` one failing as it compiles (#639).
+Conventions for the Go implementation of Beancount. The yardstick is parity with the official beancount v3 tools (3.2.3) and, for BQL, beanquery 0.2.0, v3's `bean-query`. #562's BQL sub-issues are done; the rest of beanquery's behaviours that differ are in KNOWN_GAPS.md. The deliberate deviations are listed in `queryGaps`: signed zero (#408), `OPEN ON` with a dateless `CLOSE` (#582), RE2 for Python's regular expressions and 64-bit integers that fail on overflow (#589), `GROUP BY` a frozenset failing as it compiles (#636), and opens and closes ordering and grouping by their printed form (#641).
 
 Update this file in the same change whenever you add a package, change the phase pipeline, introduce a convention, or add a compliance suite. A stale convention misleads more than a missing one.
 

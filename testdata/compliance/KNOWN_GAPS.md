@@ -300,19 +300,15 @@ compare the lines errors are on:
   supported` here (`query/err_table_notes_group_by_tags.bql`, listed in
   `queryGaps`); an implicit GROUP BY groups by them in both.
 
-- **BQL opens and closes** (#639): the `accounts` Table's `open` and
-  `close` columns hold beancount's Open and Close, whose meta is a dict, so
-  `ORDER BY open` is a Python `TypeError` there, comparing two dicts, and
-  `GROUP BY close` one hashing a dict. Here both fail when the statement
-  compiles, `ORDER-BY a non-orderable type is not supported` and
-  `GROUP-BY a non-hashable type is not supported`
-  (`query/err_table_accounts_order_by_open.bql` and
-  `query/err_table_accounts_group_by_close.bql`, listed in `queryGaps`),
-  even where Python would compare or hash none: `ORDER BY open` over one
-  row prints it there.
-  `min()`, `max()` and an implicit GROUP BY on one fail there too and, like
-  other values Python cannot order, order and group by their printed form
-  here.
+- **BQL opens and closes** (#639, #641): the `accounts` Table's `open`
+  and `close` columns hold beancount's Open and Close, whose meta is a
+  dict, so beanquery raises a Python `TypeError` once it compares two
+  (ORDER BY, `min()`, `max()`) or hashes one (GROUP BY, explicit or
+  implicit). Here, like other values Python cannot order or hash, they
+  order and group by their printed form
+  (`query/table_accounts_order_group.bql`, listed in `queryGaps`). Where
+  beanquery compares none, as in `ORDER BY open` over one row, both print
+  the row (`query/table_accounts_order_one.bql`).
 
 - **BQL `IN` on a non-string**: `1 IN account` (or `1 IN 2`) fails with a
   Python `TypeError` in beanquery; here `IN` a string or a set is FALSE

@@ -350,8 +350,6 @@ var errorFixtures = map[string]string{
 	"err_table_accounts_equal": `error: operator "equal(open, open)" not supported
 | SELECT open = open FROM #accounts
 |        ^^^^^^^^^^^`,
-	"err_table_accounts_order_by_open":  `error: ORDER-BY a non-orderable type is not supported: "Column(name='open')"`,
-	"err_table_accounts_group_by_close": `error: GROUP-BY a non-hashable type is not supported: "Column(name='close')"`,
 	"err_table_accounts_meta": `error: column "meta" not found in table "accounts"
 | SELECT meta('x') FROM #accounts
 |        ^^^^^^^^^`,
