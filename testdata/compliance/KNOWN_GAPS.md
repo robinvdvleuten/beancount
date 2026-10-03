@@ -247,7 +247,12 @@ compare the lines errors are on:
   more than RE2 gives; failing tells the user, where matching nothing
   would mislead. `subst()`'s replacement is not a pattern: it is
   read as Python's `re.sub` reads it (`\1`, `\g<name>`, a literal `$`),
-  with Python's messages for an invalid one.
+  with Python's messages for an invalid one. Like RE2's, `subst()` skips
+  an empty match adjacent to the previous match, which Python's `re.sub`
+  replaces (#625): `subst('o*', '-', 'Foood')` is `-F-d-` here and
+  `-F--d-` there (`query/func_subst_empty_after_match.bql`). Matching
+  Python needs a search from an offset that keeps the context of `^` and
+  `\b`, which Go's `regexp` does not offer.
 
 - **BQL integers** (#589): Python's integers do not overflow, and ours are
   64-bit. An integer sum, difference, product, negation or `sum()` that

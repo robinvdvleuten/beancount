@@ -132,6 +132,7 @@ var queryGaps = map[string]string{
 	"err_integer_overflow":          "#589, a deliberate deviation: Python's integers do not overflow, and ours fail the statement where they would",
 	"err_regex_invalid":             "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
 	"err_regex_invalid_grep":        "#589, a deliberate deviation: RE2 words an invalid pattern apart from Python's re",
+	"func_subst_empty_after_match":  "#589 and #625, a deliberate deviation: like RE2's, subst() skips an empty match adjacent to the previous match, which Python's re.sub replaces",
 	"err_regex_lookahead":           "#589, a deliberate deviation: RE2 has no lookarounds, so the pattern is invalid here and valid in Python's re",
 	"table_accounts_order_group":    "#641, a deliberate deviation: beanquery fails with a Python TypeError hashing the dict in an open or a close",
 	"err_table_notes_group_by_tags": "#636, a deliberate deviation: beanquery fails with a Python TypeError checking whether a frozenset is hashable",
