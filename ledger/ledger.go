@@ -79,6 +79,8 @@ type Ledger struct {
 	unopened        map[string]*Account  // Accounts posted to before any open
 	opened          map[string]*ast.Open // Accounts an open directive names, at any date, with that open
 	display         *DisplayContext
+	// The number of postings applied, which orders them across accounts
+	appliedPostings int
 }
 
 // New creates a new empty ledger
@@ -425,7 +427,9 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransactio
 		account.postings = append(account.postings, &accountPosting{
 			transaction: txn,
 			posting:     bp.posting,
+			seq:         l.appliedPostings,
 		})
+		l.appliedPostings++
 	}
 }
 

@@ -209,13 +209,13 @@ func (s *lotSums) add(p Position) {
 	s.positions = append(s.positions, p)
 }
 
-// positionsBetween returns the positions account's postings dated within
-// [start, end] inclusive add up to, a nil bound leaving that side open,
-// summed per lot in the order the lots first appear. A posting holds the
-// positions Booking recorded for it (BookedPositions), or else its units.
-func (l *Ledger) positionsBetween(account *Account, start, end *ast.Date) []Position {
+// positionsBetween returns the positions postings dated within [start,
+// end] inclusive add up to, a nil bound leaving that side open, summed per
+// lot in the order the lots first appear. A posting holds the positions
+// Booking recorded for it (BookedPositions), or else its units.
+func (l *Ledger) positionsBetween(postings []*accountPosting, start, end *ast.Date) []Position {
 	sums := newLotSums()
-	for _, posting := range account.postings {
+	for _, posting := range postings {
 		date := posting.transaction.Date()
 		if start != nil && date.Before(start.Time) || end != nil && date.After(end.Time) {
 			continue

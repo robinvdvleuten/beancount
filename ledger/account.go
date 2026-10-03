@@ -16,6 +16,9 @@ type accountPosting struct {
 
 	// The posting itself
 	posting *ast.Posting
+
+	// The order the ledger applied the posting in, across all accounts
+	seq int
 }
 
 // Account represents an account in the ledger

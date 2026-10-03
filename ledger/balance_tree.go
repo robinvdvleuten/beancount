@@ -1,7 +1,9 @@
 package ledger
 
 import (
+	"cmp"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -125,18 +127,21 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *sharedconfig.
 	var entries []balanceTreeEntry
 	var closing *closingBalances
 	if closed {
-		closing = newClosingBalances(cfg)
+		closing = newClosingBalances(cfg, endDate)
 	}
-	for _, account := range accounts {
+	// In account order, so that the closing sums, rounded to 28 digits,
+	// come out the same every time.
+	for _, name := range slices.Sorted(maps.Keys(accounts)) {
+		account := accounts[name]
 		included := len(typeFilter) == 0 || typeFilter[account.Type]
 		if !included && closing == nil {
 			continue
 		}
 
-		positions := l.positionsBetween(account, startDate, endDate)
+		positions := l.positionsBetween(account.postings, startDate, endDate)
 		balance := l.valuePositions(positions, valuation, valuationDate)
 		if closing != nil {
-			closing.add(account.Type, positions, balance)
+			closing.add(account, positions, balance)
 		}
 		if included {
 			entries = append(entries, balanceTreeEntry{name: string(account.name), accountType: account.Type, balance: balance})
@@ -176,33 +181,34 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *sharedconfig.
 	return tree, nil
 }
 
-// closingBalances gathers, account by account, what Closed balances add
-// under Equity: the Current earnings and Current conversions positions,
-// and the valued total of the balance sheet's own accounts.
+// closingBalances gathers, account by account in account order, what
+// Closed balances add under Equity: the Current earnings positions, the
+// postings Current conversions is computed from, and the valued total of
+// the balance sheet's own accounts.
 type closingBalances struct {
-	cfg         *sharedconfig.Config
-	earnings    lotSums                    // Income and Expenses
-	conversions map[string]decimal.Decimal // every account at cost, negated
-	total       map[string]decimal.Decimal // Assets, Liabilities and Equity, valued
+	cfg      *sharedconfig.Config
+	end      *ast.Date                  // the date the balances are as of, nil for all
+	earnings lotSums                    // Income and Expenses
+	postings []*accountPosting          // every account's
+	total    map[string]decimal.Decimal // Assets, Liabilities and Equity, valued
 }
 
-func newClosingBalances(cfg *sharedconfig.Config) *closingBalances {
+func newClosingBalances(cfg *sharedconfig.Config, end *ast.Date) *closingBalances {
 	return &closingBalances{
-		cfg:         cfg,
-		earnings:    newLotSums(),
-		conversions: make(map[string]decimal.Decimal),
-		total:       make(map[string]decimal.Decimal),
+		cfg:      cfg,
+		end:      end,
+		earnings: newLotSums(),
+		total:    make(map[string]decimal.Decimal),
 	}
 }
 
-// add takes in an account of accountType, its positions and their
-// valued balance.
-func (c *closingBalances) add(accountType string, positions []Position, valued *Balance) {
-	for _, position := range positions {
-		cost := position.AtCost()
-		c.conversions[cost.Currency] = pydecimal.Sub(c.conversions[cost.Currency], cost.Amount)
-	}
-	switch accountType {
+// add takes in an account, its positions in the period and their valued
+// balance. Like beancount's CLEAR, which transfers each account's balance
+// in account order, Current earnings sums the accounts' positions in that
+// order.
+func (c *closingBalances) add(account *Account, positions []Position, valued *Balance) {
+	c.postings = append(c.postings, account.postings...)
+	switch account.Type {
 	case c.cfg.AccountNames.Income, c.cfg.AccountNames.Expenses:
 		for _, position := range positions {
 			c.earnings.add(position)
@@ -216,6 +222,32 @@ func (c *closingBalances) addTotal(valued *Balance) {
 	for _, entry := range valued.Entries() {
 		c.total[entry.Currency] = pydecimal.Add(c.total[entry.Currency], entry.Amount)
 	}
+}
+
+// conversions returns the Current conversions positions: the negated cost
+// balance of every posting through the closing date. It sums as beancount's
+// conversions does, so that 28-digit rounding gives its amount: the
+// postings' positions per lot in the order the ledger applied them, then
+// each lot's cost per currency in the order the lots first appear,
+// negated once summed.
+func (l *Ledger) conversions(closing *closingBalances) []Position {
+	postings := closing.postings
+	slices.SortFunc(postings, func(a, b *accountPosting) int { return cmp.Compare(a.seq, b.seq) })
+	var currencies []string
+	costs := make(map[string]decimal.Decimal)
+	for _, position := range l.positionsBetween(postings, nil, closing.end) {
+		cost := position.AtCost()
+		sum, seen := costs[cost.Currency]
+		if !seen {
+			currencies = append(currencies, cost.Currency)
+		}
+		costs[cost.Currency] = pydecimal.Add(sum, cost.Amount)
+	}
+	positions := make([]Position, 0, len(currencies))
+	for _, currency := range currencies {
+		positions = append(positions, Position{Number: costs[currency].Neg(), Currency: currency})
+	}
+	return positions
 }
 
 // closeEntries adds Closed balances' computed accounts to entries: each
@@ -246,11 +278,7 @@ func (l *Ledger) closeEntries(entries []balanceTreeEntry, closing *closingBalanc
 
 	earningsAccount, conversionsAccount := closing.cfg.CurrentAccounts()
 	earnings := l.valuePositions(closing.earnings.positions, v, date)
-	var conversionPositions []Position
-	for currency, number := range closing.conversions {
-		conversionPositions = append(conversionPositions, Position{Number: number, Currency: currency})
-	}
-	conversions := l.valuePositions(conversionPositions, v, date)
+	conversions := l.valuePositions(l.conversions(closing), v, date)
 	closing.addTotal(earnings)
 	closing.addTotal(conversions)
 	add(earningsAccount, earnings)

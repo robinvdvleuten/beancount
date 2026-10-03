@@ -214,3 +214,25 @@ func TestClosedBalancesRejectAPeriodOrIncomeAndExpenses(t *testing.T) {
 		})
 	}
 }
+
+// Current conversions is summed as beancount sums it, so 28-digit rounding
+// gives the same amount every time: the cost of 3 AAPL at 10/3 USD each
+// leaves 1E-27 USD, which bean-query's CLOSE posts to
+// Equity:Conversions:Current.
+func TestClosedBalancesAreDeterministic(t *testing.T) {
+	source, err := os.ReadFile("../testdata/compliance/query/interpolated_cost_exponent.beancount")
+	assert.NoError(t, err)
+	l := loadLedger(t, string(source))
+	asOf, err := ast.NewDate("2020-12-31")
+	assert.NoError(t, err)
+
+	for range 200 {
+		tree, err := l.GetBalanceTree(balanceSheet, nil, asOf, ledger.ValuationAtCost, true)
+		assert.NoError(t, err)
+		assert.Equal(t, map[string]map[string]string{
+			"Assets:Cash":                {"USD": "-90"},
+			"Assets:Invest":              {"USD": "90"},
+			"Equity:Conversions:Current": {"USD": "0.000000000000000000000000001"},
+		}, accountBalances(tree))
+	}
+}
