@@ -280,7 +280,9 @@ func errorLines(path, output string) []int {
 // formatGaps lists format fixtures whose output differs from bean-format's,
 // with the reason. An entry whose output agrees, or that names no fixture,
 // fails the format parity suite.
-var formatGaps = map[string]string{}
+var formatGaps = map[string]string{
+	"line_in_string": "#664: bean-format realigns a line inside a string spanning lines; we copy the string",
+}
 
 // TestOfficialFormatParity compares our formatter's output byte-for-byte
 // with bean-format on the fixtures under testdata/compliance/format.

@@ -5,138 +5,141 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
-func parseDirective(t *testing.T, source string) ast.Directive {
-	t.Helper()
-	tree, err := parser.ParseString(context.Background(), source)
-	assert.NoError(t, err)
-	return tree.Directives[0]
-}
-
 func TestLinePattern(t *testing.T) {
-	posting := func(line string) (string, bool, *ast.Posting) {
-		txn := parseDirective(t, "2020-01-01 *\n"+line+"\n").(*ast.Transaction)
-		return line, true, txn.Postings[0]
-	}
-	postingLine := func(line string) func() lineLayout {
-		return func() lineLayout {
-			line, owned, p := posting(line)
-			return postingLayout(line, owned, p, 4)
-		}
-	}
-	balanceLine := func(line string) func() lineLayout {
-		return func() lineLayout {
-			b := parseDirective(t, line+"\n").(*ast.Balance)
-			text := numberText(b.Amount)
-			last := numberText(b.Amount)
-			if b.Tolerance != nil {
-				text += " ~ " + numberText(b.Tolerance)
-				last = numberText(b.Tolerance)
-			}
-			return datedLayout(line, true, "2020-01-01 balance "+string(b.Account), text, last, balanceCurrency(b))
-		}
-	}
-
 	tests := []struct {
-		name   string
-		layout func() lineLayout
-		want   lineLayout
+		name string
+		line string
+		want lineLayout
 	}{
 		{
-			name:   "aligned posting",
-			layout: postingLine("  Assets:Cash   10.00 USD {5 EUR} ; c"),
+			name: "aligned posting",
+			line: "  Assets:Cash   10.00 USD {5 EUR} ; c  ",
 			want: lineLayout{
-				kind: alignLine, prefix: "    Assets:Cash", number: "10.00", currency: "USD", rest: "USD {5 EUR} ; c",
+				kind: alignLine, prefix: "    Assets:Cash", number: "10.00", rest: "USD {5 EUR} ; c  ",
 				prefixWidth: 13, numberWidth: 5,
 			},
 		},
 		{
-			name: "posting whose line is not its own",
-			layout: func() lineLayout {
-				line, _, p := posting("  Assets:Cash  10.00 USD")
-				return postingLayout(line, false, p, 4)
-			},
-			want: lineLayout{kind: unownedLine},
-		},
-		{
-			name:   "number glued to its currency",
-			layout: postingLine("  Assets:Cash  10USD"),
-			want:   lineLayout{kind: copyLine, text: "    Assets:Cash  10USD"},
-		},
-		{
-			name:   "flagged posting",
-			layout: postingLine("  ! Assets:Cash  10 USD"),
-			want:   lineLayout{kind: copyLine, text: "  ! Assets:Cash  10 USD"},
-		},
-		{
-			name:   "parenthesised binary expression",
-			layout: postingLine("  Assets:Cash  (5 + 5) USD"),
+			name: "posting indented with a tab",
+			line: "\tAssets:Cash 1 USD",
 			want: lineLayout{
-				kind: alignLine, prefix: "    Assets:Cash", number: "(5 + 5)", currency: "USD", rest: "USD",
+				kind: alignLine, prefix: "    Assets:Cash", number: "1", rest: "USD",
+				prefixWidth: 12, numberWidth: 1,
+			},
+		},
+		{
+			name: "number glued to its currency",
+			line: "  Assets:Cash  10USD",
+			want: lineLayout{kind: copyLine, text: "    Assets:Cash  10USD"},
+		},
+		{
+			name: "flagged posting",
+			line: "  ! Assets:Cash  10 USD",
+			want: lineLayout{kind: copyLine, text: "  ! Assets:Cash  10 USD"},
+		},
+		{
+			name: "parenthesised binary expression",
+			line: "  Assets:Cash  (5 + 5) USD",
+			want: lineLayout{
+				kind: alignLine, prefix: "    Assets:Cash", number: "(5 + 5)", rest: "USD",
 				prefixWidth: 13, numberWidth: 7,
 			},
 		},
 		{
-			name:   "longer expression",
-			layout: postingLine("  Assets:Cash  (5 + 5 + 1) USD"),
-			want:   lineLayout{kind: copyLine, text: "    Assets:Cash  (5 + 5 + 1) USD"},
+			name: "longer expression",
+			line: "  Assets:Cash  (5 + 5 + 1) USD",
+			want: lineLayout{kind: copyLine, text: "    Assets:Cash  (5 + 5 + 1) USD"},
 		},
 		{
-			name:   "posting without an amount",
-			layout: postingLine("  Assets:Cash {10 USD}   ; c  "),
-			want:   lineLayout{kind: copyLine, text: "    Assets:Cash {10 USD}   ; c  "},
+			name: "posting without an amount",
+			line: "  Assets:Cash {10 USD}   ; c  ",
+			want: lineLayout{kind: copyLine, text: "    Assets:Cash {10 USD}   ; c  "},
 		},
 		{
-			name:   "balance",
-			layout: balanceLine("2020-01-01 balance Assets:Cash  100.00 USD"),
+			// ACCOUNT_RE wants an uppercase letter or a digit to start
+			// each component.
+			name: "account component starting with another letter",
+			line: "  Assets:日本  100 JPY",
+			want: lineLayout{kind: copyLine, text: "  Assets:日本  100 JPY"},
+		},
+		{
+			name: "account whose later component is not one to bean-format",
+			line: "  Assets:Cash:日本  100 JPY",
+			want: lineLayout{kind: copyLine, text: "    Assets:Cash:日本  100 JPY"},
+		},
+		{
+			name: "balance",
+			line: "2020-01-01 balance Assets:Cash  100.00 USD   ",
 			want: lineLayout{
-				kind: alignLine, prefix: "2020-01-01 balance Assets:Cash", number: "100.00", currency: "USD",
+				kind: alignLine, prefix: "2020-01-01 balance Assets:Cash", number: "100.00", rest: "USD   ",
 				prefixWidth: 30, numberWidth: 6,
 			},
 		},
 		{
-			name:   "balance tolerance",
-			layout: balanceLine("2020-01-01 balance Assets:Cash  100.00 ~ 0.05 USD"),
+			name: "balance tolerance",
+			line: "2020-01-01 balance Assets:Cash  100.00  ~ 0.05 USD",
 			want: lineLayout{
-				kind: alignLine, prefix: "2020-01-01 balance Assets:Cash 100.00 ~", number: "0.05", currency: "USD",
-				prefixWidth: 39, numberWidth: 4,
+				kind: alignLine, prefix: "2020-01-01 balance Assets:Cash  100.00  ~", number: "0.05", rest: "USD",
+				prefixWidth: 41, numberWidth: 4,
 			},
 		},
 		{
-			name:   "balance glued to its currency",
-			layout: balanceLine("2020-01-01 balance Assets:Cash 100.00USD"),
-			want:   lineLayout{kind: copyLine, text: "2020-01-01 balance Assets:Cash 100.00USD"},
+			name: "balance glued to its currency",
+			line: "2020-01-01 balance Assets:Cash 100.00USD",
+			want: lineLayout{kind: copyLine, text: "2020-01-01 balance Assets:Cash 100.00USD"},
 		},
 		{
-			name:   "metadata line",
-			layout: func() lineLayout { return plainLayout("    key:   1", true) },
-			want:   lineLayout{kind: copyLine, text: "    key:   1"},
+			name: "header",
+			line: "2020-01-01 * \"10 USD\"",
+			want: lineLayout{kind: copyLine, text: "2020-01-01 * \"10 USD\""},
 		},
 		{
-			name:   "comment line",
-			layout: func() lineLayout { return plainLayout("  ; a comment  ", true) },
-			want:   lineLayout{kind: copyLine, text: "  ; a comment  "},
-		},
-		{
-			name:   "line the item does not own",
-			layout: func() lineLayout { return plainLayout("2020-01-01 open Assets:A", false) },
-			want:   lineLayout{kind: unownedLine},
-		},
-		{
-			name: "balance whose line is not its own",
-			layout: func() lineLayout {
-				return datedLayout("", false, "2020-01-01 balance Assets:Cash", "100.00", "100.00", "USD")
+			name: "string spanning lines",
+			line: "2020-01-01 price HOOL  1 USD\n  more",
+			want: lineLayout{
+				kind: alignLine, prefix: "2020-01-01 price HOOL", number: "1", rest: "USD\n  more",
+				prefixWidth: 21, numberWidth: 1,
 			},
-			want: lineLayout{kind: unownedLine},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, tt.layout())
+			assert.Equal(t, tt.want, layout(tt.line, true, 4))
 		})
+	}
+
+	t.Run("line the item does not own", func(t *testing.T) {
+		assert.Equal(t, lineLayout{kind: unownedLine}, layout("2020-01-01 balance Assets:Cash  1 USD", false, 4))
+		assert.Equal(t, lineLayout{kind: unownedLine}, plainLayout("2020-01-01 open Assets:A", false))
+	})
+	t.Run("metadata line", func(t *testing.T) {
+		assert.Equal(t, lineLayout{kind: copyLine, text: "    key:   1"}, plainLayout("    key:   1", true))
+	})
+}
+
+func TestDatedLinePrefix(t *testing.T) {
+	// The aligned number is the shortest-prefix suffix spelled as a number,
+	// as in bean-format's lazy line pattern.
+	for text, want := range map[string][2]string{
+		"6":             {"H", "6"},
+		"- 5":           {"H", "- 5"},
+		"100.00 ~ 0.05": {"H 100.00 ~", "0.05"},
+		"50 + 50":       {"H 50", "+ 50"},
+		"2 * 3":         {"H 2 *", "3"},
+		"0*  0":         {"H 0*", "0"},
+		"(2 * 3)":       {"H", "(2 * 3)"},
+		"(-1-2)":        {"H", "(-1-2)"},
+	} {
+		line := layout("2020-01-01 price H "+text+" USD", true, 4)
+		assert.Equal(t, alignLine, line.kind, text)
+		assert.Equal(t, [2]string{"2020-01-01 price " + want[0], want[1]}, [2]string{line.prefix, line.number}, text)
+	}
+	// Only one operator between two numbers, in one pair of parentheses.
+	for _, text := range []string{"((1 + 2) * 3)", "(1 + 2 + 3)", "( 1 * 2 )"} {
+		assert.Equal(t, copyLine, layout("2020-01-01 price H "+text+" USD", true, 4).kind, text)
 	}
 }
 

@@ -1,0 +1,8 @@
+; bean-format reads every line alone, so it realigns a line inside a
+; string spanning lines; the formatter copies the string as written.
+2020-01-01 open Assets:Cash
+2020-01-02 note Assets:Cash "x
+  Assets:Cash     1 USD
+2020-01-02 balance Assets:Cash  1 USD
+"
+2020-01-03 balance Assets:Cash  0 USD

@@ -53,30 +53,6 @@ func TestFormatAlignsOnlyPlainlySpelledNumbers(t *testing.T) {
 	assert.Equal(t, want, out.String())
 }
 
-func TestDatedAmountLayout(t *testing.T) {
-	// The aligned number is the shortest-prefix suffix spelled as a number,
-	// as in bean-format's lazy line pattern.
-	for text, want := range map[string][2]string{
-		"6":             {"H", "6"},
-		"- 5":           {"H", "- 5"},
-		"100.00 ~ 0.05": {"H 100.00 ~", "0.05"},
-		"50 + 50":       {"H 50", "+ 50"},
-		"2 * 3":         {"H 2 *", "3"},
-		"0*  0":         {"H 0*", "0"},
-		"(2 * 3)":       {"H", "(2 * 3)"},
-		"(-1-2)":        {"H", "(-1-2)"},
-	} {
-		prefix, number, ok := datedAmountLayout("H", text, false)
-		assert.True(t, ok, text)
-		assert.Equal(t, want, [2]string{prefix, number}, text)
-	}
-	// Only one operator between two numbers, in one pair of parentheses.
-	for _, text := range []string{"((1 + 2) * 3)", "(1 + 2 + 3)", "( 1 * 2 )"} {
-		_, _, ok := datedAmountLayout("H", text, false)
-		assert.False(t, ok, text)
-	}
-}
-
 func TestFormatLeavesNumbersGluedToCurrenciesAsWritten(t *testing.T) {
 	// bean-format's pattern needs whitespace between number and currency,
 	// so "1USD" lines pass through and do not widen the columns; neither

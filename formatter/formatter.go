@@ -242,17 +242,11 @@ func (f *run) calculateWidthMetrics(tree *ast.AST) widthMetrics {
 	}
 
 	for _, directive := range tree.Directives {
-		switch d := directive.(type) {
-		case *ast.Transaction:
-			for _, posting := range d.Postings {
+		record(f.directiveLayout(directive))
+		if txn, ok := directive.(*ast.Transaction); ok {
+			for _, posting := range txn.Postings {
 				record(f.postingLayout(posting))
 			}
-
-		case *ast.Balance:
-			record(f.balanceLayout(d))
-
-		case *ast.Price:
-			record(f.priceLayout(d))
 		}
 	}
 
@@ -324,8 +318,8 @@ func (f *run) resolveIndent(tree *ast.AST) int {
 			continue
 		}
 		for _, posting := range txn.Postings {
-			if column := posting.Position().Column; column > 1 {
-				frequencies[column-1]++
+			if width, ok := postingIndent(f.source.line(posting.Position().Line)); ok {
+				frequencies[width]++
 			}
 		}
 	}
@@ -348,26 +342,10 @@ func (f *run) fail(pos ast.Position) {
 	}
 }
 
-// writeCopied writes the line of the item at pos as bean-format leaves it:
-// as written. An item that does not own its line fails the run.
-func (f *run) writeCopied(pos ast.Position, line lineLayout, buf *strings.Builder) {
-	if line.kind != copyLine {
-		f.fail(pos)
-		return
-	}
-	buf.WriteString(line.text)
-	buf.WriteByte('\n')
-}
-
 // copyItemLine copies the source line of an item starting at pos: a
 // metadata, tags, comment or blank line, or an undated directive.
 func (f *run) copyItemLine(pos ast.Position, buf *strings.Builder) {
-	f.writeCopied(pos, plainLayout(f.source.itemLine(pos.Line, pos.Column)), buf)
-}
-
-// copyDirectiveLine copies a dated directive's source line, its header.
-func (f *run) copyDirectiveLine(d ast.Directive, buf *strings.Builder) {
-	f.writeCopied(d.Position(), plainLayout(f.source.directiveLine(d)), buf)
+	f.writeLine(pos, plainLayout(f.source.itemLine(pos.Line, pos.Column)), buf)
 }
 
 // newRun starts a run formatting tree, parsed from source. The source
@@ -436,7 +414,12 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	}
 
 	// bean-format preserves blank lines at the edges of the file; emit the
-	// items exactly as collected.
+	// items exactly as collected, then an unterminated whitespace line,
+	// which no item stands for.
+	if r.source.unterminated != "" && (len(items) == 0 || items[len(items)-1].line < len(r.source.lines)) {
+		buf.WriteString(r.source.unterminated)
+		buf.WriteByte('\n')
+	}
 	_, err := w.Write([]byte(buf.String()))
 	return err
 }
@@ -541,84 +524,29 @@ func (f *run) formatItem(item astItem, buf *strings.Builder) {
 	}
 }
 
-// formatDirective formats a directive based on its type. Only a balance, a
-// price and a transaction's postings carry a number to realign; bean-format
-// leaves every other directive's line untouched, and so its header keeps
-// its spelling: txn, slash dates, the order of tags and links.
+// formatDirective formats a directive. A dated line bean-format's pattern
+// matches, a balance's or a price's, is aligned; it leaves every other
+// directive's line untouched, and so its header keeps its spelling: txn,
+// slash dates, the order of tags and links.
 func (f *run) formatDirective(d ast.Directive, buf *strings.Builder) {
-	switch directive := d.(type) {
-	case *ast.Balance:
-		f.formatBalance(directive, buf)
-	case *ast.Price:
-		f.formatPrice(directive, buf)
-	case *ast.Transaction:
-		f.copyDirectiveLine(d, buf)
-		f.formatTransactionBody(directive, buf)
-	default:
-		f.copyDirectiveLine(d, buf)
-		f.formatMetadata(d.GetMetadata(), buf)
+	f.writeLine(d.Position(), f.directiveLayout(d), buf)
+	if txn, ok := d.(*ast.Transaction); ok {
+		f.formatTransactionBody(txn, buf)
+		return
 	}
+	f.formatMetadata(d.GetMetadata(), buf)
 }
 
-// formatBalance formats a balance directive.
-func (f *run) formatBalance(b *ast.Balance, buf *strings.Builder) {
-	f.formatDatedLine(b, f.balanceLayout(b), buf)
+// directiveLayout reads a dated directive's line.
+func (f *run) directiveLayout(d ast.Directive) lineLayout {
+	text, owned := f.source.directiveLine(d)
+	return layout(text, owned, f.indent)
 }
 
-// balanceLayout reads a balance's line; the number before the currency is
-// the tolerance's when there is one.
-func (f *run) balanceLayout(b *ast.Balance) lineLayout {
-	last := b.Amount
-	if b.Tolerance != nil {
-		last = b.Tolerance
-	}
-	return f.datedLayout(b, string(b.Account), f.balanceAmountText(b), numberText(last), balanceCurrency(b))
-}
-
-// balanceAmountText spells a balance's amount, with its tolerance, without
-// the currency.
-func (f *run) balanceAmountText(b *ast.Balance) string {
-	if b.Amount == nil {
-		return ""
-	}
-	text := numberText(b.Amount)
-	if b.Tolerance != nil {
-		text += " ~ " + numberText(b.Tolerance)
-	}
-	return text
-}
-
-func balanceCurrency(b *ast.Balance) string {
-	if b.Amount != nil && b.Amount.Currency != "" {
-		return b.Amount.Currency
-	}
-	if b.Tolerance != nil {
-		return b.Tolerance.Currency
-	}
-	return ""
-}
-
-// datedHead spells the start of a dated directive: date, keyword and
-// subject (account or commodity).
-func (f *run) datedHead(d ast.Directive, subject string) string {
-	return f.dateText(d) + " " + string(d.Kind()) + " " + subject
-}
-
-// dateText spells a directive's date as its source line does.
-func (f *run) dateText(d ast.Directive) string {
-	return spelledDate(f.source.line(d.Position().Line), d.Date())
-}
-
-// datedLayout reads the line of a dated directive ending in an amount.
-func (f *run) datedLayout(d ast.Directive, subject, text, lastNumber, currency string) lineLayout {
-	line, owned := f.source.directiveLine(d)
-	return datedLayout(line, owned, f.datedHead(d, subject), text, lastNumber, currency)
-}
-
-// formatDatedLine writes a dated directive ending in an amount: aligned as
-// bean-format aligns it, or copied from the source when bean-format leaves
-// it alone.
-func (f *run) formatDatedLine(d ast.Directive, line lineLayout, buf *strings.Builder) {
+// writeLine writes the line of the item at pos: aligned as bean-format
+// aligns it, or copied when bean-format leaves it alone. An item that does
+// not own its line fails the run.
+func (f *run) writeLine(pos ast.Position, line lineLayout, buf *strings.Builder) {
 	switch line.kind {
 	case copyLine:
 		buf.WriteString(line.text)
@@ -627,32 +555,12 @@ func (f *run) formatDatedLine(d ast.Directive, line lineLayout, buf *strings.Bui
 		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), line.numberWidth)))
 		buf.WriteString(line.number)
 		buf.WriteByte(' ')
-		buf.WriteString(line.currency)
-		f.writeInlineComment(d.GetComment(), buf)
+		buf.WriteString(line.rest)
 	default:
-		f.fail(d.Position())
+		f.fail(pos)
 		return
 	}
 	buf.WriteByte('\n')
-	f.formatMetadata(d.GetMetadata(), buf)
-}
-
-// formatPrice formats a price directive.
-func (f *run) formatPrice(p *ast.Price, buf *strings.Builder) {
-	f.formatDatedLine(p, f.priceLayout(p), buf)
-}
-
-// priceLayout reads a price's line.
-func (f *run) priceLayout(p *ast.Price) lineLayout {
-	number := numberText(p.Amount)
-	return f.datedLayout(p, p.Commodity, number, number, priceCurrency(p))
-}
-
-func priceCurrency(p *ast.Price) string {
-	if p.Amount == nil {
-		return ""
-	}
-	return p.Amount.Currency
 }
 
 // formatTransactionBody writes the lines after a transaction's header.
@@ -716,40 +624,23 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 // formatPosting writes a posting's line, aligned or copied, and the
 // metadata lines below it.
 func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
-	line := f.postingLayout(p)
-	switch line.kind {
-	case copyLine:
-		buf.WriteString(line.text)
-		f.verbatimLines[p.Position().Line] = true
-	case alignLine:
-		buf.WriteString(line.prefix)
-		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), line.numberWidth)))
-		buf.WriteString(line.number)
-		buf.WriteByte(' ')
-		buf.WriteString(line.rest)
-		f.verbatimLines[p.Position().Line] = true
-	default:
-		f.fail(p.Position())
+	f.writeLine(p.Position(), f.postingLayout(p), buf)
+	if f.err != nil {
 		return
 	}
-	buf.WriteByte('\n')
+	f.verbatimLines[p.Position().Line] = true
 	f.formatMetadata(p.Metadata, buf)
 }
 
-// writeInlineComment writes a comment at the end of a line, unless
-// PreserveComments is off.
-func (f *run) writeInlineComment(c *ast.Comment, buf *strings.Builder) {
-	if c == nil || !f.PreserveComments {
-		return
-	}
-	buf.WriteByte(' ')
-	buf.WriteString(c.Content)
-}
-
-// postingLayout reads a posting's line.
+// postingLayout reads a posting's line, which must hold the posting: its
+// flag, then its account.
 func (f *run) postingLayout(p *ast.Posting) lineLayout {
-	line, owned := f.source.itemLine(p.Position().Line, p.Position().Column)
-	return postingLayout(line, owned, p, f.indent)
+	text, owned := f.source.itemLine(p.Position().Line, p.Position().Column)
+	body, ok := strings.CutPrefix(strings.TrimLeft(text, " \t"), p.Flag)
+	if !ok || !strings.HasPrefix(strings.TrimLeft(body, " \t"), string(p.Account)) {
+		owned = false
+	}
+	return layout(text, owned, f.indent)
 }
 
 // formatMetadata writes metadata lines and the comments leading them as

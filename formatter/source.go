@@ -21,6 +21,11 @@ type sourceView struct {
 
 	// lastContent is the last line holding more than whitespace.
 	lastContent int
+
+	// unterminated is the source's last line when it holds only
+	// whitespace and no line break ends it: no item stands for it, but
+	// bean-format, which reads lines, writes it with one.
+	unterminated string
 }
 
 // newSourceView reads source, the text tree was parsed from. The lines are
@@ -32,6 +37,10 @@ func newSourceView(source []byte, tree *ast.AST) *sourceView {
 		starts:   make(map[int]bool),
 	}
 	s.markStarts(tree)
+	if n := len(s.lines); n > 0 && !strings.HasSuffix(string(source), "\n") && !strings.HasSuffix(string(source), "\r") &&
+		s.lines[n-1] != "" && strings.TrimSpace(s.lines[n-1]) == "" {
+		s.unterminated = s.lines[n-1]
+	}
 	for n := len(s.lines); n > 0; n-- {
 		if strings.TrimSpace(s.lines[n-1]) != "" {
 			s.lastContent = n

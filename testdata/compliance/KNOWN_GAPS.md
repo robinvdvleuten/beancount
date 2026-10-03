@@ -84,9 +84,12 @@ limits:
 
 - A file that does not parse cannot be formatted; `bean-format` formats
   any text.
-- On a dated line whose aligned number is not the whole amount (a balance
-  tolerance, an expression's last operand), the text before that number
-  is re-spelled with single spaces; `bean-format` keeps its spacing.
+- A line inside a string spanning lines is copied as written;
+  `bean-format`, reading every line alone, aligns one that looks like a
+  posting or a balance, re-indents one that starts with an indented
+  account, and counts both for the column widths and the posting indent
+  (`format/line_in_string`, #664). Matching it would change the text of
+  the string.
 
 ## Open gaps (no fixture yet)
 

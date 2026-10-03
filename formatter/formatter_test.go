@@ -157,7 +157,7 @@ func TestResolveColumns(t *testing.T) {
 		"Flagged":   {"2021-01-01 * \"T\"\n    ! Assets:Checking  100.00 USD\n", columns{}},
 		"Balance":   {"2021-01-02 balance Assets:US:BofA:Checking  3793.56 USD\n", columns{prefix: 42, number: 7}},
 		"Price":     {"2021-01-01 price VBMPX  170.30 USD\n", columns{prefix: 22, number: 6}},
-		"Tolerance": {"2021-01-02 balance Assets:A  1.00 ~ 0.005 USD\n", columns{prefix: 34, number: 5}},
+		"Tolerance": {"2021-01-02 balance Assets:A  1.00 ~ 0.005 USD\n", columns{prefix: 35, number: 5}},
 	} {
 		tree := parser.MustParseString(context.Background(), tc.source)
 		assert.Equal(t, tc.want, newRun(New(), tree, []byte(tc.source)).resolveColumns(tree), name)
