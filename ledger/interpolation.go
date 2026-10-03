@@ -206,9 +206,10 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		}
 	}
 
-	// Complete a value-less price annotation (bare @ or currency-only): the
-	// posting's weight is whatever zeroes the residual, and the price is
-	// derived from it.
+	// Complete a value-less price annotation (bare @ or currency-only): like
+	// beancount's interpolate_group, the price is the residual's weight per
+	// unit with its sign dropped, and the posting then weighs its units at
+	// that price, which leaves a residual when the signs disagree.
 	if posting := valuelessPrice; posting != nil {
 		units, err := ParseAmount(posting.Amount)
 		if err != nil {
@@ -227,8 +228,12 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 
 		weight := balance[currency].Neg()
 		priceNumber := weight.Abs()
-		if !posting.PriceTotal && !units.IsZero() {
-			priceNumber = pydecimal.Quo(weight, units).Abs()
+		if !units.IsZero() {
+			perUnit := pydecimal.Quo(weight, units).Abs()
+			if !posting.PriceTotal {
+				priceNumber = perUnit
+			}
+			weight = pydecimal.Mul(units, perUnit)
 		}
 		prices[posting] = &ast.Amount{Value: priceNumber.String(), Currency: currency}
 		balance[currency] = pydecimal.Add(balance[currency], weight)

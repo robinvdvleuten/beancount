@@ -1,0 +1,22 @@
+; A missing price number is the residual's weight per unit with its sign
+; dropped, as in beancount's interpolate_group; the posting then weighs its
+; units at that price, so a transaction whose signs disagree still does not
+; balance.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euros
+
+2020-02-01 * "Per-unit price"
+  Assets:Cash   100 USD
+  Assets:Euros  100 EUR @ USD
+
+2020-02-02 * "Total price"
+  Assets:Cash   100 USD
+  Assets:Euros  100 EUR @@ USD
+
+2020-02-03 * "Same signs in one currency"
+  Assets:Euros  33.333 EUR
+  Assets:Euros  100 EUR @ EUR
+
+2020-02-04 * "Balances"
+  Assets:Cash   -120 USD
+  Assets:Euros  100 EUR @ USD
