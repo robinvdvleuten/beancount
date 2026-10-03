@@ -1,0 +1,15 @@
+; A price that states its number but not its currency takes its Currency
+; group's, as beancount's replace_currencies gives it before
+; interpolation, so missing units are then interpolated at that price.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+
+2020-02-01 * "Units from a number-only price"
+  Assets:Cash   100 USD
+  Assets:Stock  HOOL @ 5
+
+2020-02-02 * "Units written"
+  Assets:Cash   -10 USD
+  Assets:Stock  2 HOOL @ 5
+
+2020-02-03 balance Assets:Stock  -18 HOOL

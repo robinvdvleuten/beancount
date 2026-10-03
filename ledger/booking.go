@@ -593,10 +593,11 @@ func unbooked(txn *ast.Transaction) *ast.Transaction {
 // resolveCurrencies writes the currencies categorize resolved onto the
 // postings that leave them out, like beancount's replace_currencies, so
 // Booking weighs and books them in those currencies: the units of a posting
-// with a price (given an amount without a number when it has none), and a
-// cost that states its number, which takes its Currency group's. A posting's
-// amount or cost is replaced, not edited, and resolveCurrencies returns the
-// transaction as written when it replaced one, nil otherwise.
+// with a price (given an amount without a number when it has none), a price,
+// and a cost that states its number, which takes its Currency group's. A
+// posting's amount, price or cost is replaced, not edited, and
+// resolveCurrencies returns the transaction as written when it replaced
+// one, nil otherwise.
 func resolveCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Transaction {
 	var written *ast.Transaction
 	replace := func() {
@@ -619,6 +620,12 @@ func resolveCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Transa
 				}
 				amount.Currency = group.refs[i].units
 				posting.Amount = &amount
+			}
+			if posting.Price != nil && posting.Price.Currency == "" {
+				replace()
+				price := *posting.Price
+				price.Currency = group.refs[i].price
+				posting.Price = &price
 			}
 			cost := posting.Cost
 			if cost.HasNumber() && cost.Amount.Currency == "" {

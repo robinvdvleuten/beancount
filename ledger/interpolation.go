@@ -115,42 +115,15 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	prices := make(map[*ast.Posting]*ast.Amount)
 	var leftOut []*ast.Posting
 
-	// Booking has resolved every units currency (resolveCurrencies), so an
-	// incomplete amount leaves out its number, the group's one missing
-	// number. A number-only price is not a missing number in beancount:
-	// only its currency is inferred, from the single currency in use. Its
-	// weight is known, so resolve it before the missing number.
-	var currencyOnlyAmount *ast.Posting
+	// Booking has resolved every units and price currency
+	// (resolveCurrencies), so an incomplete amount or price leaves out its
+	// number, the group's one missing number.
+	var currencyOnlyAmount, valuelessPrice *ast.Posting
 	if len(pc.incompleteAmounts) > 0 {
 		currencyOnlyAmount = pc.incompleteAmounts[0]
 	}
-
-	var valuelessPrice *ast.Posting
-	for _, posting := range pc.incompletePrices {
-		if posting.Price.Value == "" {
-			valuelessPrice = posting
-			continue
-		}
-		units, uerr := ParseAmount(posting.Amount)
-		if uerr != nil {
-			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr)}
-		}
-		if _, perr := decimal.NewFromString(posting.Price.Value); perr != nil {
-			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Price.Value, perr)}
-		}
-		perUnit, _, _ := PerUnitPrice(posting)
-		currency := posting.Price.Currency
-		if currency == "" {
-			if len(balance) != 1 {
-				return nil, []error{newNotBalancedError(txn, balance)}
-			}
-			for c := range balance {
-				currency = c
-			}
-		}
-		weight := pydecimal.Mul(units, perUnit)
-		prices[posting] = &ast.Amount{Value: posting.Price.Value, Currency: currency}
-		balance[currency] = pydecimal.Add(balance[currency], weight)
+	if len(pc.incompletePrices) > 0 {
+		valuelessPrice = pc.incompletePrices[0]
 	}
 
 	// The posting without an amount absorbs the residual of every weight
@@ -224,15 +197,6 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		}
 
 		currency := posting.Price.Currency
-		if currency == "" {
-			if len(balance) != 1 {
-				return nil, []error{newNotBalancedError(txn, balance)}
-			}
-			for c := range balance {
-				currency = c
-			}
-		}
-
 		weight := balance[currency].Neg()
 		priceNumber := weight.Abs()
 		if !units.IsZero() {
