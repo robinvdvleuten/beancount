@@ -1,0 +1,1 @@
+SELECT type, count(*), max(date) FROM events CLOSE ON 2023-02-01 GROUP BY type ORDER BY type DESC

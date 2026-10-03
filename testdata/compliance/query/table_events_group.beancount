@@ -1,0 +1,5 @@
+2023-01-01 event "location" "Paris, France"
+  note: "moved"
+2023-03-01 event "employer" "Acme"
+2023-06-01 event "location" "Berlin, Germany"
+2023-06-01 event "location" ""

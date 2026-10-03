@@ -34,6 +34,19 @@ var pricesTable = &environment{
 	rows:     directiveRows[*ast.Price],
 }
 
+// eventsTable has one row per event directive.
+var eventsTable = &environment{
+	columns: map[string]*columnDef{
+		"meta":        metaColumn,
+		"date":        dateColumn,
+		"type":        {tString, func(row *evalRow) any { return row.Entry.(*ast.Event).Name.String() }},
+		"description": {tString, func(row *evalRow) any { return row.Entry.(*ast.Event).Value.String() }},
+	},
+	table:    "events",
+	wildcard: []string{"date", "type", "description"},
+	rows:     directiveRows[*ast.Event],
+}
+
 var (
 	// metaColumn is a directive's meta, typed like beanquery's Metadata
 	// columns, which render without filename and lineno.

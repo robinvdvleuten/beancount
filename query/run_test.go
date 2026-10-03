@@ -320,9 +320,6 @@ var errorFixtures = map[string]string{
 	"err_from_table_entries_entry_meta": `error: column "entry" not found in table "entries"
 | SELECT entry_meta('x') FROM #entries
 |        ^^^^^^^^^^^^^^^`,
-	"err_from_table_events": `error: table "events" is not supported
-| SELECT * FROM #events
-|               ^^^^^^^`,
 	"err_from_table_hash_not_exist": `error: table "nope" does not exist
 | SELECT date FROM #nope LIMIT 1
 |                  ^^^^^`,
@@ -348,6 +345,9 @@ var errorFixtures = map[string]string{
 | SELECT any_meta('x') FROM #transactions
 |        ^^^^^^^^^^^^^`,
 	"err_table_prices_has_account": `error: column "accounts" not found in table "prices"`,
+	"err_table_events_entry_meta": `error: column "entry" not found in table "events"
+| SELECT entry_meta('note') FROM #events
+|        ^^^^^^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

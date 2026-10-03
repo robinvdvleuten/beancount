@@ -137,7 +137,6 @@ var queryGaps = map[string]string{
 	"err_from_table_balances":    "#638, the balances Table is not built yet",
 	"err_from_table_commodities": "#635, the commodities Table is not built yet",
 	"err_from_table_documents":   "#637, the documents Table is not built yet",
-	"err_from_table_events":      "#634, the events Table is not built yet",
 	"err_from_table_notes":       "#636, the notes Table is not built yet",
 }
 
