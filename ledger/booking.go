@@ -334,29 +334,10 @@ func validateAmounts(txn *ast.Transaction) []error {
 	return errs
 }
 
-// validateCosts checks all cost specifications are valid.
-//
-// It validates that:
-//   - Cost amounts are parseable as decimal numbers
-//   - Cost dates are valid (not zero dates)
-//   - Cost labels are non-empty if present
-//   - Empty costs {} are accepted (for automatic lot selection)
-//   - parseLotSpec can parse the cost specification
-//
-// Returns a slice of InvalidCostError for any invalid cost specifications.
-// Includes posting index and cost spec string for clear error messages.
-//
-// Example:
-//
-//	// Valid cost: 10 HOOL {500.00 USD}
-//	errs := validateCosts(txn)
-//	if len(errs) > 0 {
-//	    // Found invalid cost specifications
-//	    for _, err := range errs {
-//	        fmt.Printf("Cost error: %v\n", err)
-//	        // Example: "2024-01-15: Invalid cost specification (Posting #1: Assets:Stock): {abc USD}: invalid decimal"
-//	    }
-//	}
+// validateCosts reports the cost specs Booking cannot read, each of which
+// drops its transaction: a number that does not parse, total braces on
+// units that are zero or do not parse, a compound whose currencies differ,
+// a zero date or a blank label. An empty cost {} is valid.
 func validateCosts(txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
@@ -453,26 +434,9 @@ func validateCosts(txn *ast.Transaction) []error {
 	return errs
 }
 
-// validatePrices checks all price specifications are valid.
-//
-// It validates that:
-//   - Price amounts are parseable as decimal numbers
-//   - Per-unit prices (@) and total prices (@@) are correctly formatted
-//
-// Returns a slice of InvalidPriceError for any invalid price specifications.
-// Includes posting index and price spec string for clear error messages.
-//
-// Example:
-//
-//	// Valid price: 100 EUR @ 1.20 USD
-//	errs := validatePrices(txn)
-//	if len(errs) > 0 {
-//	    // Found invalid price specifications
-//	    for _, err := range errs {
-//	        fmt.Printf("Price error: %v\n", err)
-//	        // Example: "2024-01-15: Invalid price specification (Posting #2: Expenses:Foreign): @ abc USD: invalid decimal"
-//	    }
-//	}
+// validatePrices reports each complete price, per unit (@) or total (@@),
+// whose number does not parse, which drops its transaction; interpolation
+// completes the others.
 func validatePrices(txn *ast.Transaction) []error {
 	var errs []error
 	for i, posting := range txn.Postings {
@@ -489,10 +453,6 @@ func validatePrices(txn *ast.Transaction) []error {
 			errs = append(errs, newInvalidPriceError(txn, posting.Account, i, priceSpec, err))
 			continue
 		}
-
-		// Validate that price currency differs from posting currency
-		// (It's valid but unusual to have the same currency)
-		// For now, we'll allow it but could add a warning system later
 	}
 	return errs
 }

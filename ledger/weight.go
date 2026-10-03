@@ -22,7 +22,7 @@ type weightSet []weight
 // This handles cost basis and price annotations
 func calculateWeights(posting *ast.Posting) (weightSet, error) {
 	if posting.Amount == nil {
-		// No amount specified - this will be inferred (not implemented yet)
+		// The auto-posting: interpolation books it at the residual.
 		return weightSet{}, nil
 	}
 
@@ -44,8 +44,8 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 	var weights weightSet
 
 	if hasEmptyCost {
-		// Amount-less cost spec - cost will be inferred/calculated to balance the transaction
-		// Return empty weights; cost inference happens in processTransaction()
+		// A reduction weighs at the lots it booked, and an augmentation's
+		// cost is interpolated from the residual (interpolation.go).
 		return weightSet{}, nil
 
 	} else if hasExplicitCost {
