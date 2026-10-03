@@ -110,9 +110,8 @@ func (t *Transaction) SetDate(date *Date) { t.date = date }
 // Exactly one field should be set. Postings remain duplicated in Transaction.Postings
 // for semantic processing; BodyItems exists to preserve source order for formatting.
 type TransactionBodyItem struct {
-	Posting   *Posting
-	Comment   *Comment
-	BlankLine *BlankLine
+	Posting *Posting
+	Comment *Comment
 }
 
 // Posting represents a single leg of a transaction, specifying an account and optional

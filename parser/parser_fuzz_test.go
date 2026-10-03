@@ -206,10 +206,6 @@ func assertTransactionBodyInvariants(t *testing.T, data []byte, txn *ast.Transac
 			populated++
 			assertPositionInBounds(t, data, "bodyComment", i, item.Comment.Position())
 		}
-		if item.BlankLine != nil {
-			populated++
-			assertPositionInBounds(t, data, "bodyBlankLine", i, item.BlankLine.Position())
-		}
 		if populated != 1 {
 			t.Fatalf("transaction body item %d has %d populated fields, want 1", i, populated)
 		}

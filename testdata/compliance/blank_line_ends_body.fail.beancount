@@ -1,0 +1,33 @@
+; A blank or whitespace-only line ends a directive's body, as in beancount:
+; an indented line after it is a syntax error, and the transaction keeps
+; only the postings before it, so it does not balance.
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "empty line"
+  Assets:Cash 1 USD
+
+  Assets:Cash -1 USD
+
+2020-01-03 * "whitespace-only line"
+  Assets:Cash 1 USD
+   
+  Assets:Cash -1 USD
+
+2020-01-04 * "metadata after a blank line"
+  first: 1
+
+  second: 2
+  Assets:Cash 1 USD
+  Assets:Cash -1 USD
+
+2020-01-05 * "posting metadata after a blank line"
+  Assets:Cash 1 USD
+    first: 1
+
+    second: 2
+  Assets:Cash -1 USD
+
+2020-01-06 * "a comment does not end the body"
+  Assets:Cash 1 USD
+  ; comment
+  Assets:Cash -1 USD

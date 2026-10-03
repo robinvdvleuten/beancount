@@ -152,11 +152,8 @@ func (s *sourceView) markStarts(tree *ast.AST) {
 			}
 		}
 		for _, item := range txn.BodyItems {
-			switch {
-			case item.Comment != nil:
+			if item.Comment != nil {
 				s.markStart(item.Comment.Position())
-			case item.BlankLine != nil:
-				s.starts[item.BlankLine.Position().Line] = true
 			}
 		}
 	}

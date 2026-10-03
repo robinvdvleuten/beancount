@@ -177,16 +177,9 @@ func (p *Parser) parsePostingBlock(txn *ast.Transaction) error {
 	for !p.isAtEnd() {
 		tok := p.peek()
 
-		if tok.Type == NEWLINE {
-			if len(txn.BodyItems) == 0 || !p.shouldConsumeIndentedBlankLine() {
-				return nil
-			}
-			blankLine := p.parseBlankLine()
-			txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{BlankLine: blankLine})
-			continue
-		}
-
-		if tok.Column <= 1 {
+		// Like beancount's, a blank or whitespace-only line ends the body:
+		// an indented line after it is a syntax error at top level.
+		if tok.Type == NEWLINE || tok.Column <= 1 {
 			return nil
 		}
 
@@ -232,16 +225,6 @@ func (p *Parser) startsIndentedMetadataLine() bool {
 	n := p.indentedCommentsBeforeMetadata()
 	tok := p.peekAhead(n)
 	return tok.Type != NEWLINE && tok.Column > 1 && p.isMetadataKeyAt(n)
-}
-
-func (p *Parser) shouldConsumeIndentedBlankLine() bool {
-	for i := 1; ; i++ {
-		nextTok := p.peekAhead(i)
-		if nextTok.Type == NEWLINE {
-			continue
-		}
-		return nextTok.Type != EOF && nextTok.Column > 1 && p.isPostingStartToken(nextTok)
-	}
 }
 
 func (p *Parser) isPostingStartToken(tok Token) bool {

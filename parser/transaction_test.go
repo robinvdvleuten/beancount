@@ -205,25 +205,30 @@ func TestParseTransactionWithTrailingWhitespace(t *testing.T) {
 	assert.Equal(t, (*ast.Amount)(nil), txn.Postings[2].Amount, "third posting should have no explicit amount")
 }
 
-// TestParseTransactionWithBlankLinesBetweenPostings tests parsing when blank lines appear between postings
-func TestParseTransactionWithBlankLinesBetweenPostings(t *testing.T) {
-	source := `2024-01-15 * "With blank lines"
-  Assets:Checking   100.00 USD
+// TestBlankLineEndsTransactionBody pins beancount's grammar: a blank or
+// whitespace-only line ends a transaction's body, so an indented posting
+// after it is a syntax error, and the transaction keeps the postings before it.
+func TestBlankLineEndsTransactionBody(t *testing.T) {
+	for name, blank := range map[string]string{"empty": "", "whitespace": "   "} {
+		t.Run(name, func(t *testing.T) {
+			source := "2024-01-15 * \"With blank lines\"\n" +
+				"  Assets:Checking   100.00 USD\n" +
+				blank + "\n" +
+				"  Expenses:Food    -100.00 USD\n"
 
-  Expenses:Food    -100.00 USD
-`
+			result, err := ParseString(context.Background(), source)
+			var errs ParseErrors
+			assert.True(t, errors.As(err, &errs))
+			assert.Equal(t, 1, len(errs))
+			assert.Equal(t, 4, errs[0].Pos.Line)
 
-	result, err := ParseString(context.Background(), source)
-	assert.NoError(t, err)
-
-	txn, ok := result.Directives[0].(*ast.Transaction)
-	assert.True(t, ok)
-	// Blank lines should be skipped gracefully
-	assert.Equal(t, 2, len(txn.Postings))
-	assert.Equal(t, 3, len(txn.BodyItems))
-	assert.Equal(t, txn.Postings[0], txn.BodyItems[0].Posting)
-	assert.True(t, txn.BodyItems[1].BlankLine != nil)
-	assert.Equal(t, txn.Postings[1], txn.BodyItems[2].Posting)
+			assert.Equal(t, 1, len(result.Directives))
+			txn, ok := result.Directives[0].(*ast.Transaction)
+			assert.True(t, ok)
+			assert.Equal(t, 1, len(txn.Postings))
+			assert.Equal(t, 1, len(txn.BodyItems))
+		})
+	}
 }
 
 // TestParseTransactionWithCost tests transaction with explicit cost specification

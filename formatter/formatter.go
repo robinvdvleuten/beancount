@@ -516,8 +516,6 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 		if !f.verbatimLines[item.Comment.Position().Line] {
 			f.copyItemLine(item.Comment.Position(), buf)
 		}
-	case item.BlankLine != nil:
-		f.copyItemLine(item.BlankLine.Position(), buf)
 	}
 }
 

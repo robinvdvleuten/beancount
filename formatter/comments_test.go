@@ -167,12 +167,13 @@ option "title" "Ledger"
 	assert.Equal(t, source, output.String())
 }
 
-func TestFormatPreservesTransactionBodyCommentsAndBlankLines(t *testing.T) {
+func TestFormatPreservesTransactionBodyComments(t *testing.T) {
+	// A blank line would end the body, as in beancount, so the body holds
+	// comments only.
 	source := `2024-01-02 * "Test"
   ; comment before first posting
   Assets:Cash  -10 USD
   ; comment between postings
-
   Expenses:Food  10 USD
   ; comment after postings
 `
@@ -195,7 +196,7 @@ func TestFormatPreservesTransactionBodyCommentsAndBlankLines(t *testing.T) {
 	assert.True(t, firstPosting < between && between < secondPosting)
 	assert.True(t, secondPosting < after)
 	// Postings keep the source's indent (2 spaces here), like bean-format.
-	assert.True(t, bytes.Contains([]byte(result), []byte("; comment between postings\n\n  Expenses:Food")))
+	assert.True(t, bytes.Contains([]byte(result), []byte("; comment between postings\n  Expenses:Food")))
 }
 
 func TestFormatPreservesOneLegTransaction(t *testing.T) {
