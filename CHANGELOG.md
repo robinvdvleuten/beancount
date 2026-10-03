@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0](https://github.com/robinvdvleuten/beancount/compare/v0.15.0...v0.16.0) (2026-10-03)
+
+
+### Features
+
+* **query:** read beanquery's accounts Table ([ec58408](https://github.com/robinvdvleuten/beancount/commit/ec58408a3a394eff31d837ff39ced4704acdc6ce)), closes [#639](https://github.com/robinvdvleuten/beancount/issues/639)
+* **query:** read beanquery's balances Table ([bfab778](https://github.com/robinvdvleuten/beancount/commit/bfab778c7c05c1c81ae13a5446d23c41b9fe3bb2)), closes [#638](https://github.com/robinvdvleuten/beancount/issues/638)
+* **query:** read beanquery's commodities Table ([98b3edf](https://github.com/robinvdvleuten/beancount/commit/98b3edfdf695403a5574ddcb205df83df4df6399)), closes [#635](https://github.com/robinvdvleuten/beancount/issues/635)
+* **query:** read beanquery's documents Table ([2b9d6d4](https://github.com/robinvdvleuten/beancount/commit/2b9d6d4afdb86114d68a0c9631cdc0e9752a246f)), closes [#637](https://github.com/robinvdvleuten/beancount/issues/637)
+* **query:** read beanquery's events Table ([ed2c657](https://github.com/robinvdvleuten/beancount/commit/ed2c657b9040b68f3135ef5aa226b42b40fb3a3b)), closes [#634](https://github.com/robinvdvleuten/beancount/issues/634)
+* **query:** read beanquery's notes Table ([bef50d4](https://github.com/robinvdvleuten/beancount/commit/bef50d4c48a6042adcb142b8b4df087ec998b1a7)), closes [#636](https://github.com/robinvdvleuten/beancount/issues/636)
+* **query:** read beanquery's prices Table ([2164a24](https://github.com/robinvdvleuten/beancount/commit/2164a2442f1ba29853481b4eb673b2a7a4fc9458)), closes [#633](https://github.com/robinvdvleuten/beancount/issues/633)
+* **query:** read beanquery's transactions Table ([39f1d69](https://github.com/robinvdvleuten/beancount/commit/39f1d69cbb4b34c5f96587436ccd45dedb48cd04)), closes [#632](https://github.com/robinvdvleuten/beancount/issues/632)
+* **query:** read the Table SELECT's FROM names ([1e18c81](https://github.com/robinvdvleuten/beancount/commit/1e18c810637adadf204badb05f9c3d000b54b591)), closes [#630](https://github.com/robinvdvleuten/beancount/issues/630) [#618](https://github.com/robinvdvleuten/beancount/issues/618)
+* **web:** show the ledger's errors on every page ([3511d51](https://github.com/robinvdvleuten/beancount/commit/3511d51dff489841471d8a3b74fcc2921d8351b9)), closes [#538](https://github.com/robinvdvleuten/beancount/issues/538)
+
+
+### Bug Fixes
+
+* **parser:** report an invalid account name a syntax error's recovery skips ([982f9f8](https://github.com/robinvdvleuten/beancount/commit/982f9f883021a84dfa7e6052074bc1c21d1c8bc0)), closes [#629](https://github.com/robinvdvleuten/beancount/issues/629)
+* **query:** cast false to Python's exponent-0 decimal zero ([2e936a5](https://github.com/robinvdvleuten/beancount/commit/2e936a560c40c04b7c9b626eb2c12b81362b7bbd)), closes [#628](https://github.com/robinvdvleuten/beancount/issues/628)
+* **query:** order and group opens and closes by their printed form ([9ad434e](https://github.com/robinvdvleuten/beancount/commit/9ad434eae0bcc4bfe30b9e29b317963eb12b4a0c)), closes [#641](https://github.com/robinvdvleuten/beancount/issues/641)
+* **query:** read a note's and a document's tags and links in entries columns ([f862dbb](https://github.com/robinvdvleuten/beancount/commit/f862dbbe8732122fa71c1ba0912275eecf04732a)), closes [#631](https://github.com/robinvdvleuten/beancount/issues/631)
+
 ## [0.15.0](https://github.com/robinvdvleuten/beancount/compare/v0.14.0...v0.15.0) (2026-10-02)
 
 
