@@ -217,10 +217,9 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 
 		case p.check(STRING):
 			duplicate(hasLabel)
-			labelTok := p.advance()
-			label, err := p.unquoteString(labelTok.String(p.source))
+			label, err := p.stringValue(p.advance())
 			if err != nil {
-				return nil, p.errorAtToken(labelTok, "invalid string literal: %v", err)
+				return nil, err
 			}
 			target.Label = label
 			hasLabel = true
@@ -311,14 +310,38 @@ func (p *Parser) parseString() (ast.RawString, error) {
 		return ast.RawString{}, p.errorAtEndOfPrevious("expected string")
 	}
 	tok := p.advance()
-
-	rawValue := tok.String(p.source)
-	unquoted, err := p.unquoteString(rawValue)
+	unquoted, err := p.stringValue(tok)
 	if err != nil {
-		return ast.RawString{}, p.errorAtToken(tok, "invalid string literal: %v", err)
+		return ast.RawString{}, err
 	}
+	return ast.NewRawStringWithRaw(tok.String(p.source), p.internString(unquoted)), nil
+}
 
-	return ast.NewRawStringWithRaw(rawValue, p.internString(unquoted)), nil
+// stringValue returns a STRING token's value, unquoted.
+func (p *Parser) stringValue(tok Token) (string, error) {
+	raw := tok.String(p.source)
+	if !utf8.ValidString(raw) {
+		return "", p.invalidStringError(tok)
+	}
+	unquoted, err := p.unquoteString(raw)
+	if err != nil {
+		return "", p.errorAtToken(tok, "invalid string literal: %v", err)
+	}
+	return unquoted, nil
+}
+
+// invalidStringError reports a string that is not valid UTF-8. Like
+// beancount's lexer, which decodes a string once it has read it, the
+// error is on the line the string ends on.
+func (p *Parser) invalidStringError(tok Token) error {
+	text := strings.TrimRight(tok.String(p.source), "\r\n")
+	pos := tokenPosition(tok, p.filename)
+	if last := strings.LastIndexAny(text, "\r\n"); last >= 0 {
+		pos.Line = p.endLine(tok)
+		pos.Column = len(text) - last
+		pos.Offset = tok.Start + last + 1
+	}
+	return newErrorfWithSource(pos, p.calculateSourceRange(pos), "string is not valid UTF-8")
 }
 
 // unquoteString unquotes a string by removing surrounding quotes and processing escapes.

@@ -1,0 +1,23 @@
+; Like beancount, a comment may hold bytes that are not UTF-8: café
+; A string holding them is an error on the line it ends on, its
+; directive is dropped, and the rest of the ledger is checked.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B ; café
+
+2020-01-02 * "café"
+  Assets:A  1 USD
+  Assets:B  -1 USD
+
+2020-01-03 * "multi" "xéy
+
+z"
+  Assets:A  1 USD
+  Assets:B  -1 USD
+
+2020-01-04 open Assets:C
+  name: "café"
+
+; Checked: both transactions were dropped, and the open of Assets:C too.
+2020-01-05 balance Assets:A 2 USD
+2020-01-05 open Assets:C
+2020-01-05 open Assets:C

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -194,6 +195,8 @@ func (p *Parser) recover(err error) {
 				errors.As(p.errorAtToken(tok, ""), &skipped)
 			case tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)):
 				errors.As(p.errorAtToken(tok, "invalid token %q", tok.String(p.source)), &skipped)
+			case tok.Type == STRING && !utf8.Valid(tok.Bytes(p.source)):
+				errors.As(p.invalidStringError(tok), &skipped)
 			}
 			if skipped != nil {
 				p.errs = append(p.errs, skipped)

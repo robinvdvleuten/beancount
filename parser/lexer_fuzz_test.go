@@ -80,9 +80,10 @@ func FuzzLexer(f *testing.F) {
 		lexer := NewLexer(data, "fuzz-test")
 		tokens, err := lexer.ScanAll()
 
-		// Invalid UTF-8 is an acceptable error - just return without further checks
+		// Like beancount's lexer, it fails on no input: invalid bytes are
+		// ILLEGAL tokens.
 		if err != nil {
-			return
+			t.Fatalf("ScanAll failed on %q: %v", data, err)
 		}
 
 		assertTokenStreamInvariants(t, data, tokens)

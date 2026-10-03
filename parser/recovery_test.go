@@ -238,3 +238,39 @@ func TestSkippedInvalidAccountNamesAreReported(t *testing.T) {
 		`8:19 invalid token "Assets:X'y"`,
 	}, got)
 }
+
+// TestInvalidBytesAreRecovered pins beancount's lexer on bytes that are not
+// UTF-8 or are control characters: a comment may hold them, a string
+// holding invalid UTF-8 is an error on the line it ends on, and a word
+// holding either is an invalid token. Each drops its directive, and parsing
+// resumes as after any syntax error.
+func TestInvalidBytesAreRecovered(t *testing.T) {
+	source := "2020-01-01 open Assets:A ; caf\xe9\x01\n" +
+		"2020-01-02 * \"a\" \"x\xe9y\n\nz\"\n" +
+		"  Assets:A  1 USD\n" +
+		"2020-01-03 open Assets:\xe9B\n" +
+		"2020-01-04 open Assets:B \x01\n" +
+		"2020-01-05 open Assets:C\n" +
+		"  key: \"caf\xe9\"\n" +
+		"2020-01-06 note Assets:A \"ok\x01\"\n"
+	tree, err := ParseString(context.Background(), source)
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	var got []string
+	for _, e := range syntaxErrs {
+		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Message()))
+	}
+	assert.Equal(t, []string{
+		"4:3 string is not valid UTF-8",
+		"6:17 invalid token \"Assets:\\xe9B\"",
+		"7:26 invalid token \"\\x01\"",
+		"9:8 string is not valid UTF-8",
+	}, got)
+
+	var kept []string
+	for _, d := range tree.Directives {
+		kept = append(kept, d.Date().String()+" "+string(d.Kind()))
+	}
+	assert.Equal(t, []string{"2020-01-01 open", "2020-01-06 note"}, kept)
+}

@@ -40,10 +40,6 @@ func (cmd *LexCmd) Run(ctx *kong.Context, globals *Globals) error {
 	lexer := parser.NewLexer(content, cmd.File.Filename)
 	tokens, err := lexer.ScanAll()
 	if err != nil {
-		// Handle specific lexer errors like InvalidUTF8Error
-		if _, ok := err.(*parser.InvalidUTF8Error); ok {
-			return fmt.Errorf("lexer error: %w", err)
-		}
 		return fmt.Errorf("failed to lex file: %w", err)
 	}
 

@@ -1,0 +1,17 @@
+ÿş bad
+; Bytes that are not UTF-8, or a control character, outside a comment or
+; a string are an invalid token up to the next whitespace, its directive
+; is dropped, and the rest of the ledger is checked.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:éB
+2020-01-01 open Assets:C
+2020-01-01 open Assets:D é
+2020-01-01 open Assets:E 
+
+; Checked: none of the opens above was applied.
+2020-01-02 open Assets:A
+2020-01-02 open Assets:B
+2020-01-02 open Assets:C
+2020-01-02 open Assets:D
+2020-01-02 open Assets:E
+2020-01-03 open Assets:B

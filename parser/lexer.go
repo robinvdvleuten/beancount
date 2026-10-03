@@ -9,24 +9,10 @@ package parser
 // - Pre-allocated token buffer
 
 import (
-	"fmt"
 	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
 )
-
-// InvalidUTF8Error is returned when the lexer encounters invalid UTF-8 sequences or
-// non-ASCII control characters in the input.
-type InvalidUTF8Error struct {
-	Filename string // Filename for error reporting
-	Line     int    // Line number (1-indexed)
-	Column   int    // Column number (1-indexed)
-	Byte     byte   // The invalid byte
-}
-
-func (e *InvalidUTF8Error) Error() string {
-	return fmt.Sprintf("%s:%d: Invalid token: '\\x%02x'", e.Filename, e.Line, e.Byte)
-}
 
 // Lexer tokenizes Beancount source code.
 type Lexer struct {
@@ -73,14 +59,13 @@ func (l *Lexer) Interner() *Interner {
 }
 
 // ScanAll lexes the entire source file and returns all tokens.
-// This is a single-pass scanner with no backtracking.
-// Returns nil and an InvalidUTF8Error if the source contains invalid UTF-8.
+// This is a single-pass scanner with no backtracking. Like beancount's
+// lexer, it fails on no input: a comment may hold any bytes, and invalid
+// UTF-8 or a control character elsewhere is left to the parser, which
+// reports it and recovers (a string's bytes are checked as it is
+// unquoted, a word's here, and a control character is an ILLEGAL token).
+// The error is always nil.
 func (l *Lexer) ScanAll() ([]Token, error) {
-	// Validate UTF-8 upfront
-	if err := l.validateUTF8(); err != nil {
-		return nil, err
-	}
-
 	for l.pos < len(l.source) {
 		tok := l.scanNextToken()
 		// scanNextToken returns EOF when it hits the end, but we may still be in the loop
@@ -101,66 +86,6 @@ func (l *Lexer) ScanAll() ([]Token, error) {
 	})
 
 	return l.tokens, nil
-}
-
-// validateUTF8 validates that the source contains valid UTF-8 and no invalid control characters.
-// Invalid control characters are bytes < 0x20 (except tab \t, newline \n, and carriage return \r)
-// and bytes >= 0x80 that are not part of valid multi-byte UTF-8 sequences.
-func (l *Lexer) validateUTF8() error {
-	line := 1
-	col := 1
-
-	for i := 0; i < len(l.source); i++ {
-		ch := l.source[i]
-
-		// Treat CRLF and CR as line breaks for compatibility with official Beancount.
-		if ch == '\r' {
-			if i+1 < len(l.source) && l.source[i+1] == '\n' {
-				i++
-			}
-			line++
-			col = 1
-			continue
-		}
-		if ch == '\n' {
-			line++
-			col = 1
-			continue
-		}
-
-		// Allow: tab (0x09)
-		// Reject: other control characters (0x00-0x08, 0x0b-0x0c, 0x0e-0x1f)
-		if ch < 0x20 && ch != '\t' {
-			return &InvalidUTF8Error{
-				Filename: l.filename,
-				Line:     line,
-				Column:   col,
-				Byte:     ch,
-			}
-		}
-
-		// Check for invalid UTF-8 at 0x80 and above
-		if ch >= 0x80 {
-			r, size := utf8.DecodeRune(l.source[i:])
-			if r == utf8.RuneError {
-				return &InvalidUTF8Error{
-					Filename: l.filename,
-					Line:     line,
-					Column:   col,
-					Byte:     ch,
-				}
-			}
-			// Skip the remaining bytes of this rune
-			for j := 1; j < size; j++ {
-				i++
-				col++
-			}
-		}
-
-		col++
-	}
-
-	return nil
 }
 
 // scanNextToken scans the next token including comments and blank lines.
@@ -336,6 +261,13 @@ func (l *Lexer) scanToken() Token {
 		}
 
 	default:
+		if isControlChar(ch) {
+			// Like beancount's lexer, which skips an invalid token up to
+			// the next whitespace.
+			for l.pos < len(l.source) && !isWhitespaceOrLineBreak(l.source[l.pos]) {
+				l.advance()
+			}
+		}
 		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 	}
 
@@ -603,11 +535,21 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 		l.advance()
 	}
 
+	value := l.source[start:l.pos]
+	if !utf8.Valid(value) || (l.pos < len(l.source) && isControlChar(l.source[l.pos])) {
+		// Like beancount's lexer, which cannot decode the word, or match
+		// it with the control character it runs into, and skips it as an
+		// invalid token up to the next whitespace.
+		for l.pos < len(l.source) && !isWhitespaceOrLineBreak(l.source[l.pos]) {
+			l.advance()
+		}
+		return Token{ILLEGAL, start, l.pos, line, col}
+	}
+
 	if hasColon {
 		return Token{ACCOUNT, start, l.pos, line, col}
 	}
 
-	value := l.source[start:l.pos]
 	if len(value) == 1 && isUppercaseLetter(value[0]) && l.whitespaceAhead() {
 		// Like beancount v3's CAPITAL token, a capital letter before
 		// whitespace, which its grammar reads as a currency or a flag:
@@ -913,6 +855,12 @@ func isNonDirectiveLineFlag(ch byte) bool {
 		return true
 	}
 	return false
+}
+
+// isControlChar reports whether ch is a control character other than the
+// whitespace and line breaks beancount's lexer reads.
+func isControlChar(ch byte) bool {
+	return ch < 0x20 && ch != '\t' && ch != '\n' && ch != '\r'
 }
 
 // isWhitespaceOrLineBreak reports whether ch ends an invalid token in

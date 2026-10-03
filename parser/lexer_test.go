@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"errors"
 	"strconv"
 	"strings"
 	"testing"
@@ -666,55 +665,38 @@ func TestKeywordMapLookup(t *testing.T) {
 	assert.Equal(t, IDENT, lexer.keywordType([]byte("notakeyword")))
 }
 
-func TestInvalidUTF8(t *testing.T) {
+func TestInvalidBytes(t *testing.T) {
+	// Like beancount's lexer, which fails on no input: invalid UTF-8 or a
+	// control character outside a comment or a string is an invalid token
+	// up to the next whitespace, and a string's bytes are left to the
+	// parser.
 	tests := []struct {
-		name     string
-		input    []byte
-		wantLine int
-		wantByte byte
+		name  string
+		input string
+		want  []TokenType
+		texts []string
 	}{
-		{
-			name:     "invalid byte 0xff",
-			input:    []byte("2024-01-01\xff"),
-			wantLine: 1,
-			wantByte: 0xff,
-		},
-		{
-			name:     "null byte",
-			input:    []byte("2024-01-01\x00"),
-			wantLine: 1,
-			wantByte: 0x00,
-		},
-		{
-			name:     "control char 0x01",
-			input:    []byte("2024-01-01\x01"),
-			wantLine: 1,
-			wantByte: 0x01,
-		},
-		{
-			name:     "control char 0x1f",
-			input:    []byte("2024-01-01\x1f"),
-			wantLine: 1,
-			wantByte: 0x1f,
-		},
-		{
-			name:     "invalid UTF-8 after valid chars",
-			input:    []byte("2024-01-01 * \"desc\"\xff"),
-			wantLine: 1,
-			wantByte: 0xff,
-		},
+		{"invalid byte", "2024-01-01\xff", []TokenType{DATE, ILLEGAL, EOF}, []string{"2024-01-01", "\xff", ""}},
+		{"null byte", "2024-01-01\x00", []TokenType{DATE, ILLEGAL, EOF}, []string{"2024-01-01", "\x00", ""}},
+		{"control char", "\x01B USD", []TokenType{ILLEGAL, IDENT, EOF}, []string{"\x01B", "USD", ""}},
+		{"invalid bytes up to whitespace", "\xff\xfe bad", []TokenType{ILLEGAL, ILLEGAL, EOF}, []string{"\xff\xfe", "bad", ""}},
+		{"invalid byte in account", "Assets:\xe9B 1", []TokenType{ILLEGAL, NUMBER, EOF}, []string{"Assets:\xe9B", "1", ""}},
+		{"control char after account", "Assets:\x01B 1", []TokenType{ILLEGAL, NUMBER, EOF}, []string{"Assets:\x01B", "1", ""}},
+		{"in string", "\"desc\xff\x01\"", []TokenType{STRING, EOF}, []string{"\"desc\xff\x01\"", ""}},
+		{"in comment", "; caf\xe9\x01\n", []TokenType{COMMENT, EOF}, []string{"; caf\xe9\x01\n", ""}},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			lexer := NewLexer(tt.input, "test.beancount")
-			_, err := lexer.ScanAll()
-			assert.Error(t, err)
-
-			var utf8Err *InvalidUTF8Error
-			assert.True(t, errors.As(err, &utf8Err), "expected InvalidUTF8Error")
-			assert.Equal(t, utf8Err.Line, tt.wantLine)
-			assert.Equal(t, utf8Err.Byte, tt.wantByte)
+			source := []byte(tt.input)
+			tokens, err := NewLexer(source, "test.beancount").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, tt.want, tokenTypes(tokens))
+			var texts []string
+			for _, tok := range tokens {
+				texts = append(texts, tok.String(source))
+			}
+			assert.Equal(t, tt.texts, texts)
 		})
 	}
 }
