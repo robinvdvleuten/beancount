@@ -1,0 +1,1 @@
+SELECT type, count(*) FROM "entries" GROUP BY type ORDER BY type

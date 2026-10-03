@@ -77,25 +77,31 @@ func execute(ctx context.Context, qctx *Context, compiled *compiledSelect) (*tab
 	return result, nil
 }
 
-// scanRows applies the FROM transforms to the directive stream, flattens
-// the transactions into posting rows, one per booked position (see
-// postingPositions), and visits each row that Where (FROM's expression and
-// WHERE) keeps. Every row shares one running inventory for the lazy balance
-// column. It returns last, the last row of the table: after FROM's
-// transforms but before Where. It is nil for an empty table.
+// scanRows applies the FROM transforms to the directive stream, reads the
+// rows of the query's Table from it, and visits each row that Where (FROM's
+// expression and WHERE) keeps. It returns last, the last row of the table:
+// after FROM's transforms but before Where. It is nil for an empty table.
 func scanRows(ctx context.Context, qctx *Context, compiled *compiledSelect, visit func(*evalRow)) (last *evalRow, err error) {
 	qctx, entries := compiled.From.transformed(qctx)
-	running := newInventory()
-
-	for i, entry := range entries {
-		if i%1024 == 0 {
-			select {
-			case <-ctx.Done():
-				return nil, ctx.Err()
-			default:
-			}
+	err = compiled.Table.rows(ctx, qctx, entries, func(row *evalRow) {
+		last = row
+		if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
+			return
 		}
+		visit(row)
+	})
+	return last, err
+}
 
+// postingRows visits the postings table's rows: each transaction's
+// postings, one row per booked position (see postingPositions). Every row
+// shares one running inventory for the lazy balance column.
+func postingRows(ctx context.Context, qctx *Context, entries []ast.Directive, visit func(*evalRow)) error {
+	running := newInventory()
+	for i, entry := range entries {
+		if err := checkCancelled(ctx, i); err != nil {
+			return err
+		}
 		txn, ok := entry.(*ast.Transaction)
 		if !ok {
 			continue
@@ -105,18 +111,38 @@ func scanRows(ctx context.Context, qctx *Context, compiled *compiledSelect, visi
 			if len(positions) == 0 {
 				positions = []*positionValue{nil}
 			}
-
 			for _, position := range positions {
-				row := &evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position, running: running}
-				last = row
-				if compiled.Where != nil && !truthy(compiled.Where.eval(row)) {
-					continue
-				}
-				visit(row)
+				visit(&evalRow{Ctx: qctx, Entry: entry, Txn: txn, Posting: posting, Position: position, running: running})
 			}
 		}
 	}
-	return last, nil
+	return nil
+}
+
+// entryRows visits the entries table's rows, one per directive.
+func entryRows(ctx context.Context, qctx *Context, entries []ast.Directive, visit func(*evalRow)) error {
+	for i, entry := range entries {
+		if err := checkCancelled(ctx, i); err != nil {
+			return err
+		}
+		visit(&evalRow{Ctx: qctx, Entry: entry})
+	}
+	return nil
+}
+
+// emptyRows visits the Empty table's one row.
+func emptyRows(_ context.Context, qctx *Context, _ []ast.Directive, visit func(*evalRow)) error {
+	visit(&evalRow{Ctx: qctx})
+	return nil
+}
+
+// checkCancelled returns ctx's error every 1024th directive, which the
+// loops over a ledger's directives check.
+func checkCancelled(ctx context.Context, i int) error {
+	if i%1024 == 0 {
+		return ctx.Err()
+	}
+	return nil
 }
 
 // evalTargets evaluates every target (visible and hidden) for a row.

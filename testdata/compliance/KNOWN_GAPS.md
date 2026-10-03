@@ -60,6 +60,16 @@ beancount has no tolerance at all, so it reports the 1E-27 USD an
 interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
+**BQL Tables**: SELECT's FROM reads beanquery's `postings` and `entries`
+Tables and the Empty table (`#`). beanquery's other eight, `accounts`
+(#639), `balances` (#638), `commodities` (#635), `documents` (#637),
+`events` (#634), `notes` (#636), `prices` (#633) and `transactions` (#632),
+are not built yet: naming one, as `#prices`, `"prices"` or a bare `prices`,
+fails with `table "prices" is not supported` (`err_from_table_prices`, one
+fixture per Table, listed in `queryGaps`), where beanquery reads it. A bare
+`accounts` is a postings column, so `FROM accounts` filters postings in
+both.
+
 The printer (BQL `PRINT`, `import`, `doctor missing_open`, error context)
 follows beancount 3.2.3's `printer.py`, with these known differences from
 `bean-query`'s `PRINT`:
@@ -426,7 +436,7 @@ compare the lines errors are on:
   so the hex digests differ from official output.
 - **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives,
   shell settings (`set format ...`) and dot-commands are not implemented;
-  nor are beanquery's subqueries, `FROM #table` and `CREATE TABLE`.
+  nor are beanquery's subqueries and `CREATE TABLE`.
 - **BQL dict-typed metadata functions**: `commodity_meta`, `currency_meta`,
   `open_meta`, and `getitem` (dict-typed values) are not implemented;
   `meta`, `entry_meta`, and `any_meta` cover scalar metadata lookups.

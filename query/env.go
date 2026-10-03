@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"crypto/md5"
 	"encoding/hex"
 	"fmt"
@@ -77,11 +78,7 @@ type columnDef struct {
 	eval func(row *evalRow) any
 }
 
-// wildcardColumns is the column list SELECT * expands to, matching the
-// official targets environment.
-var wildcardColumns = []string{"date", "flag", "payee", "narration", "position"}
-
-// entryColumns is PRINT's FROM environment: columns on directives.
+// entryColumns are the entries table's columns, on directives.
 var entryColumns = map[string]*columnDef{
 	"date":        {tDate, func(row *evalRow) any { return row.Entry.Date() }},
 	"year":        {tInt, func(row *evalRow) any { return int64(row.Entry.Date().Year()) }},
@@ -101,7 +98,7 @@ var entryColumns = map[string]*columnDef{
 	"accounts":    {tAccountSet, func(row *evalRow) any { return accountSet(row.Entry) }},
 }
 
-// postingColumns is the targets/WHERE environment: columns on posting rows.
+// postingColumns are the postings table's columns, on posting rows.
 var postingColumns = map[string]*columnDef{
 	"account":       {tString, func(row *evalRow) any { return string(row.Posting.Account) }},
 	"position":      {tPosition, func(row *evalRow) any { return row.Position }},
@@ -191,21 +188,58 @@ var postingColumns = map[string]*columnDef{
 	"accounts":    {tAccountSet, func(row *evalRow) any { return accountSet(row.Txn) }},
 }
 
-// environment is what one clause compiles against, like one of
-// beanquery's tables: its columns and the table name its errors quote.
-// Every environment registers every function and aggregate.
+// environment is a Table, what a query reads and its clauses compile
+// against, like one of beanquery's tables: its columns, the name its errors
+// quote, the columns SELECT * expands to, and its rows. Every environment
+// registers every function and aggregate.
 type environment struct {
-	columns map[string]*columnDef
-	table   string
+	columns  map[string]*columnDef
+	table    string
+	wildcard []string
+	// rows visits the Table's rows. A Table that is read from the
+	// ledger's directives reads them from entries, which FROM's
+	// transforms have summarized for the postings table.
+	rows func(ctx context.Context, qctx *Context, entries []ast.Directive, visit func(*evalRow)) error
 }
 
 var (
-	// targetsEnv compiles a SELECT's FROM expression, targets, WHERE,
-	// GROUP BY, ORDER BY and PIVOT BY, over postings.
-	targetsEnv = &environment{columns: postingColumns, table: "postings"}
-	// printFromEnv compiles PRINT's FROM clause, over entries.
-	printFromEnv = &environment{columns: entryColumns, table: "entries"}
+	// postingsTable is the Table a SELECT reads unless its FROM names
+	// another: one row per booked position of a transaction's posting.
+	postingsTable = &environment{
+		columns:  postingColumns,
+		table:    "postings",
+		wildcard: []string{"date", "flag", "payee", "narration", "position"},
+		rows:     postingRows,
+	}
+	// entriesTable is the Table PRINT's FROM filters: one row per
+	// directive. Like beanquery's, SELECT * expands to every column, in
+	// the order beanquery registers them.
+	entriesTable = &environment{
+		columns: entryColumns,
+		table:   "entries",
+		wildcard: []string{"id", "type", "filename", "lineno", "date", "year", "month", "day", "flag",
+			"payee", "narration", "description", "tags", "links", "meta", "accounts"},
+		rows: entryRows,
+	}
+	// emptyTable is the Empty table, which # names: one row and no
+	// columns.
+	emptyTable = &environment{columns: map[string]*columnDef{}, rows: emptyRows}
 )
+
+// tables are the Tables a Table reference names, by name.
+var tables = map[string]*environment{
+	postingsTable.table: postingsTable,
+	entriesTable.table:  entriesTable,
+	emptyTable.table:    emptyTable,
+}
+
+// unbuiltTables are beanquery's Tables not built yet, which a Table
+// reference reports as not supported rather than as not existing
+// (KNOWN_GAPS.md).
+var unbuiltTables = map[string]bool{
+	"accounts": true, "balances": true, "commodities": true, "documents": true,
+	"events": true, "notes": true, "prices": true, "transactions": true,
+}
 
 // txnColumn wraps a transaction accessor into an entry-environment column
 // that yields NULL for non-transaction directives.

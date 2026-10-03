@@ -46,6 +46,8 @@ func (l *Lexer) Next() Token {
 		return l.scanNumber(start, line, col)
 	case c == '"' || c == '\'':
 		return l.scanString(c, start, line, col)
+	case c == '#':
+		return l.scanTable(start, line, col)
 	}
 
 	l.advance()
@@ -128,6 +130,18 @@ func (l *Lexer) scanIdent(start, line, col int) Token {
 		typ = kw
 	}
 	return Token{Type: typ, Start: start, End: l.pos, Line: line, Column: col}
+}
+
+// scanTable scans beanquery's #([a-zA-Z_][a-zA-Z0-9_]*)? rule: a # and the
+// name of a Table, if one follows it at once.
+func (l *Lexer) scanTable(start, line, col int) Token {
+	l.advance() // #
+	if l.pos < len(l.source) && (isLetter(l.source[l.pos]) || l.source[l.pos] == '_') {
+		for l.pos < len(l.source) && (isLetter(l.source[l.pos]) || isDigit(l.source[l.pos]) || l.source[l.pos] == '_') {
+			l.advance()
+		}
+	}
+	return Token{Type: TABLE, Start: start, End: l.pos, Line: line, Column: col}
 }
 
 // scanNumberOrDate scans an INTEGER, DECIMAL, or DATE token. Date literals

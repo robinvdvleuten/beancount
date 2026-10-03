@@ -286,6 +286,67 @@ var errorFixtures = map[string]string{
 	"err_block_comment_unterminated": `error: syntax error
 | SELECT 1 /* closed */ + /* never closed
 |                         ^`,
+	"err_from_table_accounts": `error: table "accounts" is not supported
+| SELECT * FROM #accounts
+|               ^^^^^^^^^`,
+	"err_from_table_balances": `error: table "balances" is not supported
+| SELECT * FROM #balances
+|               ^^^^^^^^^`,
+	"err_from_table_case_sensitive": `error: table "Postings" does not exist
+| SELECT date FROM "Postings" LIMIT 1
+|                  ^^^^^^^^^^`,
+	"err_from_table_commodities": `error: table "commodities" is not supported
+| SELECT * FROM #commodities
+|               ^^^^^^^^^^^^`,
+	"err_from_table_documents": `error: table "documents" is not supported
+| SELECT * FROM #documents
+|               ^^^^^^^^^^`,
+	"err_from_table_empty_any_meta": `error: column "meta" not found in table ""
+| SELECT any_meta('x') FROM #
+|        ^^^^^^^^^^^^^`,
+	"err_from_table_empty_column": `error: column "date" not found in table ""
+| SELECT date FROM #
+|        ^^^^`,
+	"err_from_table_empty_entry_meta": `error: column "entry" not found in table ""
+| SELECT entry_meta('x') FROM #
+|        ^^^^^^^^^^^^^^^`,
+	"err_from_table_empty_has_account": `error: column "accounts" not found in table ""`,
+	"err_from_table_empty_meta": `error: column "meta" not found in table ""
+| SELECT meta('x') FROM #
+|        ^^^^^^^^^`,
+	"err_from_table_entries_any_meta": `error: column "entry" not found in table "entries"
+| SELECT any_meta('x') FROM #entries
+|        ^^^^^^^^^^^^^`,
+	"err_from_table_entries_entry_meta": `error: column "entry" not found in table "entries"
+| SELECT entry_meta('x') FROM #entries
+|        ^^^^^^^^^^^^^^^`,
+	"err_from_table_events": `error: table "events" is not supported
+| SELECT * FROM #events
+|               ^^^^^^^`,
+	"err_from_table_hash_not_exist": `error: table "nope" does not exist
+| SELECT date FROM #nope LIMIT 1
+|                  ^^^^^`,
+	"err_from_table_notes": `error: table "notes" is not supported
+| SELECT * FROM #notes
+|               ^^^^^^`,
+	"err_from_table_prices": `error: table "prices" is not supported
+| SELECT * FROM #prices
+|               ^^^^^^^`,
+	"err_from_table_quoted_expression": `error: syntax error
+| SELECT date FROM "year" = 2023 LIMIT 1
+|                         ^`,
+	"err_from_table_quoted_match": `error: syntax error
+| SELECT "type" FROM "account" ~ "Cash" LIMIT 1
+|                              ^`,
+	"err_from_table_quoted_not_exist": `error: table "nope" does not exist
+| SELECT date FROM "nope" LIMIT 1
+|                  ^^^^^^`,
+	"err_from_table_quoted_open": `error: syntax error
+| SELECT date FROM "postings" OPEN ON 2024-01-01
+|                             ^`,
+	"err_from_table_transactions": `error: table "transactions" is not supported
+| SELECT * FROM #transactions
+|               ^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

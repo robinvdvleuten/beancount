@@ -1,0 +1,1 @@
+SELECT meta('lineno') AS l, any_meta('lineno') AS a, entry_meta('lineno') AS e LIMIT 3

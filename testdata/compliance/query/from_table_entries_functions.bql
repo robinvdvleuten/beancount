@@ -1,0 +1,1 @@
+SELECT type, meta('lineno') AS l, has_account('cash') AS h FROM #entries LIMIT 5

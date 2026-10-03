@@ -121,7 +121,7 @@ func (p *parser) describe(tok Token) string {
 	switch tok.Type {
 	case EOF:
 		return "end of query"
-	case IDENT, STRING, INTEGER, DECIMAL, DATE, ILLEGAL:
+	case IDENT, STRING, INTEGER, DECIMAL, DATE, TABLE, ILLEGAL:
 		return fmt.Sprintf("%s %q", strings.ToLower(tok.Type.String()), tok.String(p.source))
 	default:
 		return fmt.Sprintf("%q", tok.String(p.source))
@@ -166,7 +166,7 @@ func (p *parser) parseSelect() (*Select, error) {
 	}
 
 	if p.cur.Type == FROM {
-		from, err := p.parseFrom()
+		from, err := p.parseSelectFrom()
 		if err != nil {
 			return nil, err
 		}
@@ -306,13 +306,41 @@ func (p *parser) parseTarget() (Target, error) {
 	return target, nil
 }
 
-// parseFrom parses a FROM clause: an optional entry filter expression
-// followed by optional OPEN ON, CLOSE [ON], and CLEAR transforms, in that
-// order (matching the official grammar).
-func (p *parser) parseFrom() (*From, error) {
+// parseSelectFrom parses SELECT's FROM clause. Like beanquery's grammar, it
+// tries a Table reference first, #name, # or a quoted name, which ends the
+// clause, and a FROM filter otherwise.
+func (p *parser) parseSelectFrom() (*From, error) {
 	tok := p.cur
 	p.next() // FROM
 
+	table := p.cur
+	switch {
+	case table.Type == TABLE:
+		p.next()
+		name := table.String(p.source)[1:]
+		return &From{position: p.node(tok.Start), Table: &Table{position: p.node(table.Start), Name: name}}, nil
+	case p.atQuotedIdent() && p.quotedIdentEnd()-table.Start > 2:
+		name, err := p.quotedIdent()
+		if err != nil {
+			return nil, err
+		}
+		return &From{position: p.node(tok.Start), Table: &Table{position: p.node(table.Start), Name: name}}, nil
+	}
+	return p.parseFromFilter(tok)
+}
+
+// parseFrom parses a FROM clause that holds a FROM filter.
+func (p *parser) parseFrom() (*From, error) {
+	tok := p.cur
+	p.next() // FROM
+	return p.parseFromFilter(tok)
+}
+
+// parseFromFilter parses a FROM filter, after the FROM keyword tok: an
+// optional entry filter expression followed by optional OPEN ON, CLOSE
+// [ON], and CLEAR transforms, in that order (matching the official
+// grammar).
+func (p *parser) parseFromFilter(tok Token) (*From, error) {
 	from := &From{position: position{start: tok.Start}}
 
 	if p.startsExpr() {
@@ -728,6 +756,18 @@ func (p *parser) quotedCallAhead() bool {
 		tok = lexer.Next()
 	}
 	return tok.Type == LPAREN && end-start > 2
+}
+
+// quotedIdentEnd returns where the quoted identifier at the current token
+// ends: past every double-quoted string that starts where the last one
+// ends (quotedIdent).
+func (p *parser) quotedIdentEnd() int {
+	lexer := *p.lexer
+	end := p.cur.End
+	for tok := lexer.Next(); tok.Type == STRING && tok.Start == end && p.source[tok.Start] == '"'; tok = lexer.Next() {
+		end = tok.End
+	}
+	return end
 }
 
 // callAhead reports whether the token after the current one is the ( of

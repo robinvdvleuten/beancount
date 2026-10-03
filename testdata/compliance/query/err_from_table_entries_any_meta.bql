@@ -1,0 +1,1 @@
+SELECT any_meta('x') FROM #entries

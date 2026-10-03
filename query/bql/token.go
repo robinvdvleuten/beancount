@@ -51,6 +51,7 @@ const (
 	INTEGER // 123
 	DECIMAL // 123.45
 	DATE    // YYYY-MM-DD
+	TABLE   // #name, or # alone: a Table reference
 
 	// Symbols
 	LPAREN    // (
@@ -121,6 +122,7 @@ var tokenNames = map[TokenType]string{
 	INTEGER: "INTEGER",
 	DECIMAL: "DECIMAL",
 	DATE:    "DATE",
+	TABLE:   "TABLE",
 
 	LPAREN:    "(",
 	RPAREN:    ")",

@@ -64,15 +64,24 @@ type Target struct {
 	Text string
 }
 
-// From is the FROM clause: an optional filter expression plus optional
-// summarization transforms.
+// From is the FROM clause: a Table reference, which only SELECT's FROM
+// takes and nothing follows, or else an optional filter expression plus
+// optional summarization transforms.
 type From struct {
 	position
+	Table   *Table
 	Expr    Expr
 	OpenOn  *ast.Date
 	Close   bool // bare CLOSE, or CLOSE ON when CloseOn is set
 	CloseOn *ast.Date
 	Clear   bool
+}
+
+// Table is a Table reference: #name, # alone for the Empty table, or a
+// quoted name. Name is kept as written, without # or quotes.
+type Table struct {
+	position
+	Name string
 }
 
 // Balances is the BALANCES shortcut statement.

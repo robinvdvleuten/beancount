@@ -86,3 +86,55 @@ func (c *cSubscript) eval(row *evalRow) any {
 	}
 	return d.get(c.key)
 }
+
+// cGetItem is beanquery's getitem(): the value of a key, a string
+// expression, in a dict, NULL for a NULL dict. A missing key, or a NULL
+// one, is NULL, or the value of fallback when there is one.
+type cGetItem struct {
+	dict, key, fallback cexpr
+}
+
+func (c *cGetItem) typ() dtype { return tAny }
+
+func (c *cGetItem) eval(row *evalRow) any {
+	d, ok := c.dict.eval(row).(*dictValue)
+	if !ok {
+		return nil
+	}
+	if key, ok := c.key.eval(row).(string); ok {
+		if value, found := d.lookup(key); found {
+			return value
+		}
+	}
+	if c.fallback != nil {
+		return c.fallback.eval(row)
+	}
+	return nil
+}
+
+// cHasAccount is has_account(re) as beanquery rewrites it, '(?i)' + re ?~
+// any(accounts): whether any account matches the pattern, ignoring case.
+// It is NULL for a NULL pattern or accounts.
+type cHasAccount struct {
+	pattern, accounts cexpr
+}
+
+func (c *cHasAccount) typ() dtype { return tBool }
+
+func (c *cHasAccount) eval(row *evalRow) any {
+	pattern, ok := c.pattern.eval(row).(string)
+	if !ok {
+		return nil
+	}
+	accounts, ok := c.accounts.eval(row).(setValue)
+	if !ok {
+		return nil
+	}
+	re := mustCompilePattern("(?i)", pattern)
+	for account := range accounts {
+		if re.MatchString(account) {
+			return true
+		}
+	}
+	return false
+}

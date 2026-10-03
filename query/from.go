@@ -20,6 +20,45 @@ type compiledFrom struct {
 	Clear   bool
 }
 
+// compileSelectFrom compiles SELECT's FROM clause, like beanquery's
+// _compile_from: it returns the Table the statement reads and, for a FROM
+// filter over the postings table, the compiled filter. A Table reference
+// names a Table, and so does a FROM filter that is a lone name of a Table
+// but not of a postings column; OPEN, CLOSE and CLEAR after that name are
+// ignored, as in beanquery.
+func (c *compiler) compileSelectFrom(from *bql.From) (*environment, *compiledFrom, error) {
+	if from == nil {
+		return postingsTable, nil, nil
+	}
+	if from.Table != nil {
+		table, err := lookupTable(from.Table, from.Table.Name)
+		if err != nil {
+			return nil, nil, err
+		}
+		if table == nil {
+			return nil, nil, compileErrorf(from.Table, `table "%s" does not exist`, from.Table.Name)
+		}
+		return table, nil, nil
+	}
+	if ident, ok := from.Expr.(*bql.Ident); ok && postingsTable.columns[ident.Name] == nil {
+		table, err := lookupTable(ident, ident.Name)
+		if err != nil || table != nil {
+			return table, nil, err
+		}
+	}
+	compiled, err := c.compileFrom(from, postingsTable)
+	return postingsTable, compiled, err
+}
+
+// lookupTable returns the Table named name, nil when there is none, and an
+// error, at node, for one of beanquery's Tables not built yet.
+func lookupTable(node bql.Node, name string) (*environment, error) {
+	if unbuiltTables[name] {
+		return nil, compileErrorf(node, `table "%s" is not supported`, name)
+	}
+	return tables[name], nil
+}
+
 // compileFrom compiles a FROM clause, whose expression sees env: the
 // postings table for a SELECT, the entries table for PRINT. A statement
 // without one compiles to nil.
@@ -65,10 +104,8 @@ func (from *compiledFrom) entries(ctx context.Context, qctx *Context) (*Context,
 
 	kept := make([]ast.Directive, 0, len(entries))
 	for i, entry := range entries {
-		if i%1024 == 0 {
-			if err := ctx.Err(); err != nil {
-				return nil, nil, err
-			}
+		if err := checkCancelled(ctx, i); err != nil {
+			return nil, nil, err
 		}
 		if truthy(from.Expr.eval(&evalRow{Ctx: qctx, Entry: entry})) {
 			kept = append(kept, entry)

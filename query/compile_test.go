@@ -398,3 +398,22 @@ func TestMatchOverloadBoolBases(t *testing.T) {
 	overload, _ = def.matchOverload([]dtype{tString, tBool})
 	assert.Zero(t, overload)
 }
+
+// TestCompileTableWildcard checks that SELECT * expands to the columns of
+// the Table FROM names: beanquery's five for postings, every column of
+// entries in the order beanquery registers them, and none for the Empty
+// table.
+func TestCompileTableWildcard(t *testing.T) {
+	ctx := newTestContext(t)
+	names := func(compiled *compiledSelect) []string {
+		var names []string
+		for _, target := range compiled.Targets {
+			names = append(names, target.Name)
+		}
+		return names
+	}
+	assert.Equal(t, []string{"date", "flag", "payee", "narration", "position"}, names(mustCompile(t, ctx, "SELECT * FROM postings")))
+	assert.Equal(t, []string{"id", "type", "filename", "lineno", "date", "year", "month", "day", "flag",
+		"payee", "narration", "description", "tags", "links", "meta", "accounts"}, names(mustCompile(t, ctx, "SELECT * FROM #entries")))
+	assert.Equal(t, 0, len(mustCompile(t, ctx, "SELECT * FROM #").Targets))
+}

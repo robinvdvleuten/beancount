@@ -1,6 +1,7 @@
 package bql
 
 import (
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -323,6 +324,67 @@ func TestParseFromTransformsOnly(t *testing.T) {
 	from := stmt.(*Select).From
 	assert.Zero(t, from.Expr)
 	assert.Equal(t, "2014-01-01", from.OpenOn.String())
+}
+
+// TestParseFromTable checks that, like beanquery's grammar, SELECT's FROM
+// tries a Table reference first: #name, # alone (the Empty table) or a
+// quoted name, after which no expression or transform may follow.
+func TestParseFromTable(t *testing.T) {
+	tests := []struct {
+		query string
+		table *Table
+	}{
+		{"SELECT * FROM #entries WHERE x", &Table{position: position{14, 22}, Name: "entries"}},
+		{"SELECT * FROM #", &Table{position: position{14, 15}, Name: ""}},
+		{"SELECT * FROM #_x1 LIMIT 1", &Table{position: position{14, 18}, Name: "_x1"}},
+		{`SELECT * FROM "postings" ORDER BY 1`, &Table{position: position{14, 24}, Name: "postings"}},
+		{`SELECT * FROM "a""b"`, &Table{position: position{14, 20}, Name: `a"b`}},
+		{`SELECT * FROM #Entries`, &Table{position: position{14, 22}, Name: "Entries"}},
+	}
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			stmt, err := Parse(test.query)
+			assert.NoError(t, err)
+			from := stmt.(*Select).From
+			assert.Equal(t, test.table, from.Table)
+			assert.Zero(t, from.Expr)
+		})
+	}
+
+	// An empty quoted name is no Table reference but a FROM filter.
+	stmt, err := Parse(`SELECT * FROM ""`)
+	assert.NoError(t, err)
+	assert.Zero(t, stmt.(*Select).From.Table)
+	assert.Equal(t, Expr(&Str{position: position{14, 16}, Value: "", DoubleQuoted: true}), stmt.(*Select).From.Expr)
+}
+
+// TestParseFromTableEndsTheClause checks that, as in beanquery, nothing
+// but the clauses after FROM may follow a Table reference, and that only
+// SELECT's FROM takes one: the error is where the Table reference ends, or
+// at a # elsewhere.
+func TestParseFromTableEndsTheClause(t *testing.T) {
+	tests := []struct {
+		query  string
+		offset int
+	}{
+		{`SELECT date FROM "year" = 2023`, 24},
+		{`SELECT date FROM "postings" OPEN ON 2024-01-01`, 28},
+		{`SELECT date FROM #entries CLOSE`, 26},
+		{"SELECT date FROM # entries", 19},
+		{"SELECT date FROM #1", 18},
+		{"PRINT FROM #entries", 11},
+		{"BALANCES FROM #entries", 14},
+		{"JOURNAL FROM #entries", 13},
+		{"SELECT #x", 7},
+	}
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			_, err := Parse(test.query)
+			var parseErr *ParseError
+			assert.True(t, errors.As(err, &parseErr), "got %v", err)
+			assert.Equal(t, test.offset, parseErr.Pos.Offset)
+		})
+	}
 }
 
 func TestParseGroupByIndexAndName(t *testing.T) {

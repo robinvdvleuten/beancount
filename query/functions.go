@@ -299,23 +299,9 @@ var functions = map[string]*funcDef{
 			return nil
 		}},
 	}},
-	"has_account": {overloads: []funcOverload{
-		// Like bean-query, a case-insensitive search through every
-		// account the entry references, not only transaction postings.
-		{[]dtype{tString}, tBool, func(row *evalRow, args []any) any {
-			entry, ok := row.Entry.(ast.WithAccounts)
-			if !ok {
-				return false
-			}
-			re := mustCompilePattern("(?i)", args[0].(string))
-			for _, account := range entry.Accounts() {
-				if re.MatchString(string(account)) {
-					return true
-				}
-			}
-			return false
-		}},
-	}},
+	// Like beanquery's, a stub that only types the call, which compiles
+	// as columnRewrites rewrites it.
+	"has_account": {overloads: []funcOverload{{params: []dtype{tString}, result: tBool}}},
 
 	// Amount, position, and inventory functions.
 	"number": {overloads: []funcOverload{
@@ -617,37 +603,11 @@ var functions = map[string]*funcDef{
 		}},
 	}},
 
-	// Metadata functions.
-	"meta": {overloads: []funcOverload{
-		{[]dtype{tString}, tAny, func(row *evalRow, args []any) any {
-			if row.Posting == nil {
-				return nil
-			}
-			return metaLookup(row.Posting.Metadata, args[0].(string))
-		}},
-	}},
-	"entry_meta": {overloads: []funcOverload{
-		{[]dtype{tString}, tAny, func(row *evalRow, args []any) any {
-			if row.Txn == nil {
-				return nil
-			}
-			return metaLookup(row.Txn.Metadata, args[0].(string))
-		}},
-	}},
-	"any_meta": {overloads: []funcOverload{
-		{[]dtype{tString}, tAny, func(row *evalRow, args []any) any {
-			key := args[0].(string)
-			if row.Posting != nil {
-				if v := metaLookup(row.Posting.Metadata, key); v != nil {
-					return v
-				}
-			}
-			if row.Txn != nil {
-				return metaLookup(row.Txn.Metadata, key)
-			}
-			return nil
-		}},
-	}},
+	// Metadata functions. Like beanquery's, stubs that only type the
+	// call, which compiles as columnRewrites rewrites it.
+	"meta":       {overloads: []funcOverload{{params: []dtype{tString}, result: tAny}}},
+	"entry_meta": {overloads: []funcOverload{{params: []dtype{tString}, result: tAny}}},
+	"any_meta":   {overloads: []funcOverload{{params: []dtype{tString}, result: tAny}}},
 }
 
 // ledgerPosition returns p as the ledger values it.
@@ -826,16 +786,6 @@ func accountInvertsSign(ctx *Context, account string) bool {
 		return true
 	}
 	return false
-}
-
-// metaLookup finds a metadata key and converts its value to a query value.
-func metaLookup(metadata []*ast.Metadata, key string) any {
-	for _, md := range metadata {
-		if md.Key == key {
-			return metaValue(md.Value)
-		}
-	}
-	return nil
 }
 
 func metaValue(v *ast.MetadataValue) any {

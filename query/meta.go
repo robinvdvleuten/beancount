@@ -29,12 +29,18 @@ func (d *dictValue) set(key string, value any) {
 
 // get is Python's dict.get: the key's value, NULL for a missing key.
 func (d *dictValue) get(key string) any {
+	value, _ := d.lookup(key)
+	return value
+}
+
+// lookup returns the key's value and whether the dict has the key.
+func (d *dictValue) lookup(key string) (any, bool) {
 	for i, k := range d.keys {
 		if k == key {
-			return d.values[i]
+			return d.values[i], true
 		}
 	}
-	return nil
+	return nil, false
 }
 
 // String renders the dict like Python's str() of a dict.

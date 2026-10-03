@@ -36,12 +36,14 @@ type cexpr interface {
 // OrderBy reference targets by index; hidden targets were appended
 // during resolution and are not rendered.
 type compiledSelect struct {
+	// Table is the Table the query reads.
+	Table   *environment
 	Targets []compiledTarget
 	// Where filters the posting rows: FROM's expression and WHERE, joined
 	// like beanquery's EvalAnd([c_from_expr, c_where]).
 	Where cexpr
 	// From holds the FROM transforms (OPEN, CLOSE, CLEAR); a SELECT's
-	// expression is joined into Where.
+	// expression is joined into Where. It is nil when FROM names a Table.
 	From    *compiledFrom
 	GroupBy []int
 	// Having is the index of the hidden HAVING target, or -1.
@@ -93,21 +95,22 @@ type compiler struct {
 func (c *compiler) compileSelect(sel *bql.Select) (*compiledSelect, error) {
 	compiled := &compiledSelect{Distinct: sel.Distinct, Limit: sel.Limit, Having: -1}
 
-	// Like beanquery, a SELECT's FROM expression compiles against the
-	// postings table, before the targets.
-	from, err := c.compileFrom(sel.From, targetsEnv)
+	// Like beanquery, FROM compiles first: it names the Table the other
+	// clauses compile against, or filters the postings table.
+	table, from, err := c.compileSelectFrom(sel.From)
 	if err != nil {
 		return nil, err
 	}
+	compiled.Table = table
 	compiled.From = from
 
-	c.env = targetsEnv
+	c.env = table
 
 	// Targets: expand the wildcard or compile the explicit list.
 	targets := sel.Targets
 	if sel.Wildcard {
-		targets = make([]bql.Target, len(wildcardColumns))
-		for i, name := range wildcardColumns {
+		targets = make([]bql.Target, len(table.wildcard))
+		for i, name := range table.wildcard {
 			targets[i] = bql.Target{Expr: &bql.Ident{Name: name}}
 		}
 	}
@@ -535,11 +538,7 @@ func (c *compiler) compileExpr(e bql.Expr) (cexpr, error) {
 		return &cLiteral{v: constantValue(node), t: tList}, nil
 
 	case *bql.Ident:
-		def, ok := c.env.columns[node.Name]
-		if !ok {
-			return nil, compileErrorf(node, `column "%s" not found in table "%s"`, node.Name, c.env.table)
-		}
-		return &cColumn{def: def}, nil
+		return c.column(node, node.Name)
 
 	case *bql.Call:
 		return c.compileCall(node)
@@ -618,6 +617,9 @@ func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
 	}
 	if def := functions[name]; def != nil {
 		if overload, sig := def.matchOverload(argTypes); overload != nil {
+			if rewrite := columnRewrites[name]; rewrite != nil {
+				return rewrite(c, node, args)
+			}
 			for i, base := range sig {
 				args[i] = asBase(args[i], base)
 			}
@@ -626,6 +628,67 @@ func (c *compiler) compileCall(node *bql.Call) (cexpr, error) {
 	}
 
 	return nil, compileErrorf(node, `no function matches "%s(%s)" name and argument types`, name, argTypeList(args))
+}
+
+// column compiles a reference to the current Table's column name, which an
+// error blames on node.
+func (c *compiler) column(node bql.Node, name string) (cexpr, error) {
+	def, ok := c.env.columns[name]
+	if !ok {
+		return nil, compileErrorf(node, `column "%s" not found in table "%s"`, name, c.env.table)
+	}
+	return &cColumn{def: def}, nil
+}
+
+// columnRewrites are the functions beanquery rewrites into expressions
+// over the current Table's columns once their arguments match, so that
+// they fail on a Table without those columns: meta(k) is meta[k],
+// entry_meta(k) entry.meta[k], any_meta(k) meta[k] with entry.meta[k] as
+// its default, and has_account(re) '(?i)' + re ?~ any(accounts). Like
+// beanquery's, a missing column is blamed on the call, but has_account's,
+// which beanquery raises without a node.
+var columnRewrites = map[string]func(c *compiler, node *bql.Call, args []cexpr) (cexpr, error){
+	"meta": func(c *compiler, node *bql.Call, args []cexpr) (cexpr, error) {
+		meta, err := c.column(node, "meta")
+		if err != nil {
+			return nil, err
+		}
+		return &cGetItem{dict: meta, key: args[0]}, nil
+	},
+	"entry_meta": func(c *compiler, node *bql.Call, args []cexpr) (cexpr, error) {
+		entryMeta, err := c.entryMeta(node)
+		if err != nil {
+			return nil, err
+		}
+		return &cGetItem{dict: entryMeta, key: args[0]}, nil
+	},
+	"any_meta": func(c *compiler, node *bql.Call, args []cexpr) (cexpr, error) {
+		meta, err := c.column(node, "meta")
+		if err != nil {
+			return nil, err
+		}
+		entryMeta, err := c.entryMeta(node)
+		if err != nil {
+			return nil, err
+		}
+		return &cGetItem{dict: meta, key: args[0], fallback: &cGetItem{dict: entryMeta, key: args[0]}}, nil
+	},
+	"has_account": func(c *compiler, _ *bql.Call, args []cexpr) (cexpr, error) {
+		accounts, err := c.column(&bql.Ident{}, "accounts")
+		if err != nil {
+			return nil, err
+		}
+		return &cHasAccount{pattern: args[0], accounts: accounts}, nil
+	},
+}
+
+// entryMeta compiles entry.meta, which an error blames on node.
+func (c *compiler) entryMeta(node bql.Node) (cexpr, error) {
+	entry, err := c.column(node, "entry")
+	if err != nil {
+		return nil, err
+	}
+	return &cAttribute{x: entry, attr: transactionAttributes["meta"]}, nil
 }
 
 // specialFunctions are the functions beanquery compiles itself rather than
