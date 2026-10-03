@@ -273,6 +273,15 @@ compare the lines errors are on:
   takes (`%d`, `%m`, `%Y`, `%y`, `%j`, `%b`, `%B`, and `%a`, `%A`, `%H`,
   `%I`, `%M`, `%S`, `%f`, `%p` read and dropped), with its messages.
 
+- **BQL dates before year 1000** (#627): a date column renders its year
+  zero-padded to four digits (`0999-01-01`), as ISO 8601 and Python's
+  `str(date)` do. beanquery's `DateRenderer` uses
+  `strftime('%Y-%m-%d')`, whose output depends on the C library: padded
+  on macOS, as here, and unpadded under glibc (`999-01-01`), where CI
+  compares. No single rendering matches beanquery everywhere, so no query
+  fixture renders such a date in a date column; `str(date)` matches on
+  every platform.
+
 - **BQL intervals** (#593): `interval()` gives dateutil's relativedelta,
   printed as Python prints it (`relativedelta(years=+1, months=+2)`). The
   difference of two intervals, which beanquery types as a date and then
