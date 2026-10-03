@@ -93,3 +93,19 @@ _Avoid_: conversion, rounding
 **Unrealized gains**:
 What the balance sheet's other balances leave over once each is stated At market value or Converted to X, shown under Equity in `Earnings:Unrealized` so the sheet sums to zero. Since the ledger's cost balance is zero, it is the holdings' value minus their cost, plus the units of any holding that could not be valued. It is zero At cost and not shown in Units, where a balance sheet does not balance.
 _Avoid_: capital gains, market gains
+
+**Table**:
+A named set of rows a query reads, such as `postings` (the default) or `entries`. A query's columns are the columns of its Table.
+_Avoid_: source, relation
+
+**Table reference**:
+Naming a Table after SELECT's FROM, as `"name"`, `#name`, or a bare name that is not a column of the current Table.
+_Avoid_: from expression, table expression
+
+**FROM filter**:
+An expression after FROM that keeps some rows of the current Table, optionally with OPEN, CLOSE and CLEAR.
+_Avoid_: from expression, table reference
+
+**Empty table**:
+The Table `#` names: one row and no columns.
+_Avoid_: null table, dual
