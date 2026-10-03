@@ -1,0 +1,60 @@
+; Units interpolated at an explicit cost augment, as an undated lot of
+; their own beside a dated lot of the same cost. A later reduction is
+; matched against the lots of either sign, as in beancount's
+; book_reductions: STRICT cannot choose between them unless their units sum
+; to the reduction's, STRICT_WITH_SIZE picks the lot of the reduction's
+; size, and HIFO books only the lots of the opposite sign but lists every
+; match when there are not enough.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Strict
+2020-01-01 open Assets:Hifo "HIFO"
+2020-01-01 open Assets:Size "STRICT_WITH_SIZE"
+2020-01-01 open Assets:All
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lots"
+  Assets:Strict  10 HOOL {10 USD}
+  Assets:Hifo    10 HOOL {10 USD}
+  Assets:Size    10 HOOL {10 USD}
+  Assets:All     15 HOOL {10 USD}
+  Equity:Open
+
+2020-02-01 * "Interpolated into Strict"
+  Assets:Cash    100 USD
+  Assets:Strict  HOOL {10 USD}
+
+2020-02-01 * "Interpolated into Hifo"
+  Assets:Cash  100 USD
+  Assets:Hifo  HOOL {10 USD}
+
+2020-02-01 * "Interpolated into Size"
+  Assets:Cash  100 USD
+  Assets:Size  HOOL {10 USD}
+
+2020-02-01 * "Interpolated into All"
+  Assets:Cash  100 USD
+  Assets:All   HOOL {10 USD}
+
+2020-03-01 * "STRICT cannot choose"
+  Assets:Strict  -1 HOOL {10 USD}
+  Assets:Cash    10 USD
+
+2020-03-02 * "HIFO skips the lot of the posting's sign"
+  Assets:Hifo  -1 HOOL {}
+  Assets:Cash  10 USD
+
+2020-03-03 * "STRICT_WITH_SIZE picks the lot of the reduction's size"
+  Assets:Size  -10 HOOL {10 USD}
+  Assets:Cash  100 USD
+
+2020-03-04 * "STRICT takes every lot when their units sum to the reduction's"
+  Assets:All   -5 HOOL {10 USD}
+  Assets:Cash  50 USD
+
+2020-03-05 * "HIFO lists both signs when there are not enough"
+  Assets:Hifo  -50 HOOL {}
+  Assets:Cash  500 USD
+
+2020-04-01 balance Assets:Hifo  -1 HOOL
+2020-04-01 balance Assets:Size  -10 HOOL
+2020-04-01 balance Assets:All    0 HOOL

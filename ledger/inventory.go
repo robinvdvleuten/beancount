@@ -318,13 +318,14 @@ func (inv *inventory) book(posting *ast.Posting, method bookingMethod) (position
 	}
 	method = defaultBookingMethod(method)
 
-	// Like beancount's book_reductions, the posting is booked only against
-	// the lots held at cost: units held without cost make it a reduction
-	// but are never booked against.
+	// Like beancount's book_reductions, the posting is matched against the
+	// lots held at cost, of either sign: units held without cost make it a
+	// reduction but are never booked against, and the booking method
+	// decides what a lot of the posting's own sign does (planReduction).
 	commodity := posting.Amount.Currency
 	var lots []*lot
 	for _, lot := range inv.lots[commodity] {
-		if signIndex(lot.amount) != signIndex(units) && lot.spec != nil && lot.spec.cost != nil {
+		if lot.spec != nil && lot.spec.cost != nil {
 			lots = append(lots, lot)
 		}
 	}
@@ -345,9 +346,7 @@ func (inv *inventory) book(posting *ast.Posting, method bookingMethod) (position
 		return nil, false, &noPositionMatchesError{posting: reducingPosting(posting, units), balance: inv.String()}
 	}
 
-	// The strategies work on magnitudes; the booked units take the
-	// posting's sign.
-	plan, err := planReduction(commodity, matches, units.Abs(), method)
+	plan, err := planReduction(commodity, matches, units, method)
 	switch {
 	case errors.Is(err, errNotEnoughLots):
 		return nil, false, &notEnoughLotsError{posting: reducingPosting(posting, units), matches: lotStrings(matches)}
@@ -360,9 +359,6 @@ func (inv *inventory) book(posting *ast.Posting, method bookingMethod) (position
 	booked := make([]BookedPosition, 0, len(plan.reductions))
 	for i := range plan.reductions {
 		reduction := &plan.reductions[i]
-		if units.IsNegative() {
-			reduction.amount = reduction.amount.Neg()
-		}
 		s := reduction.lot.spec
 		booked = append(booked, BookedPosition{
 			Units:   reduction.amount,
@@ -558,46 +554,48 @@ func (inv *inventory) countAtCost(commodity string) int {
 	return n
 }
 
-// planReduction plans reducing amount (a magnitude) from the lots the
-// reduction's spec matches, at least one.
-func planReduction(commodity string, matches []*lot, amount decimal.Decimal, bookingMethod bookingMethod) (*reductionPlan, error) {
+// planReduction plans booking units (signed, the posting's) against the lots
+// the reduction's spec matches, at least one. Like beancount's, the matches
+// are lots of either sign: STRICT weighs them all, and the other methods
+// book only those of the opposite sign.
+func planReduction(commodity string, matches []*lot, units decimal.Decimal, bookingMethod bookingMethod) (*reductionPlan, error) {
 	switch bookingMethod {
 	case bookingAVERAGE:
 		// Beancount v2 never implemented AVERAGE: every reduction under it fails.
 		return nil, errAverageUnsupported
 	case bookingSTRICT:
-		return planStrictReduction(commodity, matches, amount)
+		return planStrictReduction(commodity, matches, units)
 	case bookingSTRICTWithSize:
-		return planStrictReductionWithSize(commodity, matches, amount)
+		return planStrictReductionWithSize(commodity, matches, units)
 	default:
-		return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
+		return planReductionAcrossLots(commodity, units, sortedLotsForBooking(matches, bookingMethod))
 	}
 }
 
 // planStrictReduction books the one lot matched, or every lot matched when
-// the reduction takes them all, like beancount's booking_method_STRICT;
-// otherwise it cannot choose.
-func planStrictReduction(commodity string, matches []*lot, amount decimal.Decimal) (*reductionPlan, error) {
+// their units sum to the reduction's, like beancount's
+// booking_method_STRICT; otherwise it cannot choose.
+func planStrictReduction(commodity string, matches []*lot, units decimal.Decimal) (*reductionPlan, error) {
 	if len(matches) == 1 {
-		if matches[0].amount.Abs().LessThan(amount) {
+		if matches[0].amount.Abs().LessThan(units.Abs()) {
 			return nil, errNotEnoughLots
 		}
 		return &reductionPlan{
 			commodity:  commodity,
-			reductions: []lotReduction{{lot: matches[0], amount: amount}},
+			reductions: []lotReduction{{lot: matches[0], amount: units}},
 		}, nil
 	}
 
 	total := decimal.Zero
 	for _, lot := range matches {
-		total = pydecimal.Add(total, lot.amount.Abs())
+		total = pydecimal.Add(total, lot.amount)
 	}
-	if !total.Equal(amount) {
+	if !total.Equal(units.Neg()) {
 		return nil, errAmbiguousMatches
 	}
 	reductions := make([]lotReduction, 0, len(matches))
 	for _, lot := range matches {
-		reductions = append(reductions, lotReduction{lot: lot, amount: lot.amount.Abs()})
+		reductions = append(reductions, lotReduction{lot: lot, amount: lot.amount.Neg()})
 	}
 	return &reductionPlan{
 		commodity:  commodity,
@@ -608,14 +606,14 @@ func planStrictReduction(commodity string, matches []*lot, amount decimal.Decima
 // planStrictReductionWithSize books as planStrictReduction, and when that
 // cannot choose among several lots, the oldest lot of the reduction's size,
 // like beancount's booking_method_STRICT_WITH_SIZE.
-func planStrictReductionWithSize(commodity string, matches []*lot, amount decimal.Decimal) (*reductionPlan, error) {
-	plan, err := planStrictReduction(commodity, matches, amount)
+func planStrictReductionWithSize(commodity string, matches []*lot, units decimal.Decimal) (*reductionPlan, error) {
+	plan, err := planStrictReduction(commodity, matches, units)
 	if err == nil || len(matches) < 2 {
 		return plan, err
 	}
 	var sized []*lot
 	for _, lot := range matches {
-		if lot.amount.Abs().Equal(amount) {
+		if lot.amount.Equal(units.Neg()) {
 			sized = append(sized, lot)
 		}
 	}
@@ -627,7 +625,7 @@ func planStrictReductionWithSize(commodity string, matches []*lot, amount decima
 	oldest := slices.MinFunc(sized, func(a, b *lot) int { return compareLotDates(a, b) })
 	return &reductionPlan{
 		commodity:  commodity,
-		reductions: []lotReduction{{lot: oldest, amount: amount}},
+		reductions: []lotReduction{{lot: oldest, amount: units}},
 	}, nil
 }
 
@@ -646,18 +644,26 @@ func compareLotDates(a, b *lot) int {
 	return a.spec.date.Compare(b.spec.date.Time)
 }
 
-// planReductionAcrossLots reduces the given amount across lots in order,
-// consuming each lot before moving to the next.
-func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLots []*lot) (*reductionPlan, error) {
-	remaining := amount
+// planReductionAcrossLots books units across lots in order, consuming each
+// lot before moving to the next, and skipping a lot of the units' own sign,
+// like beancount's _booking_method_xifo.
+func planReductionAcrossLots(commodity string, units decimal.Decimal, sortedLots []*lot) (*reductionPlan, error) {
+	remaining := units.Abs()
 	reductions := make([]lotReduction, 0, len(sortedLots))
 	for _, lot := range sortedLots {
 		if remaining.IsZero() {
 			break
 		}
+		if signIndex(lot.amount) == signIndex(units) {
+			continue
+		}
 
 		reduction := decimal.Min(lot.amount.Abs(), remaining)
-		reductions = append(reductions, lotReduction{lot: lot, amount: reduction})
+		change := reduction
+		if units.IsNegative() {
+			change = reduction.Neg()
+		}
+		reductions = append(reductions, lotReduction{lot: lot, amount: change})
 		remaining = pydecimal.Sub(remaining, reduction)
 	}
 
