@@ -402,6 +402,16 @@ func TestInterpolate(t *testing.T) {
 			wantErrs: []string{"Cannot infer per-unit cost only from total"},
 		},
 		{
+			// beancount fails dividing by zero; the error is never a
+			// transaction that does not balance with no residual.
+			name: "missing units at a zero price",
+			source: `
+2024-01-15 * "Test"
+  Assets:Stock  HOOL @ 0 USD
+`,
+			wantErrs: []string{"Cannot infer units at a zero price"},
+		},
+		{
 			name: "a reduction with an empty cost spec booked against two lots",
 			source: lots + `
 2024-01-15 * "Sell"

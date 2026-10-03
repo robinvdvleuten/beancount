@@ -169,7 +169,9 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		currency := posting.Amount.Currency
 		weightCurrency, perUnit, total, ok := unitsWeightTerms(posting)
 		if !ok {
-			return nil, []error{newNotBalancedError(txn, balance)}
+			// Past tooManyMissing and zeroPerUnitCost, only a zero price
+			// is left, at which beancount fails dividing by zero.
+			return nil, []error{newCurrencyGroupError(txn, posting, "Cannot infer units at a zero price")}
 		}
 
 		weight := balance[weightCurrency].Neg()

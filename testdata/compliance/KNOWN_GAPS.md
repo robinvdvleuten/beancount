@@ -232,6 +232,11 @@ compare the lines errors are on:
   crashes comparing `None` with a date (`TypeError`); we sort an undated
   lot before every dated one.
 
+- **Missing units at a zero price** (#653): bean-check fails with a
+  Python `AssertionError` on `Assets:Stock  HOOL @ 0 USD`, the units it
+  would divide the residual by the price to find. We report `Cannot infer
+  units at a zero price` on the posting and drop its Currency group.
+
 - **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
   Python's `bool` subclasses `int`, sums the values as integers and still
   types the column as boolean, so `sum(1 = 1)` over four rows renders

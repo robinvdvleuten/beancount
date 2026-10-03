@@ -1,0 +1,14 @@
+; A number-only price takes the cost currency of its account's lots, which
+; puts it in the same Currency group as an augmentation at {} beside it:
+; that cost is then interpolated from the price's weight, and is negative.
+option "booking_method" "HIFO"
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lot a"
+  Assets:Stock  10 HOOL {10 USD}
+  Equity:Open
+
+2020-02-01 * "Beside an augmentation at {}"
+  Assets:Stock  10 HOOL @ 1.5
+  Assets:Stock  10 HOOL {}

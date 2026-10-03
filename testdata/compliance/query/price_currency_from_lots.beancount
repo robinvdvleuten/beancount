@@ -1,0 +1,25 @@
+; A price that states its number but not its currency, where nothing else
+; in the transaction decides it, takes the cost currency of the lots its
+; account holds, as in beancount's categorize_by_currency.
+option "booking_method" "HIFO"
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lot a"
+  Assets:Stock  10 HOOL {10 USD}
+  Equity:Open
+
+2020-01-03 * "Lot b"
+  Assets:Stock  10 HOOL {20 USD, "lotb"}
+  Equity:Open
+
+2020-02-01 * "Beside an auto-posting"
+  Assets:Cash
+  Assets:Stock  10 HOOL @ 1.5
+
+2020-02-02 * "Zero units at an empty cost spec"
+  Assets:Stock  0 HOOL {} @ 5
+
+2020-02-03 balance Assets:Cash   -15.0 USD
+2020-02-03 balance Assets:Stock  30 HOOL
