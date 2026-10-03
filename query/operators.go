@@ -467,10 +467,11 @@ var casts = map[dtype]func(v any) any{
 func castDecimal(v any) any {
 	switch val := v.(type) {
 	case bool:
+		// Python's Decimal(False) is 0, not shopspring's Zero (0E+1).
 		if val {
 			return decimal.NewFromInt(1)
 		}
-		return decimal.Zero
+		return decimal.New(0, 0)
 	case string:
 		if d, ok := parsePyDecimal(val); ok {
 			return d

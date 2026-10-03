@@ -1,0 +1,1 @@
+SELECT decimal(FALSE) AS f, decimal(TRUE) AS t, decimal(FALSE) + 1 AS f1, str(decimal(FALSE)) AS s LIMIT 1
