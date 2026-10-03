@@ -189,6 +189,34 @@ option "account_unrealized_gains" "中文"
 	}, got)
 }
 
+func TestRootAccountNames(t *testing.T) {
+	tree, err := parser.ParseBytesWithFilename(context.Background(), "ledger.beancount", []byte(`option "name_assets" "Vermögen"
+option "name_assets" ""
+option "name_liabilities" "liabilities"
+option "name_equity" "Equity:Sub"
+option "name_income" "Inc ome"
+option "name_expenses" "1Expenses"
+option "name_expenses" "Ünïcode-2"
+`))
+	assert.NoError(t, err)
+	cfg, errs := ParseOptions(tree)
+
+	// Like beancount's options_validate_root_account: an invalid name is
+	// reported, quoted with repr(), and the previous one stays.
+	assert.Equal(t, &AccountNames{Assets: "Vermögen", Liabilities: "Liabilities", Equity: "Equity", Income: "Income", Expenses: "Ünïcode-2"}, cfg.AccountNames)
+	var got []string
+	for _, err := range errs {
+		got = append(got, err.Error())
+	}
+	assert.Equal(t, []string{
+		"ledger.beancount:2: Error for option 'name_assets': Invalid root account name: ''",
+		"ledger.beancount:3: Error for option 'name_liabilities': Invalid root account name: 'liabilities'",
+		"ledger.beancount:4: Error for option 'name_equity': Invalid root account name: 'Equity:Sub'",
+		"ledger.beancount:5: Error for option 'name_income': Invalid root account name: 'Inc ome'",
+		"ledger.beancount:6: Error for option 'name_expenses': Invalid root account name: '1Expenses'",
+	}, got)
+}
+
 func TestSummaryAccounts(t *testing.T) {
 	cfg, errs := ParseOptions(parser.MustParseString(context.Background(), ""))
 	assert.Zero(t, errs)

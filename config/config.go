@@ -379,16 +379,12 @@ func (c *Config) apply(name, value string) error {
 		c.BookingMethod = value
 	case "title":
 		c.Title = value
-	case "name_assets":
-		c.AccountNames.Assets = value
-	case "name_liabilities":
-		c.AccountNames.Liabilities = value
-	case "name_equity":
-		c.AccountNames.Equity = value
-	case "name_income":
-		c.AccountNames.Income = value
-	case "name_expenses":
-		c.AccountNames.Expenses = value
+	case "name_assets", "name_liabilities", "name_equity", "name_income", "name_expenses":
+		// Like beancount's options_validate_root_account.
+		if !rootComponentRegex.MatchString(value) {
+			return beancountError("Invalid root account name: " + pyrepr.String(value))
+		}
+		*c.rootAccountOption(name) = value
 	case "operating_currency":
 		c.OperatingCurrencies = append(c.OperatingCurrencies, value)
 	case "tolerance_multiplier":
@@ -429,6 +425,17 @@ func (c *Config) apply(name, value string) error {
 		}
 	}
 	return nil
+}
+
+// rootAccountOption returns the field a root account name option sets.
+func (c *Config) rootAccountOption(name string) *string {
+	return map[string]*string{
+		"name_assets":      &c.AccountNames.Assets,
+		"name_liabilities": &c.AccountNames.Liabilities,
+		"name_equity":      &c.AccountNames.Equity,
+		"name_income":      &c.AccountNames.Income,
+		"name_expenses":    &c.AccountNames.Expenses,
+	}[name]
 }
 
 // leafAccountOption returns the field a leaf account option sets.
@@ -487,6 +494,10 @@ func parseNumber(value string) (decimal.Decimal, error) {
 	}
 	return number, nil
 }
+
+// rootComponentRegex is beancount's ACC_COMP_TYPE_RE, which
+// account.is_valid_root matches a root account name against.
+var rootComponentRegex = regexp.MustCompile(`^\p{Lu}[\p{L}\p{Nd}-]*$`)
 
 // leafComponentRegex is beancount's ACC_COMP_NAME_RE. Unlike an account
 // in a directive, a component may not start with a letter without case.

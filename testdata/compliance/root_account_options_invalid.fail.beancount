@@ -1,0 +1,19 @@
+; The name_* options must be root account names: one component that
+; starts with an uppercase letter. An invalid one is reported and the
+; previous name stays in effect.
+option "name_assets" ""
+option "name_liabilities" ""
+option "name_equity" ""
+option "name_income" ""
+option "name_expenses" ""
+option "name_assets" "assets"
+option "name_assets" "Foo:Bar"
+option "name_assets" "Foo Bar"
+option "name_assets" "1Foo"
+option "name_income" "Ünïcode-2"
+
+2020-01-01 open Assets:A
+2020-01-01 open Liabilities:A
+2020-01-01 open Equity:A
+2020-01-01 open Ünïcode-2:A
+2020-01-01 open Expenses:A
