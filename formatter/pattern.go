@@ -17,13 +17,17 @@ import (
 type lineKind int
 
 const (
-	// reconstructLine: the item has no source line of its own, so it is
-	// printed from the AST.
-	reconstructLine lineKind = iota
+	// unownedLine: the line is not the item's own, so the formatter has
+	// nothing to copy or align and fails.
+	unownedLine lineKind = iota
 	// copyLine: bean-format leaves the line as written.
 	copyLine
 	// alignLine: bean-format pads the prefix and right-aligns the number.
 	alignLine
+	// accountLine: an unflagged posting without units. It is written as
+	// its account at the posting indent, then its inline comment; nothing
+	// else of the line is.
+	accountLine
 )
 
 // lineLayout is bean-format's reading of one item's line.
@@ -34,8 +38,8 @@ type lineLayout struct {
 	text string
 
 	// prefix, number and currency split an aligned line; rest is the
-	// source text from the currency to the end of the line, or "" when
-	// what follows the number is printed from the AST.
+	// source text of a posting's from the currency to the end of the
+	// line. An account line has its prefix alone.
 	prefix, number, currency, rest string
 
 	// prefixWidth and numberWidth are the display widths bean-format
@@ -47,7 +51,7 @@ type lineLayout struct {
 // a metadata, tags or comment line. bean-format leaves it as written.
 func plainLayout(line string, owned bool) lineLayout {
 	if !owned {
-		return lineLayout{kind: reconstructLine}
+		return lineLayout{kind: unownedLine}
 	}
 	return lineLayout{kind: copyLine, text: line}
 }
@@ -94,20 +98,21 @@ func gluedToCurrency(line, number, currency string) bool {
 // account, as bean-format re-indents such lines. owned says whether the
 // line is the posting's own; indent is the run's posting indent.
 func postingLayout(line string, owned bool, p *ast.Posting, indent int) lineLayout {
+	text, rest, holds := postingText(line, owned, p)
+	if !holds {
+		return lineLayout{kind: unownedLine}
+	}
+
 	aligns := p.Flag == "" && isAlignedAmount(p.Amount) &&
 		!gluedToCurrency(line, numberText(p.Amount), p.Amount.Currency)
-	text, rest, holds := postingText(line, owned, p)
-
 	if !aligns {
-		if (p.Flag != "" || p.Amount != nil) && holds {
-			if p.Flag == "" {
-				text = strings.Repeat(" ", indent) + text
-			} else {
-				text = line
-			}
-			return lineLayout{kind: copyLine, text: text}
+		switch {
+		case p.Flag != "":
+			return lineLayout{kind: copyLine, text: line}
+		case p.Amount != nil:
+			return lineLayout{kind: copyLine, text: strings.Repeat(" ", indent) + text}
 		}
-		return lineLayout{kind: reconstructLine}
+		return lineLayout{kind: accountLine, prefix: strings.Repeat(" ", indent) + string(p.Account)}
 	}
 
 	// bean-format measures the prefix as the source indents it, even
@@ -117,18 +122,19 @@ func postingLayout(line string, owned bool, p *ast.Posting, indent int) lineLayo
 		sourceIndent = column - 1
 	}
 	number := numberText(p.Amount)
-	layout := lineLayout{
+	suffix := postingRest(rest, p)
+	if suffix == "" {
+		return lineLayout{kind: unownedLine}
+	}
+	return lineLayout{
 		kind:        alignLine,
 		prefix:      strings.Repeat(" ", indent) + string(p.Account),
 		number:      number,
 		currency:    p.Amount.Currency,
+		rest:        suffix,
 		prefixWidth: sourceIndent + runewidth.StringWidth(string(p.Account)),
 		numberWidth: runewidth.StringWidth(number),
 	}
-	if holds {
-		layout.rest = postingRest(rest, p)
-	}
-	return layout
 }
 
 // postingText returns a posting's owned source line trimmed of its indent,
@@ -176,7 +182,7 @@ func postingRest(afterAccount string, p *ast.Posting) string {
 // does not glue that number to the currency ("10USD"); otherwise it
 // leaves the line as written.
 func datedLayout(line string, owned bool, head, text, lastNumber, currency string) lineLayout {
-	if currency != "" && !gluedToCurrency(line, lastNumber, currency) {
+	if owned && currency != "" && !gluedToCurrency(line, lastNumber, currency) {
 		// The source may glue the amount text to the subject: BA- 1 USD
 		// is BA's price at - 1, whose minus bean-format reads as part of
 		// the prefix.

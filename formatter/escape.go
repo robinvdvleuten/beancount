@@ -1,14 +1,12 @@
 package formatter
 
-import (
-	"strings"
-
-	"github.com/robinvdvleuten/beancount/ast"
-)
-
-// StringEscapeStyle controls how strings are escaped in formatter output.
+// StringEscapeStyle was how the formatter escaped the strings it printed.
+//
+// Deprecated: the formatter copies every string from the source, so the
+// style has no effect.
 type StringEscapeStyle int
 
+// The styles are kept for callers that name them; none has an effect.
 const (
 	// EscapeStyleNone outputs strings without escape sequences.
 	// Newlines, tabs, quotes become their literal characters (multi-line output).
@@ -20,76 +18,3 @@ const (
 	// Falls back to CStyle if original raw token is unavailable.
 	EscapeStyleOriginal
 )
-
-// escapeString escapes special characters in strings for Beancount format.
-// Uses the formatter's configured escape style.
-func (f *run) escapeString(s string) string {
-	switch f.StringEscapeStyle {
-	case EscapeStyleNone:
-		return s
-	case EscapeStyleCStyle:
-		return escapeCStyle(s)
-	case EscapeStyleOriginal:
-		return escapeCStyle(s) // Fallback to C-style
-	default:
-		return escapeCStyle(s)
-	}
-}
-
-// formatRawString formats a RawString to the buffer.
-// If the RawString has a raw token and EscapeStyleOriginal is set, uses the raw token directly.
-// However, skips raw tokens that contain literal line breaks, as these break idempotency
-// (raw tokens can't be round-tripped through parsing).
-// Otherwise, quotes and escapes the logical value.
-func (f *run) formatRawString(s ast.RawString, buf *strings.Builder) {
-	// EscapeStyleOriginal: use the raw token if available, literal line
-	// breaks included, as bean-format leaves them.
-	if f.StringEscapeStyle == EscapeStyleOriginal && s.HasRaw() {
-		buf.WriteString(s.Raw)
-		return
-	}
-
-	// Otherwise, quote and escape the logical value
-	buf.WriteByte('"')
-	buf.WriteString(f.escapeString(s.Value))
-	buf.WriteByte('"')
-}
-
-// escapeCStyle escapes special characters using C-style escape sequences.
-func escapeCStyle(s string) string {
-	// Quick check if escaping is needed
-	needsEscape := false
-	for _, c := range s {
-		if c == '"' || c == '\\' || c == '\n' || c == '\t' || c == '\r' {
-			needsEscape = true
-			break
-		}
-	}
-
-	if !needsEscape {
-		return s
-	}
-
-	// Use strings.Builder for efficient escaping
-	var buf strings.Builder
-	buf.Grow(len(s) + 10) // Add some extra capacity for escape sequences
-
-	for _, c := range s {
-		switch c {
-		case '"':
-			buf.WriteString(`\"`)
-		case '\\':
-			buf.WriteString(`\\`)
-		case '\n':
-			buf.WriteString(`\n`)
-		case '\t':
-			buf.WriteString(`\t`)
-		case '\r':
-			buf.WriteString(`\r`)
-		default:
-			buf.WriteRune(c)
-		}
-	}
-
-	return buf.String()
-}

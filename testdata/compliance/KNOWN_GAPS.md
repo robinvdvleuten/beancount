@@ -75,9 +75,9 @@ follows beancount 3.2.3's `printer.py`, with these known differences from
   `document` and `custom` strings or cost labels. So `import` output with a
   `"` in one of them fails its re-parse.
 
-`beancount format` re-renders the parsed AST, while `bean-format` only
-rewrites whitespace line by line with one regular expression. The
-formatter follows that expression's rules (which lines align, which
+`beancount format` copies or aligns the source lines of a parsed file,
+while `bean-format` rewrites whitespace line by line with one regular
+expression on any text. The formatter follows that expression's rules (which lines align, which
 number, which lines pass through as written), so output is byte-identical
 on the `format/` fixtures and on every fixture that parses, with these known
 limits:

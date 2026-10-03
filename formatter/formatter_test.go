@@ -11,48 +11,6 @@ import (
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
-func TestEscapeString(t *testing.T) {
-	tests := []struct {
-		name     string
-		input    string
-		expected string
-	}{
-		{
-			name:     "NoEscaping",
-			input:    "simple string",
-			expected: "simple string",
-		},
-		{
-			name:     "DoubleQuote",
-			input:    `string with "quotes"`,
-			expected: `string with \"quotes\"`,
-		},
-		{
-			name:     "Backslash",
-			input:    `path\to\file`,
-			expected: `path\\to\\file`,
-		},
-		{
-			name:     "Both",
-			input:    `path\with"both`,
-			expected: `path\\with\"both`,
-		},
-		{
-			name:     "Empty",
-			input:    "",
-			expected: "",
-		},
-	}
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			f := newRun(New(WithStringEscapeStyle(EscapeStyleCStyle)), &ast.AST{}, nil)
-			result := f.escapeString(test.input)
-			assert.Equal(t, test.expected, result)
-		})
-	}
-}
-
 func TestDirectiveKeywordWidth(t *testing.T) {
 	tests := []struct {
 		name      string
@@ -367,21 +325,6 @@ func TestFormatDirectives(t *testing.T) {
 		assert.NoError(t, err)
 
 		assert.Equal(t, source, buf.String())
-	})
-
-	// Without the note's source line, the formatter reconstructs it from
-	// the AST, tags before links.
-	t.Run("NoteWithTagsAndLinksReconstructed", func(t *testing.T) {
-		source := "2021-01-01  note Assets:Checking \"Initial balance\"  ^link   #tag\n"
-		ast := parser.MustParseString(context.Background(), source)
-
-		f := New()
-		var buf bytes.Buffer
-		err := f.Format(context.Background(), ast, []byte(""), &buf)
-		assert.NoError(t, err)
-
-		expected := "2021-01-01 note Assets:Checking \"Initial balance\" #tag ^link\n"
-		assert.Equal(t, expected, buf.String())
 	})
 
 	t.Run("Document", func(t *testing.T) {
@@ -1247,4 +1190,44 @@ func TestFormatSlashAndLongCurrencies(t *testing.T) {
 	var buf bytes.Buffer
 	assert.NoError(t, New().Format(context.Background(), tree, []byte(source), &buf))
 	assert.Equal(t, want, buf.String())
+}
+
+// TestFormatFailsOnAnItemNotOwningItsLine pins the formatter's one
+// fallback: it only copies or aligns source lines, so a tree that was not
+// parsed from the source it is given is an error, not a rebuilt line.
+func TestFormatFailsOnAnItemNotOwningItsLine(t *testing.T) {
+	t.Run("two directives on one line", func(t *testing.T) {
+		// The parser rejects this line, so only a hand-built tree holds it.
+		date, err := ast.NewDate("2020-01-01")
+		assert.NoError(t, err)
+		first := ast.NewOpen(date, "Assets:A", nil, "")
+		first.SetPosition(ast.Position{Filename: "main.beancount", Line: 1, Column: 12})
+		second := ast.NewOpen(date, "Assets:B", nil, "")
+		second.SetPosition(ast.Position{Filename: "main.beancount", Line: 1, Column: 37})
+		tree := &ast.AST{Directives: ast.Directives{first, second}}
+
+		var buf bytes.Buffer
+		err = New().Format(context.Background(), tree, []byte("2020-01-01 open Assets:A 2020-01-01 open Assets:B\n"), &buf)
+		assert.EqualError(t, err, "main.beancount:1:12: item does not own its source line; the source must be the text the AST was parsed from")
+		assert.Equal(t, "", buf.String())
+	})
+
+	t.Run("source other than the one parsed", func(t *testing.T) {
+		source := "2021-01-01 open Assets:Checking\n\n2021-01-02 * \"Lunch\"\n  Expenses:Food  10 USD\n  Assets:Checking\n"
+		tree := parser.MustParseString(context.Background(), source)
+
+		for name, other := range map[string]string{
+			"empty":         "",
+			"shorter":       "2021-01-01 open Assets:Checking\n",
+			"other posting": strings.Replace(source, "Expenses:Food", "Expenses:Fuel", 1),
+		} {
+			t.Run(name, func(t *testing.T) {
+				var buf bytes.Buffer
+				err := New().Format(context.Background(), tree, []byte(other), &buf)
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), "does not own its source line")
+				assert.Equal(t, "", buf.String())
+			})
+		}
+	})
 }

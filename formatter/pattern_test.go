@@ -54,12 +54,12 @@ func TestLinePattern(t *testing.T) {
 			},
 		},
 		{
-			name: "aligned posting whose line is not its own",
+			name: "posting whose line is not its own",
 			layout: func() lineLayout {
 				line, _, p := posting("  Assets:Cash  10.00 USD")
 				return postingLayout(line, false, p, 4)
 			},
-			want: lineLayout{kind: alignLine, prefix: "    Assets:Cash", number: "10.00", currency: "USD", prefixWidth: 13, numberWidth: 5},
+			want: lineLayout{kind: unownedLine},
 		},
 		{
 			name:   "number glued to its currency",
@@ -86,8 +86,8 @@ func TestLinePattern(t *testing.T) {
 		},
 		{
 			name:   "posting without an amount",
-			layout: postingLine("  Assets:Cash"),
-			want:   lineLayout{},
+			layout: postingLine("  Assets:Cash   ; c"),
+			want:   lineLayout{kind: accountLine, prefix: "    Assets:Cash"},
 		},
 		{
 			name:   "balance",
@@ -122,8 +122,15 @@ func TestLinePattern(t *testing.T) {
 		},
 		{
 			name:   "line the item does not own",
-			layout: func() lineLayout { return plainLayout(`2020-01-01 open Assets:A 2020-01-01 open Assets:B`, false) },
-			want:   lineLayout{},
+			layout: func() lineLayout { return plainLayout("2020-01-01 open Assets:A", false) },
+			want:   lineLayout{kind: unownedLine},
+		},
+		{
+			name: "balance whose line is not its own",
+			layout: func() lineLayout {
+				return datedLayout("", false, "2020-01-01 balance Assets:Cash", "100.00", "100.00", "USD")
+			},
+			want: lineLayout{kind: unownedLine},
 		},
 	}
 	for _, tt := range tests {
@@ -170,16 +177,4 @@ func TestSourceViewItemLine(t *testing.T) {
 			assert.Equal(t, tt.text, text)
 		})
 	}
-
-	t.Run("line holding more than one item", func(t *testing.T) {
-		first := &ast.Open{Account: "Assets:A"}
-		first.SetPosition(ast.Position{Line: 1, Column: 12})
-		second := &ast.Open{Account: "Assets:B"}
-		second.SetPosition(ast.Position{Line: 1, Column: 37})
-		tree := &ast.AST{Directives: ast.Directives{first, second}}
-		view := newSourceView([]byte("2020-01-01 open Assets:A 2020-01-01 open Assets:B\n"), tree)
-		text, owned := view.directiveLine(first)
-		assert.False(t, owned)
-		assert.Equal(t, "2020-01-01 open Assets:A 2020-01-01 open Assets:B", text)
-	})
 }
