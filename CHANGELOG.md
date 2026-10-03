@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0](https://github.com/robinvdvleuten/beancount/compare/v0.16.0...v0.17.0) (2026-10-03)
+
+
+### ⚠ BREAKING CHANGES
+
+* the Message field of parser.ParseError, ast.PushPopError and config.DeprecatedOptionError is now Msg, and the config errors and parser.ParseError no longer implement MarshalJSON.
+* **formatter:** Format requires the source the AST was parsed from, and WithStringEscapeStyle has no effect.
+* **ledger:** package ledger exports only what cli, web, query, printer, ledgerload and its external tests use.
+
+### Bug Fixes
+
+* **parser:** end a string token's line where a lone CR breaks it ([f37e53a](https://github.com/robinvdvleuten/beancount/commit/f37e53ac296fec674fb862eb30c975e6870f69fb))
+
+
+### Code Refactoring
+
+* **formatter:** fail on an item that does not own its line ([31e30ba](https://github.com/robinvdvleuten/beancount/commit/31e30ba896c5b82f0bd3e34ca566ff758cd0385a)), closes [#644](https://github.com/robinvdvleuten/beancount/issues/644)
+* give every positioned error of a loaded ledger one shape ([4110ce9](https://github.com/robinvdvleuten/beancount/commit/4110ce906005e2598a7b2288c53d8e2264e9b0f4)), closes [#643](https://github.com/robinvdvleuten/beancount/issues/643)
+* **ledger:** unexport the names no other package uses ([c745ea2](https://github.com/robinvdvleuten/beancount/commit/c745ea2af0a8ee4cc99e9d80842a0c3b05682ff6)), closes [#647](https://github.com/robinvdvleuten/beancount/issues/647)
+
 ## [0.16.0](https://github.com/robinvdvleuten/beancount/compare/v0.15.0...v0.16.0) (2026-10-03)
 
 
