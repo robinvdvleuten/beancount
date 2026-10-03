@@ -1,0 +1,1 @@
+SELECT date, currency, amount, amount.number AS n, meta('source') AS s FROM "prices" WHERE currency = 'HOOL' ORDER BY amount.number DESC

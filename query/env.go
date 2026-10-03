@@ -232,6 +232,7 @@ var tables = map[string]*environment{
 	entriesTable.table:      entriesTable,
 	emptyTable.table:        emptyTable,
 	transactionsTable.table: transactionsTable,
+	pricesTable.table:       pricesTable,
 }
 
 // unbuiltTables are beanquery's Tables not built yet, which a Table
@@ -239,7 +240,7 @@ var tables = map[string]*environment{
 // (KNOWN_GAPS.md).
 var unbuiltTables = map[string]bool{
 	"accounts": true, "balances": true, "commodities": true, "documents": true,
-	"events": true, "notes": true, "prices": true,
+	"events": true, "notes": true,
 }
 
 // txnColumn wraps a transaction accessor into an entry-environment column

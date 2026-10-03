@@ -1,0 +1,1 @@
+SELECT currency, count(*), last(amount) FROM prices OPEN ON 2023-02-15 GROUP BY currency ORDER BY currency

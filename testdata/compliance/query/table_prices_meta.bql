@@ -1,0 +1,1 @@
+SELECT meta, date FROM #prices LIMIT 2

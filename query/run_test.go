@@ -329,9 +329,6 @@ var errorFixtures = map[string]string{
 	"err_from_table_notes": `error: table "notes" is not supported
 | SELECT * FROM #notes
 |               ^^^^^^`,
-	"err_from_table_prices": `error: table "prices" is not supported
-| SELECT * FROM #prices
-|               ^^^^^^^`,
 	"err_from_table_quoted_expression": `error: syntax error
 | SELECT date FROM "year" = 2023 LIMIT 1
 |                         ^`,
@@ -350,6 +347,7 @@ var errorFixtures = map[string]string{
 	"err_table_transactions_any_meta": `error: column "entry" not found in table "transactions"
 | SELECT any_meta('x') FROM #transactions
 |        ^^^^^^^^^^^^^`,
+	"err_table_prices_has_account": `error: column "accounts" not found in table "prices"`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

@@ -1,0 +1,16 @@
+option "operating_currency" "USD"
+plugin "beancount.plugins.implicit_prices"
+
+2023-01-01 open Assets:Cash USD
+2023-01-01 open Assets:Invest
+2023-01-01 commodity HOOL
+
+2023-02-01 price HOOL 500.00 USD
+  source: "broker"
+2023-02-01 price HOOL 510 USD
+2023-01-15 price EUR 1.10 USD
+2023-03-01 price EUR 1.2 USD
+
+2023-03-05 * "Buy"
+  Assets:Invest  2 HOOL {520.00 USD}
+  Assets:Cash

@@ -139,7 +139,6 @@ var queryGaps = map[string]string{
 	"err_from_table_documents":   "#637, the documents Table is not built yet",
 	"err_from_table_events":      "#634, the events Table is not built yet",
 	"err_from_table_notes":       "#636, the notes Table is not built yet",
-	"err_from_table_prices":      "#633, the prices Table is not built yet",
 }
 
 // TestOfficialQueryParity compares our output byte-for-byte with bean-query
