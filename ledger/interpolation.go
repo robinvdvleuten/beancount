@@ -22,6 +22,9 @@ type interpolatedGroup struct {
 	// residuals holds, per currency, what the group's weights leave beyond
 	// the booked tolerances; it is empty when the group balances.
 	residuals map[string]decimal.Decimal
+	// errs are what interpolation reports on a group it still books, as
+	// beancount's interpolate_group keeps a group it cannot complete.
+	errs []error
 }
 
 // interpolatedPosting is what Booking commits for one posting of a group.
@@ -146,6 +149,16 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		if len(autoAmounts) > 0 {
 			amounts[autoPosting] = autoAmounts[0]
 		}
+	}
+
+	// Like beancount's interpolate_group, units cannot be solved for at a
+	// zero per-unit cost, as total braces have: the group is still booked,
+	// without the posting, and its residual reported.
+	var kept []error
+	if posting := currencyOnlyAmount; posting != nil && zeroPerUnitCost(posting.Cost) {
+		kept = append(kept, newCurrencyGroupError(txn, posting, "Cannot infer per-unit cost only from total"))
+		leftOut = append(leftOut, posting)
+		currencyOnlyAmount = nil
 	}
 
 	// Complete a currency-only amount: the missing number is the residual
@@ -283,6 +296,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	interpolated := &interpolatedGroup{
 		postings:  make([]interpolatedPosting, len(group.postings)),
 		residuals: residuals,
+		errs:      kept,
 	}
 	for i, posting := range group.postings {
 		interpolated.postings[i] = interpolatedPosting{
@@ -327,6 +341,22 @@ func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]Boo
 		return first
 	}
 	return nil
+}
+
+// zeroPerUnitCost reports whether a cost's per-unit number is zero, like
+// beancount's number_per of total braces ({{100 USD}}) or {0 # 100 USD}.
+func zeroPerUnitCost(cost *ast.Cost) bool {
+	if cost == nil {
+		return false
+	}
+	if cost.IsTotal {
+		return true
+	}
+	if cost.Amount == nil || cost.Amount.Value == "" {
+		return false
+	}
+	number, err := ParseAmount(cost.Amount)
+	return err == nil && number.IsZero()
 }
 
 // missingCostNumbers counts the numbers a cost leaves to Booking, like

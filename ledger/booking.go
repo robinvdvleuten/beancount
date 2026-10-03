@@ -196,7 +196,8 @@ func fixTotalCost(txn *ast.Transaction, posting *ast.Posting) []error {
 // price, or postings that cannot be sorted into groups. Otherwise the errors
 // are the Dropped groups (missing numbers that cannot be interpolated, a
 // reduction that matches no lot or several), whose postings leave txn while
-// the other groups are booked.
+// the other groups are booked, and what interpolation reports on a group it
+// still books.
 func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	if err := validateDateRange(txn.Date()); err != nil {
 		return nil, []error{err}
@@ -248,6 +249,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			errs = append(errs, groupErrs...)
 			continue
 		}
+		errs = append(errs, interpolated.errs...)
 		maps.Copy(staged, scratch.own)
 		maps.Copy(reductions, groupReductions)
 
@@ -369,8 +371,9 @@ func validateCosts(txn *ast.Transaction) []error {
 
 		// Validate total cost {{}} requirements; total braces without an
 		// amount ({{}}, {{*}}) are no total, and fixTotalCost makes them a
-		// per-unit cost.
-		if posting.Cost.IsTotal && posting.Cost.Amount != nil {
+		// per-unit cost. Missing units are interpolation's to report.
+		missingUnits := posting.Amount != nil && posting.Amount.Value == ""
+		if posting.Cost.IsTotal && posting.Cost.Amount != nil && !missingUnits {
 			if posting.Amount == nil {
 				errs = append(errs, newTotalCostError(txn, posting, "total cost requires a quantity"))
 				continue

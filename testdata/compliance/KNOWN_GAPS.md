@@ -24,6 +24,16 @@ USD (1 too little)`). We report the unknown account once and check nothing
 more. The lines agree. Like beancount v3, the balance is a use of its
 account for `doctor missing_open`.
 
+**Units that cannot be interpolated at a zero per-unit cost**
+(`cost_total_units_missing.fail`): for missing units in total braces
+(`HOOL {{100 USD}}`) or at `{0 # 100 USD}`, both implementations report
+`Cannot infer per-unit cost only from total` on the posting and book the
+rest of its group, whose residual both report on the transaction. beancount
+keeps the posting with its units missing, reports `Transaction has
+incomplete elements` on the transaction's line too, and fails with a
+`TypeError` when a later posting to the account is weighed against it; we
+leave the posting out of the booked transaction. The lines agree.
+
 **Merge cost on an augmentation**: both implementations report a merge
 cost `{*}` ("Cost merging is not supported yet"), and beancount then books
 it like `{}`: an augmentation at `{*}` gets the cost the transaction's

@@ -1,0 +1,45 @@
+; Missing units inside total braces are a missing number like any other:
+; beside an auto-posting there are too many, and on their own they cannot
+; be solved for at the zero per-unit cost total braces imply, which
+; beancount reports on the posting, booking the rest of the group and
+; reporting its residual. Each such posting has an account of its own:
+; bean-check keeps it incomplete and fails on a later posting to the
+; account.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Other
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Written
+2020-01-01 open Assets:Reduced
+2020-01-01 open Assets:Compound
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lot"
+  Assets:Reduced  10 HOOL {10 USD}
+  Equity:Open
+
+2020-02-01 * "Beside one auto-posting"
+  Assets:Cash
+  Assets:Stock  HOOL {{100 USD}}
+
+2020-02-02 * "Beside a written amount"
+  Assets:Cash     -100 USD
+  Assets:Written  HOOL {{100 USD}}
+
+2020-02-03 * "Where a reduction could be"
+  Assets:Cash     100 USD
+  Assets:Reduced  HOOL {{100 USD}}
+
+2020-02-04 * "Beside two auto-postings"
+  Assets:Cash
+  Assets:Other
+  Assets:Stock  HOOL {{100 USD}}
+
+2020-02-05 * "Currency only"
+  Assets:Cash   -100 USD
+  Assets:Stock  HOOL {{USD}}
+
+2020-02-06 * "Compound with a zero per-unit number"
+  Assets:Cash      -100 USD
+  Assets:Compound  HOOL {0 # 100 USD}
+
+2020-03-01 balance Assets:Cash  -100 USD

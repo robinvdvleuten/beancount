@@ -50,6 +50,9 @@ func interpolateLast(t *testing.T, source string) (lines, errs []string) {
 			assert.True(t, interpolated == nil, "a Dropped group has no result")
 			continue
 		}
+		for _, err := range interpolated.errs {
+			errs = append(errs, err.(*Diagnostic).Message())
+		}
 		assert.Equal(t, len(group.postings), len(interpolated.postings))
 		for i, posting := range interpolated.postings {
 			assert.True(t, posting.posting == group.postings[i], "one result per posting, in the group's order")
@@ -389,7 +392,14 @@ func TestInterpolate(t *testing.T) {
   Assets:Stock     HOOL {{1000.00 USD}}
   Assets:Cash   -1000.00 USD
 `,
-			wantErrs: []string{"Transaction does not balance: (-1000 USD)"},
+			// Like beancount, the group is booked without the posting,
+			// and its residual reported.
+			want: []string{
+				"USD: Assets:Stock left out",
+				"USD: Assets:Cash",
+				"USD: residual -1000 USD",
+			},
+			wantErrs: []string{"Cannot infer per-unit cost only from total"},
 		},
 		{
 			name: "a reduction with an empty cost spec booked against two lots",
