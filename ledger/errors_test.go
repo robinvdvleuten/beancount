@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
@@ -92,7 +92,7 @@ func TestErrorKinds(t *testing.T) {
 			assert.Equal(t, tt.kind, kindOf(tt.err))
 
 			prefix := "test.bean:" + map[int]string{10: "10", 11: "11"}[tt.line] + ": "
-			assert.True(t, strings.HasPrefix(tt.err.Error(), prefix), tt.err.Error())
+			assert.Equal(t, prefix+tt.err.(diagnostic.Positioned).Message(), tt.err.Error())
 
 			positioned := tt.err.(interface {
 				GetPosition() ast.Position

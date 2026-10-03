@@ -16,7 +16,6 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledgerload"
-	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/query"
 )
 
@@ -47,7 +46,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// query, given or piped, prints nothing (query.Run).
 	if len(cmd.Query) == 0 {
 		if cmd.File.Filename != "<stdin>" && term.IsTerminal(int(os.Stdin.Fd())) {
-			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, ctx.Stderr, result.Ledger.Diagnostics(), result.Sources)
+			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, ctx.Stderr, result.Ledger.Diagnostics(), newLedgerErrorRenderer(result))
 		}
 		piped, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -76,20 +75,16 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 func loadQueryContext(ctx context.Context, stderr io.Writer, file *FileOrStdin) (*query.Context, *ledgerload.Result, error) {
 	result, err := ledgerload.Load(ctx, file.Source())
 	if err != nil {
-		sourceContent, readErr := file.GetSourceContent()
-		if readErr != nil {
-			return nil, nil, fmt.Errorf("failed to read file for error context: %w", readErr)
-		}
-		_, _ = fmt.Fprintln(stderr, file.errorRenderer(sourceContent).Render(err))
-		return nil, nil, NewCommandError(1)
+		return nil, nil, file.reportLoadFailure(stderr, loadFailureBare, err)
 	}
 
+	// The load's errors are printed plain; the ledger's diagnostics, each
+	// with its directive or source lines.
 	for _, loadErr := range diagnostic.Errors(result.LoadDiagnostics) {
 		_, _ = fmt.Fprintln(stderr, loadErr.Error())
 	}
-	if diagnostics := result.Ledger.Diagnostics(); len(diagnostics) > 0 {
-		renderer := NewErrorRenderer(result.Sources, printer.WithBookedPositions(result.Ledger.BookedPositions))
-		_, _ = fmt.Fprintln(stderr, renderer.RenderAll(diagnostics))
+	if validationErrors := result.Ledger.Diagnostics(); len(validationErrors) > 0 {
+		_, _ = fmt.Fprintln(stderr, newLedgerErrorRenderer(result).RenderAll(validationErrors))
 	}
 	qctx := &query.Context{Ledger: result.Ledger, Config: result.Ledger.Config(), AST: result.AST}
 	return qctx, result, nil
@@ -135,7 +130,7 @@ func reportQueryError(stderr io.Writer, err error) error {
 
 // runShell is the interactive query REPL: one query per line, with help,
 // errors, and exit commands.
-func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out, errOut io.Writer, validationErrors []error, sources map[string][]byte) error {
+func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out, errOut io.Writer, validationErrors []error, renderer *ErrorRenderer) error {
 	printShellBanner(out, qctx.AST)
 
 	scanner := bufio.NewScanner(in)
@@ -161,7 +156,6 @@ func runShell(ctx context.Context, qctx *query.Context, format query.Format, num
 				_, _ = fmt.Fprintln(out, "(no errors)")
 				continue
 			}
-			renderer := NewErrorRenderer(sources, printer.WithBookedPositions(qctx.Ledger.BookedPositions))
 			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors))
 			continue
 		}

@@ -7,8 +7,8 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledgerload"
-	"github.com/robinvdvleuten/beancount/parser"
 )
 
 // checkJSONErrors returns the errors check --json prints: those of the
@@ -16,8 +16,7 @@ import (
 func checkJSONErrors(result *ledgerload.Result, loadErr error) []error {
 	switch joined := loadErr.(type) {
 	case nil:
-		loadErrors, validationErrors := ledgerErrors(result)
-		return append(loadErrors, validationErrors...)
+		return diagnostic.Errors(result.Diagnostics())
 	case interface{ Unwrap() []error }:
 		return joined.Unwrap()
 	default:
@@ -35,7 +34,7 @@ func writeJSONErrors(stdout io.Writer, errs []error) error {
 		if i > 0 {
 			b.WriteString(", ")
 		}
-		writeJSONError(&b, err)
+		writeJSONError(&b, positioned(err))
 	}
 	b.WriteString("]}\n")
 	if _, err := io.WriteString(stdout, b.String()); err != nil {
@@ -53,7 +52,12 @@ type missingFileError struct{ path string }
 
 func newMissingFileError(path string) *missingFileError { return &missingFileError{path: path} }
 
-func (e *missingFileError) Error() string {
+// Error has no Error line: bean-check prints the message alone.
+func (e *missingFileError) Error() string { return e.Message() }
+
+func (e *missingFileError) Kind() string { return "MissingFileError" }
+
+func (e *missingFileError) Message() string {
 	return "File \"" + e.path + "\" does not exist"
 }
 
@@ -61,29 +65,34 @@ func (e *missingFileError) GetPosition() ast.Position {
 	return ast.Position{Filename: "<load>"}
 }
 
-// writeJSONError writes one error as bean-check's _error_to_json does: its
-// message without the location, and a filename and lineno, null when the
-// error has no position.
-func writeJSONError(b *strings.Builder, err error) {
-	message := err.Error()
-	filename, lineno := "null", "null"
-	if positioned, ok := err.(interface{ GetPosition() ast.Position }); ok {
-		pos := positioned.GetPosition()
-		if pos.Filename != "" {
-			filename = pythonJSONString(pos.Filename)
-			lineno = strconv.Itoa(pos.Line)
-		}
-		message = strings.TrimPrefix(message, pos.String()+": ")
-		message = strings.TrimPrefix(message, fmt.Sprintf("%s:%d: ", pos.Filename, pos.Line))
+// unpositionedError gives an error without the shape, such as an I/O
+// failure, the shape of one that blames no file: its whole text is its
+// message.
+type unpositionedError struct{ error }
+
+func (e unpositionedError) Kind() string              { return "LoadError" }
+func (e unpositionedError) Message() string           { return e.Error() }
+func (e unpositionedError) GetPosition() ast.Position { return ast.Position{} }
+
+// positioned returns err in the shape every error of a loaded ledger has.
+func positioned(err error) diagnostic.Positioned {
+	if shaped, ok := err.(diagnostic.Positioned); ok {
+		return shaped
 	}
-	switch e := err.(type) {
-	case interface{ Message() string }:
-		message = e.Message()
-	case *parser.ParseError:
-		message = e.Message
+	return unpositionedError{err}
+}
+
+// writeJSONError writes one error as bean-check's _error_to_json does: its
+// message without the Error line, and a filename and lineno, null when the
+// error blames no file.
+func writeJSONError(b *strings.Builder, err diagnostic.Positioned) {
+	filename, lineno := "null", "null"
+	if pos := err.GetPosition(); pos.Filename != "" {
+		filename = pythonJSONString(pos.Filename)
+		lineno = strconv.Itoa(pos.Line)
 	}
 	b.WriteString(`{"message": `)
-	b.WriteString(pythonJSONString(message))
+	b.WriteString(pythonJSONString(err.Message()))
 	b.WriteString(`, "filename": `)
 	b.WriteString(filename)
 	b.WriteString(`, "lineno": `)

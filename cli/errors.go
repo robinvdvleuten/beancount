@@ -1,12 +1,15 @@
 package cli
 
 import (
+	"fmt"
+	"io"
 	"strings"
 	"unicode/utf8"
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/printer"
 )
@@ -30,6 +33,53 @@ type ErrorRenderer struct {
 // transaction's postings as booked, as bean-check does.
 func NewErrorRenderer(sources map[string][]byte, opts ...printer.Option) *ErrorRenderer {
 	return &ErrorRenderer{sources: sources, print: opts, lines: make(map[string][]string)}
+}
+
+// newLedgerErrorRenderer creates the renderer for the errors of a loaded
+// ledger: each in the context of the loaded file its position names and,
+// like bean-check, an error's transaction with its postings as booked.
+func newLedgerErrorRenderer(result *ledgerload.Result) *ErrorRenderer {
+	return NewErrorRenderer(result.Sources, printer.WithBookedPositions(result.Ledger.BookedPositions))
+}
+
+// loadFailureLayout is how a command lays out a load that cannot go on.
+type loadFailureLayout int
+
+const (
+	// loadFailureLabelled ends with a blank line and the label.
+	loadFailureLabelled loadFailureLayout = iota
+	// loadFailureCompact ends with the label, as format does.
+	loadFailureCompact
+	// loadFailureBare is the errors alone, as query prints them, like
+	// bean-query.
+	loadFailureBare
+)
+
+// printLoadFailure reports on stderr what stopped a load: each error in
+// the context of the source renderer has for it, then the layout's label.
+func printLoadFailure(stderr io.Writer, renderer *ErrorRenderer, layout loadFailureLayout, errs ...error) {
+	for _, err := range errs {
+		_, _ = fmt.Fprintln(stderr, renderer.Render(err))
+	}
+	if layout == loadFailureBare {
+		return
+	}
+	if layout == loadFailureLabelled {
+		_, _ = fmt.Fprintln(stderr)
+	}
+	printError(stderr, "parse error")
+}
+
+// reportLoadFailure reports on stderr a load of f that cannot go on, in
+// the context of its source, which it reads again, and returns the
+// command's failure.
+func (f *FileOrStdin) reportLoadFailure(stderr io.Writer, layout loadFailureLayout, err error) error {
+	source, readErr := f.GetSourceContent()
+	if readErr != nil {
+		return fmt.Errorf("failed to read file for error context: %w", readErr)
+	}
+	printLoadFailure(stderr, f.errorRenderer(source), layout, err)
+	return NewCommandError(1)
 }
 
 // Render formats a single error with styling and context: like bean-check,

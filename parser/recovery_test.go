@@ -198,7 +198,7 @@ func TestSkippedInvalidTokensAreReported(t *testing.T) {
 	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
 	var got []string
 	for _, e := range syntaxErrs {
-		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Message))
+		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Msg))
 	}
 	assert.Equal(t, []string{
 		`2:3 invalid token "a:"`,
@@ -226,7 +226,7 @@ func TestSkippedInvalidAccountNamesAreReported(t *testing.T) {
 	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
 	var got []string
 	for _, e := range syntaxErrs {
-		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Message))
+		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Msg))
 	}
 	assert.Equal(t, []string{
 		`2:3 invalid token "garbage"`,

@@ -1,8 +1,13 @@
-// Package diagnostic defines shared severity classification for errors emitted
-// while loading, configuring, and validating Beancount files.
+// Package diagnostic defines the shape and the severity classification
+// shared by the errors emitted while loading, configuring, and validating
+// Beancount files.
 package diagnostic
 
-import "errors"
+import (
+	"errors"
+
+	"github.com/robinvdvleuten/beancount/ast"
+)
 
 // Severity describes whether a diagnostic prevents successful processing.
 type Severity uint8
@@ -18,9 +23,25 @@ type Diagnostic interface {
 	Severity() Severity
 }
 
+// Positioned is the shape of every error a loaded ledger reports on a line:
+// syntax, load, option and ledger errors alike. Renderers read it instead of
+// matching on types or trimming Error's text. Its severity is SeverityOf: an
+// error unless the type declares another, which package ast, unable to
+// import this one, cannot do.
+type Positioned interface {
+	error
+	// Kind names the kind of error, e.g. "DuplicateIncludeError": the type
+	// the web API sends.
+	Kind() string
+	// Message is the error's text without its Error line.
+	Message() string
+	// GetPosition returns where the error is reported.
+	GetPosition() ast.Position
+}
+
 // SeverityOf returns an error's declared severity, unwrapping as needed so a
-// wrapped warning keeps its classification. Ordinary errors are fatal by
-// default so existing error types remain safe while being migrated.
+// wrapped warning keeps its classification. An error that declares no
+// severity is fatal.
 func SeverityOf(err error) Severity {
 	var d Diagnostic
 	if errors.As(err, &d) {

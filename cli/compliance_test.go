@@ -17,6 +17,7 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/formatter"
 	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
@@ -83,8 +84,7 @@ func TestComplianceFixtures(t *testing.T) {
 			if err == nil {
 				// Fatal load diagnostics fail a check like validation
 				// diagnostics do.
-				loadErrors, validationErrors := ledgerErrors(result)
-				err = errors.Join(append(loadErrors, validationErrors...)...)
+				err = errors.Join(diagnostic.Errors(result.Diagnostics())...)
 			}
 
 			if fixture.wantPass {
@@ -336,7 +336,7 @@ func TestNoFollowOnErrors(t *testing.T) {
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".fail.beancount"), func(t *testing.T) {
 			result, err := ledgerload.Load(context.Background(), loader.Source{Path: path})
 			assert.NoError(t, err)
-			loadErrors, validationErrors := ledgerErrors(result)
+			loadErrors, validationErrors := diagnostic.Errors(result.LoadDiagnostics), result.Ledger.Diagnostics()
 			assert.Equal(t, 0, len(loadErrors), "%v", loadErrors)
 			assert.Equal(t, 1, len(validationErrors), "%v", validationErrors)
 

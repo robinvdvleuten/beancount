@@ -63,6 +63,14 @@ func Load(ctx context.Context, src loader.Source) (*Result, error) {
 	return result, nil
 }
 
+// Diagnostics returns everything the ledger reports, errors and warnings
+// alike, as one new list in the order they are shown: the LoadDiagnostics,
+// then the Ledger's. It is for a caller that reports both alike, such as
+// check --json and the web server; one that renders them apart reads each.
+func (r *Result) Diagnostics() []error {
+	return slices.Concat(r.LoadDiagnostics, r.Ledger.Diagnostics())
+}
+
 // With returns the ledger processed again with directives added to it, as
 // they would be if the loaded files held them, in a Ledger of its own. The
 // load is not repeated: Process leaves the loaded tree as it was.

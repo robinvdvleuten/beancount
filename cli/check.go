@@ -11,11 +11,9 @@ import (
 
 	"github.com/alecthomas/kong"
 
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/parser"
-	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -63,18 +61,9 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		return writeJSONErrors(ctx.Stdout, checkJSONErrors(result, err))
 	}
 	if err != nil {
-		sourceContent, readErr := cmd.File.GetSourceContent()
-		if readErr != nil {
-			return fmt.Errorf("failed to read file for error context: %w", readErr)
-		}
-		formatted := cmd.File.errorRenderer(sourceContent).Render(err)
-		_, _ = fmt.Fprintln(ctx.Stderr, formatted)
-
-		_, _ = fmt.Fprintln(ctx.Stderr)
-		printError(ctx.Stderr, "parse error")
-
+		failed := cmd.File.reportLoadFailure(ctx.Stderr, loadFailureLabelled, err)
 		reportTelemetry()
-		return NewCommandError(1)
+		return failed
 	}
 	if errorCount := checkLedger(ctx.Stderr, result, cmd.File.GetAbsoluteFilename()); errorCount > 0 {
 		reportTelemetry()
@@ -93,9 +82,10 @@ func checkLedger(stderr io.Writer, result *ledgerload.Result, mainFile string) i
 	for _, warning := range diagnostic.Warnings(result.LoadDiagnostics) {
 		printInfof(stderr, "%s", warning)
 	}
-	loadErrors, validationErrors := ledgerErrors(result)
-	// Like bean-check, an error's transaction shows its postings as booked.
-	renderer := NewErrorRenderer(result.Sources, printer.WithBookedPositions(result.Ledger.BookedPositions))
+	// The load's errors are printed plain; the ledger's, each with its
+	// directive or source lines, and counted.
+	loadErrors, validationErrors := diagnostic.Errors(result.LoadDiagnostics), result.Ledger.Diagnostics()
+	renderer := newLedgerErrorRenderer(result)
 	for _, loadErr := range loadErrors {
 		// A syntax error in the main file is shown in its source context,
 		// like a failed load.
@@ -105,7 +95,7 @@ func checkLedger(stderr io.Writer, result *ledgerload.Result, mainFile string) i
 		}
 		// A positioned error already starts with "path:line:", which editors
 		// jump to only when it starts the line.
-		if _, ok := loadErr.(interface{ GetPosition() ast.Position }); ok {
+		if _, ok := loadErr.(diagnostic.Positioned); ok {
 			_, _ = fmt.Fprintln(stderr, errorStyle.Render(loadErr.Error()))
 			continue
 		}
@@ -121,10 +111,4 @@ func checkLedger(stderr io.Writer, result *ledgerload.Result, mainFile string) i
 		return total
 	}
 	return len(loadErrors)
-}
-
-// ledgerErrors returns the errors check reports for a loaded ledger, in its
-// order: the fatal load diagnostics, then every validation diagnostic.
-func ledgerErrors(result *ledgerload.Result) (loadErrors, validationErrors []error) {
-	return diagnostic.Errors(result.LoadDiagnostics), result.Ledger.Diagnostics()
 }

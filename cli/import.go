@@ -67,9 +67,7 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 		if readErr != nil {
 			return fmt.Errorf("failed to read %s: %w", cmd.Ledger, readErr)
 		}
-		_, _ = fmt.Fprintln(ctx.Stderr, NewErrorRenderer(map[string][]byte{cmd.Ledger: source}).Render(err))
-		_, _ = fmt.Fprintln(ctx.Stderr)
-		printError(ctx.Stderr, "parse error")
+		printLoadFailure(ctx.Stderr, NewErrorRenderer(map[string][]byte{cmd.Ledger: source}), loadFailureLabelled, err)
 		return NewCommandError(1)
 	}
 
@@ -95,12 +93,7 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 		if !stdErrors.As(err, &syntaxErrs) {
 			syntaxErrs = parser.ParseErrors{parser.NewParseErrorWithSource(extractedName, err, text)}
 		}
-		renderer := NewErrorRenderer(map[string][]byte{extractedName: text})
-		for _, syntaxErr := range syntaxErrs {
-			_, _ = fmt.Fprintln(ctx.Stderr, renderer.Render(syntaxErr))
-		}
-		_, _ = fmt.Fprintln(ctx.Stderr)
-		printError(ctx.Stderr, "parse error")
+		printLoadFailure(ctx.Stderr, NewErrorRenderer(map[string][]byte{extractedName: text}), loadFailureLabelled, syntaxErrs.Unwrap()...)
 		return NewCommandError(1)
 	}
 

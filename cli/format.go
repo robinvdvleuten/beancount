@@ -116,10 +116,7 @@ func (cmd *FormatCmd) format(ctx context.Context, stderr io.Writer, file *FileOr
 
 	loadResult, err := loader.New().Load(ctx, file.Source())
 	if err != nil {
-		formatted := file.errorRenderer(sourceContent).Render(err)
-		_, _ = fmt.Fprint(stderr, formatted)
-		_, _ = fmt.Fprintln(stderr)
-		printError(stderr, "parse error")
+		printLoadFailure(stderr, file.errorRenderer(sourceContent), loadFailureCompact, err)
 		return false, nil
 	}
 	for _, warning := range loadResult.Diagnostics {

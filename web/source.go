@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 
-	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 )
 
 // writeJSONResponse writes a JSON response to the http.ResponseWriter.
@@ -38,19 +38,34 @@ type SourceResponse struct {
 	Files       Files   `json:"files"`
 }
 
+// sourceError is an error without the shape, such as an I/O failure, as
+// the web API sends it.
 type sourceError struct {
-	Type     string        `json:"type"`
-	Message  string        `json:"message"`
-	Position *ast.Position `json:"position,omitempty"`
+	Type    string `json:"type"`
+	Message string `json:"message"`
 }
 
 func (e *sourceError) Error() string {
 	return e.Message
 }
 
+// positionedError is an error of a loaded ledger as the web API sends it:
+// its kind as type, its message starting with its Error line, and its
+// position, so the editor marks its line.
+type positionedError struct{ diagnostic.Positioned }
+
+func (e positionedError) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]any{
+		"type":     e.Kind(),
+		"message":  e.Error(),
+		"position": e.GetPosition(),
+	})
+}
+
 // jsonSafeSourceError returns err as the web API marshals it: as itself
-// when it marshals itself, otherwise as a LoadError with its message and,
-// when it has one, its position, so the editor marks its line.
+// when it marshals itself (a ledger error, which adds its account and
+// date), from its shape when it has one, and otherwise as a LoadError with
+// its message.
 func jsonSafeSourceError(err error) error {
 	if err == nil {
 		return nil
@@ -58,16 +73,10 @@ func jsonSafeSourceError(err error) error {
 	if _, ok := err.(json.Marshaler); ok {
 		return err
 	}
-	sourceErr := &sourceError{
-		Type:    "LoadError",
-		Message: err.Error(),
+	if positioned, ok := err.(diagnostic.Positioned); ok {
+		return positionedError{positioned}
 	}
-	if positioned, ok := err.(interface{ GetPosition() ast.Position }); ok {
-		if pos := positioned.GetPosition(); pos.Filename != "" {
-			sourceErr.Position = &pos
-		}
-	}
-	return sourceErr
+	return &sourceError{Type: "LoadError", Message: err.Error()}
 }
 
 // computeFingerprint returns a short hash of content for change detection.
@@ -132,10 +141,7 @@ func (s *Server) buildResponse(source []byte) *SourceResponse {
 	if s.reloadErr != nil {
 		errors = []error{s.reloadErr}
 	} else {
-		errors = append(errors, s.loadErrors...)
-		if s.ledger != nil {
-			errors = append(errors, s.ledger.Errors()...)
-		}
+		errors = append(errors, s.ledgerErrors...)
 	}
 	return &SourceResponse{
 		Source:      string(source),

@@ -46,6 +46,8 @@ func (e *Diagnostic) atPosting(posting *ast.Posting) *Diagnostic {
 	return e
 }
 
+var _ diagnostic.Positioned = (*Diagnostic)(nil)
+
 // Kind names the kind of error, e.g. "AccountNotOpenError".
 func (e *Diagnostic) Kind() string { return e.kind }
 

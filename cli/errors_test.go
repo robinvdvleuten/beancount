@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,7 +12,10 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -30,7 +35,7 @@ func TestErrorRenderer_RenderParseErrorWithSourceContext(t *testing.T) {
 			Line:     6, // 1-based line number (0-based index 5)
 			Column:   49,
 		},
-		Message: "expected currency",
+		Msg: "expected currency",
 		SourceRange: parser.SourceRange{
 			StartOffset: 0,
 			EndOffset:   len(sourceContent),
@@ -73,7 +78,7 @@ func TestErrorRenderer_RenderParseErrorWithoutSourceContext(t *testing.T) {
 			Line:     6,
 			Column:   49,
 		},
-		Message: "expected currency",
+		Msg: "expected currency",
 		// SourceRange is empty (Source is nil)
 	}
 
@@ -360,3 +365,52 @@ type positionedError struct {
 
 func (e positionedError) Error() string             { return e.message }
 func (e positionedError) GetPosition() ast.Position { return e.pos }
+
+// TestPositionedErrors checks the shape of every positioned error outside
+// package ledger (whose kinds TestErrorKinds covers): its kind, and that its
+// text is its Error line, ": " and its message.
+func TestPositionedErrors(t *testing.T) {
+	tree, err := parser.ParseBytesWithFilename(context.Background(), "main.beancount", []byte(
+		"option \"inferred_tolerance_multiplier\" \"x\"\ninclude \"sub*.beancount\"\n"))
+	assert.NoError(t, err)
+	option, include := tree.Options[0], tree.Includes[0]
+	pos := ast.Position{Filename: "main.beancount", Line: 6, Column: 49}
+
+	for _, tt := range []struct {
+		err       error
+		kind      string
+		errorLine string
+		message   string
+		severity  diagnostic.Severity
+	}{
+		{&config.RenamedOptionError{Option: option}, "RenamedOptionError", "main.beancount:1", "Renamed to 'tolerance_multiplier'.", diagnostic.SeverityError},
+		{&config.DeprecatedOptionError{Option: option, Msg: "going away"}, "DeprecatedOptionError", "main.beancount:1", "going away", diagnostic.SeverityError},
+		{&config.InvalidOptionError{Option: option}, "InvalidOptionError", "main.beancount:1", "Invalid option: 'inferred_tolerance_multiplier'", diagnostic.SeverityError},
+		{&config.InvalidOptionError{Option: option, Reserved: true}, "InvalidOptionError", "main.beancount:1", "Option 'inferred_tolerance_multiplier' may not be set", diagnostic.SeverityError},
+		{&config.OptionValueError{Option: option, Err: errors.New("boom")}, "OptionValueError", "main.beancount:1", "Error for option 'tolerance_multiplier': boom", diagnostic.SeverityError},
+		{&loader.IncludedOptionWarning{Option: option}, "IncludedOptionWarning", "main.beancount:1", `option "inferred_tolerance_multiplier" from included file is ignored`, diagnostic.SeverityWarning},
+		{&loader.IncludeGlobNoMatchError{Include: include}, "IncludeGlobNoMatchError", "main.beancount:2", `File glob "sub*.beancount" does not match any files`, diagnostic.SeverityError},
+		{&loader.DuplicateIncludeError{Include: include, Path: "sub.beancount"}, "DuplicateIncludeError", "main.beancount:2", `Duplicate filename parsed: "sub.beancount"`, diagnostic.SeverityError},
+		{&loader.DocumentRootError{Option: option, Dir: "/docs"}, "DocumentRootError", "main.beancount:1", "Document root '/docs' does not exist", diagnostic.SeverityError},
+		// A syntax error's Error line has the column.
+		{&parser.ParseError{Pos: pos, Msg: "expected currency"}, "ParseError", "main.beancount:6:49", "expected currency", diagnostic.SeverityError},
+		{&ast.PushPopError{Pos: pos, Msg: "Unbalanced pushed tag: 'trip'"}, "PushPopError", "main.beancount:6", "Unbalanced pushed tag: 'trip'", diagnostic.SeverityError},
+		// bean-check prints a missing file without an Error line.
+		{newMissingFileError("/x.beancount"), "MissingFileError", "", `File "/x.beancount" does not exist`, diagnostic.SeverityError},
+	} {
+		t.Run(tt.kind, func(t *testing.T) {
+			shaped, ok := tt.err.(diagnostic.Positioned)
+			assert.True(t, ok, "%T lacks the shape", tt.err)
+			assert.Equal(t, tt.kind, shaped.Kind())
+			assert.Equal(t, tt.message, shaped.Message())
+			assert.Equal(t, tt.severity, diagnostic.SeverityOf(tt.err))
+
+			want := tt.message
+			if tt.errorLine != "" {
+				want = tt.errorLine + ": " + tt.message
+				assert.Equal(t, strings.SplitN(tt.errorLine, ":", 2)[0], shaped.GetPosition().Filename)
+			}
+			assert.Equal(t, want, tt.err.Error())
+		})
+	}
+}

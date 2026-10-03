@@ -86,14 +86,7 @@ func (cmd *MissingOpenCmd) Run(ctx *kong.Context) error {
 	// still uses its accounts.
 	result, err := ledgerload.Load(runCtx, cmd.File.Source())
 	if err != nil {
-		sourceContent, readErr := cmd.File.GetSourceContent()
-		if readErr != nil {
-			return fmt.Errorf("failed to read file for error context: %w", readErr)
-		}
-		_, _ = fmt.Fprintln(ctx.Stderr, cmd.File.errorRenderer(sourceContent).Render(err))
-		_, _ = fmt.Fprintln(ctx.Stderr)
-		printError(ctx.Stderr, "parse error")
-		return NewCommandError(1)
+		return cmd.File.reportLoadFailure(ctx.Stderr, loadFailureLabelled, err)
 	}
 
 	opens := ledger.MissingOpens(result.AST)

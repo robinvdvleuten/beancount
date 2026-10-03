@@ -167,14 +167,23 @@ type positionedItem struct {
 
 // PushPopError reports a pushed tag or metadata key left open at the end of
 // a file, or a pop of one that is not pushed.
+//
+// It has the shape of diagnostic.Positioned, which this package cannot
+// import.
 type PushPopError struct {
-	Pos     Position
-	Message string
+	Pos Position
+	Msg string
 }
 
 func (e *PushPopError) Error() string {
-	return fmt.Sprintf("%s:%d: %s", e.Pos.Filename, e.Pos.Line, e.Message)
+	return fmt.Sprintf("%s:%d: %s", e.Pos.Filename, e.Pos.Line, e.Msg)
 }
+
+// Kind names the kind of error.
+func (e *PushPopError) Kind() string { return "PushPopError" }
+
+// Message is the error's text without its Error line.
+func (e *PushPopError) Message() string { return e.Msg }
 
 // GetPosition returns the position of the offending push or pop directive.
 func (e *PushPopError) GetPosition() Position { return e.Pos }
@@ -263,8 +272,8 @@ func ApplyPushPopDirectives(ast *AST) []error {
 			}
 			if !popped {
 				errs = append(errs, &PushPopError{
-					Pos:     item.poptag.Position(),
-					Message: fmt.Sprintf("Attempting to pop absent tag: '%s'", string(item.poptag.Tag)),
+					Pos: item.poptag.Position(),
+					Msg: fmt.Sprintf("Attempting to pop absent tag: '%s'", string(item.poptag.Tag)),
 				})
 			}
 
@@ -286,8 +295,8 @@ func ApplyPushPopDirectives(ast *AST) []error {
 				}
 			} else {
 				errs = append(errs, &PushPopError{
-					Pos:     item.popmeta.Position(),
-					Message: fmt.Sprintf("Attempting to pop absent metadata key: '%s'", key),
+					Pos: item.popmeta.Position(),
+					Msg: fmt.Sprintf("Attempting to pop absent metadata key: '%s'", key),
 				})
 			}
 
@@ -308,8 +317,8 @@ func ApplyPushPopDirectives(ast *AST) []error {
 
 	for _, pushed := range activeTags {
 		errs = append(errs, &PushPopError{
-			Pos:     pushed.Position(),
-			Message: fmt.Sprintf("Unbalanced pushed tag: '%s'", string(pushed.Tag)),
+			Pos: pushed.Position(),
+			Msg: fmt.Sprintf("Unbalanced pushed tag: '%s'", string(pushed.Tag)),
 		})
 	}
 	for _, key := range metadataKeys {
@@ -322,8 +331,8 @@ func ApplyPushPopDirectives(ast *AST) []error {
 			values[i] = pushed.metadataValue().String()
 		}
 		errs = append(errs, &PushPopError{
-			Pos:     stack[0].Position(),
-			Message: fmt.Sprintf("Unbalanced metadata key '%s'; leftover metadata '%s'", key, strings.Join(values, ", ")),
+			Pos: stack[0].Position(),
+			Msg: fmt.Sprintf("Unbalanced metadata key '%s'; leftover metadata '%s'", key, strings.Join(values, ", ")),
 		})
 	}
 

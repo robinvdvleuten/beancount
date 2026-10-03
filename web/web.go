@@ -48,7 +48,7 @@ type Server struct {
 	rootFile     string         // Absolute path of the root ledger file
 	includeFiles []string       // Absolute paths of included files
 	reloadErr    error          // Last error that stopped a load, such as a missing file
-	loadErrors   []error        // Errors of the last load that went on, syntax errors among them
+	ledgerErrors []error        // Errors of the last load that went on: its load errors, then the ledger's
 
 	// inputFile is the file path passed to New(), used only for initial loading.
 	// After loading, rootFile contains the resolved absolute path.
@@ -228,24 +228,24 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 		}
 		s.mu.Lock()
 		s.reloadErr = jsonSafeSourceError(err)
-		s.loadErrors = nil
+		s.ledgerErrors = nil
 		s.mu.Unlock()
 		return nil, err // I/O error
 	}
-	loadErrors := diagnostic.Errors(result.LoadDiagnostics)
-	for i, loadErr := range loadErrors {
-		loadErrors[i] = jsonSafeSourceError(loadErr)
+	ledgerErrors := diagnostic.Errors(result.Diagnostics())
+	for i, ledgerErr := range ledgerErrors {
+		ledgerErrors[i] = jsonSafeSourceError(ledgerErr)
 	}
 
 	s.mu.Lock()
 	oldIncludes = s.includeFiles
-	s.ledger = result.Ledger // Validation errors in Ledger.Errors()
+	s.ledger = result.Ledger
 	s.config = result.Ledger.Config()
 	s.ast = result.AST
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes
 	s.reloadErr = nil
-	s.loadErrors = loadErrors
+	s.ledgerErrors = ledgerErrors
 	s.mu.Unlock()
 
 	return oldIncludes, nil

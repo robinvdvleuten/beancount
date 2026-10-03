@@ -57,14 +57,24 @@ type LoadResult struct {
 	Sources map[string][]byte
 }
 
+// errorAt returns a load error's text: its Error line, then the message.
+func errorAt(pos ast.Position, message string) string {
+	return fmt.Sprintf("%s:%d: %s", pos.Filename, pos.Line, message)
+}
+
 // IncludedOptionWarning reports an option ignored because it came from an included file.
 type IncludedOptionWarning struct {
 	Option *ast.Option
 }
 
-func (w *IncludedOptionWarning) Error() string {
-	position := w.Option.Position()
-	return fmt.Sprintf("%s:%d: option %q from included file is ignored", position.Filename, position.Line, w.Option.Name.Value)
+func (w *IncludedOptionWarning) Error() string { return errorAt(w.Option.Position(), w.Message()) }
+
+// Kind names the kind of warning.
+func (w *IncludedOptionWarning) Kind() string { return "IncludedOptionWarning" }
+
+// Message is the warning's text without its Error line.
+func (w *IncludedOptionWarning) Message() string {
+	return fmt.Sprintf("option %q from included file is ignored", w.Option.Name.Value)
 }
 
 func (w *IncludedOptionWarning) Severity() diagnostic.Severity {
@@ -80,9 +90,14 @@ type IncludeGlobNoMatchError struct {
 	Include *ast.Include
 }
 
-func (e *IncludeGlobNoMatchError) Error() string {
-	pos := e.Include.Position()
-	return fmt.Sprintf("%s:%d: File glob %q does not match any files", pos.Filename, pos.Line, e.Include.Filename.Value)
+func (e *IncludeGlobNoMatchError) Error() string { return errorAt(e.Include.Position(), e.Message()) }
+
+// Kind names the kind of error.
+func (e *IncludeGlobNoMatchError) Kind() string { return "IncludeGlobNoMatchError" }
+
+// Message is the error's text without its Error line.
+func (e *IncludeGlobNoMatchError) Message() string {
+	return fmt.Sprintf("File glob %q does not match any files", e.Include.Filename.Value)
 }
 
 // Severity is fatal: official beancount reports an unmatched include glob as an error.
@@ -98,9 +113,14 @@ type DuplicateIncludeError struct {
 	Path    string // The included path, relative to the including file
 }
 
-func (e *DuplicateIncludeError) Error() string {
-	pos := e.Include.Position()
-	return fmt.Sprintf("%s:%d: Duplicate filename parsed: %q", pos.Filename, pos.Line, e.Path)
+func (e *DuplicateIncludeError) Error() string { return errorAt(e.Include.Position(), e.Message()) }
+
+// Kind names the kind of error.
+func (e *DuplicateIncludeError) Kind() string { return "DuplicateIncludeError" }
+
+// Message is the error's text without its Error line.
+func (e *DuplicateIncludeError) Message() string {
+	return fmt.Sprintf("Duplicate filename parsed: %q", e.Path)
 }
 
 // Severity is fatal: official beancount reports a duplicate include as an error.
@@ -114,9 +134,14 @@ type DocumentRootError struct {
 	Dir    string
 }
 
-func (e *DocumentRootError) Error() string {
-	pos := e.Option.Position()
-	return fmt.Sprintf("%s:%d: Document root '%s' does not exist", pos.Filename, pos.Line, e.Dir)
+func (e *DocumentRootError) Error() string { return errorAt(e.Option.Position(), e.Message()) }
+
+// Kind names the kind of error.
+func (e *DocumentRootError) Kind() string { return "DocumentRootError" }
+
+// Message is the error's text without its Error line.
+func (e *DocumentRootError) Message() string {
+	return fmt.Sprintf("Document root '%s' does not exist", e.Dir)
 }
 
 // Severity is fatal: official beancount reports a missing document root as an error.

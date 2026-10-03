@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -11,7 +10,7 @@ import (
 // ParseError represents an error that occurred during parsing.
 type ParseError struct {
 	Pos         ast.Position
-	Message     string
+	Msg         string      // The message without its Error line
 	SourceRange SourceRange // Range in source for context extraction
 }
 
@@ -47,26 +46,24 @@ type SourceRange struct {
 }
 
 func (e *ParseError) Error() string {
-	return fmt.Sprintf("%s: %s", e.Pos, e.Message)
+	return fmt.Sprintf("%s: %s", e.Pos, e.Msg)
 }
+
+// Kind names the kind of error.
+func (e *ParseError) Kind() string { return "ParseError" }
+
+// Message is the error's text without its Error line.
+func (e *ParseError) Message() string { return e.Msg }
 
 func (e *ParseError) GetPosition() ast.Position {
 	return e.Pos
-}
-
-func (e *ParseError) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     "ParseError",
-		"message":  e.Error(),
-		"position": e.Pos,
-	})
 }
 
 // newErrorfWithSource creates a new parse error with formatted message and source range.
 func newErrorfWithSource(pos ast.Position, sourceRange SourceRange, format string, args ...any) *ParseError {
 	return &ParseError{
 		Pos:         pos,
-		Message:     fmt.Sprintf(format, args...),
+		Msg:         fmt.Sprintf(format, args...),
 		SourceRange: sourceRange,
 	}
 }
@@ -81,8 +78,8 @@ func NewParseError(filename string, err error) *ParseError {
 
 	// Otherwise, wrap it in a new ParseError
 	return &ParseError{
-		Pos:     ast.Position{Filename: filename, Line: 1, Column: 1},
-		Message: err.Error(),
+		Pos: ast.Position{Filename: filename, Line: 1, Column: 1},
+		Msg: err.Error(),
 	}
 }
 
@@ -106,8 +103,8 @@ func NewParseErrorWithSource(filename string, err error, source []byte) *ParseEr
 	// Otherwise, wrap it in a new ParseError with full source range
 	// For fallback errors, we include the entire source for context
 	return &ParseError{
-		Pos:     ast.Position{Filename: filename, Line: 1, Column: 1},
-		Message: err.Error(),
+		Pos: ast.Position{Filename: filename, Line: 1, Column: 1},
+		Msg: err.Error(),
 		SourceRange: SourceRange{
 			StartOffset: 0,
 			EndOffset:   len(source),

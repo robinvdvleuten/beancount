@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -28,6 +29,8 @@ func TestLoad(t *testing.T) {
 	// The syntax error is a load diagnostic, and the rest is processed.
 	assert.Equal(t, 1, len(result.LoadDiagnostics))
 	assert.Equal(t, 1, len(result.Ledger.Diagnostics()), "%v", result.Ledger.Diagnostics())
+	// Diagnostics lists the load's, then the ledger's.
+	assert.Equal(t, append(slices.Clone(result.LoadDiagnostics), result.Ledger.Diagnostics()...), result.Diagnostics())
 	assert.Equal(t, "Test", result.Ledger.Config().Title)
 	txn := result.AST.Directives[1].(*ast.Transaction)
 	assert.Equal(t, 1, len(result.Ledger.BookedPositions(txn.Postings[1])), "the processed tree's postings are booked")

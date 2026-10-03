@@ -2,7 +2,6 @@
 package config
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -173,7 +172,7 @@ func (c *Config) applyOption(option *ast.Option) []error {
 		name = current
 	}
 	if message, deprecated := deprecatedOptions[name]; deprecated {
-		errs = append(errs, &DeprecatedOptionError{Option: option, Message: message})
+		errs = append(errs, &DeprecatedOptionError{Option: option, Msg: message})
 	}
 	if err := c.apply(name, option.Value.Value); err != nil {
 		errs = append(errs, &OptionValueError{Option: option, Err: err})
@@ -263,38 +262,36 @@ type RenamedOptionError struct {
 	Option *ast.Option
 }
 
-func (e *RenamedOptionError) Error() string {
-	pos := e.Option.Position()
-	return fmt.Sprintf("%s:%d: Renamed to '%s'.", pos.Filename, pos.Line, currentName(e.Option.Name.Value))
+func (e *RenamedOptionError) Error() string { return optionError(e.Option, e.Message()) }
+
+// Kind names the kind of error.
+func (e *RenamedOptionError) Kind() string { return "RenamedOptionError" }
+
+// Message is the error's text without its Error line.
+func (e *RenamedOptionError) Message() string {
+	return fmt.Sprintf("Renamed to '%s'.", currentName(e.Option.Name.Value))
 }
 
 // GetPosition returns the source position of the renamed option directive.
 func (e *RenamedOptionError) GetPosition() ast.Position { return e.Option.Position() }
 
-// MarshalJSON renders the error for the web API.
-func (e *RenamedOptionError) MarshalJSON() ([]byte, error) {
-	return marshalOptionError("RenamedOptionError", e, e.Option)
-}
-
 // DeprecatedOptionError reports an option directive beancount deprecates,
 // in beancount's words. The option is still accepted.
 type DeprecatedOptionError struct {
-	Option  *ast.Option
-	Message string
+	Option *ast.Option
+	Msg    string
 }
 
-func (e *DeprecatedOptionError) Error() string {
-	pos := e.Option.Position()
-	return fmt.Sprintf("%s:%d: %s", pos.Filename, pos.Line, e.Message)
-}
+func (e *DeprecatedOptionError) Error() string { return optionError(e.Option, e.Msg) }
+
+// Kind names the kind of error.
+func (e *DeprecatedOptionError) Kind() string { return "DeprecatedOptionError" }
+
+// Message is the error's text without its Error line.
+func (e *DeprecatedOptionError) Message() string { return e.Msg }
 
 // GetPosition returns the source position of the deprecated option directive.
 func (e *DeprecatedOptionError) GetPosition() ast.Position { return e.Option.Position() }
-
-// MarshalJSON renders the error for the web API.
-func (e *DeprecatedOptionError) MarshalJSON() ([]byte, error) {
-	return marshalOptionError("DeprecatedOptionError", e, e.Option)
-}
 
 // InvalidOptionError reports an option directive official beancount rejects.
 type InvalidOptionError struct {
@@ -302,21 +299,21 @@ type InvalidOptionError struct {
 	Reserved bool
 }
 
-func (e *InvalidOptionError) Error() string {
-	pos := e.Option.Position()
+func (e *InvalidOptionError) Error() string { return optionError(e.Option, e.Message()) }
+
+// Kind names the kind of error.
+func (e *InvalidOptionError) Kind() string { return "InvalidOptionError" }
+
+// Message is the error's text without its Error line.
+func (e *InvalidOptionError) Message() string {
 	if e.Reserved {
-		return fmt.Sprintf("%s:%d: Option '%s' may not be set", pos.Filename, pos.Line, e.Option.Name.Value)
+		return fmt.Sprintf("Option '%s' may not be set", e.Option.Name.Value)
 	}
-	return fmt.Sprintf("%s:%d: Invalid option: '%s'", pos.Filename, pos.Line, e.Option.Name.Value)
+	return fmt.Sprintf("Invalid option: '%s'", e.Option.Name.Value)
 }
 
 // GetPosition returns the source position of the offending option directive.
 func (e *InvalidOptionError) GetPosition() ast.Position { return e.Option.Position() }
-
-// MarshalJSON renders the error for the web API.
-func (e *InvalidOptionError) MarshalJSON() ([]byte, error) {
-	return marshalOptionError("InvalidOptionError", e, e.Option)
-}
 
 func validateOptionName(option *ast.Option) error {
 	name := option.Name.Value
@@ -347,9 +344,14 @@ type OptionValueError struct {
 	Err    error
 }
 
-func (e *OptionValueError) Error() string {
-	pos := e.Option.Position()
-	return fmt.Sprintf("%s:%d: Error for option '%s': %v", pos.Filename, pos.Line, currentName(e.Option.Name.Value), e.Err)
+func (e *OptionValueError) Error() string { return optionError(e.Option, e.Message()) }
+
+// Kind names the kind of error.
+func (e *OptionValueError) Kind() string { return "OptionValueError" }
+
+// Message is the error's text without its Error line.
+func (e *OptionValueError) Message() string {
+	return fmt.Sprintf("Error for option '%s': %v", currentName(e.Option.Name.Value), e.Err)
 }
 
 func (e *OptionValueError) Unwrap() error { return e.Err }
@@ -357,19 +359,11 @@ func (e *OptionValueError) Unwrap() error { return e.Err }
 // GetPosition returns the source position of the offending option directive.
 func (e *OptionValueError) GetPosition() ast.Position { return e.Option.Position() }
 
-// MarshalJSON renders the error for the web API.
-func (e *OptionValueError) MarshalJSON() ([]byte, error) {
-	return marshalOptionError("OptionValueError", e, e.Option)
-}
-
-// marshalOptionError renders an option error in the shape the web API
-// gives every positioned error: its type, message and position.
-func marshalOptionError(kind string, err error, option *ast.Option) ([]byte, error) {
-	return json.Marshal(map[string]any{
-		"type":     kind,
-		"message":  err.Error(),
-		"position": option.Position(),
-	})
+// optionError returns an option error's text: the option's Error line, then
+// the message.
+func optionError(option *ast.Option, message string) string {
+	pos := option.Position()
+	return fmt.Sprintf("%s:%d: %s", pos.Filename, pos.Line, message)
 }
 
 // apply sets one option value, by the option's current name. Scalar

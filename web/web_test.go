@@ -609,6 +609,52 @@ func TestAPISourceOptionErrorsKeepTypeAndPosition(t *testing.T) {
 	assert.Equal(t, map[string]float64{"InvalidOptionError": 1, "OptionValueError": 2, "RenamedOptionError": 3}, lines)
 }
 
+func TestAPISourceLoadErrorsKeepTypeAndPosition(t *testing.T) {
+	// A load error reaches the editor under its own type, not as a
+	// LoadError, with the position its lint lands on.
+	dir := t.TempDir()
+	ledgerFile := filepath.Join(dir, "main.beancount")
+	source := "option \"documents\" \"nodir\"\n" +
+		"include \"nomatch*.beancount\"\n" +
+		"include \"sub.beancount\"\n" +
+		"include \"sub.beancount\"\n" +
+		"pushtag #trip\n"
+	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "sub.beancount"), []byte("2024-01-01 open Assets:Cash\n"), 0600))
+
+	server := New(8080, ledgerFile)
+	_, err := server.reloadLedger(context.Background())
+	assert.NoError(t, err)
+	mux, err := server.setupRouter()
+	assert.NoError(t, err)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	lines := map[string]float64{}
+	for _, raw := range decodeSourceResponse(t, rec)["errors"].([]any) {
+		sourceErr := raw.(map[string]any)
+		position, ok := sourceErr["position"].(map[string]any)
+		assert.True(t, ok, "error without position: %v", sourceErr)
+		assert.Equal[any](t, ledgerFile, position["filename"])
+		assert.True(t, strings.HasPrefix(sourceErr["message"].(string), ledgerFile+":"), "%v", sourceErr)
+		lines[sourceErr["type"].(string)] = position["line"].(float64)
+	}
+	assert.Equal(t, map[string]float64{
+		"DocumentRootError":       1,
+		"IncludeGlobNoMatchError": 2,
+		"DuplicateIncludeError":   4,
+		"PushPopError":            5,
+	}, lines)
+}
+
+func TestJSONSafeSourceErrorWithoutShapeIsALoadError(t *testing.T) {
+	data, err := json.Marshal(jsonSafeSourceError(os.ErrNotExist))
+	assert.NoError(t, err)
+	assert.Equal(t, `{"type":"LoadError","message":"file does not exist"}`, string(data))
+}
+
 func TestJSONSafeSourceErrorKeepsLedgerErrors(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), "2024-01-01 price HOOL 1 USD\n")
 	// A price without an amount, which the parser cannot produce, is the

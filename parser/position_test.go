@@ -60,9 +60,9 @@ func TestErrorPositioning(t *testing.T) {
 			assert.Equal(t, tt.expectedLine, parseErr.Pos.Line,
 				"error should be on line %d, got line %d: %s",
 				tt.expectedLine, parseErr.Pos.Line, parseErr.Error())
-			assert.True(t, strings.Contains(parseErr.Message, tt.expectedMsg),
+			assert.True(t, strings.Contains(parseErr.Msg, tt.expectedMsg),
 				"error message should contain %q, got %q",
-				tt.expectedMsg, parseErr.Message)
+				tt.expectedMsg, parseErr.Msg)
 		})
 	}
 }
