@@ -199,9 +199,16 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			Value:    formatInferredNumber(needed),
 			Currency: currency,
 		}
-		if weightCurrency == currency {
+		switch {
+		case weightCurrency == currency:
 			balance[currency] = pydecimal.Add(balance[currency], needed)
-		} else {
+		case posting.Cost != nil && posting.Cost.Total != nil && !needed.IsZero():
+			// Like beancount's, the units weigh at the compound's per-unit
+			// cost, which spreads its total over their absolute value: for
+			// negative units, that leaves twice the total as a residual.
+			perUnit = compoundCostNumber(perUnit, total, needed)
+			balance[weightCurrency] = pydecimal.Add(balance[weightCurrency], pydecimal.Mul(needed, perUnit))
+		default:
 			balance[weightCurrency] = pydecimal.Add(balance[weightCurrency], pydecimal.Add(pydecimal.Mul(needed, perUnit), total))
 		}
 	}

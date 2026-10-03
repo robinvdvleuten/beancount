@@ -1,0 +1,19 @@
+; Units interpolated at a compound cost weigh at the compound's per-unit
+; cost, which spreads its total over their absolute value, as beancount's
+; convert_costspec_to_cost does: negative units leave twice the total as a
+; residual, and 28-digit arithmetic can leave a residual of its own.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euros
+2020-01-01 open Assets:Stock
+
+2020-02-01 * "Negative units"
+  Assets:Cash   100 USD
+  Assets:Stock  HOOL {10 # 5 USD}
+
+2020-02-02 * "A residual of the arithmetic"
+  Assets:Euros  -83.33 EUR @ 1.2 USD
+  Assets:Stock  HOOL {10 # 5 USD}
+
+2020-02-03 * "Positive units balance"
+  Assets:Cash   -105 USD
+  Assets:Stock  HOOL {10 # 5 USD}
