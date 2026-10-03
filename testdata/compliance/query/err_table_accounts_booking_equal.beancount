@@ -1,0 +1,8 @@
+2023-01-01 open Assets:Cash USD,HOOL "FIFO"
+  note: "main"
+2023-01-01 open Assets:Bank
+2023-02-01 close Assets:Bank
+2023-03-01 close Liabilities:Card
+2023-01-01 open Assets:Cash EUR
+2022-12-01 open Expenses:Food "STRICT_WITH_SIZE"
+2022-12-15 open Expenses:Food

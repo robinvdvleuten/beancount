@@ -286,9 +286,6 @@ var errorFixtures = map[string]string{
 	"err_block_comment_unterminated": `error: syntax error
 | SELECT 1 /* closed */ + /* never closed
 |                         ^`,
-	"err_from_table_accounts": `error: table "accounts" is not supported
-| SELECT * FROM #accounts
-|               ^^^^^^^^^`,
 	"err_from_table_case_sensitive": `error: table "Postings" does not exist
 | SELECT date FROM "Postings" LIMIT 1
 |                  ^^^^^^^^^^`,
@@ -349,6 +346,17 @@ var errorFixtures = map[string]string{
 	"err_table_documents_has_account": `error: column "accounts" not found in table "documents"`,
 	"err_table_balances_entry_meta": `error: column "entry" not found in table "balances"
 | SELECT entry_meta('checked') FROM #balances
+|        ^^^^^^^^^^^^^^^^^^^^^`,
+	"err_table_accounts_equal": `error: operator "equal(open, open)" not supported
+| SELECT open = open FROM #accounts
+|        ^^^^^^^^^^^`,
+	"err_table_accounts_order_by_open":  `error: ORDER-BY a non-orderable type is not supported: "Column(name='open')"`,
+	"err_table_accounts_group_by_close": `error: GROUP-BY a non-hashable type is not supported: "Column(name='close')"`,
+	"err_table_accounts_meta": `error: column "meta" not found in table "accounts"
+| SELECT meta('x') FROM #accounts
+|        ^^^^^^^^^`,
+	"err_table_accounts_booking_equal": `error: operator "equal(booking, str)" not supported
+| SELECT open.booking = 'FIFO' FROM #accounts
 |        ^^^^^^^^^^^^^^^^^^^^^`,
 }
 

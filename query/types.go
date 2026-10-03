@@ -57,6 +57,14 @@ const (
 	// takes it beyond those that take any type, and a cell renders as
 	// Python's repr of it.
 	tFrozenset
+	// tOpen and tClose are the accounts table's open and close columns,
+	// beanquery's open and close structures of beancount's Open and Close,
+	// which hold an *ast.Open and an *ast.Close.
+	tOpen
+	tClose
+	// tBooking is an open's booking method, beancount's Booking enum, which
+	// holds a bookingValue.
+	tBooking
 	// tObject is a function parameter type only, beanquery's object: unlike
 	// tAny, its Any, it takes an untyped (tAny) argument or NULL alone.
 	tObject
@@ -84,6 +92,9 @@ var dtypeNames = map[dtype]string{
 	tTransaction: "transaction",
 	tAccountSet:  "set[str]",
 	tFrozenset:   "frozenset",
+	tOpen:        "open",
+	tClose:       "close",
+	tBooking:     "booking",
 }
 
 func (t dtype) String() string {
@@ -311,6 +322,8 @@ func pyValueRepr(v any) string {
 		return amountRepr(val)
 	case *dictValue:
 		return val.String()
+	case bookingValue:
+		return "<Booking." + string(val) + ": " + pyrepr.String(string(val)) + ">"
 	case *costValue:
 		var label any
 		if val.Label != "" {
@@ -410,6 +423,12 @@ func valueString(v any) string {
 		return val.String()
 	case *transactionValue:
 		return val.String()
+	case *ast.Open:
+		return openRepr(val)
+	case *ast.Close:
+		return closeRepr(val)
+	case bookingValue:
+		return "Booking." + string(val)
 	case *amountValue:
 		return fmt.Sprintf("%s %s", val.Number.String(), val.Currency)
 	case *positionValue:

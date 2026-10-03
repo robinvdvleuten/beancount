@@ -260,8 +260,9 @@ func (c *compiler) resolveGroupBy(sel *bql.Select, compiled *compiledSelect) err
 		}
 		// Sets, lists, dicts and inventories are unhashable in Python.
 		// beanquery fails with a Python TypeError on a frozenset, whose
-		// type it cannot check (KNOWN_GAPS.md).
-		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList || t == tDict || t == tMetadata || t == tFrozenset {
+		// type it cannot check, and on an open or a close, which hold a
+		// dict, when it hashes one (KNOWN_GAPS.md).
+		if t := compiled.Targets[idx].Type; t == tInventory || t == tSet || t == tList || t == tDict || t == tMetadata || t == tFrozenset || t == tOpen || t == tClose {
 			return statementErrorf(`GROUP-BY a non-hashable type is not supported: "%s"`, ref)
 		}
 		compiled.GroupBy = append(compiled.GroupBy, idx)
@@ -343,6 +344,11 @@ func (c *compiler) resolveOrderBy(sel *bql.Select, compiled *compiledSelect) err
 		idx, err := c.resolveTargetRef(term.Expr, compiled, limit)
 		if err != nil {
 			return err
+		}
+		// beanquery fails with a Python TypeError comparing the dicts an
+		// open or a close holds (KNOWN_GAPS.md).
+		if t := compiled.Targets[idx].Type; t == tOpen || t == tClose {
+			return statementErrorf(`ORDER-BY a non-orderable type is not supported: "%s"`, pyExprRepr(term.Expr))
 		}
 		compiled.OrderBy = append(compiled.OrderBy, orderKey{target: idx, desc: term.Desc})
 	}

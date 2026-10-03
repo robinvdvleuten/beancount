@@ -1,0 +1,1 @@
+SELECT open.meta, close.meta, length(open.currencies) AS n, open.account FROM #accounts ORDER BY account DESC

@@ -2,8 +2,11 @@ package query
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/robinvdvleuten/beancount/ledger"
 )
 
@@ -148,6 +151,130 @@ func balanceRows(ctx context.Context, qctx *Context, entries []ast.Directive, vi
 		}
 		visit(row)
 	})
+}
+
+// accountsTable has one row per account with an open or a close
+// directive, beancount's get_account_open_close: in the order of its
+// first, with its earliest open and its earliest close, the first of
+// several on one date. Bare accounts is a postings column, so only a Table
+// reference names it.
+var accountsTable = &environment{
+	columns: map[string]*columnDef{
+		"account": {tString, func(row *evalRow) any { return row.Record.(*accountRow).account }},
+		"open": {tOpen, func(row *evalRow) any {
+			if open := row.Record.(*accountRow).open; open != nil {
+				return open
+			}
+			return nil
+		}},
+		"close": {tClose, func(row *evalRow) any {
+			if closing := row.Record.(*accountRow).close; closing != nil {
+				return closing
+			}
+			return nil
+		}},
+	},
+	table:    "accounts",
+	wildcard: []string{"account", "open", "close"},
+	rows:     accountRows,
+}
+
+// accountRow is a row of the accounts table, its Record.
+type accountRow struct {
+	account string
+	open    *ast.Open
+	close   *ast.Close
+}
+
+// accountRows visits the accounts table's rows.
+func accountRows(ctx context.Context, qctx *Context, entries []ast.Directive, visit func(*evalRow)) error {
+	var rows []*accountRow
+	byAccount := make(map[ast.Account]*accountRow)
+	row := func(account ast.Account) *accountRow {
+		r, ok := byAccount[account]
+		if !ok {
+			r = &accountRow{account: string(account)}
+			byAccount[account] = r
+			rows = append(rows, r)
+		}
+		return r
+	}
+	for i, entry := range entries {
+		if err := checkCancelled(ctx, i); err != nil {
+			return err
+		}
+		switch directive := entry.(type) {
+		case *ast.Open:
+			if r := row(directive.Account); r.open == nil || directive.Date().Before(r.open.Date().Time) {
+				r.open = directive
+			}
+		case *ast.Close:
+			if r := row(directive.Account); r.close == nil || directive.Date().Before(r.close.Date().Time) {
+				r.close = directive
+			}
+		}
+	}
+	for _, r := range rows {
+		visit(&evalRow{Ctx: qctx, Record: r})
+	}
+	return nil
+}
+
+// bookingValue is an open's booking method, beancount's Booking enum
+// member, by its name.
+type bookingValue string
+
+// openAttributes are the attributes of beanquery's open structure,
+// beancount's Open.
+var openAttributes = map[string]attributeDef{
+	"meta":       {tMetadata, func(v any) any { return entryMeta(v.(*ast.Open)) }},
+	"date":       {tDate, func(v any) any { return v.(*ast.Open).Date() }},
+	"account":    {tString, func(v any) any { return string(v.(*ast.Open).Account) }},
+	"currencies": {tList, func(v any) any { return openCurrencies(v.(*ast.Open)) }},
+	"booking":    {tBooking, func(v any) any { return openBooking(v.(*ast.Open)) }},
+}
+
+// closeAttributes are the attributes of beanquery's close structure,
+// beancount's Close.
+var closeAttributes = map[string]attributeDef{
+	"meta":    {tMetadata, func(v any) any { return entryMeta(v.(*ast.Close)) }},
+	"date":    {tDate, func(v any) any { return v.(*ast.Close).Date() }},
+	"account": {tString, func(v any) any { return string(v.(*ast.Close).Account) }},
+}
+
+// openCurrencies is an open's constraint currencies, a listValue, NULL
+// without any, as beancount's None.
+func openCurrencies(open *ast.Open) any {
+	if len(open.ConstraintCurrencies) == 0 {
+		return nil
+	}
+	currencies := make(listValue, len(open.ConstraintCurrencies))
+	for i, currency := range open.ConstraintCurrencies {
+		currencies[i] = currency
+	}
+	return currencies
+}
+
+// openBooking is an open's booking method, a bookingValue, NULL when it
+// names none, or none beancount knows.
+func openBooking(open *ast.Open) any {
+	if !config.IsBookingMethod(open.BookingMethod) {
+		return nil
+	}
+	return bookingValue(open.BookingMethod)
+}
+
+// openRepr renders an open like Python's repr() of beancount's Open.
+func openRepr(open *ast.Open) string {
+	return fmt.Sprintf("Open(meta=%s, date=%s, account=%s, currencies=%s, booking=%s)",
+		entryMeta(open), pyValueRepr(open.Date()), pyrepr.String(string(open.Account)),
+		pyValueRepr(openCurrencies(open)), pyValueRepr(openBooking(open)))
+}
+
+// closeRepr renders a close like Python's repr() of beancount's Close.
+func closeRepr(closing *ast.Close) string {
+	return fmt.Sprintf("Close(meta=%s, date=%s, account=%s)",
+		entryMeta(closing), pyValueRepr(closing.Date()), pyrepr.String(string(closing.Account)))
 }
 
 var (

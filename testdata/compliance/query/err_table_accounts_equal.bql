@@ -1,0 +1,1 @@
+SELECT open = open FROM #accounts

@@ -31,32 +31,19 @@ func (c *compiler) compileSelectFrom(from *bql.From) (*environment, *compiledFro
 		return postingsTable, nil, nil
 	}
 	if from.Table != nil {
-		table, err := lookupTable(from.Table, from.Table.Name)
-		if err != nil {
-			return nil, nil, err
-		}
+		table := tables[from.Table.Name]
 		if table == nil {
 			return nil, nil, compileErrorf(from.Table, `table "%s" does not exist`, from.Table.Name)
 		}
 		return table, nil, nil
 	}
 	if ident, ok := from.Expr.(*bql.Ident); ok && postingsTable.columns[ident.Name] == nil {
-		table, err := lookupTable(ident, ident.Name)
-		if err != nil || table != nil {
-			return table, nil, err
+		if table := tables[ident.Name]; table != nil {
+			return table, nil, nil
 		}
 	}
 	compiled, err := c.compileFrom(from, postingsTable)
 	return postingsTable, compiled, err
-}
-
-// lookupTable returns the Table named name, nil when there is none, and an
-// error, at node, for one of beanquery's Tables not built yet.
-func lookupTable(node bql.Node, name string) (*environment, error) {
-	if unbuiltTables[name] {
-		return nil, compileErrorf(node, `table "%s" is not supported`, name)
-	}
-	return tables[name], nil
 }
 
 // compileFrom compiles a FROM clause, whose expression sees env: the

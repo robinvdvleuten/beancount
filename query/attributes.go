@@ -14,6 +14,8 @@ type attributeDef struct {
 // date) list their columns.
 var structures = map[dtype]map[string]attributeDef{
 	tTransaction: transactionAttributes,
+	tOpen:        openAttributes,
+	tClose:       closeAttributes,
 	tPosition: {
 		"units": {tAmount, func(v any) any {
 			units := v.(*positionValue).Units

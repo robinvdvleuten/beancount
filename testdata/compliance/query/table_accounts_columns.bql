@@ -1,0 +1,1 @@
+SELECT account, open.date, open.currencies, open.booking, str(open.booking) AS b, close.date, close.account FROM "accounts" WHERE close IS NULL OR open IS NULL

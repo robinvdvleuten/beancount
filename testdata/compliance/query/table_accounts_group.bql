@@ -1,0 +1,1 @@
+SELECT open.booking IS NULL AS nb, count(*), last(account) FROM #accounts GROUP BY nb ORDER BY nb
