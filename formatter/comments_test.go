@@ -198,28 +198,6 @@ func TestFormatPreservesTransactionBodyCommentsAndBlankLines(t *testing.T) {
 	assert.True(t, bytes.Contains([]byte(result), []byte("; comment between postings\n\n  Expenses:Food")))
 }
 
-func TestFormatCanDropTransactionBodyTrivia(t *testing.T) {
-	source := `2024-01-02 * "Test"
-  ; comment before first posting
-  Assets:Cash  -10 USD
-
-  Expenses:Food  10 USD
-`
-
-	tree := parser.MustParseBytes(context.Background(), []byte(source))
-
-	f := New(WithPreserveComments(false), WithPreserveBlanks(false))
-	output := bytes.NewBufferString("")
-	err := f.Format(context.Background(), tree, []byte(source), output)
-	assert.NoError(t, err)
-
-	result := output.String()
-	assert.True(t, !bytes.Contains([]byte(result), []byte("; comment before first posting")))
-	assert.True(t, !bytes.Contains([]byte(result), []byte("\n\n")))
-	assert.True(t, bytes.Contains([]byte(result), []byte("Assets:Cash")))
-	assert.True(t, bytes.Contains([]byte(result), []byte("Expenses:Food")))
-}
-
 func TestFormatPreservesOneLegTransaction(t *testing.T) {
 	source := `2024-01-02 * "In progress"
   Assets:Cash  -10 USD

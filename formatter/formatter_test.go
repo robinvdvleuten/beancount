@@ -11,88 +11,16 @@ import (
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
-func TestDirectiveKeywordWidth(t *testing.T) {
-	tests := []struct {
-		name      string
-		directive ast.Directive
-		expected  int
-	}{
-		{
-			name:      "Balance",
-			directive: &ast.Balance{},
-			expected:  8, // "balance" (7) + space (1)
-		},
-		{
-			name:      "Price",
-			directive: &ast.Price{},
-			expected:  6, // "price" (5) + space (1)
-		},
-		{
-			name:      "Open",
-			directive: &ast.Open{},
-			expected:  5, // "open" (4) + space (1)
-		},
-		{
-			name:      "Close",
-			directive: &ast.Close{},
-			expected:  6, // "close" (5) + space (1)
-		},
-		{
-			name:      "Commodity",
-			directive: &ast.Commodity{},
-			expected:  10, // "commodity" (9) + space (1)
-		},
-		{
-			name:      "Pad",
-			directive: &ast.Pad{},
-			expected:  4, // "pad" (3) + space (1)
-		},
-		{
-			name:      "Note",
-			directive: &ast.Note{},
-			expected:  5, // "note" (4) + space (1)
-		},
-		{
-			name:      "Document",
-			directive: &ast.Document{},
-			expected:  9, // "document" (8) + space (1)
-		},
-		{
-			name:      "Event",
-			directive: &ast.Event{},
-			expected:  6, // "event" (5) + space (1)
-		},
-		{
-			name:      "Custom",
-			directive: &ast.Custom{},
-			expected:  7, // "custom" (6) + space (1)
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := directiveKeywordWidth(tt.directive)
-			assert.Equal(t, tt.expected, got)
-		})
-	}
-}
-
 func TestNew(t *testing.T) {
 	t.Run("DefaultOptions", func(t *testing.T) {
 		f := New()
 		assert.NotEqual(t, nil, f)
 		assert.Equal(t, 0, f.CurrencyColumn) // 0 = auto-calculate
-		assert.Equal(t, DefaultIndentation, f.Indentation)
 	})
 
 	t.Run("WithCurrencyColumn", func(t *testing.T) {
 		f := New(WithCurrencyColumn(60))
 		assert.Equal(t, 60, f.CurrencyColumn)
-	})
-
-	t.Run("WithIndentation", func(t *testing.T) {
-		f := New(WithIndentation(6))
-		assert.Equal(t, 6, f.Indentation)
 	})
 }
 
@@ -1209,6 +1137,18 @@ func TestFormatFailsOnAnItemNotOwningItsLine(t *testing.T) {
 		var buf bytes.Buffer
 		err = New().Format(context.Background(), tree, []byte("2020-01-01 open Assets:A 2020-01-01 open Assets:B\n"), &buf)
 		assert.EqualError(t, err, "main.beancount:1:12: item does not own its source line; the source must be the text the AST was parsed from")
+		assert.Equal(t, "", buf.String())
+	})
+
+	t.Run("directive without a date", func(t *testing.T) {
+		// Only a hand-built tree holds one; it is not dropped silently.
+		open := ast.NewOpen(nil, "Assets:A", nil, "")
+		open.SetPosition(ast.Position{Filename: "main.beancount", Line: 1, Column: 1})
+		tree := &ast.AST{Directives: ast.Directives{open}}
+
+		var buf bytes.Buffer
+		err := New().Format(context.Background(), tree, []byte("2020-01-01 open Assets:A\n"), &buf)
+		assert.EqualError(t, err, "main.beancount:1:1: item does not own its source line; the source must be the text the AST was parsed from")
 		assert.Equal(t, "", buf.String())
 	})
 

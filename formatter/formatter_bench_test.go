@@ -144,32 +144,6 @@ option "title" "Test Ledger"
 			}
 		}
 	})
-
-	b.Run("DisabledCommentPreservation", func(b *testing.B) {
-		source := `; Header comment
-option "title" "Test Ledger"
-
-2021-01-01 open Assets:Checking  USD
-2021-01-02 * "Test"
-  Assets:Checking  -75.50 USD
-  Expenses:Food  75.50 USD
-`
-		ast, err := parser.ParseString(context.Background(), source)
-		if err != nil {
-			b.Fatal(err)
-		}
-
-		f := New(WithPreserveComments(false), WithPreserveBlanks(false))
-		b.ResetTimer()
-		b.ReportAllocs()
-
-		for i := 0; i < b.N; i++ {
-			var buf bytes.Buffer
-			if err := f.Format(context.Background(), ast, []byte(source), &buf); err != nil {
-				b.Fatal(err)
-			}
-		}
-	})
 }
 
 // BenchmarkCurrencyColumnCalculation benchmarks just the currency column calculation

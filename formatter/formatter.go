@@ -36,27 +36,13 @@ import (
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
-const (
-	// DefaultIndentation is the default indentation for postings and metadata
-	DefaultIndentation = 4
-
-	// MinimumSpacing is the minimum number of spaces between account/number and currency
-	MinimumSpacing = 2
-
-	// DateWidth is the width of a formatted date (YYYY-MM-DD)
-	DateWidth = 10
-)
-
-// directiveKeywordWidth calculates the display width of a directive's keyword plus trailing space.
-// Uses runewidth for Unicode-safe width calculation, though current directive keywords are ASCII.
-//
-// Example: balance directive → "balance" → 8 (7 chars + 1 space)
-func directiveKeywordWidth(d ast.Directive) int {
-	return runewidth.StringWidth(string(d.Kind())) + 1
-}
+// minimumSpacing is the number of spaces bean-format writes at least
+// between an aligned line's prefix and its number.
+const minimumSpacing = 2
 
 // Formatter holds the options of a formatting: the column widths numbers
-// are aligned to, and whether comments and blank lines are written.
+// are aligned to, bean-format's --prefix-width, --num-width and
+// --currency-column.
 //
 // It measures by display width (via go-runewidth) rather than byte length,
 // so lines with Unicode characters align. Comments and blank lines are
@@ -80,28 +66,6 @@ type Formatter struct {
 	// NumWidth is the width to render each number.
 	// If 0, a good value is selected automatically from the contents.
 	NumWidth int
-
-	// PreserveComments controls whether the source's comments, standalone
-	// and inline, are written.
-	// Default: true
-	PreserveComments bool
-
-	// PreserveBlanks controls whether blank lines are preserved during formatting.
-	// Default: true
-	PreserveBlanks bool
-
-	// Indentation is the number of spaces to use for indentation.
-	// Default: DefaultIndentation
-	Indentation int
-
-	// indentationExplicit is true when Indentation was set via WithIndentation;
-	// otherwise the posting indent follows the source (bean-format behavior).
-	indentationExplicit bool
-
-	// StringEscapeStyle has no effect.
-	//
-	// Deprecated: the formatter copies every string from the source.
-	StringEscapeStyle StringEscapeStyle
 }
 
 // run is one Format call: the Formatter's options and the state derived
@@ -120,8 +84,7 @@ type run struct {
 	verbatimLines map[int]bool
 
 	// indent is the posting indent: the most frequent posting indent in the
-	// source (ties broken by the widest, matching bean-format), or
-	// Indentation when explicit or undeterminable.
+	// source, ties broken by the widest, as bean-format's.
 	indent int
 
 	// columns is the number layout.
@@ -157,66 +120,15 @@ func WithNumWidth(width int) Option {
 	}
 }
 
-// WithPreserveComments enables or disables writing the source's comments.
-func WithPreserveComments(preserve bool) Option {
-	return func(f *Formatter) {
-		f.PreserveComments = preserve
-	}
-}
-
-// WithPreserveBlanks enables or disables blank line preservation.
-func WithPreserveBlanks(preserve bool) Option {
-	return func(f *Formatter) {
-		f.PreserveBlanks = preserve
-	}
-}
-
-// WithIndentation sets the indentation level for postings and metadata,
-// overriding the source-derived indent.
-func WithIndentation(indent int) Option {
-	return func(f *Formatter) {
-		f.Indentation = indent
-		f.indentationExplicit = true
-	}
-}
-
-// WithStringEscapeStyle has no effect.
-//
-// Deprecated: the formatter copies every string from the source.
-func WithStringEscapeStyle(style StringEscapeStyle) Option {
-	return func(f *Formatter) {
-		f.StringEscapeStyle = style
-	}
-}
-
 // New creates a new Formatter with the given options.
 func New(opts ...Option) *Formatter {
-	f := &Formatter{
-		CurrencyColumn:    0,                   // Auto-calculate by default (0 = auto)
-		Indentation:       DefaultIndentation,  // Use default indentation
-		PreserveComments:  true,                // Preserve comments by default
-		PreserveBlanks:    true,                // Preserve blank lines by default
-		StringEscapeStyle: EscapeStyleOriginal, // No effect: strings are copied from the source
-	}
+	f := &Formatter{}
 
 	for _, opt := range opts {
 		opt(f)
 	}
 
 	return f
-}
-
-// isValidDirective returns true if a directive is valid to format.
-// Checks:
-// - Date-based directives must have valid dates (not empty string representation)
-func isValidDirective(d ast.Directive) bool {
-	// All directives implement Date() method, check if date is valid
-	date := d.Date()
-	if date == nil {
-		return false
-	}
-
-	return date.String() != ""
 }
 
 // widthMetrics holds calculated width information for formatting.
@@ -285,9 +197,9 @@ func (f *run) resolveColumns(tree *ast.AST) columns {
 // what reaches that column but at least two spaces.
 func (c columns) padding(prefixWidth, numberWidth int) int {
 	if c.currency > 0 {
-		return max(c.currency-prefixWidth-numberWidth-2, MinimumSpacing)
+		return max(c.currency-prefixWidth-numberWidth-2, minimumSpacing)
 	}
-	return max(c.prefix-prefixWidth, 0) + MinimumSpacing + max(c.number-numberWidth, 0)
+	return max(c.prefix-prefixWidth, 0) + minimumSpacing + max(c.number-numberWidth, 0)
 }
 
 // astItem is a top-level item of the AST with its line.
@@ -302,15 +214,10 @@ type astItem struct {
 	blankLine *ast.BlankLine
 }
 
-// resolveIndent returns the posting indent for a run. Unless an
-// explicit indentation was configured, it follows bean-format: the most
-// frequent posting indent in the source wins, with ties broken by the
-// widest indent.
+// resolveIndent returns the posting indent for a run, as bean-format
+// computes it: the most frequent indent of the lines it re-indents wins,
+// with ties broken by the widest indent.
 func (f *run) resolveIndent(tree *ast.AST) int {
-	if f.indentationExplicit {
-		return f.Indentation
-	}
-
 	frequencies := make(map[int]int)
 	for _, directive := range tree.Directives {
 		txn, ok := directive.(*ast.Transaction)
@@ -324,7 +231,7 @@ func (f *run) resolveIndent(tree *ast.AST) int {
 		}
 	}
 
-	indent, count := f.Indentation, 0
+	indent, count := 0, 0
 	for width, frequency := range frequencies {
 		if frequency > count || (frequency == count && width > indent) {
 			indent, count = width, frequency
@@ -359,11 +266,10 @@ func newRun(f *Formatter, tree *ast.AST, source []byte) *run {
 }
 
 // Format formats tree, parsed from sourceContent, and writes the output to
-// the writer. Comments and blank lines from the AST are preserved based on
-// Formatter configuration. The source must be the text the AST was parsed
-// from: every line is copied from it or aligned within it, so an item that
-// does not own its source line is an error naming the item's position, and
-// nothing is written.
+// the writer. The source must be the text the AST was parsed from: every
+// line is copied from it or aligned within it, so an item that does not
+// own its source line, or a directive without a valid date, is an error
+// naming the item's position, and nothing is written.
 func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []byte, w io.Writer) error {
 	// Check for cancellation before starting
 	select {
@@ -398,11 +304,6 @@ func (f *Formatter) Format(ctx context.Context, tree *ast.AST, sourceContent []b
 	// Format all items in order
 	directiveTimer := collector.Start("formatter.directive_formatting")
 	for _, item := range items {
-		// Skip invalid directives, such as directives with invalid dates.
-		if item.directive != nil && !isValidDirective(item.directive) {
-			continue
-		}
-
 		r.formatItem(item, &buf)
 		if r.err != nil {
 			break
@@ -479,20 +380,15 @@ func (f *run) collectItems(tree *ast.AST) []astItem {
 		}
 	}
 
-	// Add comments and blank lines if preservation is enabled
-	if f.PreserveComments {
-		for _, comment := range tree.Comments {
-			if comment != nil {
-				items = append(items, astItem{line: comment.Position().Line, comment: comment})
-			}
+	for _, comment := range tree.Comments {
+		if comment != nil {
+			items = append(items, astItem{line: comment.Position().Line, comment: comment})
 		}
 	}
 
-	if f.PreserveBlanks {
-		for _, blankLine := range tree.BlankLines {
-			if blankLine != nil {
-				items = append(items, astItem{line: blankLine.Position().Line, blankLine: blankLine})
-			}
+	for _, blankLine := range tree.BlankLines {
+		if blankLine != nil {
+			items = append(items, astItem{line: blankLine.Position().Line, blankLine: blankLine})
 		}
 	}
 
@@ -529,6 +425,12 @@ func (f *run) formatItem(item astItem, buf *strings.Builder) {
 // directive's line untouched, and so its header keeps its spelling: txn,
 // slash dates, the order of tags and links.
 func (f *run) formatDirective(d ast.Directive, buf *strings.Builder) {
+	// Only a tree built by hand has a directive without a valid date,
+	// and so no source line of its own.
+	if d.Date().String() == "" {
+		f.fail(d.Position())
+		return
+	}
 	f.writeLine(d.Position(), f.directiveLayout(d), buf)
 	if txn, ok := d.(*ast.Transaction); ok {
 		f.formatTransactionBody(txn, buf)
@@ -611,13 +513,11 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 	case item.Posting != nil:
 		f.formatPosting(item.Posting, buf)
 	case item.Comment != nil:
-		if f.PreserveComments && !f.verbatimLines[item.Comment.Position().Line] {
+		if !f.verbatimLines[item.Comment.Position().Line] {
 			f.copyItemLine(item.Comment.Position(), buf)
 		}
 	case item.BlankLine != nil:
-		if f.PreserveBlanks {
-			f.copyItemLine(item.BlankLine.Position(), buf)
-		}
+		f.copyItemLine(item.BlankLine.Position(), buf)
 	}
 }
 
@@ -653,7 +553,7 @@ func (f *run) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 			continue
 		}
 		for _, c := range m.Comments {
-			if f.PreserveComments && !f.verbatimLines[c.Position().Line] {
+			if !f.verbatimLines[c.Position().Line] {
 				f.copyItemLine(c.Position(), buf)
 			}
 		}
