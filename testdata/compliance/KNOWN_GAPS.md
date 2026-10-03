@@ -61,9 +61,9 @@ interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
 We report nothing.
 
 **BQL Tables**: SELECT's FROM reads beanquery's `postings`, `entries`,
-`transactions`, `prices` and `events` Tables and the Empty table (`#`).
-beanquery's other five, `accounts` (#639), `balances` (#638), `commodities`
-(#635), `documents` (#637) and `notes` (#636), are not built yet:
+`transactions`, `prices`, `events` and `commodities` Tables and the Empty
+table (`#`). beanquery's other four, `accounts` (#639), `balances` (#638),
+`documents` (#637) and `notes` (#636), are not built yet:
 naming one, as `#notes`, `"notes"` or a bare `notes`, fails with
 `table "notes" is not supported` (`err_from_table_notes`, one
 fixture per Table, listed in `queryGaps`), where beanquery reads it. A bare

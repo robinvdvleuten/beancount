@@ -1,0 +1,8 @@
+2023-01-01 commodity USD
+  name: "US Dollar"
+2023-01-01 commodity HOOL
+  name: "Hooli"
+2023-02-01 commodity EUR
+2023-03-01 commodity USD
+  name: "Dollar"
+  precision: 2

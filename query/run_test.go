@@ -295,9 +295,6 @@ var errorFixtures = map[string]string{
 	"err_from_table_case_sensitive": `error: table "Postings" does not exist
 | SELECT date FROM "Postings" LIMIT 1
 |                  ^^^^^^^^^^`,
-	"err_from_table_commodities": `error: table "commodities" is not supported
-| SELECT * FROM #commodities
-|               ^^^^^^^^^^^^`,
 	"err_from_table_documents": `error: table "documents" is not supported
 | SELECT * FROM #documents
 |               ^^^^^^^^^^`,
@@ -348,6 +345,9 @@ var errorFixtures = map[string]string{
 	"err_table_events_entry_meta": `error: column "entry" not found in table "events"
 | SELECT entry_meta('note') FROM #events
 |        ^^^^^^^^^^^^^^^^^^`,
+	"err_table_commodities_any_meta": `error: column "entry" not found in table "commodities"
+| SELECT any_meta('name') FROM #commodities
+|        ^^^^^^^^^^^^^^^^`,
 }
 
 // loadFixture returns the query and query context of a .bql fixture: its

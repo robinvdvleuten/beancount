@@ -47,6 +47,42 @@ var eventsTable = &environment{
 	rows:     directiveRows[*ast.Event],
 }
 
+// commoditiesTable has one row per currency with a commodity directive,
+// in the order of its first, like beancount's get_commodity_directives:
+// the row of a currency with several is its last. Like beanquery's, its
+// SELECT * takes in meta.
+var commoditiesTable = &environment{
+	columns: map[string]*columnDef{
+		"meta": metaColumn,
+		"date": dateColumn,
+		"name": {tString, func(row *evalRow) any { return row.Entry.(*ast.Commodity).Currency }},
+	},
+	table:    "commodities",
+	wildcard: []string{"meta", "date", "name"},
+	rows:     commodityRows,
+}
+
+// commodityRows visits the commodities table's rows.
+func commodityRows(ctx context.Context, qctx *Context, entries []ast.Directive, visit func(*evalRow)) error {
+	var currencies []string
+	last := make(map[string]*ast.Commodity)
+	for i, entry := range entries {
+		if err := checkCancelled(ctx, i); err != nil {
+			return err
+		}
+		if commodity, ok := entry.(*ast.Commodity); ok {
+			if _, seen := last[commodity.Currency]; !seen {
+				currencies = append(currencies, commodity.Currency)
+			}
+			last[commodity.Currency] = commodity
+		}
+	}
+	for _, currency := range currencies {
+		visit(&evalRow{Ctx: qctx, Entry: last[currency]})
+	}
+	return nil
+}
+
 var (
 	// metaColumn is a directive's meta, typed like beanquery's Metadata
 	// columns, which render without filename and lineno.
