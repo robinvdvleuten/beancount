@@ -1,0 +1,25 @@
+; Like Bison's error recovery, beancount's parser reports no syntax error
+; until three tokens have been shifted after the last one, reported or not.
+; A line break counts as a token, and so does the indent of an indented line;
+; a comment does not. Invalid tokens are its lexer's errors, always reported.
+"stray"
+"suppressed: right after an error"
+
+2020-01-04 * "y" ^
+"suppressed: right after an invalid token"
+
+2020-01-02 open Assets:B USD USD USD
+"suppressed: right after an error"
+; comment
+"suppressed: a comment line is one line break"
+
+
+"reported: three line breaks after an error"
+2020-01-01 open Assets:A
+"reported: a valid directive in between"
+2020-01-01 "suppressed: two tokens in"
+2020-01-01 open "reported: three tokens in"
+"suppressed"
+  Assets:A
+"suppressed: an indented line is an error too"
+"suppressed" ^

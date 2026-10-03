@@ -1,9 +1,11 @@
 package parser
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"io"
+	"sort"
 	"strings"
 	"unicode/utf8"
 
@@ -26,6 +28,12 @@ type Parser struct {
 	filename string    // Filename for error reporting
 	interner *Interner // String interning pool
 	errs     ParseErrors
+
+	// recovered is set once a syntax error has been recovered from, and
+	// recoveredEnd is the offset the recovery skipped to: the end of the
+	// last token it dropped.
+	recovered    bool
+	recoveredEnd int
 
 	lineStarts []int // Byte offset of each line's start, built on the first error
 }
@@ -177,12 +185,21 @@ func (p *Parser) Parse() (*ast.AST, error) {
 // beancount's grammar. Parsing resumes there. Like beancount's lexer, which
 // reports each invalid token whatever the grammar is doing, every invalid
 // token it skips past the error is reported too.
+//
+// Like the Bison parser beancount generates, a grammar error is reported
+// only once three tokens have been shifted since the last error, reported
+// or not (see shiftedSince); an invalid token is its lexer's error and is
+// always reported.
 func (p *Parser) recover(err error) {
 	var parseErr *ParseError
 	if !errors.As(err, &parseErr) {
 		parseErr = NewParseError(p.filename, err)
 	}
-	p.errs = append(p.errs, parseErr)
+	if !p.recovered || p.lexerErrorAt(parseErr.Pos.Offset) || p.shiftedSince(p.recoveredEnd, parseErr.Pos.Offset) >= 3 {
+		p.errs = append(p.errs, parseErr)
+	}
+	p.recovered = true
+	p.recoveredEnd = max(p.recoveredEnd, parseErr.Pos.Offset)
 	for !p.isAtEnd() {
 		tok := p.peek()
 		if tok.Line > parseErr.Pos.Line && tok.Column == 1 {
@@ -202,8 +219,62 @@ func (p *Parser) recover(err error) {
 				p.errs = append(p.errs, skipped)
 			}
 		}
+		if tok.Type != NEWLINE {
+			p.recoveredEnd = max(p.recoveredEnd, tok.End)
+		}
 		p.advance()
 	}
+}
+
+// lexerErrorAt reports whether the token at offset is one beancount's lexer
+// rejects as an invalid token, rather than one its grammar rejects.
+func (p *Parser) lexerErrorAt(offset int) bool {
+	i := sort.Search(len(p.tokens), func(i int) bool { return p.tokens[i].Start >= offset })
+	if i == len(p.tokens) || p.tokens[i].Start != offset {
+		return false
+	}
+	tok := p.tokens[i]
+	return (tok.Type == ILLEGAL && p.lexerRejects(tok)) ||
+		(tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)))
+}
+
+// shiftedSince counts the tokens beancount's grammar shifts after recovering
+// from a syntax error that ends at offset start, up to the error at offset
+// end. Bison drops the rest of the erroneous line and shifts its line break
+// (an indented line after it is an error of its own, so recovery skips it
+// too); from there each line break counts, as does an indented line's
+// INDENT and every token but a comment, a signed number counting its sign.
+func (p *Parser) shiftedSince(start, end int) int {
+	if lineEnd := bytes.IndexByte(p.source[start:], '\n'); lineEnd >= 0 {
+		start += lineEnd
+	} else {
+		start = len(p.source)
+	}
+	if end <= start {
+		return 0
+	}
+	n := bytes.Count(p.source[start:end], []byte("\n"))
+	line := 0
+	for i := sort.Search(len(p.tokens), func(i int) bool { return p.tokens[i].Start >= start }); i < len(p.tokens) && p.tokens[i].Start < end; i++ {
+		tok := p.tokens[i]
+		if tok.Type == NEWLINE || tok.Type == EOF {
+			continue
+		}
+		if tok.Line != line {
+			line = tok.Line
+			if tok.Column > 1 {
+				n++ // INDENT
+			}
+		}
+		if tok.Type == COMMENT {
+			continue
+		}
+		n++
+		if tok.Type == NUMBER && (p.source[tok.Start] == '-' || p.source[tok.Start] == '+') {
+			n++
+		}
+	}
+	return n
 }
 
 // parseComment parses a comment token into a Comment AST node.

@@ -962,9 +962,14 @@ func (p *Parser) lexerRejects(tok Token) bool {
 // component starts with an ASCII character other than a capital letter (or a
 // digit, past the first) or goes on with one other than a letter, a digit or
 // a dash. Non-ASCII characters pass its lexer, and only the account pattern
-// rejects them; a trailing colon is a token of its own.
+// rejects them; a trailing colon is a token of its own. A word with no
+// colon but a trailing one is no account at all: unless it is a currency,
+// which its lexer reads before the colon, it is an invalid token (`T:`).
 func lexerRejectsAccount(name []byte) bool {
 	name = bytes.TrimSuffix(name, []byte(":"))
+	if !bytes.Contains(name, []byte(":")) {
+		return !isCurrencyWord(name)
+	}
 	for i, component := range bytes.Split(name, []byte(":")) {
 		if len(component) == 0 {
 			return true
@@ -979,6 +984,23 @@ func lexerRejectsAccount(name []byte) bool {
 		}
 	}
 	return false
+}
+
+// isCurrencyWord reports whether name matches beancount's currency pattern
+// starting with a letter, [A-Z][A-Z0-9'._-]*[A-Z0-9].
+func isCurrencyWord(name []byte) bool {
+	if len(name) < 2 || !isUppercaseLetter(name[0]) {
+		return false
+	}
+	if last := name[len(name)-1]; !isUppercaseLetter(last) && !isDigit(last) {
+		return false
+	}
+	for _, ch := range name[1 : len(name)-1] {
+		if !isUppercaseLetter(ch) && !isDigit(ch) && !bytes.ContainsRune([]byte("'._-"), rune(ch)) {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *Parser) error(format string, args ...any) error {

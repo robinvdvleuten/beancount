@@ -274,3 +274,39 @@ func TestInvalidBytesAreRecovered(t *testing.T) {
 	}
 	assert.Equal(t, []string{"2020-01-01 open", "2020-01-06 note"}, kept)
 }
+
+// TestSyntaxErrorsCloseTogetherAreReportedOnce pins the error recovery of
+// beancount's Bison parser: a grammar error is reported only once three
+// tokens (a line break and an indent each counting as one, a comment as
+// none) have been shifted since the last error, reported or not, while an
+// invalid token is its lexer's error and always reported.
+func TestSyntaxErrorsCloseTogetherAreReportedOnce(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		source string
+		lines  []int
+	}{
+		{"next line", "\"a\"\n\"b\"\n", []int{1}},
+		{"after an invalid token", "2020-01-04 * \"y\" ^\n\"a\"\n", []int{1}},
+		{"mid-line", "2020-01-02 open Assets:B USD USD USD\n\"a\"\n", []int{1}},
+		{"a blank line", "\"a\"\n\n\"b\"\n", []int{1}},
+		{"two blank lines", "\"a\"\n\n\n\"b\"\n", []int{1, 4}},
+		{"a comment line", "\"a\"\n; c\n\"b\"\n", []int{1}},
+		{"a valid directive", "\"a\"\n2020-01-01 open Assets:A\n\"b\"\n", []int{1, 3}},
+		{"two tokens in", "\"a\"\n2020-01-01 \"b\"\n", []int{1}},
+		{"three tokens in", "\"a\"\n2020-01-01 open \"b\"\n", []int{1, 2}},
+		{"an indented line", "\"a\"\n  Assets:A\n\n\n\"b\"\n", []int{1, 5}},
+		{"invalid token in the window", "\"a\"\n\"b\" ^\n", []int{1, 2}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := ParseString(context.Background(), tc.source)
+			var syntaxErrs ParseErrors
+			assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+			var lines []int
+			for _, e := range syntaxErrs {
+				lines = append(lines, e.Pos.Line)
+			}
+			assert.Equal(t, tc.lines, lines)
+		})
+	}
+}
