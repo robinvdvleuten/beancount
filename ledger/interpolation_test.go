@@ -36,7 +36,7 @@ func interpolateLast(t *testing.T, source string) (lines, errs []string) {
 	groups, groupErrs := b.categorize(txn)
 	assert.Equal(t, 0, len(groupErrs))
 	specTolerances := b.tolerances.spec(txn.Postings)
-	resolveCostCurrencies(txn, groups)
+	resolveCurrencies(txn, groups)
 	for _, group := range groups {
 		scratch := &scratchInventories{booker: b, staged: map[string]*inventory{}, own: map[string]*inventory{}}
 		reductions, bookErrs := b.bookReductions(txn, group, scratch)

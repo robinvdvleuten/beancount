@@ -14,6 +14,8 @@ import (
 type currencyGroup struct {
 	currency string
 	postings []*ast.Posting
+	// refs are the currencies categorize resolved for each of postings.
+	refs []currencyRefs
 }
 
 // missingCurrency marks a currency the source leaves out of an amount, cost
@@ -78,6 +80,10 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 		r := currencyRefs{index: i}
 		if posting.Amount != nil {
 			r.units = statedCurrency(true, posting.Amount.Currency)
+		} else if posting.Price != nil {
+			// A price without units is no auto-posting: as in beancount's
+			// parser, its units leave out their currency too.
+			r.units = missingCurrency
 		}
 		if posting.Cost != nil {
 			r.cost = statedCurrency(true, costCurrency(posting.Cost))
@@ -186,7 +192,7 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 	for _, currency := range currencies {
 		refs := groups[currency]
 		slices.SortStableFunc(refs, func(a, b currencyRefs) int { return cmp.Compare(a.index, b.index) })
-		group := currencyGroup{currency: currency, postings: make([]*ast.Posting, len(refs))}
+		group := currencyGroup{currency: currency, postings: make([]*ast.Posting, len(refs)), refs: refs}
 		for i, r := range refs {
 			group.postings[i] = txn.Postings[r.index]
 		}

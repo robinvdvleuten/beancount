@@ -1,0 +1,17 @@
+; A posting with a price and no units is no auto-posting: as in beancount's
+; parser, its units leave out their currency too, which nothing resolves
+; when its account holds nothing. The transaction is dropped.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euros
+2020-01-01 open Assets:Other
+
+2020-02-01 * "Price without units"
+  Assets:Cash   0 USD
+  Assets:Euros  @ 1.20 USD
+
+2020-02-02 * "Price without units beside two groups"
+  Assets:Cash   0 USD
+  Assets:Other  5 CAD
+  Assets:Euros  @ 1.20 USD
+
+2020-02-03 balance Assets:Euros  0 EUR

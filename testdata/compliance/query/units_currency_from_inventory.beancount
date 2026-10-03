@@ -1,0 +1,18 @@
+; A posting's units currency left out beside a price comes from its
+; account's inventory: the units are interpolated in it when the posting has
+; none, and written in it otherwise.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euros
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Seed"
+  Assets:Euros  5 EUR
+  Equity:Open
+
+2020-02-01 * "Price without units"
+  Assets:Cash   -12 USD
+  Assets:Euros  @ 1.20 USD
+
+2020-02-02 * "Units number without currency"
+  Assets:Cash   -12 USD
+  Assets:Euros  10 @ 1.20 USD

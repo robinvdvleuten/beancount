@@ -115,29 +115,14 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	prices := make(map[*ast.Posting]*ast.Amount)
 	var leftOut []*ast.Posting
 
-	// A number-only amount or price is not a missing number in beancount:
-	// only its currency is inferred, from the single currency in use. Their
-	// weights are known, so resolve them before the missing number.
+	// Booking has resolved every units currency (resolveCurrencies), so an
+	// incomplete amount leaves out its number, the group's one missing
+	// number. A number-only price is not a missing number in beancount:
+	// only its currency is inferred, from the single currency in use. Its
+	// weight is known, so resolve it before the missing number.
 	var currencyOnlyAmount *ast.Posting
-	for _, posting := range pc.incompleteAmounts {
-		if posting.Amount.Value == "" {
-			currencyOnlyAmount = posting
-			continue
-		}
-		if len(balance) != 1 {
-			return nil, []error{newNotBalancedError(txn, balance)}
-		}
-		number, nerr := decimal.NewFromString(posting.Amount.Value)
-		if nerr != nil {
-			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Amount.Value, nerr)}
-		}
-		for currency := range balance {
-			amounts[posting] = &ast.Amount{
-				Value:    posting.Amount.Value,
-				Currency: currency,
-			}
-			balance[currency] = pydecimal.Add(balance[currency], number)
-		}
+	if len(pc.incompleteAmounts) > 0 {
+		currencyOnlyAmount = pc.incompleteAmounts[0]
 	}
 
 	var valuelessPrice *ast.Posting

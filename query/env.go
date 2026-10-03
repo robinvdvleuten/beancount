@@ -104,8 +104,8 @@ var entryColumns = map[string]*columnDef{
 // postingColumns are the postings table's columns, on posting rows.
 var postingColumns = map[string]*columnDef{
 	"account":       {tString, func(row *evalRow) any { return string(row.Posting.Account) }},
-	"position":      {tPosition, func(row *evalRow) any { return row.Position }},
-	"change":        {tPosition, func(row *evalRow) any { return row.Position }},
+	"position":      {tPosition, positionColumn},
+	"change":        {tPosition, positionColumn},
 	"balance":       {tInventory, func(row *evalRow) any { return row.balanceValue() }},
 	"number":        {tDecimal, unitsColumn(func(units amountValue) any { return units.Number })},
 	"currency":      {tString, unitsColumn(func(units amountValue) any { return units.Currency })},
@@ -382,6 +382,15 @@ func postingPrice(posting *ast.Posting) any {
 // postingWeight computes the booking weight of a booked position: units at
 // cost if a cost basis is attached, converted at the posting's price if one
 // is attached, and the plain units otherwise.
+// positionColumn is the row's position, or NULL for a posting without one:
+// a nil *positionValue boxed in an any would not read as NULL.
+func positionColumn(row *evalRow) any {
+	if row.Position == nil {
+		return nil
+	}
+	return row.Position
+}
+
 func postingWeight(posting *ast.Posting, position *positionValue) any {
 	if position == nil {
 		return nil

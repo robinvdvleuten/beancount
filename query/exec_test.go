@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
@@ -23,6 +24,17 @@ func runQueryOn(t *testing.T, ctx *Context, query string) *table {
 	result, err := execute(context.Background(), ctx, mustCompile(t, ctx, query))
 	assert.NoError(t, err)
 	return result
+}
+
+// TestNullPositionFunctions evaluates the position functions on a row
+// without a position: like beanquery's, each gives NULL.
+func TestNullPositionFunctions(t *testing.T) {
+	ctx := newTestContext(t)
+	compiled := mustCompile(t, ctx, "SELECT position, units(position), cost(position), weight, value(position), convert(position, 'USD')")
+	row := &evalRow{Ctx: ctx, Posting: ctx.AST.Directives[len(ctx.AST.Directives)-2].(*ast.Transaction).Postings[0]}
+	for _, target := range compiled.Targets {
+		assert.Zero(t, target.expr.eval(row), "%s", target.Name)
+	}
 }
 
 func TestExecuteSimpleSelect(t *testing.T) {

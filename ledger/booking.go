@@ -224,7 +224,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	// Like beancount, tolerances come from the whole transaction as
 	// written, before a cost takes its group's currency.
 	specTolerances := b.tolerances.spec(txn.Postings)
-	written := resolveCostCurrencies(txn, groups)
+	written := resolveCurrencies(txn, groups)
 
 	// The booked postings, and what interpolation completed on them, which
 	// commitBooking writes onto txn once every group is booked.
@@ -258,7 +258,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			if done.leftOut {
 				continue
 			}
-			if posting.Amount != nil || posting.Price != nil {
+			if posting.Amount != nil {
 				postings = append(postings, posting)
 				if done.amount != nil || done.cost != nil || done.price != nil {
 					completed = append(completed, done)
@@ -572,7 +572,7 @@ func newBookingError(txn *ast.Transaction, account ast.Account, err error) error
 	return newInsufficientInventoryError(txn, account, err)
 }
 
-// unbooked returns a copy of txn as written, before resolveCostCurrencies
+// unbooked returns a copy of txn as written, before resolveCurrencies
 // and commitBooking rewrite its postings and fill in their numbers, for the
 // errors reported on it to carry, so an error shows the postings of the
 // group it dropped.
@@ -590,28 +590,45 @@ func unbooked(txn *ast.Transaction) *ast.Transaction {
 	return &copied
 }
 
-// resolveCostCurrencies gives a cost that states its number but not its
-// currency the currency of its posting's Currency group, which categorize
-// resolved it to, like beancount's replace_currencies, so Booking weighs
-// and books it in that currency. The cost is replaced, not edited, and
-// resolveCostCurrencies returns the transaction as written when it
-// replaced one, nil otherwise.
-func resolveCostCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Transaction {
+// resolveCurrencies writes the currencies categorize resolved onto the
+// postings that leave them out, like beancount's replace_currencies, so
+// Booking weighs and books them in those currencies: the units of a posting
+// with a price (given an amount without a number when it has none), and a
+// cost that states its number, which takes its Currency group's. A posting's
+// amount or cost is replaced, not edited, and resolveCurrencies returns the
+// transaction as written when it replaced one, nil otherwise.
+func resolveCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Transaction {
 	var written *ast.Transaction
+	replace := func() {
+		if written == nil {
+			written = unbooked(txn)
+		}
+	}
 	for _, group := range groups {
-		for _, posting := range group.postings {
-			cost := posting.Cost
-			if !cost.HasNumber() || cost.Amount.Currency != "" {
+		for i, posting := range group.postings {
+			// The auto-posting, in every group, is expanded per group by
+			// the booker.
+			if posting.Amount == nil && posting.Price == nil {
 				continue
 			}
-			if written == nil {
-				written = unbooked(txn)
+			if posting.Amount == nil || posting.Amount.Currency == "" {
+				replace()
+				var amount ast.Amount
+				if posting.Amount != nil {
+					amount = *posting.Amount
+				}
+				amount.Currency = group.refs[i].units
+				posting.Amount = &amount
 			}
-			amount := *cost.Amount
-			amount.Currency = group.currency
-			resolved := *cost
-			resolved.Amount = &amount
-			posting.Cost = &resolved
+			cost := posting.Cost
+			if cost.HasNumber() && cost.Amount.Currency == "" {
+				replace()
+				amount := *cost.Amount
+				amount.Currency = group.currency
+				resolved := *cost
+				resolved.Amount = &amount
+				posting.Cost = &resolved
+			}
 		}
 	}
 	return written
