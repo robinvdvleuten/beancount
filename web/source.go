@@ -84,8 +84,14 @@ func computeFingerprint(content []byte) string {
 
 // handleGetSource handles GET requests to /api/source.
 // Returns the file content, validation errors, and files list as JSON.
+// While the last load could not go on, it loads again first, so the error
+// it answers with is current, and a file that cannot be read answers with
+// no source and that error, which the editor shows.
 func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 	snap := s.snapshot()
+	if snap.loadErr != nil {
+		_, snap, _ = s.reloadLedger(r.Context())
+	}
 	filename, err := snap.resolve(r.URL.Query().Get("filepath"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -93,6 +99,10 @@ func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 	}
 
 	content, err := os.ReadFile(filename)
+	if err != nil && snap.loadErr != nil {
+		writeJSONResponse(w, snap.sourceResponse(nil))
+		return
+	}
 	if err != nil {
 		if os.IsNotExist(err) {
 			http.Error(w, "File not found", http.StatusNotFound)

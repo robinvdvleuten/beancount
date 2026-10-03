@@ -7,11 +7,13 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/alecthomas/assert/v2"
+	"github.com/fsnotify/fsnotify"
 )
 
 // request sends one request to handler and returns the status and body.
@@ -92,10 +94,66 @@ func TestFailedFirstLoad(t *testing.T) {
 			assert.Equal(t, http.StatusConflict, code)
 			assert.Equal(t, "the ledger failed to load, so there is nothing to query\n", body)
 
+			// The source is the load error, for the editor to show.
 			code, body = request(t, handler, http.MethodGet, "/api/source", "")
-			assert.Equal(t, http.StatusInternalServerError, code)
-			assert.Equal(t, "Failed to read file\n", body)
+			assert.Equal(t, http.StatusOK, code)
+			source := decodeSource(t, body)
+			assert.Equal(t, "", source.Source)
+			assert.Equal(t, 1, len(source.Errors))
+			assert.Equal(t, "LoadError", source.Errors[0].Type)
 		})
+	}
+}
+
+// TestSourceLoadsAgainAfterAFailedLoad pins that /api/source answers with
+// the load error while the ledger cannot load, and with the source once it
+// can, without anything else reloading it.
+func TestSourceLoadsAgainAfterAFailedLoad(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "main.beancount")
+	assert.NoError(t, os.Mkdir(root, 0700))
+	handler := newFailedTestHandler(t, root)
+
+	code, body := request(t, handler, http.MethodGet, "/api/source", "")
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, "LoadError", decodeSource(t, body).Errors[0].Type)
+
+	assert.NoError(t, os.Remove(root))
+	assert.NoError(t, os.WriteFile(root, []byte("2024-01-01 open Assets:Cash\n"), 0600))
+	code, body = request(t, handler, http.MethodGet, "/api/source", "")
+	assert.Equal(t, http.StatusOK, code)
+	source := decodeSource(t, body)
+	assert.Equal(t, "2024-01-01 open Assets:Cash\n", source.Source)
+	assert.Equal(t, 0, len(source.Errors))
+
+	code, body = request(t, handler, http.MethodGet, "/api/accounts", "")
+	assert.Equal(t, http.StatusOK, code)
+	assert.Equal(t, `{"accounts":[{"name":"Assets:Cash","type":"Assets"}]}`+"\n", body)
+}
+
+// TestFailedReloadKeepsTheIncludes pins that a reload that cannot go on
+// keeps the includes the last load that went on resolved, so the files a
+// glob matched and the nested includes stay editable.
+func TestFailedReloadKeepsTheIncludes(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "main.beancount")
+	rootSource := "include \"sub/*.beancount\"\n"
+	matched := filepath.Join(dir, "sub", "a.beancount")
+	nested := filepath.Join(dir, "nested.beancount")
+	assert.NoError(t, os.WriteFile(root, []byte(rootSource), 0600))
+	assert.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0700))
+	assert.NoError(t, os.WriteFile(matched, []byte("include \"../nested.beancount\"\n"), 0600))
+	assert.NoError(t, os.WriteFile(nested, []byte("2024-01-01 open Assets:Cash\n"), 0600))
+	handler := newTestHandler(t, root)
+
+	// An include that is a directory stops the load.
+	assert.NoError(t, os.Mkdir(filepath.Join(dir, "broken.beancount"), 0700))
+	saved := putSource(t, handler, "", rootSource+"include \"broken.beancount\"\n")
+	assert.Equal(t, "LoadError", saved.Errors[0].Type)
+	assert.Equal(t, Files{Root: root, Includes: []string{matched, nested}}, saved.Files)
+
+	for _, file := range []string{matched, nested} {
+		code, body := request(t, handler, http.MethodGet, "/api/source?filepath="+file, "")
+		assert.Equal(t, http.StatusOK, code, body)
 	}
 }
 
@@ -343,4 +401,133 @@ func TestIncludesAreInLoadOrder(t *testing.T) {
 		assert.Equal(t, http.StatusOK, code)
 		assert.Equal(t, want, decodeSource(t, body).Files.Includes)
 	}
+}
+
+// watchedServer returns a watching server for the ledger at root, and a
+// function that waits until /api/accounts lists account.
+func watchedServer(t *testing.T, root string) (*Server, http.Handler, func(account, why string)) {
+	t.Helper()
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	server, handler := newTestServer(t, root)
+	assert.NoError(t, server.startWatcher(ctx))
+	// One write can reload more than once, when its events straddle the
+	// watcher's debounce, so wait for the account itself.
+	awaitAccount := func(account, why string) {
+		t.Helper()
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			code, body := request(t, handler, http.MethodGet, "/api/accounts", "")
+			assert.Equal(t, http.StatusOK, code)
+			if strings.Contains(body, `"`+account+`"`) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("no %s after %s: %s", account, why, body)
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}
+	return server, handler, awaitAccount
+}
+
+// watchList returns what the server's watcher watches, sorted.
+func watchList(server *Server) []string {
+	server.reloadMu.Lock()
+	defer server.reloadMu.Unlock()
+	list := server.watcher.WatchList()
+	slices.Sort(list)
+	return list
+}
+
+// TestWatcherFollowsTheRootAcrossItsRecreation pins that the root,
+// deleted and created again, is still watched: the failed reload in
+// between does not lose it.
+func TestWatcherFollowsTheRootAcrossItsRecreation(t *testing.T) {
+	root := writeLedger(t, "2024-01-01 open Assets:Cash\n")
+	_, handler, awaitAccount := watchedServer(t, root)
+
+	assert.NoError(t, os.Remove(root))
+	time.Sleep(300 * time.Millisecond) // the reload that fails
+	assert.NoError(t, os.WriteFile(root, []byte("2024-01-01 open Assets:Bank\n"), 0600))
+	awaitAccount("Assets:Bank", "the root was created again")
+
+	code, body := request(t, handler, http.MethodGet, "/api/source", "")
+	assert.Equal(t, http.StatusOK, code)
+	source := decodeSource(t, body)
+	assert.Equal(t, "2024-01-01 open Assets:Bank\n", source.Source)
+	assert.Equal(t, 0, len(source.Errors))
+}
+
+// TestWatchesFollowTheFilesAcrossAFailedReload pins that the watches are
+// diffed against what is watched: a directory whose files the ledger
+// dropped across a failed and a successful reload is no longer watched.
+func TestWatchesFollowTheFilesAcrossAFailedReload(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "main.beancount")
+	other := filepath.Join(dir, "other")
+	assert.NoError(t, os.Mkdir(other, 0700))
+	assert.NoError(t, os.WriteFile(filepath.Join(other, "a.beancount"), nil, 0600))
+	assert.NoError(t, os.WriteFile(root, []byte("include \"other/a.beancount\"\n"), 0600))
+	assert.NoError(t, os.Mkdir(filepath.Join(dir, "broken.beancount"), 0700))
+	server, _ := newTestServer(t, root)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	server.reloadMu.Lock()
+	server.watcher = mustWatcher(t)
+	server.syncWatches(server.snapshot())
+	server.reloadMu.Unlock()
+	t.Cleanup(func() { _ = server.watcher.Close() })
+	assert.Equal(t, []string{dir, other}, watchList(server))
+
+	assert.NoError(t, os.WriteFile(root, []byte("include \"broken.beancount\"\n"), 0600))
+	_, _, err := server.reloadLedger(ctx)
+	assert.Error(t, err)
+	assert.NoError(t, os.WriteFile(root, []byte("2024-01-01 open Assets:Cash\n"), 0600))
+	_, _, err = server.reloadLedger(ctx)
+	assert.NoError(t, err)
+	assert.Equal(t, []string{dir}, watchList(server))
+}
+
+func mustWatcher(t *testing.T) *fsnotify.Watcher {
+	t.Helper()
+	watcher, err := fsnotify.NewWatcher()
+	assert.NoError(t, err)
+	return watcher
+}
+
+// TestWatcherFollowsAnIncludeASaveAdds pins that an include added through
+// the API is watched, though the save's own reload took the change.
+func TestWatcherFollowsAnIncludeASaveAdds(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "main.beancount")
+	added := filepath.Join(dir, "sub", "added.beancount")
+	assert.NoError(t, os.WriteFile(root, []byte("2024-01-01 open Assets:Cash\n"), 0600))
+	assert.NoError(t, os.Mkdir(filepath.Join(dir, "sub"), 0700))
+	assert.NoError(t, os.WriteFile(added, []byte("2024-01-01 open Assets:Bank\n"), 0600))
+	_, handler, awaitAccount := watchedServer(t, root)
+
+	putSource(t, handler, "", "include \"sub/added.beancount\"\n2024-01-01 open Assets:Cash\n")
+	awaitAccount("Assets:Bank", "the save added an include")
+
+	assert.NoError(t, os.WriteFile(added, []byte("2024-01-01 open Assets:Bank\n2024-01-01 open Assets:Wallet\n"), 0600))
+	awaitAccount("Assets:Wallet", "the added include changed")
+}
+
+// TestEventsSendNoCORSHeader pins that the event stream, like the other
+// endpoints of a localhost server, allows no other origin.
+func TestEventsSendNoCORSHeader(t *testing.T) {
+	handler := newTestHandler(t, writeLedger(t, ""))
+	ctx, cancel := context.WithCancel(context.Background())
+	rec := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/events", nil).WithContext(ctx))
+		close(done)
+	}()
+	time.Sleep(50 * time.Millisecond)
+	cancel()
+	<-done
+	assert.Equal(t, "text/event-stream", rec.Header().Get("Content-Type"))
+	assert.Equal(t, "", rec.Header().Get("Access-Control-Allow-Origin"))
 }

@@ -39,7 +39,12 @@ type Server struct {
 	state *snapshot
 	// reloadMu makes reloads follow one another, so each snapshot is built
 	// from the one before it and the last reload to start is the one served.
+	// It guards watcher too.
 	reloadMu sync.Mutex
+	// watcher watches the directories of the ledger's files, nil unless
+	// watching. Every reload brings its watches in step with the snapshot
+	// it serves (syncWatches).
+	watcher *fsnotify.Watcher
 
 	// inputFile is the ledger file passed to New(), which every load reads.
 	// A snapshot holds its resolved absolute path.
@@ -172,10 +177,10 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // reloadLedger loads the ledger from disk and swaps in the snapshot that
-// follows from it. It returns the snapshot it replaced and the one now
-// served, and the error of a load that could not go on, which the new
-// snapshot carries too. When no snapshot could be built, the one served
-// stays, and is returned as both.
+// follows from it, and, when watching, watches its files. It returns the
+// snapshot it replaced and the one now served, and the error of a load
+// that could not go on, which the new snapshot carries too. When no
+// snapshot could be built, the one served stays, and is returned as both.
 // Caller must NOT hold the mutex - this method acquires it internally.
 func (s *Server) reloadLedger(ctx context.Context) (prev, next *snapshot, err error) {
 	s.reloadMu.Lock()
@@ -190,29 +195,50 @@ func (s *Server) reloadLedger(ctx context.Context) (prev, next *snapshot, err er
 	s.mu.Lock()
 	s.state = next
 	s.mu.Unlock()
+	s.syncWatches(next)
 
 	return prev, next, next.loadErr
 }
 
-// startWatcher starts a file watcher for the root file and all includes.
-// It reloads the ledger and broadcasts SSE events when files change.
+// syncWatches brings the watcher's watches in step with snap: the
+// directory of each of its files, so a file deleted and created again, as
+// an editor's atomic save does, is still seen. It diffs against what the
+// watcher watches, whatever reload changed the files last.
+// Caller must hold reloadMu.
+func (s *Server) syncWatches(snap *snapshot) {
+	if s.watcher == nil {
+		return
+	}
+	dirs := make(map[string]bool)
+	for _, file := range snap.files() {
+		dirs[filepath.Dir(file)] = true
+	}
+	for _, dir := range s.watcher.WatchList() {
+		if !dirs[dir] {
+			_ = s.watcher.Remove(dir)
+		}
+		delete(dirs, dir)
+	}
+	for dir := range dirs {
+		if err := s.watcher.Add(dir); err != nil {
+			log.Printf("Warning: failed to watch %s: %v", dir, err)
+		}
+	}
+}
+
+// startWatcher starts watching the root file and all includes. It
+// reloads the ledger and broadcasts SSE events when they change.
 func (s *Server) startWatcher(ctx context.Context) error {
 	watcher, err := fsnotify.NewWatcher()
 	if err != nil {
 		return fmt.Errorf("failed to create file watcher: %w", err)
 	}
 
-	// Add root file and all includes to watch
-	snap := s.snapshot()
-	filesToWatch := append([]string{snap.root}, snap.includes...)
+	s.reloadMu.Lock()
+	s.watcher = watcher
+	s.syncWatches(s.snapshot())
+	s.reloadMu.Unlock()
 
-	for _, file := range filesToWatch {
-		if err := watcher.Add(file); err != nil {
-			log.Printf("Warning: failed to watch %s: %v", file, err)
-		}
-	}
-
-	// Start watcher goroutine
 	go s.runWatcher(ctx, watcher)
 
 	return nil
@@ -225,6 +251,9 @@ func (s *Server) runWatcher(ctx context.Context, watcher *fsnotify.Watcher) {
 		if debounceTimer != nil {
 			debounceTimer.Stop()
 		}
+		s.reloadMu.Lock()
+		s.watcher = nil
+		s.reloadMu.Unlock()
 		_ = watcher.Close()
 	}()
 
@@ -241,9 +270,10 @@ func (s *Server) runWatcher(ctx context.Context, watcher *fsnotify.Watcher) {
 				return
 			}
 
-			// React to write/create/remove/rename events
-			// (Remove/Rename are common in atomic saves)
-			if event.Op&(fsnotify.Write|fsnotify.Create|fsnotify.Remove|fsnotify.Rename) == 0 {
+			// React to the ledger's files only, among the others in
+			// their directories, on any change: Remove and Rename are
+			// common in atomic saves, and Chmod can make a file readable.
+			if !s.snapshot().allows(filepath.Clean(event.Name)) {
 				continue
 			}
 
@@ -253,7 +283,7 @@ func (s *Server) runWatcher(ctx context.Context, watcher *fsnotify.Watcher) {
 			}
 
 			debounceTimer = time.AfterFunc(debounceDelay, func() {
-				s.handleFileChange(ctx, watcher)
+				s.handleFileChange(ctx)
 			})
 
 		case err, ok := <-watcher.Errors:
@@ -265,46 +295,12 @@ func (s *Server) runWatcher(ctx context.Context, watcher *fsnotify.Watcher) {
 	}
 }
 
-// handleFileChange reloads the ledger and updates the watch list.
-func (s *Server) handleFileChange(ctx context.Context, watcher *fsnotify.Watcher) {
-	// Reload ledger — returns the snapshot it replaced and the one it built
-	prev, next, err := s.reloadLedger(ctx)
-	if err != nil {
+// handleFileChange reloads the ledger, which updates the watches, and
+// tells the clients.
+func (s *Server) handleFileChange(ctx context.Context) {
+	if _, _, err := s.reloadLedger(ctx); err != nil {
 		log.Printf("Failed to reload ledger: %v", err)
-		s.broadcast("reload")
-		return
 	}
-
-	oldIncludes := make(map[string]bool)
-	for _, f := range prev.includes {
-		oldIncludes[f] = true
-	}
-	newIncludes := make(map[string]bool)
-	for _, f := range next.includes {
-		newIncludes[f] = true
-	}
-	newRoot := next.root
-
-	// Remove watches for files no longer included
-	for file := range oldIncludes {
-		if !newIncludes[file] {
-			_ = watcher.Remove(file)
-		}
-	}
-
-	// Update watches for all current includes (re-add to ensure we catch re-created files)
-	for file := range newIncludes {
-		if err := watcher.Add(file); err != nil {
-			log.Printf("Warning: failed to watch %s: %v", file, err)
-		}
-	}
-
-	// Re-add root (always needed)
-	if err := watcher.Add(newRoot); err != nil {
-		log.Printf("Warning: failed to watch root %s: %v", newRoot, err)
-	}
-
-	// Broadcast reload event to all SSE clients
 	s.broadcast("reload")
 }
 
@@ -314,7 +310,6 @@ func (s *Server) handleSSE(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
 
 	// Create client channel
 	clientChan := make(chan string, 10)

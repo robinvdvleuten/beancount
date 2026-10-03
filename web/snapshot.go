@@ -33,8 +33,9 @@ type snapshot struct {
 	// first load.
 	root string
 	// includes are the absolute paths of the files the root includes: the
-	// loaded ones or, after a load that could not go on, the ones the root
-	// file names itself.
+	// loaded ones or, after a load that could not go on, the ones the last
+	// load that went on loaded, or the ones the root file names itself when
+	// none went on.
 	includes []string
 	// errors are the errors of the load this snapshot was built from, as
 	// the web API sends them: the load's, then the ledger's.
@@ -54,9 +55,10 @@ func newSnapshot() *snapshot {
 // snap. Like check and query, a syntax error drops the directive it is in
 // and the rest of the ledger still loads. When the load cannot go on, the
 // new snapshot keeps snap's ledger, so the reports still answer from it,
-// carries the error as its loadErr, and lists the root's own includes, so
-// they can still be edited and watched. The error returned is that of a
-// path that cannot be resolved, which leaves no snapshot to build.
+// and its includes, so they can still be edited and watched (the root's
+// own includes when no load has gone on yet), and carries the error as its
+// loadErr. The error returned is that of a path that cannot be resolved,
+// which leaves no snapshot to build.
 func (snap *snapshot) reload(ctx context.Context, path string) (*snapshot, error) {
 	result, loadErr := ledgerload.Load(ctx, loader.Source{Path: path})
 	if loadErr != nil {
@@ -64,11 +66,15 @@ func (snap *snapshot) reload(ctx context.Context, path string) (*snapshot, error
 		if err != nil {
 			return nil, err
 		}
+		includes := snap.includes
+		if snap.tree == nil {
+			includes = rootIncludes(ctx, root)
+		}
 		return &snapshot{
 			ledger:   snap.ledger,
 			tree:     snap.tree,
 			root:     root,
-			includes: rootIncludes(ctx, root),
+			includes: includes,
 			loadErr:  loadErr,
 		}, nil
 	}
@@ -133,6 +139,14 @@ func (snap *snapshot) queryContext() *query.Context {
 		return nil
 	}
 	return &query.Context{Ledger: snap.ledger, Config: snap.ledger.Config(), AST: snap.tree}
+}
+
+// files returns the ledger's files: its root, then its includes.
+func (snap *snapshot) files() []string {
+	if snap.root == "" {
+		return nil
+	}
+	return append([]string{snap.root}, snap.includes...)
 }
 
 // allows reports whether path is a file of the ledger: its root or one of
