@@ -322,6 +322,34 @@ func TestOfficialFormatParity(t *testing.T) {
 	assertGapsNameFixtures(t, formatGaps, names)
 }
 
+// TestFormatFixturesReachFixedPoint formats every format fixture three
+// times: the third pass must leave the second one's output as it is. Like
+// bean-format, a first pass can still move numbers, since it measures a
+// posting's prefix as the source indents it.
+func TestFormatFixturesReachFixedPoint(t *testing.T) {
+	paths, err := filepath.Glob(filepath.Join(complianceDir, "format", "*.beancount"))
+	assert.NoError(t, err)
+	assert.True(t, len(paths) > 0, "no format fixtures found")
+
+	format := func(t *testing.T, source []byte) string {
+		t.Helper()
+		ctx := context.Background()
+		tree, err := parser.ParseBytes(ctx, source)
+		assert.NoError(t, err)
+		var out bytes.Buffer
+		assert.NoError(t, formatter.New().Format(ctx, tree, source, &out))
+		return out.String()
+	}
+	for _, path := range paths {
+		t.Run(strings.TrimSuffix(filepath.Base(path), ".beancount"), func(t *testing.T) {
+			source, err := os.ReadFile(path)
+			assert.NoError(t, err)
+			twice := format(t, []byte(format(t, source)))
+			assert.Equal(t, twice, format(t, []byte(twice)))
+		})
+	}
+}
+
 // TestNoFollowOnErrors checks the applied_ fixtures, whose one erroneous
 // directive is still applied like beancount applies it: the later directives
 // that depend on it must pass, so both implementations report exactly one

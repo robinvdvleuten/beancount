@@ -713,9 +713,8 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 	}
 }
 
-// formatPosting writes a posting's line, aligned, copied or, for an
-// unflagged posting without units, as its account at the posting indent,
-// and the metadata lines below it.
+// formatPosting writes a posting's line, aligned or copied, and the
+// metadata lines below it.
 func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 	line := f.postingLayout(p)
 	switch line.kind {
@@ -729,9 +728,6 @@ func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 		buf.WriteByte(' ')
 		buf.WriteString(line.rest)
 		f.verbatimLines[p.Position().Line] = true
-	case accountLine:
-		buf.WriteString(line.prefix)
-		f.writeInlineComment(p.GetComment(), buf)
 	default:
 		f.fail(p.Position())
 		return

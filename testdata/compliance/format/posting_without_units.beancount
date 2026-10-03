@@ -1,0 +1,15 @@
+; bean-format leaves a posting without units as written, re-indented:
+; its cost, price, inline comment spacing and trailing whitespace stay.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 *
+  Assets:A  10 STK {10 USD}
+  Assets:A {10 USD}
+   Assets:B   ; hi
+  Assets:A;c
+  Assets:B   
+	Assets:C @ 10 USD
+  Assets:B {}
+  Assets:C

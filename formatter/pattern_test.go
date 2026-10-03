@@ -86,8 +86,8 @@ func TestLinePattern(t *testing.T) {
 		},
 		{
 			name:   "posting without an amount",
-			layout: postingLine("  Assets:Cash   ; c"),
-			want:   lineLayout{kind: accountLine, prefix: "    Assets:Cash"},
+			layout: postingLine("  Assets:Cash {10 USD}   ; c  "),
+			want:   lineLayout{kind: copyLine, text: "    Assets:Cash {10 USD}   ; c  "},
 		},
 		{
 			name:   "balance",

@@ -24,10 +24,6 @@ const (
 	copyLine
 	// alignLine: bean-format pads the prefix and right-aligns the number.
 	alignLine
-	// accountLine: an unflagged posting without units. It is written as
-	// its account at the posting indent, then its inline comment; nothing
-	// else of the line is.
-	accountLine
 )
 
 // lineLayout is bean-format's reading of one item's line.
@@ -39,7 +35,7 @@ type lineLayout struct {
 
 	// prefix, number and currency split an aligned line; rest is the
 	// source text of a posting's from the currency to the end of the
-	// line. An account line has its prefix alone.
+	// line.
 	prefix, number, currency, rest string
 
 	// prefixWidth and numberWidth are the display widths bean-format
@@ -106,13 +102,10 @@ func postingLayout(line string, owned bool, p *ast.Posting, indent int) lineLayo
 	aligns := p.Flag == "" && isAlignedAmount(p.Amount) &&
 		!gluedToCurrency(line, numberText(p.Amount), p.Amount.Currency)
 	if !aligns {
-		switch {
-		case p.Flag != "":
+		if p.Flag != "" {
 			return lineLayout{kind: copyLine, text: line}
-		case p.Amount != nil:
-			return lineLayout{kind: copyLine, text: strings.Repeat(" ", indent) + text}
 		}
-		return lineLayout{kind: accountLine, prefix: strings.Repeat(" ", indent) + string(p.Account)}
+		return lineLayout{kind: copyLine, text: strings.Repeat(" ", indent) + text}
 	}
 
 	// bean-format measures the prefix as the source indents it, even
