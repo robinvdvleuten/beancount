@@ -151,13 +151,16 @@ func TestParseCommentCRLFDoesNotKeepCarriageReturn(t *testing.T) {
 	assert.Equal(t, "; header comment", tree.Comments[0].Content)
 }
 
-func TestParseCommentCROnlyDoesNotKeepCarriageReturn(t *testing.T) {
+// TestParseCommentRunsPastALoneCR pins beancount's lexer, to which a lone
+// \r is whitespace: it ends no comment, so the comment runs on to the \n.
+func TestParseCommentRunsPastALoneCR(t *testing.T) {
 	source := "; header comment\r2024-01-01 open Assets:Checking USD\r"
 
 	tree, err := ParseBytes(context.Background(), []byte(source))
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(tree.Comments))
-	assert.Equal(t, "; header comment", tree.Comments[0].Content)
+	assert.Equal(t, 0, len(tree.Directives))
+	assert.Equal(t, source, tree.Comments[0].Content)
 }
 
 func TestParseOrgStyleSectionHeaders(t *testing.T) {

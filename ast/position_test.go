@@ -13,5 +13,6 @@ func TestCountLineBreaks(t *testing.T) {
 		want := max(len(SplitSourceLines(s)), 1) - 1
 		assert.Equal(t, want, CountLineBreaks(s), "%q", s)
 	}
-	assert.Equal(t, 2, CountLineBreaks("a\r\nb\r"))
+	assert.Equal(t, 1, CountLineBreaks("a\r\nb\r"))
+	assert.Equal(t, []string{"a", "b\rc", "\r"}, SplitSourceLines("a\r\nb\rc\n\r"))
 }

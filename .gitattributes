@@ -3,3 +3,5 @@
 # them LF on every checkout, Windows included, so the fixtures test the same
 # input everywhere.
 *.beancount text eol=lf
+# Fixtures named crlf_* test CRLF line endings: keep their bytes as written.
+crlf_*.beancount -text

@@ -534,8 +534,8 @@ func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 // flag, then its account.
 func (f *run) postingLayout(p *ast.Posting) lineLayout {
 	text, owned := f.source.itemLine(p.Position().Line, p.Position().Column)
-	body, ok := strings.CutPrefix(strings.TrimLeft(text, " \t"), p.Flag)
-	if !ok || !strings.HasPrefix(strings.TrimLeft(body, " \t"), string(p.Account)) {
+	body, ok := strings.CutPrefix(strings.TrimLeft(text, " \t\r"), p.Flag)
+	if !ok || !strings.HasPrefix(strings.TrimLeft(body, " \t\r"), string(p.Account)) {
 		owned = false
 	}
 	return layout(text, owned, f.indent)

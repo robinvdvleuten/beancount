@@ -1,0 +1,6 @@
+; A lone CR is whitespace to beancount's lexer, not a line break: the
+; posting after it is on the header's line, a syntax error.
+2020-01-01 open Assets:Cash
+2020-01-02 * "x"  Assets:Cash 1 USD
+  Assets:Cash -2 USD
+2020-01-03 balance Assets:Cash 5 USD

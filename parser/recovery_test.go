@@ -80,11 +80,10 @@ func TestDirectiveHeaderEndsAtItsLine(t *testing.T) {
 		"balance metadata":                       {"2020-01-02 balance Assets:A 0 USD  kk: 1", 1},
 		"metadata after a string spanning lines": {"2020-01-02 note Assets:A \"x\ny\"  kk: 1", 2},
 		"posting after a string spanning lines":  {"2020-01-02 * \"x\ny\" Assets:A  1 USD\n  Assets:A", 2},
-		// Our lexer numbers a new line after a lone \r too (beancount's reads
-		// it as whitespace), so the string closes on line 2. Either way the
-		// posting is on its header's line, a syntax error in beancount as well.
-		"posting after a string spanning a \\r": {"2020-01-02 * \"x\ry\" Assets:A  1 USD\n  Assets:A", 2},
-		"metadata on a posting's line":          {"2020-01-02 *\n  Assets:A  1 USD  kk: 1\n  Assets:B", 2},
+		// Like beancount's, our lexer reads a lone \r as whitespace, so the
+		// string and the posting after it are on the header's line.
+		"posting after a string holding a \\r": {"2020-01-02 * \"x\ry\" Assets:A  1 USD\n  Assets:A", 1},
+		"metadata on a posting's line":         {"2020-01-02 *\n  Assets:A  1 USD  kk: 1\n  Assets:B", 2},
 	} {
 		t.Run(name, func(t *testing.T) {
 			tree, err := ParseString(context.Background(), tt.header+"\n2020-01-05 open Assets:Z\n")

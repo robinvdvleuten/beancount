@@ -85,12 +85,12 @@ func (p *Parser) continuesPreviousLine() bool {
 	next := p.peek()
 	// COMMENT tokens include their trailing newline in their bounds.
 	if prev.End > prev.Start && prev.End <= len(p.source) {
-		if c := p.source[prev.End-1]; c == '\n' || c == '\r' {
+		if p.source[prev.End-1] == '\n' {
 			return false
 		}
 	}
 	for i := prev.End; i < next.Start && i < len(p.source); i++ {
-		if p.source[i] == '\n' || p.source[i] == '\r' {
+		if p.source[i] == '\n' {
 			return false
 		}
 	}
@@ -766,12 +766,9 @@ func (p *Parser) previous() Token {
 
 // endLine returns the line tok ends on: its own, plus the line breaks
 // inside it (a string spanning lines), not counting the trailing line break
-// content tokens own. The breaks are counted as this lexer numbers lines,
-// which breaks a line at \r\n, \n and a lone \r alike, so the result
-// compares with the Line of the tokens after it. (To beancount's lexer a
-// lone \r is whitespace and breaks no line.)
+// content tokens own.
 func (p *Parser) endLine(tok Token) int {
-	return tok.Line + ast.CountLineBreaks(strings.TrimRight(tok.String(p.source), "\r\n"))
+	return tok.Line + ast.CountLineBreaks(strings.TrimSuffix(tok.String(p.source), "\n"))
 }
 
 // lineAfterPrevious returns the line following the one the last consumed
@@ -1086,17 +1083,11 @@ func (p *Parser) calculateSourceRange(pos ast.Position) SourceRange {
 }
 
 // lineStarts returns the byte offset where each line of source starts,
-// breaking lines on \r\n, \r, or \n like the lexer.
+// breaking lines after each \n like the lexer.
 func lineStarts(source []byte) []int {
 	starts := []int{0}
-	for i := 0; i < len(source); i++ {
-		switch source[i] {
-		case '\r':
-			if i+1 < len(source) && source[i+1] == '\n' {
-				i++
-			}
-			starts = append(starts, i+1)
-		case '\n':
+	for i, ch := range source {
+		if ch == '\n' {
 			starts = append(starts, i+1)
 		}
 	}

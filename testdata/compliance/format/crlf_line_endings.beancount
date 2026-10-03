@@ -1,0 +1,8 @@
+; CRLF line endings.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+
+2020-01-02 * "x" ; c
+  Assets:Cash 1 USD
+    note: "y"
+  Equity:Opening

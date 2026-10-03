@@ -17,7 +17,7 @@ type numberExpressionParser struct {
 
 func evaluateNumberExpression(source []byte, start int) (decimal.Decimal, int, error) {
 	lineEnd := start
-	for lineEnd < len(source) && source[lineEnd] != '\n' && source[lineEnd] != '\r' {
+	for lineEnd < len(source) && source[lineEnd] != '\n' {
 		lineEnd++
 	}
 	p := &numberExpressionParser{source: source, pos: start, lineEnd: lineEnd, consumedEnd: start}
@@ -29,7 +29,7 @@ func evaluateNumberExpression(source []byte, start int) (decimal.Decimal, int, e
 }
 
 func (p *numberExpressionParser) skipWhitespace() {
-	for p.pos < p.lineEnd && (p.source[p.pos] == ' ' || p.source[p.pos] == '\t') {
+	for p.pos < p.lineEnd && isBlank(p.source[p.pos]) {
 		p.pos++
 	}
 }

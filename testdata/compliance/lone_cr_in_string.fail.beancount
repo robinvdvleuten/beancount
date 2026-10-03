@@ -1,0 +1,5 @@
+; A lone CR is whitespace to beancount's lexer: it breaks no line, so the
+; balance assertion below is blamed on line 5.
+2020-01-01 open Assets:Cash
+2020-01-02 note Assets:Cash "ab"
+2020-01-03 balance Assets:Cash 5 USD

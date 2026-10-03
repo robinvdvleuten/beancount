@@ -90,6 +90,12 @@ limits:
   account, and counts both for the column widths and the posting indent
   (`format/line_in_string`, #664). Matching it would change the text of
   the string.
+- A lone `\r` is whitespace inside its line, as beancount's lexer and ours
+  read it (#663): a line the formatter copies keeps it, and an aligned
+  posting's spacing replaces it. `bean-format` reads the file with
+  Python's universal newlines and writes it as a line break
+  (`comment_after_string_spanning_cr`). A lone `\r` left before a line
+  break becomes a `\r\n`, which a second pass writes as `\n`.
 
 ## Open gaps (no fixture yet)
 

@@ -32,40 +32,26 @@ func (p Position) GoString() string {
 }
 
 // CountLineBreaks counts the line breaks in s as SplitSourceLines splits
-// them: \r\n is one break, and so is a lone \r or \n.
+// them: each \n, \r\n included. Like beancount's lexer, a lone \r breaks
+// no line.
 func CountLineBreaks(s string) int {
-	count := 0
-	for i := 0; i < len(s); i++ {
-		switch s[i] {
-		case '\n':
-			count++
-		case '\r':
-			count++
-			if i+1 < len(s) && s[i+1] == '\n' {
-				i++
-			}
-		}
-	}
-	return count
+	return strings.Count(s, "\n")
 }
 
-// SplitSourceLines splits source text on \r\n, \r, or \n, matching the
-// lexer's line-break semantics. Use this instead of strings.Split(s, "\n")
+// SplitSourceLines splits source text into lines on \n, dropping the \r of
+// a \r\n, matching the lexer's line-break semantics: like beancount's, a
+// lone \r stays in its line. Use this instead of strings.Split(s, "\n")
 // whenever the result must align with lexer-assigned Position.Line values.
 func SplitSourceLines(s string) []string {
 	var lines []string
 	for len(s) > 0 {
-		i := strings.IndexAny(s, "\r\n")
+		i := strings.IndexByte(s, '\n')
 		if i < 0 {
 			lines = append(lines, s)
 			break
 		}
-		lines = append(lines, s[:i])
-		if s[i] == '\r' && i+1 < len(s) && s[i+1] == '\n' {
-			s = s[i+2:]
-		} else {
-			s = s[i+1:]
-		}
+		lines = append(lines, strings.TrimSuffix(s[:i], "\r"))
+		s = s[i+1:]
 	}
 	return lines
 }

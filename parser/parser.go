@@ -286,7 +286,6 @@ func (p *Parser) parseComment() *ast.Comment {
 	// Strip it to keep Comment.Content semantic (comment text without line terminator).
 	content = strings.TrimSuffix(content, "\r\n")
 	content = strings.TrimSuffix(content, "\n")
-	content = strings.TrimSuffix(content, "\r")
 
 	// Determine comment type by checking if next token is a NEWLINE
 	commentType := ast.StandaloneComment

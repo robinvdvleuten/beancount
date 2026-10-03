@@ -416,14 +416,14 @@ func TestLexerCRLFCommentsAndDirectives(t *testing.T) {
 	}
 }
 
-func TestLexerCROnlyCommentsAndDirectives(t *testing.T) {
+func TestLexerLoneCREndsNoComment(t *testing.T) {
 	input := "; comment\r2024-01-01 open Assets:Bank\r"
 
 	lexer := NewLexer([]byte(input), "test")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
 
-	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, EOF}
+	expectedTypes := []TokenType{COMMENT, EOF}
 	assert.Equal(t, len(expectedTypes), len(tokens))
 	for i, tok := range tokens {
 		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
@@ -437,24 +437,28 @@ func TestLexerMixedLineEndingsAndBlankOwnership(t *testing.T) {
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
 
-	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, NEWLINE, COMMENT, DATE, OPEN, ACCOUNT, EOF}
+	expectedTypes := []TokenType{COMMENT, DATE, OPEN, ACCOUNT, NEWLINE, COMMENT, EOF}
 	assert.Equal(t, len(expectedTypes), len(tokens))
 	for i, tok := range tokens {
 		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
 	}
 }
 
-func TestLexerCROnlyConsecutiveBlankLines(t *testing.T) {
-	input := "2024-01-01 open Assets:Bank\r\r\r2024-01-02 open Assets:Cash"
+// TestLexerLoneCRIsWhitespace pins beancount's lexer, to which a lone \r is
+// whitespace: it breaks no line, and the tokens around it share one.
+func TestLexerLoneCRIsWhitespace(t *testing.T) {
+	input := "2024-01-01 open Assets:Bank\r\r\r2024-01-02 open Assets:Cash\n\r\n \r \n2024-01-03"
 
 	lexer := NewLexer([]byte(input), "test")
 	tokens, err := lexer.ScanAll()
 	assert.NoError(t, err)
 
-	expectedTypes := []TokenType{DATE, OPEN, ACCOUNT, NEWLINE, NEWLINE, DATE, OPEN, ACCOUNT, EOF}
+	expectedTypes := []TokenType{DATE, OPEN, ACCOUNT, DATE, OPEN, ACCOUNT, NEWLINE, NEWLINE, DATE, EOF}
+	expectedLines := []int{1, 1, 1, 1, 1, 1, 2, 3, 4, 4}
 	assert.Equal(t, len(expectedTypes), len(tokens))
 	for i, tok := range tokens {
 		assert.Equal(t, expectedTypes[i], tok.Type, "token %d type mismatch", i)
+		assert.Equal(t, expectedLines[i], tok.Line, "token %d line mismatch", i)
 	}
 }
 

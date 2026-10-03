@@ -29,7 +29,7 @@ type sourceView struct {
 }
 
 // newSourceView reads source, the text tree was parsed from. The lines are
-// split on \r\n, \r and \n to match the lexer's lineBreakLenAt semantics.
+// split as the lexer breaks them (ast.SplitSourceLines).
 func newSourceView(source []byte, tree *ast.AST) *sourceView {
 	s := &sourceView{
 		lines:    ast.SplitSourceLines(string(source)),
@@ -83,9 +83,10 @@ func (s *sourceView) directiveLine(d ast.Directive) (text string, owned bool) {
 	return s.itemLine(d.Position().Line, 1)
 }
 
-// firstColumn is the 1-indexed column of a line's first non-blank byte.
+// firstColumn is the 1-indexed column of a line's first non-blank byte,
+// blank as the lexer reads it: a space, a tab or a lone \r.
 func firstColumn(line string) int {
-	return len(line) - len(strings.TrimLeft(line, " \t")) + 1
+	return len(line) - len(strings.TrimLeft(line, " \t\r")) + 1
 }
 
 func (s *sourceView) markStart(pos ast.Position) {

@@ -125,7 +125,7 @@ func (l *Lexer) scanNextToken() Token {
 			return l.scanComment()
 		}
 
-		if ch == ' ' || ch == '\t' {
+		if isBlank(ch) {
 			// Whitespace doesn't count as content
 			l.pos++
 			l.column++
@@ -276,7 +276,7 @@ func (l *Lexer) scanToken() Token {
 	// their physical line when users leave trailing whitespace at end-of-line.
 	savedPos := l.pos
 	savedCol := l.column
-	for l.pos < len(l.source) && (l.source[l.pos] == ' ' || l.source[l.pos] == '\t') {
+	for l.pos < len(l.source) && isBlank(l.source[l.pos]) {
 		l.pos++
 		l.column++
 	}
@@ -404,7 +404,7 @@ func (l *Lexer) signedValueAhead() bool {
 }
 
 func isSignOrBlank(ch byte) bool {
-	return ch == '+' || ch == '-' || ch == ' ' || ch == '\t'
+	return ch == '+' || ch == '-' || isBlank(ch)
 }
 
 func (l *Lexer) consumeNumberRemainder() {
@@ -694,6 +694,9 @@ func (l *Lexer) advance() byte {
 	return ch
 }
 
+// lineBreakLenAt returns the length of the line break at pos: 1 for \n, 2
+// for \r\n, else 0. Like beancount's lexer, a lone \r breaks no line; it
+// is whitespace (isBlank).
 func (l *Lexer) lineBreakLenAt(pos int) int {
 	if pos >= len(l.source) {
 		return 0
@@ -705,7 +708,7 @@ func (l *Lexer) lineBreakLenAt(pos int) int {
 		if pos+1 < len(l.source) && l.source[pos+1] == '\n' {
 			return 2
 		}
-		return 1
+		return 0
 	default:
 		return 0
 	}
@@ -725,6 +728,12 @@ func (l *Lexer) consumeLineBreak() {
 }
 
 // Character classification helpers
+
+// isBlank reports whether ch is whitespace within a line: a space, a tab or,
+// as beancount's lexer reads it, a carriage return.
+func isBlank(ch byte) bool {
+	return ch == ' ' || ch == '\t' || ch == '\r'
+}
 
 func isDigit(ch byte) bool {
 	return ch >= '0' && ch <= '9'

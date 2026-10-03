@@ -282,6 +282,10 @@ func errorLines(path, output string) []int {
 // fails the format parity suite.
 var formatGaps = map[string]string{
 	"line_in_string": "#664: bean-format realigns a line inside a string spanning lines; we copy the string",
+	// Deliberate (#663): beancount's lexer reads a lone \r as whitespace,
+	// so we keep it inside its line; bean-format reads the file with
+	// Python's universal newlines and writes it as a line break.
+	"comment_after_string_spanning_cr": "bean-format turns a lone \\r into a line break; we keep it (#663)",
 }
 
 // TestOfficialFormatParity compares our formatter's output byte-for-byte
