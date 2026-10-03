@@ -741,13 +741,20 @@ func (p *Parser) previous() Token {
 	return p.tokens[p.pos-1]
 }
 
-// lineAfterPrevious returns the line following the last consumed token,
-// accounting for line breaks inside it (multi-line strings) and not
-// counting the trailing line break content tokens own.
+// endLine returns the line tok ends on: its own, plus the line breaks
+// inside it (a string spanning lines), not counting the trailing line break
+// content tokens own. The breaks are counted as this lexer numbers lines,
+// which breaks a line at \r\n, \n and a lone \r alike, so the result
+// compares with the Line of the tokens after it. (To beancount's lexer a
+// lone \r is whitespace and breaks no line.)
+func (p *Parser) endLine(tok Token) int {
+	return tok.Line + ast.CountLineBreaks(strings.TrimRight(tok.String(p.source), "\r\n"))
+}
+
+// lineAfterPrevious returns the line following the one the last consumed
+// token ends on.
 func (p *Parser) lineAfterPrevious() int {
-	tok := p.previous()
-	text := strings.TrimRight(tok.String(p.source), "\r\n")
-	return tok.Line + strings.Count(text, "\n") + 1
+	return p.endLine(p.previous()) + 1
 }
 
 func (p *Parser) isAtEnd() bool {
@@ -830,9 +837,7 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 		start--
 	}
 	for i := start + 1; i < p.pos; i++ {
-		prev := p.tokens[i-1]
-		text := strings.TrimRight(prev.String(p.source), "\r\n")
-		if p.tokens[i].Line != prev.Line+strings.Count(text, "\n") {
+		if p.tokens[i].Line != p.endLine(p.tokens[i-1]) {
 			return p.tokens[i], true
 		}
 	}

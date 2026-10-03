@@ -80,7 +80,11 @@ func TestDirectiveHeaderEndsAtItsLine(t *testing.T) {
 		"balance metadata":                       {"2020-01-02 balance Assets:A 0 USD  kk: 1", 1},
 		"metadata after a string spanning lines": {"2020-01-02 note Assets:A \"x\ny\"  kk: 1", 2},
 		"posting after a string spanning lines":  {"2020-01-02 * \"x\ny\" Assets:A  1 USD\n  Assets:A", 2},
-		"metadata on a posting's line":           {"2020-01-02 *\n  Assets:A  1 USD  kk: 1\n  Assets:B", 2},
+		// Our lexer numbers a new line after a lone \r too (beancount's reads
+		// it as whitespace), so the string closes on line 2. Either way the
+		// posting is on its header's line, a syntax error in beancount as well.
+		"posting after a string spanning a \\r": {"2020-01-02 * \"x\ry\" Assets:A  1 USD\n  Assets:A", 2},
+		"metadata on a posting's line":          {"2020-01-02 *\n  Assets:A  1 USD  kk: 1\n  Assets:B", 2},
 	} {
 		t.Run(name, func(t *testing.T) {
 			tree, err := ParseString(context.Background(), tt.header+"\n2020-01-05 open Assets:Z\n")
@@ -97,6 +101,17 @@ func TestDirectiveHeaderEndsAtItsLine(t *testing.T) {
 	// lines still parse.
 	_, err := ParseString(context.Background(), "2020-01-02 open Assets:C\n  kk: 1\n2020-01-03 note Assets:C \"two\nlines\"\n  kk: 2\n")
 	assert.NoError(t, err)
+
+	// So does the rest of a header after a string holding a lone \r, which
+	// beancount reads as whitespace inside the string.
+	for _, source := range []string{
+		"2020-01-02 * \"a\rb\" #t\n  Assets:A  1 USD\n  Assets:A  -1 USD\n",
+		"2020-01-02 * \"p\rq\" \"n\"\n  Assets:A  1 USD\n  Assets:A  -1 USD\n",
+		"2020-01-02 note Assets:A \"a\rb\" #t\n",
+	} {
+		_, err := ParseString(context.Background(), source)
+		assert.NoError(t, err, "%q", source)
+	}
 }
 
 // TestUndatedLineEndsAtItsLine pins beancount's grammar, where option,

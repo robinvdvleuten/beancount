@@ -31,6 +31,24 @@ func (p Position) GoString() string {
 	return fmt.Sprintf("Position{Filename: %q, Line: %d, Column: %d}", p.Filename, p.Line, p.Column)
 }
 
+// CountLineBreaks counts the line breaks in s as SplitSourceLines splits
+// them: \r\n is one break, and so is a lone \r or \n.
+func CountLineBreaks(s string) int {
+	count := 0
+	for i := 0; i < len(s); i++ {
+		switch s[i] {
+		case '\n':
+			count++
+		case '\r':
+			count++
+			if i+1 < len(s) && s[i+1] == '\n' {
+				i++
+			}
+		}
+	}
+	return count
+}
+
 // SplitSourceLines splits source text on \r\n, \r, or \n, matching the
 // lexer's line-break semantics. Use this instead of strings.Split(s, "\n")
 // whenever the result must align with lexer-assigned Position.Line values.
