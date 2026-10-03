@@ -99,8 +99,6 @@ func (e *Diagnostic) location() string {
 // its amounts, which print reads to show the difference.
 type BalanceMismatchError struct {
 	Diagnostic
-	expected string // Expected amount
-	actual   string // Actual amount in inventory
 	// Difference is the actual amount less the expected one, like
 	// beancount's diff_amount, with the exponent the subtraction leaves.
 	Difference decimal.Decimal
@@ -114,8 +112,6 @@ func newBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Deci
 		Diagnostic: *newError("BalanceMismatchError", balance, balance.Account,
 			"Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
 			balance.Account, expected.String(), currency, actual.String(), currency),
-		expected:   expected.String(),
-		actual:     actual.String(),
 		Difference: pydecimal.Sub(actual, expected),
 	}
 }

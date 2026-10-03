@@ -296,11 +296,6 @@ func (inv *inventory) get(commodity string) decimal.Decimal {
 	return total
 }
 
-// getLots returns all lots for a commodity
-func (inv *inventory) getLots(commodity string) []*lot {
-	return inv.lots[commodity]
-}
-
 // book decides whether a posting reduces the inventory under its account's
 // booking method and, if so, books it; it books nothing for an augmentation.
 // It is the one place a posting is found to reduce or to augment, like
@@ -441,7 +436,7 @@ func (inv *inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosi
 }
 
 // removeLot removes a lot from the inventory, keeping the others in order.
-// It builds a new slice, since getLots hands the old one out.
+// It builds a new slice, since a caller may still range over the old one.
 func (inv *inventory) removeLot(commodity string, lotToRemove *lot) {
 	inv.countLot(commodity, lotToRemove.amount, -1)
 	lots := inv.lots[commodity]
@@ -461,11 +456,6 @@ func (inv *inventory) removeLot(commodity string, lotToRemove *lot) {
 	for j := i; j < len(newLots); j++ {
 		positions[newLots[j].key] = j
 	}
-}
-
-// isEmpty returns true if the inventory has no lots
-func (inv *inventory) isEmpty() bool {
-	return len(inv.lots) == 0
 }
 
 // currencies returns all commodities in the inventory

@@ -19,11 +19,6 @@ type openDelta struct {
 	metadata             []*ast.Metadata
 }
 
-// hasMetadata returns true if the delta has metadata
-func (d *openDelta) hasMetadata() bool {
-	return len(d.metadata) > 0
-}
-
 // closeDelta describes changes from closing an account
 type closeDelta struct {
 	accountName string

@@ -1178,7 +1178,7 @@ func TestValidateOpen(t *testing.T) {
 
 			if tt.wantErrCount == 0 && delta != nil {
 				if tt.wantMetadataCopy {
-					assert.True(t, delta.hasMetadata(), "expected metadata on delta")
+					assert.True(t, len(delta.metadata) > 0, "expected metadata on delta")
 				}
 
 				if tt.wantConstraintLen > 0 {
@@ -1186,7 +1186,7 @@ func TestValidateOpen(t *testing.T) {
 				}
 
 				// Verify no shared references
-				if tt.open.HasMetadata() && delta.hasMetadata() {
+				if tt.open.HasMetadata() && len(delta.metadata) > 0 {
 					// Check that the slices don't point to the same backing array by checking addresses
 					// Using %p format to get pointer addresses as strings
 					openPtr := fmt.Sprintf("%p", &tt.open.Metadata[0])
@@ -1377,7 +1377,7 @@ func TestBookingDropsAFailedGroupsReductions(t *testing.T) {
 
 	stock, ok := l.GetAccount("Assets:Stock")
 	assert.True(t, ok)
-	assert.True(t, stock.inventory.isEmpty(), "inventory: %s", stock.inventory)
+	assert.True(t, len(stock.inventory.lots) == 0, "inventory: %s", stock.inventory)
 }
 
 func TestBookingMethodSemantics(t *testing.T) {

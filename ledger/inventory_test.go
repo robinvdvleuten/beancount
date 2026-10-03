@@ -118,7 +118,7 @@ func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
 // units leave no lot, so a later sale opens a short lot (#600).
 func TestZeroUnitsHoldNoLot(t *testing.T) {
 	inv := holding(t, "2024-01-01", "0 HOOL {5 USD}")
-	assert.True(t, inv.isEmpty())
+	assert.True(t, len(inv.lots) == 0)
 
 	positions, reduced, err := inv.book(testPosting(t, "-1 HOOL {5 USD}"), bookingSTRICT)
 	assert.NoError(t, err)
@@ -407,7 +407,7 @@ func TestBookShortPositionAtCost(t *testing.T) {
 
 			_, _, err = inv.book(testPosting(t, "1 HOOL {}"), method)
 			assert.NoError(t, err)
-			assert.True(t, inv.isEmpty())
+			assert.True(t, len(inv.lots) == 0)
 		})
 	}
 }
@@ -525,7 +525,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				// Should have 5 shares left from lot 2 at 110 USD
 				assert.Equal(t, 1, len(lots))
 				assert.Equal(t, "5", lots[0].amount.String())
@@ -556,7 +556,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				// Should have 5 shares left from lot 1 at 100 USD
 				assert.Equal(t, 1, len(lots))
 				assert.Equal(t, "5", lots[0].amount.String())
@@ -585,7 +585,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				// Should have 5 shares left from last lot at 110 USD
 				assert.Equal(t, 1, len(lots))
 				assert.Equal(t, "5", lots[0].amount.String())
@@ -662,7 +662,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				assert.Equal(t, 1, len(lots))
 				assert.Equal(t, "5", lots[0].amount.String())
 			},
@@ -689,7 +689,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				assert.Equal(t, 2, len(lots))
 			},
 		},
@@ -715,7 +715,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				assert.Equal(t, 2, len(lots))
 			},
 		},
@@ -741,7 +741,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.inventory.getLots("STOCK")
+				lots := acc.inventory.lots["STOCK"]
 				assert.Equal(t, 2, len(lots))
 			},
 		},
@@ -874,7 +874,7 @@ func TestLotOrderSurvivesEmptyingALot(t *testing.T) {
 	inv.augment(testPosting(t, "1 AA {1 USD}"), newTestDate("2024-01-01"))
 
 	var order []string
-	for _, lot := range inv.getLots("AA") {
+	for _, lot := range inv.lots["AA"] {
 		order = append(order, lot.String())
 	}
 	assert.Equal(t, []string{"1 AA {2 USD, 2024-01-01}", "2 AA {3 USD, 2024-01-01}", "1 AA {1 USD, 2024-01-01}"}, order)

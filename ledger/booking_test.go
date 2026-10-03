@@ -681,5 +681,5 @@ plugin "test.add_transaction"
 	cash, ok := l.GetAccount("Assets:Cash")
 	assert.True(t, ok)
 	assert.Equal(t, 0, len(cash.postings))
-	assert.True(t, cash.inventory.isEmpty())
+	assert.True(t, len(cash.inventory.lots) == 0)
 }

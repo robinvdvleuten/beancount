@@ -509,9 +509,9 @@ func TestLedger_ProcessBalance(t *testing.T) {
 				assert.Equal(t, 1, len(errs))
 				balErr, ok := errs[0].(*BalanceMismatchError)
 				assert.True(t, ok, "should be BalanceMismatchError")
-				assert.Equal(t, "500", balErr.expected)
-				assert.Equal(t, "1000", balErr.actual)
+				assert.Equal(t, "500", balErr.Difference.String())
 				assert.Contains(t, balErr.Error(), "Expected: 500 USD")
+				assert.Contains(t, balErr.Error(), "Actual:   1000 USD")
 			},
 		},
 		{
@@ -874,7 +874,7 @@ func TestDatedAndLabeledLotReduction(t *testing.T) {
 
 			acc, ok := l.GetAccount("Assets:Brokerage")
 			assert.True(t, ok)
-			lots := acc.inventory.getLots("HOOL")
+			lots := acc.inventory.lots["HOOL"]
 			assert.Equal(t, 1, len(lots))
 			assert.Equal(t, "5", lots[0].amount.String())
 			assert.True(t, lots[0].spec != nil && lots[0].spec.cost != nil)

@@ -318,7 +318,8 @@ func TestPadFillsOnlyTheFirstAssertion(t *testing.T) {
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
 	var mismatch *BalanceMismatchError
 	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
-	assert.Equal(t, "5", mismatch.actual)
+	assert.Contains(t, mismatch.Message(), "Actual:   5 USD")
+	assert.Equal(t, "-2", mismatch.Difference.String())
 }
 
 func TestPaddingKeepsTheDifferencesPrecision(t *testing.T) {
