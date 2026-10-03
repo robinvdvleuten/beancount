@@ -25,9 +25,9 @@ import (
 // tolerances.
 type booker struct {
 	tolerances  tolerances
-	inventories map[string]*Inventory
-	methods     map[string]BookingMethod
-	fallback    BookingMethod
+	inventories map[string]*inventory
+	methods     map[string]bookingMethod
+	fallback    bookingMethod
 }
 
 // bookedTransaction is Booking's result for one transaction.
@@ -47,31 +47,31 @@ type bookedPosting struct {
 // newBooker takes each account's booking method from its open directive,
 // wherever it is dated, and the configured method otherwise, as beancount
 // does.
-func newBooker(cfg *Config, tolerances tolerances, directives []ast.Directive) *booker {
+func newBooker(cfg *sharedconfig.Config, tolerances tolerances, directives []ast.Directive) *booker {
 	b := &booker{
 		tolerances:  tolerances,
-		inventories: make(map[string]*Inventory),
-		methods:     make(map[string]BookingMethod),
-		fallback:    BookingMethod(cfg.BookingMethod),
+		inventories: make(map[string]*inventory),
+		methods:     make(map[string]bookingMethod),
+		fallback:    bookingMethod(cfg.BookingMethod),
 	}
 	for _, directive := range directives {
 		if open, ok := directive.(*ast.Open); ok && sharedconfig.IsBookingMethod(open.BookingMethod) {
-			b.methods[string(open.Account)] = BookingMethod(open.BookingMethod)
+			b.methods[string(open.Account)] = bookingMethod(open.BookingMethod)
 		}
 	}
 	return b
 }
 
-func (b *booker) inventory(account ast.Account) *Inventory {
+func (b *booker) inventory(account ast.Account) *inventory {
 	inv, ok := b.inventories[string(account)]
 	if !ok {
-		inv = NewInventory()
+		inv = newInventory()
 		b.inventories[string(account)] = inv
 	}
 	return inv
 }
 
-func (b *booker) method(account ast.Account) BookingMethod {
+func (b *booker) method(account ast.Account) bookingMethod {
 	if method, ok := b.methods[string(account)]; ok {
 		return method
 	}
@@ -113,11 +113,11 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 	// booking.
 	for _, posting := range txn.Postings {
 		if posting.Cost.IsMergeCost() {
-			l.errors = append(l.errors, NewMergeCostError(txn, posting))
+			l.errors = append(l.errors, newMergeCostError(txn, posting))
 		}
 		if posting.Cost != nil {
 			for _, duplicate := range posting.Cost.Duplicates {
-				l.errors = append(l.errors, NewDuplicateCostComponentError(txn, posting, duplicate))
+				l.errors = append(l.errors, newDuplicateCostComponentError(txn, posting, duplicate))
 			}
 		}
 		l.errors = append(l.errors, fixTotalCost(txn, posting)...)
@@ -152,12 +152,12 @@ func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
 	var errs []error
 	if price.Value != "" {
 		if number, err := ParseAmount(price); err == nil && number.IsNegative() {
-			errs = append(errs, NewNegativePriceError(txn, posting))
+			errs = append(errs, newNegativePriceError(txn, posting))
 			posting.Price = &ast.Amount{Value: formatInferredNumber(number.Abs()), Currency: price.Currency}
 		}
 	}
 	if posting.PriceTotal && (posting.Amount == nil || posting.Amount.Value == "") {
-		errs = append(errs, NewTotalPriceWithoutUnitsError(txn, posting))
+		errs = append(errs, newTotalPriceWithoutUnitsError(txn, posting))
 		posting.Price = nil
 		posting.PriceTotal = false
 	}
@@ -183,7 +183,7 @@ func fixTotalCost(txn *ast.Transaction, posting *ast.Posting) []error {
 	if cost.Total == nil {
 		return nil
 	}
-	err := NewTotalCompoundCostError(txn, posting)
+	err := newTotalCompoundCostError(txn, posting)
 	fixed := *cost
 	fixed.IsTotal = false
 	fixed.Amount = &ast.Amount{Value: "0", Currency: cost.Total.Currency}
@@ -235,10 +235,10 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	// Like beancount, a transaction changes the inventories only through
 	// the groups it books: each group reduces lots in scratch copies, which
 	// are staged once the group is booked.
-	staged := make(map[string]*Inventory)
+	staged := make(map[string]*inventory)
 	reductions := make(map[*ast.Posting][]BookedPosition)
 	for _, group := range groups {
-		scratch := &scratchInventories{booker: b, staged: staged, own: make(map[string]*Inventory)}
+		scratch := &scratchInventories{booker: b, staged: staged, own: make(map[string]*inventory)}
 		groupReductions, groupErrs := b.bookReductions(txn, group, scratch)
 		var interpolated *interpolatedGroup
 		if len(groupErrs) == 0 {
@@ -326,7 +326,7 @@ func validateAmounts(txn *ast.Transaction) []error {
 			continue // Will be inferred, checked later
 		}
 		if _, err := ParseAmount(posting.Amount); err != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
+			errs = append(errs, newInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
 		}
 	}
 	return errs
@@ -339,7 +339,7 @@ func validateAmounts(txn *ast.Transaction) []error {
 //   - Cost dates are valid (not zero dates)
 //   - Cost labels are non-empty if present
 //   - Empty costs {} are accepted (for automatic lot selection)
-//   - ParseLotSpec can parse the cost specification
+//   - parseLotSpec can parse the cost specification
 //
 // Returns a slice of InvalidCostError for any invalid cost specifications.
 // Includes posting index and cost spec string for clear error messages.
@@ -372,25 +372,25 @@ func validateCosts(txn *ast.Transaction) []error {
 		// per-unit cost.
 		if posting.Cost.IsTotal && posting.Cost.Amount != nil {
 			if posting.Amount == nil {
-				errs = append(errs, NewTotalCostError(txn, posting, "total cost requires a quantity"))
+				errs = append(errs, newTotalCostError(txn, posting, "total cost requires a quantity"))
 				continue
 			}
 
 			quantity, err := decimal.NewFromString(posting.Amount.Value)
 			if err != nil {
-				errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err)))
+				errs = append(errs, newTotalCostError(txn, posting, fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err)))
 				continue
 			}
 
 			if posting.Cost.Amount.Value != "" {
 				if _, err := decimal.NewFromString(posting.Cost.Amount.Value); err != nil {
-					errs = append(errs, NewTotalCostError(txn, posting, fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err)))
+					errs = append(errs, newTotalCostError(txn, posting, fmt.Sprintf("invalid total cost %q: %v", posting.Cost.Amount.Value, err)))
 					continue
 				}
 			}
 
 			if quantity.IsZero() {
-				errs = append(errs, NewTotalCostError(txn, posting, "cannot use total cost with zero quantity"))
+				errs = append(errs, newTotalCostError(txn, posting, "cannot use total cost with zero quantity"))
 				continue
 			}
 		}
@@ -399,28 +399,28 @@ func validateCosts(txn *ast.Transaction) []error {
 		if amount := posting.Cost.Amount; amount != nil && amount.Value != "" {
 			if _, err := ParseAmount(amount); err != nil {
 				costSpec := fmt.Sprintf("{%s %s}", amount.Value, amount.Currency)
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
+				errs = append(errs, newInvalidCostError(txn, posting.Account, i, costSpec, err))
 			}
 		}
 		// A compound's total may be left out; fixTotalCost has rewritten
 		// one inside total braces.
 		if total := posting.Cost.Total; total != nil {
 			if posting.Cost.Amount == nil || total.Currency != posting.Cost.Amount.Currency {
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", fmt.Errorf("compound cost currencies must match")))
+				errs = append(errs, newInvalidCostError(txn, posting.Account, i, "{... # ...}", fmt.Errorf("compound cost currencies must match")))
 			} else if total.Value != "" {
 				if _, err := ParseAmount(total); err != nil {
-					errs = append(errs, NewInvalidCostError(txn, posting.Account, i, "{... # ...}", err))
+					errs = append(errs, newInvalidCostError(txn, posting.Account, i, "{... # ...}", err))
 				}
 			}
 		}
 
-		// Validate ParseLotSpec can parse the cost
-		if _, err := ParseLotSpec(posting.Cost); err != nil {
+		// Validate parseLotSpec can parse the cost
+		if _, err := parseLotSpec(posting.Cost); err != nil {
 			costSpec := "{...}"
 			if posting.Cost.Amount != nil {
 				costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
 			}
-			errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec, err))
+			errs = append(errs, newInvalidCostError(txn, posting.Account, i, costSpec, err))
 		}
 
 		// Validate cost date if present
@@ -430,7 +430,7 @@ func validateCosts(txn *ast.Transaction) []error {
 				if posting.Cost.Amount != nil {
 					costSpec = fmt.Sprintf("{%s %s, ...}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
 				}
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
+				errs = append(errs, newInvalidCostError(txn, posting.Account, i, costSpec,
 					fmt.Errorf("cost date cannot be zero")))
 			}
 		}
@@ -442,7 +442,7 @@ func validateCosts(txn *ast.Transaction) []error {
 				if posting.Cost.Amount != nil {
 					costSpec = fmt.Sprintf("{%s %s}", posting.Cost.Amount.Value, posting.Cost.Amount.Currency)
 				}
-				errs = append(errs, NewInvalidCostError(txn, posting.Account, i, costSpec,
+				errs = append(errs, newInvalidCostError(txn, posting.Account, i, costSpec,
 					fmt.Errorf("cost label cannot be empty")))
 			}
 		}
@@ -483,7 +483,7 @@ func validatePrices(txn *ast.Transaction) []error {
 			if posting.PriceTotal {
 				priceSpec = fmt.Sprintf("@@ %s %s", posting.Price.Value, posting.Price.Currency)
 			}
-			errs = append(errs, NewInvalidPriceError(txn, posting.Account, i, priceSpec, err))
+			errs = append(errs, newInvalidPriceError(txn, posting.Account, i, priceSpec, err))
 			continue
 		}
 
@@ -505,13 +505,13 @@ func isIncompleteAmount(a *ast.Amount) bool {
 // earlier groups or else of the booker's.
 type scratchInventories struct {
 	booker *booker
-	staged map[string]*Inventory
-	own    map[string]*Inventory
+	staged map[string]*inventory
+	own    map[string]*inventory
 }
 
 // view returns the inventory the group books account against, read-only:
 // its own copy once made, or else the one it would copy.
-func (s *scratchInventories) view(account ast.Account) *Inventory {
+func (s *scratchInventories) view(account ast.Account) *inventory {
 	if inv, ok := s.own[string(account)]; ok {
 		return inv
 	}
@@ -522,7 +522,7 @@ func (s *scratchInventories) view(account ast.Account) *Inventory {
 }
 
 // get returns the group's own copy of account's inventory, to book into.
-func (s *scratchInventories) get(account ast.Account) *Inventory {
+func (s *scratchInventories) get(account ast.Account) *inventory {
 	if inv, ok := s.own[string(account)]; ok {
 		return inv
 	}
@@ -567,9 +567,9 @@ func (b *booker) bookReductions(txn *ast.Transaction, group currencyGroup, scrat
 func newBookingError(txn *ast.Transaction, account ast.Account, err error) error {
 	var ambiguousErr *ambiguousBookingMatchError
 	if errors.As(err, &ambiguousErr) || errors.Is(err, errAverageUnsupported) {
-		return NewAmbiguousBookingError(txn, account, err)
+		return newAmbiguousBookingError(txn, account, err)
 	}
-	return NewInsufficientInventoryError(txn, account, err)
+	return newInsufficientInventoryError(txn, account, err)
 }
 
 // unbooked returns a copy of txn as written, before resolveCostCurrencies

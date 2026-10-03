@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
@@ -95,7 +96,7 @@ const unrealizedGainsLeaf = "Earnings:Unrealized"
 
 // newBalanceTree builds the balance tree GetBalanceTree returns from the
 // accounts, with the account-type roots cfg names.
-func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation, closed bool) (*BalanceTree, error) {
+func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *sharedconfig.Config, types []ast.AccountType, startDate, endDate *ast.Date, valuation Valuation, closed bool) (*BalanceTree, error) {
 	// Validate date range
 	if startDate != nil && endDate != nil && startDate.After(endDate.Time) {
 		return nil, fmt.Errorf("startDate %s is after endDate %s", startDate.String(), endDate.String())
@@ -138,7 +139,7 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types
 			closing.add(account.Type, positions, balance)
 		}
 		if included {
-			entries = append(entries, balanceTreeEntry{name: string(account.Name), accountType: account.Type, balance: balance})
+			entries = append(entries, balanceTreeEntry{name: string(account.name), accountType: account.Type, balance: balance})
 		}
 	}
 	if closing != nil {
@@ -148,7 +149,7 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types
 	// Build sorted currency list
 	currencySet := make(map[string]bool)
 	for _, entry := range entries {
-		for _, currency := range entry.balance.Currencies() {
+		for _, currency := range entry.balance.currencies() {
 			currencySet[currency] = true
 		}
 	}
@@ -179,13 +180,13 @@ func (l *Ledger) newBalanceTree(accounts map[string]*Account, cfg *Config, types
 // under Equity: the Current earnings and Current conversions positions,
 // and the valued total of the balance sheet's own accounts.
 type closingBalances struct {
-	cfg         *Config
+	cfg         *sharedconfig.Config
 	earnings    lotSums                    // Income and Expenses
 	conversions map[string]decimal.Decimal // every account at cost, negated
 	total       map[string]decimal.Decimal // Assets, Liabilities and Equity, valued
 }
 
-func newClosingBalances(cfg *Config) *closingBalances {
+func newClosingBalances(cfg *sharedconfig.Config) *closingBalances {
 	return &closingBalances{
 		cfg:         cfg,
 		earnings:    newLotSums(),
@@ -234,8 +235,8 @@ func (l *Ledger) closeEntries(entries []balanceTreeEntry, closing *closingBalanc
 		}
 		for i := range entries {
 			if entries[i].name == name {
-				merged := entries[i].balance.Copy()
-				merged.Merge(balance)
+				merged := entries[i].balance.copy()
+				merged.merge(balance)
 				entries[i].balance = merged
 				return
 			}
@@ -262,7 +263,7 @@ func (l *Ledger) closeEntries(entries []balanceTreeEntry, closing *closingBalanc
 				unrealized[currency] = number.Neg()
 			}
 		}
-		add(equity+":"+unrealizedGainsLeaf, NewBalanceFromMap(unrealized))
+		add(equity+":"+unrealizedGainsLeaf, newBalanceFromMap(unrealized))
 	}
 	return entries
 }
@@ -275,7 +276,7 @@ type balanceTreeEntry struct {
 	balance     *Balance
 }
 
-func buildBalanceTree(cfg *Config, entries []balanceTreeEntry, typeFilter map[string]bool) *BalanceTree {
+func buildBalanceTree(cfg *sharedconfig.Config, entries []balanceTreeEntry, typeFilter map[string]bool) *BalanceTree {
 	// Group accounts by type
 	accountsByType := make(map[string][]balanceTreeEntry)
 	for _, entry := range entries {
@@ -340,7 +341,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 			Name:     accountName,
 			Account:  accountName,
 			Depth:    strings.Count(accountName, ":"),
-			Balance:  entry.balance.Copy(),
+			Balance:  entry.balance.copy(),
 			Children: nil,
 		}
 	}
@@ -354,7 +355,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 			Name:     path,
 			Account:  path,
 			Depth:    depth,
-			Balance:  NewBalance(),
+			Balance:  newBalance(),
 			Children: nil,
 		}
 		nodeMap[path] = n
@@ -404,7 +405,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 	aggregate = func(node *BalanceNode) {
 		for _, child := range node.Children {
 			aggregate(child)
-			node.Balance.Merge(child.Balance)
+			node.Balance.merge(child.Balance)
 		}
 	}
 
@@ -413,7 +414,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 		Name:     typeName,
 		Account:  "", // Virtual root, not an actual account
 		Depth:    0,
-		Balance:  NewBalance(),
+		Balance:  newBalance(),
 		Children: nil,
 	}
 
@@ -438,7 +439,7 @@ func buildTypeSubtree(typeName string, entries []balanceTreeEntry) *BalanceNode 
 	// Aggregate balances from children to root
 	for _, child := range root.Children {
 		aggregate(child)
-		root.Balance.Merge(child.Balance)
+		root.Balance.merge(child.Balance)
 	}
 
 	return root

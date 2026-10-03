@@ -97,7 +97,7 @@ func residualCurrencies(allWeights []weightSet, balance map[string]decimal.Decim
 	}
 	for _, weights := range allWeights {
 		for _, w := range weights {
-			add(w.Currency)
+			add(w.currency)
 		}
 	}
 	rest := make([]string, 0, len(balance))

@@ -50,10 +50,10 @@ func TestLedger_ProcessOpen(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok, "account should exist")
-				assert.Equal(t, "Assets:Checking", string(acc.Name))
+				assert.Equal(t, "Assets:Checking", string(acc.name))
 				assert.Equal(t, "Assets", acc.Type) // Account.Type is now the root name string
-				assert.Equal(t, BookingSTRICT, l.booker.method(acc.Name))
-				assert.False(t, acc.IsClosed())
+				assert.Equal(t, bookingSTRICT, l.booker.method(acc.name))
+				assert.False(t, acc.isClosed())
 			},
 		},
 		{
@@ -66,7 +66,7 @@ option "booking_method" "LIFO"
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				assert.Equal(t, BookingLIFO, l.booker.method(acc.Name))
+				assert.Equal(t, bookingLIFO, l.booker.method(acc.name))
 			},
 		},
 		{
@@ -78,7 +78,7 @@ option "booking_method" "LIFO"
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok)
-				assert.Equal(t, []string{"USD", "EUR"}, acc.ConstraintCurrencies)
+				assert.Equal(t, []string{"USD", "EUR"}, acc.constraintCurrencies)
 			},
 		},
 		{
@@ -91,7 +91,7 @@ option "booking_method" "LIFO"
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				assert.Equal(t, BookingSTRICT, l.booker.method(acc.Name))
+				assert.Equal(t, bookingSTRICT, l.booker.method(acc.name))
 			},
 		},
 		{
@@ -222,7 +222,7 @@ func TestLedger_ProcessClose(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok)
-				assert.True(t, acc.IsClosed())
+				assert.True(t, acc.isClosed())
 				assert.NotZero(t, acc.CloseDate)
 			},
 		},
@@ -297,10 +297,10 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			checkFunc: func(t *testing.T, l *Ledger) {
 				// Check inventory updated
 				checking, _ := l.GetAccount("Assets:Checking")
-				assert.Equal(t, "1000", checking.Inventory.Get("USD").String())
+				assert.Equal(t, "1000", checking.inventory.get("USD").String())
 
 				income, _ := l.GetAccount("Income:Salary")
-				assert.Equal(t, "-1000", income.Inventory.Get("USD").String())
+				assert.Equal(t, "-1000", income.inventory.get("USD").String())
 			},
 		},
 		{
@@ -318,13 +318,13 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
 				checking, _ := l.GetAccount("Assets:Checking")
-				assert.Equal(t, "-2000", checking.Inventory.Get("USD").String())
+				assert.Equal(t, "-2000", checking.inventory.get("USD").String())
 
 				rent, _ := l.GetAccount("Expenses:Rent")
-				assert.Equal(t, "1500", rent.Inventory.Get("USD").String())
+				assert.Equal(t, "1500", rent.inventory.get("USD").String())
 
 				food, _ := l.GetAccount("Expenses:Food")
-				assert.Equal(t, "500", food.Inventory.Get("USD").String())
+				assert.Equal(t, "500", food.inventory.get("USD").String())
 			},
 		},
 		{
@@ -509,8 +509,8 @@ func TestLedger_ProcessBalance(t *testing.T) {
 				assert.Equal(t, 1, len(errs))
 				balErr, ok := errs[0].(*BalanceMismatchError)
 				assert.True(t, ok, "should be BalanceMismatchError")
-				assert.Equal(t, "500", balErr.Expected)
-				assert.Equal(t, "1000", balErr.Actual)
+				assert.Equal(t, "500", balErr.expected)
+				assert.Equal(t, "1000", balErr.actual)
 				assert.Contains(t, balErr.Error(), "Expected: 500 USD")
 			},
 		},
@@ -658,7 +658,7 @@ func TestAccount_IsOpen(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			checkDate := mustParseDate(tt.checkDate)
-			got := tt.account.IsOpen(checkDate)
+			got := tt.account.isOpen(checkDate)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -701,9 +701,9 @@ func TestAccountLifecycleEdgeCases(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok)
-				assert.True(t, acc.IsClosed())
+				assert.True(t, acc.isClosed())
 				// Should still have balance
-				assert.Equal(t, "100", acc.Inventory.Get("USD").String())
+				assert.Equal(t, "100", acc.inventory.get("USD").String())
 			},
 		},
 		{
@@ -874,11 +874,11 @@ func TestDatedAndLabeledLotReduction(t *testing.T) {
 
 			acc, ok := l.GetAccount("Assets:Brokerage")
 			assert.True(t, ok)
-			lots := acc.Inventory.GetLots("HOOL")
+			lots := acc.inventory.getLots("HOOL")
 			assert.Equal(t, 1, len(lots))
-			assert.Equal(t, "5", lots[0].Amount.String())
-			assert.True(t, lots[0].Spec != nil && lots[0].Spec.Cost != nil)
-			assert.Equal(t, test.remainingCost, lots[0].Spec.Cost.String())
+			assert.Equal(t, "5", lots[0].amount.String())
+			assert.True(t, lots[0].spec != nil && lots[0].spec.cost != nil)
+			assert.Equal(t, test.remainingCost, lots[0].spec.cost.String())
 		})
 	}
 }
@@ -1060,7 +1060,7 @@ func TestLedger_OpensAnAccountThatIsAlsoAParent(t *testing.T) {
 
 	account, ok := ledger.GetAccount("Expenses:Taxes:Y2021:US:Federal")
 	assert.True(t, ok)
-	assert.True(t, account.Inventory.Get("USD").Equal(mustParseDec("100")))
+	assert.True(t, account.inventory.get("USD").Equal(mustParseDec("100")))
 }
 
 func TestLedger_GetPriceSameCurrency(t *testing.T) {

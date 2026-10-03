@@ -5,17 +5,10 @@ import (
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
 )
 
-// Config aliases the shared processing configuration for compatibility.
-type Config = sharedconfig.Config
+func configFromAST(tree *ast.AST) (*sharedconfig.Config, []error) {
+	return sharedconfig.ParseOptions(tree)
+}
 
-// AccountNamesConfig aliases the shared account-name configuration.
-type AccountNamesConfig = sharedconfig.AccountNames
-
-// NewConfig returns configuration populated with official defaults.
-func NewConfig() *Config { return sharedconfig.New() }
-
-func configFromAST(tree *ast.AST) (*Config, []error) { return sharedconfig.ParseOptions(tree) }
-
-func configFromOptions(options map[string][]string) (*Config, error) {
+func configFromOptions(options map[string][]string) (*sharedconfig.Config, error) {
 	return sharedconfig.FromOptions(options)
 }

@@ -24,9 +24,10 @@ func ParseAmount(amount *ast.Amount) (decimal.Decimal, error) {
 	return d, nil
 }
 
-// MustParseAmount converts a ast.Amount to a decimal.Decimal and panics on error
-// Use only in tests or when you're certain the amount is valid
-func MustParseAmount(amount *ast.Amount) decimal.Decimal {
+// mustParseAmount converts a ast.Amount to a decimal.Decimal and panics on
+// error. Use it only where the amount is certain to be valid, as a padding
+// transaction's is.
+func mustParseAmount(amount *ast.Amount) decimal.Decimal {
 	d, err := ParseAmount(amount)
 	if err != nil {
 		panic(err)
@@ -42,8 +43,8 @@ func formatInferredNumber(d decimal.Decimal) string {
 	return d.StringFixed(max(-d.Exponent(), 0))
 }
 
-// AmountEqual checks if two amounts are equal within tolerance
-func AmountEqual(a, b decimal.Decimal, tolerance decimal.Decimal) bool {
+// amountEqual checks if two amounts are equal within tolerance
+func amountEqual(a, b decimal.Decimal, tolerance decimal.Decimal) bool {
 	diff := pydecimal.Sub(a, b).Abs()
 	return diff.LessThanOrEqual(tolerance)
 }

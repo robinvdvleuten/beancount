@@ -5,17 +5,18 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 )
 
 // testAccount builds an account holding the given postings, each a date
 // and a USD amount, in its inventory and its posting history.
 func testAccount(name string, postings ...[2]string) *Account {
-	account := &Account{Name: ast.Account(name), Type: ast.Account(name).Root(), Inventory: NewInventory()}
+	account := &Account{name: ast.Account(name), Type: ast.Account(name).Root(), inventory: newInventory()}
 	for _, p := range postings {
-		posting := ast.NewPosting(account.Name, ast.WithAmount(p[1], "USD"))
+		posting := ast.NewPosting(account.name, ast.WithAmount(p[1], "USD"))
 		txn := ast.NewTransaction(newTestDate(p[0]), "t", ast.WithPostings(posting))
-		account.Inventory.AddLot("USD", mustParseDec(p[1]), nil)
-		account.Postings = append(account.Postings, &AccountPosting{Transaction: txn, Posting: posting})
+		account.inventory.addLot("USD", mustParseDec(p[1]), nil)
+		account.postings = append(account.postings, &accountPosting{transaction: txn, posting: posting})
 	}
 	return account
 }
@@ -23,7 +24,7 @@ func testAccount(name string, postings ...[2]string) *Account {
 func testAccounts(accounts ...*Account) map[string]*Account {
 	byName := make(map[string]*Account, len(accounts))
 	for _, account := range accounts {
-		byName[string(account.Name)] = account
+		byName[string(account.name)] = account
 	}
 	return byName
 }
@@ -52,7 +53,7 @@ func TestNewBalanceTreeNesting(t *testing.T) {
 		testAccount("Income:Salary", [2]string{"2024-01-01", "-155"}),
 	)
 
-	tree, err := (&Ledger{}).newBalanceTree(accounts, NewConfig(), nil, nil, nil, ValuationUnits, false)
+	tree, err := (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), nil, nil, nil, ValuationUnits, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{
 		"Assets 155",
@@ -75,7 +76,7 @@ func TestNewBalanceTreeSingleLeafUnderIntermediates(t *testing.T) {
 		testAccount("Liabilities:US:Chase:Slate", [2]string{"2024-01-01", "-10"}),
 	)
 
-	tree, err := (&Ledger{}).newBalanceTree(accounts, NewConfig(), nil, nil, nil, ValuationUnits, false)
+	tree, err := (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), nil, nil, nil, ValuationUnits, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{
 		"Liabilities -10",
@@ -93,13 +94,13 @@ func TestNewBalanceTreeSingleLeafUnderIntermediates(t *testing.T) {
 func TestNewBalanceTreeTypeWithoutAccounts(t *testing.T) {
 	accounts := testAccounts(testAccount("Assets:Cash", [2]string{"2024-01-01", "5"}))
 
-	tree, err := (&Ledger{}).newBalanceTree(accounts, NewConfig(), []ast.AccountType{ast.AccountTypeAssets, ast.AccountTypeLiabilities}, nil, nil, ValuationUnits, false)
+	tree, err := (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), []ast.AccountType{ast.AccountTypeAssets, ast.AccountTypeLiabilities}, nil, nil, ValuationUnits, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Assets 5", "Assets:Cash 5"}, treeLines(tree.Roots))
 }
 
 func TestNewBalanceTreeConfiguredTypeNames(t *testing.T) {
-	cfg := NewConfig()
+	cfg := sharedconfig.New()
 	cfg.AccountNames.Assets = "Vermoegen"
 	accounts := testAccounts(
 		testAccount("Vermoegen:Kasse", [2]string{"2024-01-01", "5"}),
@@ -118,22 +119,22 @@ func TestNewBalanceTreeDateRange(t *testing.T) {
 		[2]string{"2024-03-05", "40"},
 	))
 
-	tree, err := (&Ledger{}).newBalanceTree(accounts, NewConfig(), nil, newTestDate("2024-02-01"), newTestDate("2024-02-29"), ValuationUnits, false)
+	tree, err := (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), nil, newTestDate("2024-02-01"), newTestDate("2024-02-29"), ValuationUnits, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Expenses 20", "Expenses:Food 20"}, treeLines(tree.Roots))
 	assert.Equal(t, "2024-02-01", *tree.StartDate)
 	assert.Equal(t, "2024-02-29", *tree.EndDate)
 
-	tree, err = (&Ledger{}).newBalanceTree(accounts, NewConfig(), nil, newTestDate("2024-02-05"), newTestDate("2024-02-05"), ValuationUnits, false)
+	tree, err = (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), nil, newTestDate("2024-02-05"), newTestDate("2024-02-05"), ValuationUnits, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Expenses 20", "Expenses:Food 20"}, treeLines(tree.Roots))
 
-	tree, err = (&Ledger{}).newBalanceTree(accounts, NewConfig(), nil, nil, newTestDate("2024-02-05"), ValuationUnits, false)
+	tree, err = (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), nil, nil, newTestDate("2024-02-05"), ValuationUnits, false)
 	assert.NoError(t, err)
 	assert.Equal(t, []string{"Expenses 30", "Expenses:Food 30"}, treeLines(tree.Roots))
 	assert.Equal(t, (*string)(nil), tree.StartDate)
 	assert.Equal(t, "2024-02-05", *tree.EndDate)
 
-	_, err = (&Ledger{}).newBalanceTree(accounts, NewConfig(), nil, newTestDate("2024-03-01"), newTestDate("2024-02-01"), ValuationUnits, false)
+	_, err = (&Ledger{}).newBalanceTree(accounts, sharedconfig.New(), nil, newTestDate("2024-03-01"), newTestDate("2024-02-01"), ValuationUnits, false)
 	assert.Error(t, err)
 }

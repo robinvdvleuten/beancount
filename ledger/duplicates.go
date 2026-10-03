@@ -68,14 +68,14 @@ func (l *Ledger) duplicateTransaction(txn *ast.Transaction) *ast.Transaction {
 		if !ok {
 			continue
 		}
-		for _, recorded := range account.Postings {
-			if _, ok := importID(recorded.Transaction); ok {
+		for _, recorded := range account.postings {
+			if _, ok := importID(recorded.transaction); ok {
 				continue
 			}
-			if withinDays(txn.Date(), recorded.Transaction.Date(), duplicateDays) &&
-				sameAmount(posting.Amount, recorded.Posting.Amount) &&
-				nestedAccounts(txn, recorded.Transaction) {
-				return recorded.Transaction
+			if withinDays(txn.Date(), recorded.transaction.Date(), duplicateDays) &&
+				sameAmount(posting.Amount, recorded.posting.Amount) &&
+				nestedAccounts(txn, recorded.transaction) {
+				return recorded.transaction
 			}
 		}
 	}

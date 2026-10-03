@@ -8,6 +8,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -19,7 +20,7 @@ import (
 func interpolateLast(t *testing.T, source string) (lines, errs []string) {
 	t.Helper()
 	tree := parser.MustParseString(context.Background(), source)
-	b := newBooker(NewConfig(), newTolerances(nil), tree.Directives)
+	b := newBooker(sharedconfig.New(), newTolerances(nil), tree.Directives)
 	var txns []*ast.Transaction
 	for _, directive := range tree.Directives {
 		if txn, ok := directive.(*ast.Transaction); ok {
@@ -37,7 +38,7 @@ func interpolateLast(t *testing.T, source string) (lines, errs []string) {
 	specTolerances := b.tolerances.spec(txn.Postings)
 	resolveCostCurrencies(txn, groups)
 	for _, group := range groups {
-		scratch := &scratchInventories{booker: b, staged: map[string]*Inventory{}, own: map[string]*Inventory{}}
+		scratch := &scratchInventories{booker: b, staged: map[string]*inventory{}, own: map[string]*inventory{}}
 		reductions, bookErrs := b.bookReductions(txn, group, scratch)
 		assert.Equal(t, 0, len(bookErrs))
 

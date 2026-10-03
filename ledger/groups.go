@@ -141,7 +141,7 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 			add(currency, r)
 			continue
 		}
-		errs = append(errs, NewCurrencyGroupError(txn, posting, fmt.Sprintf("Failed to categorize posting %d", r.index+1)))
+		errs = append(errs, newCurrencyGroupError(txn, posting, fmt.Sprintf("Failed to categorize posting %d", r.index+1)))
 	}
 
 	// A units currency still left out comes from the account's inventory.
@@ -159,7 +159,7 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 
 	if len(autos) > 1 {
 		last := txn.Postings[autos[len(autos)-1].index]
-		errs = append(errs, NewCurrencyGroupError(txn, last, "You may not have more than one auto-posting per currency"))
+		errs = append(errs, newCurrencyGroupError(txn, last, "You may not have more than one auto-posting per currency"))
 		autos = autos[:1]
 	}
 	for _, auto := range autos {
@@ -172,7 +172,7 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 		for _, r := range groups[currency] {
 			for _, part := range []struct{ currency, name string }{{r.units, "units"}, {r.cost, "cost"}, {r.price, "price"}} {
 				if part.currency == missingCurrency {
-					errs = append(errs, NewCurrencyGroupError(txn, txn.Postings[r.index], fmt.Sprintf("Could not resolve %s currency", part.name)))
+					errs = append(errs, newCurrencyGroupError(txn, txn.Postings[r.index], fmt.Sprintf("Could not resolve %s currency", part.name)))
 				}
 			}
 		}
@@ -202,5 +202,5 @@ func (b *booker) heldCurrencies(account ast.Account) (units, costs []string) {
 	if !ok {
 		return nil, nil
 	}
-	return inv.Currencies(), inv.costCurrencies()
+	return inv.currencies(), inv.costCurrencies()
 }

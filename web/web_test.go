@@ -611,8 +611,15 @@ func TestAPISourceOptionErrorsKeepTypeAndPosition(t *testing.T) {
 
 func TestJSONSafeSourceErrorKeepsLedgerErrors(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), "2024-01-01 price HOOL 1 USD\n")
-	price := tree.Directives[0].(*ast.Price)
-	data, err := json.Marshal(jsonSafeSourceError(ledger.NewInvalidDirectivePriceError("price currency cannot be empty", price)))
+	// A price without an amount, which the parser cannot produce, is the
+	// ledger error.
+	tree.Directives[0].(*ast.Price).Amount = nil
+	l := ledger.New()
+	_, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs))
+	data, err := json.Marshal(jsonSafeSourceError(errs[0]))
 	assert.NoError(t, err)
 	var rendered map[string]any
 	assert.NoError(t, json.Unmarshal(data, &rendered))

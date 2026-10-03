@@ -29,8 +29,8 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 	cashWeights, err := calculateWeights(txn.Postings[0])
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(cashWeights))
-	assert.Equal(t, "USD", cashWeights[0].Currency)
-	assert.Equal(t, "-500", cashWeights[0].Amount.String())
+	assert.Equal(t, "USD", cashWeights[0].currency)
+	assert.Equal(t, "-500", cashWeights[0].amount.String())
 
 	// Test stock posting (with cost)
 	stockWeights, err := calculateWeights(txn.Postings[1])
@@ -42,8 +42,8 @@ func TestCalculateWeights_SimpleCost(t *testing.T) {
 	assert.Equal(t, 1, len(stockWeights), "should have 1 weight (cost only)")
 
 	// Only weight: +500 USD (5 * 100)
-	assert.Equal(t, "USD", stockWeights[0].Currency)
-	assert.Equal(t, "500", stockWeights[0].Amount.String())
+	assert.Equal(t, "USD", stockWeights[0].currency)
+	assert.Equal(t, "500", stockWeights[0].amount.String())
 }
 
 func TestCalculateWeightsCompoundCost(t *testing.T) {
@@ -55,21 +55,21 @@ func TestCalculateWeightsCompoundCost(t *testing.T) {
 	weights, err := calculateWeights(txn.Postings[0])
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(weights))
-	assert.Equal(t, "5031.15", weights[0].Amount.String())
+	assert.Equal(t, "5031.15", weights[0].amount.String())
 
-	lotSpec, err := ParseLotSpec(txn.Postings[0].Cost)
+	lotSpec, err := parseLotSpec(txn.Postings[0].Cost)
 	assert.NoError(t, err)
 	assert.NoError(t, normalizeLotSpecForPosting(lotSpec, txn.Postings[0]))
-	assert.Equal(t, "503.115", lotSpec.Cost.String())
+	assert.Equal(t, "503.115", lotSpec.cost.String())
 }
 
 func TestBalanceWeights(t *testing.T) {
 	// Test that balanceWeights correctly sums weights
 	allWeights := []weightSet{
 		// Cash posting
-		{{Amount: mustDecimal("-500"), Currency: "USD"}},
+		{{amount: mustDecimal("-500"), currency: "USD"}},
 		// Stock posting with cost (only cost weight, not commodity!)
-		{{Amount: mustDecimal("500"), Currency: "USD"}},
+		{{amount: mustDecimal("500"), currency: "USD"}},
 	}
 
 	balance := balanceWeights(allWeights)
@@ -128,8 +128,8 @@ func TestCalculateWeights_Price(t *testing.T) {
 	assert.Equal(t, 1, len(stockWeights))
 
 	// Only weight: -1500 USD (-10 * 150 from COST, not price)
-	assert.Equal(t, "USD", stockWeights[0].Currency)
-	assert.Equal(t, "-1500", stockWeights[0].Amount.String())
+	assert.Equal(t, "USD", stockWeights[0].currency)
+	assert.Equal(t, "-1500", stockWeights[0].amount.String())
 }
 
 func TestPerUnitPrice(t *testing.T) {

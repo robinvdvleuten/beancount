@@ -9,6 +9,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
@@ -54,38 +55,38 @@ func TestErrorKinds(t *testing.T) {
 		line      int
 		directive ast.Directive
 	}{
-		{NewAccountNotOpenError(txn, account), "AccountNotOpenError", 10, txn},
-		{NewAccountAlreadyOpenError(open, date), "AccountAlreadyOpenError", 10, open},
-		{NewInvalidAccountNameError(open, NewConfig()), "InvalidAccountNameError", 10, open},
-		{NewAccountAlreadyClosedError(closeDirective, date), "AccountAlreadyClosedError", 10, closeDirective},
-		{NewAccountNotClosedError(closeDirective), "AccountNotClosedError", 10, closeDirective},
-		{NewDuplicateCommodityError(commodity), "DuplicateCommodityError", 10, commodity},
-		{NewBalanceCurrencyError(balance), "BalanceCurrencyError", 10, balance},
-		{NewDuplicateBalanceError(balance), "DuplicateBalanceError", 10, balance},
-		{NewNegativeCostError(txn, posting, decimal.NewFromInt(-1), "USD"), "NegativeCostError", 11, txn},
-		{NewZeroAmountError(txn, posting), "ZeroAmountError", 11, txn},
-		{NewMergeCostError(txn, posting), "MergeCostError", 11, txn},
-		{NewDuplicateCostComponentError(txn, posting, &ast.Cost{Label: "b"}), "DuplicateCostComponentError", 11, txn},
-		{NewCurrencyGroupError(txn, posting, "Too many missing numbers"), "CurrencyGroupError", 11, txn},
-		{NewNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
-		{NewTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
-		{NewInvalidBookingMethodError(open), "InvalidBookingMethodError", 10, open},
-		{NewUnbookedTransactionError(txn), "UnbookedTransactionError", 10, txn},
-		{NewTransactionNotBalancedError(txn, map[string]string{"USD": "1"}), "TransactionNotBalancedError", 10, txn},
-		{NewInvalidAmountError(txn, account, "x", details), "InvalidAmountError", 10, txn},
-		{NewBalanceMismatchError(balance, decimal.NewFromInt(1), decimal.NewFromInt(2)), "BalanceMismatchError", 10, balance},
-		{NewInvalidCostError(txn, account, 0, "{x USD}", details), "InvalidCostError", 10, txn},
-		{NewTotalCostError(txn, posting, "cannot use total cost with zero quantity"), "TotalCostError", 10, txn},
-		{NewInvalidPriceError(txn, account, 0, "@ x USD", details), "InvalidPriceError", 10, txn},
-		{NewInvalidMetadataError(txn, account, "k", nil, "duplicate key"), "InvalidMetadataError", 10, txn},
-		{NewInsufficientInventoryError(txn, account, details), "InsufficientInventoryError", 10, txn},
-		{NewAmbiguousBookingError(txn, account, details), "AmbiguousBookingError", 10, txn},
-		{NewCurrencyConstraintError(txn, account, "EUR"), "CurrencyConstraintError", 10, txn},
-		{NewUnusedPadWarning(pad), "UnusedPadWarning", 10, pad},
-		{NewDocumentFileError(document), "DocumentFileError", 10, document},
-		{NewInvalidDirectivePriceError("price currency cannot be empty", price), "InvalidDirectivePriceError", 10, price},
-		{NewPluginConfigError(plugin), "PluginConfigError", 10, nil},
-		{NewPluginImportError(plugin), "PluginImportError", 10, nil},
+		{newAccountNotOpenError(txn, account), "AccountNotOpenError", 10, txn},
+		{newAccountAlreadyOpenError(open, date), "AccountAlreadyOpenError", 10, open},
+		{newInvalidAccountNameError(open, sharedconfig.New()), "InvalidAccountNameError", 10, open},
+		{newAccountAlreadyClosedError(closeDirective, date), "AccountAlreadyClosedError", 10, closeDirective},
+		{newAccountNotClosedError(closeDirective), "AccountNotClosedError", 10, closeDirective},
+		{newDuplicateCommodityError(commodity), "DuplicateCommodityError", 10, commodity},
+		{newBalanceCurrencyError(balance), "BalanceCurrencyError", 10, balance},
+		{newDuplicateBalanceError(balance), "DuplicateBalanceError", 10, balance},
+		{newNegativeCostError(txn, posting, decimal.NewFromInt(-1), "USD"), "NegativeCostError", 11, txn},
+		{newZeroAmountError(txn, posting), "ZeroAmountError", 11, txn},
+		{newMergeCostError(txn, posting), "MergeCostError", 11, txn},
+		{newDuplicateCostComponentError(txn, posting, &ast.Cost{Label: "b"}), "DuplicateCostComponentError", 11, txn},
+		{newCurrencyGroupError(txn, posting, "Too many missing numbers"), "CurrencyGroupError", 11, txn},
+		{newNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
+		{newTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
+		{newInvalidBookingMethodError(open), "InvalidBookingMethodError", 10, open},
+		{newUnbookedTransactionError(txn), "UnbookedTransactionError", 10, txn},
+		{newTransactionNotBalancedError(txn, map[string]string{"USD": "1"}), "TransactionNotBalancedError", 10, txn},
+		{newInvalidAmountError(txn, account, "x", details), "InvalidAmountError", 10, txn},
+		{newBalanceMismatchError(balance, decimal.NewFromInt(1), decimal.NewFromInt(2)), "BalanceMismatchError", 10, balance},
+		{newInvalidCostError(txn, account, 0, "{x USD}", details), "InvalidCostError", 10, txn},
+		{newTotalCostError(txn, posting, "cannot use total cost with zero quantity"), "TotalCostError", 10, txn},
+		{newInvalidPriceError(txn, account, 0, "@ x USD", details), "InvalidPriceError", 10, txn},
+		{newInvalidMetadataError(txn, account, "k", nil, "duplicate key"), "InvalidMetadataError", 10, txn},
+		{newInsufficientInventoryError(txn, account, details), "InsufficientInventoryError", 10, txn},
+		{newAmbiguousBookingError(txn, account, details), "AmbiguousBookingError", 10, txn},
+		{newCurrencyConstraintError(txn, account, "EUR"), "CurrencyConstraintError", 10, txn},
+		{newUnusedPadWarning(pad), "UnusedPadWarning", 10, pad},
+		{newDocumentFileError(document), "DocumentFileError", 10, document},
+		{newInvalidDirectivePriceError("price currency cannot be empty", price), "InvalidDirectivePriceError", 10, price},
+		{newPluginConfigError(plugin), "PluginConfigError", 10, nil},
+		{newPluginImportError(plugin), "PluginImportError", 10, nil},
 	} {
 		t.Run(tt.kind, func(t *testing.T) {
 			assert.Equal(t, tt.kind, kindOf(tt.err))
@@ -114,7 +115,7 @@ func TestErrorKinds(t *testing.T) {
 func TestErrorWithoutFilenameUsesTheDate(t *testing.T) {
 	date, _ := ast.NewDate("2024-01-15")
 	txn := ast.NewTransaction(date, "x")
-	err := NewInsufficientInventoryError(txn, "Assets:Checking", errors.New("details"))
+	err := newInsufficientInventoryError(txn, "Assets:Checking", errors.New("details"))
 	assert.Equal(t, "2024-01-15: details", err.Error())
 }
 

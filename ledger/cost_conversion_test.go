@@ -199,8 +199,8 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 		{
 			name: "TotalCostConversion",
 			lotSpec: &lotSpec{
-				Cost:         &decimal.Decimal{},
-				CostCurrency: "USD",
+				cost:         &decimal.Decimal{},
+				costCurrency: "USD",
 			},
 			posting: &ast.Posting{
 				Amount: &ast.Amount{Value: "10", Currency: "AAPL"},
@@ -215,8 +215,8 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 		{
 			name: "TotalCostFractionalConversion",
 			lotSpec: &lotSpec{
-				Cost:         &decimal.Decimal{},
-				CostCurrency: "USD",
+				cost:         &decimal.Decimal{},
+				costCurrency: "USD",
 			},
 			posting: &ast.Posting{
 				Amount: &ast.Amount{Value: "3.5", Currency: "AAPL"},
@@ -231,8 +231,8 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 		{
 			name: "PerUnitCostUnchanged",
 			lotSpec: &lotSpec{
-				Cost:         &decimal.Decimal{},
-				CostCurrency: "USD",
+				cost:         &decimal.Decimal{},
+				costCurrency: "USD",
 			},
 			posting: &ast.Posting{
 				Amount: &ast.Amount{Value: "10", Currency: "AAPL"},
@@ -247,8 +247,8 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 		{
 			name: "NoTotalCostUnchanged",
 			lotSpec: &lotSpec{
-				Cost:         &decimal.Decimal{},
-				CostCurrency: "USD",
+				cost:         &decimal.Decimal{},
+				costCurrency: "USD",
 			},
 			posting: &ast.Posting{
 				Amount: &ast.Amount{Value: "10", Currency: "AAPL"},
@@ -268,8 +268,8 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 			if test.posting.Cost != nil && test.posting.Cost.Amount != nil {
 				cost, err := ParseAmount(test.posting.Cost.Amount)
 				assert.NoError(t, err)
-				test.lotSpec.Cost = &cost
-				test.lotSpec.CostCurrency = test.posting.Cost.Amount.Currency
+				test.lotSpec.cost = &cost
+				test.lotSpec.costCurrency = test.posting.Cost.Amount.Currency
 			}
 
 			err := normalizeLotSpecForPosting(test.lotSpec, test.posting)
@@ -280,9 +280,9 @@ func TestNormalizeLotSpecForPosting(t *testing.T) {
 			}
 
 			assert.NoError(t, err, "Expected no error for test: %s", test.name)
-			assert.True(t, test.expectedCost.Equal(*test.lotSpec.Cost),
+			assert.True(t, test.expectedCost.Equal(*test.lotSpec.cost),
 				"Cost mismatch for test: %s\nExpected: %s\nActual: %s",
-				test.name, test.expectedCost.String(), test.lotSpec.Cost.String())
+				test.name, test.expectedCost.String(), test.lotSpec.cost.String())
 		})
 	}
 }

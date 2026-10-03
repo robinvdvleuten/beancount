@@ -144,8 +144,8 @@ func (l *Ledger) Convert(p Position, currency string, date *ast.Date) CurrencyAm
 	return p.units()
 }
 
-// Value returns p stated under v on date.
-func (l *Ledger) Value(p Position, v Valuation, date *ast.Date) CurrencyAmount {
+// value returns p stated under v on date.
+func (l *Ledger) value(p Position, v Valuation, date *ast.Date) CurrencyAmount {
 	switch v.kind {
 	case valuationUnits:
 		return p.units()
@@ -215,16 +215,16 @@ func (s *lotSums) add(p Position) {
 // positions Booking recorded for it (BookedPositions), or else its units.
 func (l *Ledger) positionsBetween(account *Account, start, end *ast.Date) []Position {
 	sums := newLotSums()
-	for _, posting := range account.Postings {
-		date := posting.Transaction.Date()
+	for _, posting := range account.postings {
+		date := posting.transaction.Date()
 		if start != nil && date.Before(start.Time) || end != nil && date.After(end.Time) {
 			continue
 		}
-		amount := posting.Posting.Amount
+		amount := posting.posting.Amount
 		if amount == nil {
 			continue
 		}
-		booked := l.BookedPositions(posting.Posting)
+		booked := l.BookedPositions(posting.posting)
 		if len(booked) == 0 {
 			number, err := ParseAmount(amount)
 			if err != nil {
@@ -246,7 +246,7 @@ func (l *Ledger) positionsBetween(account *Account, start, end *ast.Date) []Posi
 func (l *Ledger) valuePositions(positions []Position, v Valuation, date *ast.Date) *Balance {
 	sums := make(map[string]decimal.Decimal)
 	for _, position := range positions {
-		valued := l.Value(position, v, date)
+		valued := l.value(position, v, date)
 		sums[valued.Currency] = pydecimal.Add(sums[valued.Currency], valued.Amount)
 	}
 	for currency, sum := range sums {
@@ -254,5 +254,5 @@ func (l *Ledger) valuePositions(positions []Position, v Valuation, date *ast.Dat
 			delete(sums, currency)
 		}
 	}
-	return NewBalanceFromMap(sums)
+	return newBalanceFromMap(sums)
 }

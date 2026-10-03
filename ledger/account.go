@@ -4,34 +4,34 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
-// AccountPosting records a single posting's impact on an account.
+// accountPosting records a single posting's impact on an account.
 // Used to trace balance mutations and enable reconciliation.
 //
 // Store postings in chronological order (enforced by transaction processing order).
 // Balances are reconstructed on demand from the posting sequence rather than stored
 // (DRY principle: avoids snapshot duplication and synchronization issues).
-type AccountPosting struct {
+type accountPosting struct {
 	// The transaction this posting belongs to
-	Transaction *ast.Transaction
+	transaction *ast.Transaction
 
 	// The posting itself
-	Posting *ast.Posting
+	posting *ast.Posting
 }
 
 // Account represents an account in the ledger
 type Account struct {
-	Name                 ast.Account
+	name                 ast.Account
 	Type                 string // Account type root name (e.g., "Assets", "Vermoegen")
 	OpenDate             *ast.Date
 	CloseDate            *ast.Date
-	ConstraintCurrencies []string
-	Metadata             []*ast.Metadata
-	Inventory            *Inventory        // Inventory with lot tracking
-	Postings             []*AccountPosting // Transaction history in chronological order
+	constraintCurrencies []string
+	metadata             []*ast.Metadata
+	inventory            *inventory        // Lots held, with their cost basis
+	postings             []*accountPosting // Transaction history in chronological order
 }
 
-// IsOpen returns true if the account is open at the given date
-func (a *Account) IsOpen(date *ast.Date) bool {
+// isOpen returns true if the account is open at the given date
+func (a *Account) isOpen(date *ast.Date) bool {
 	if a.OpenDate == nil {
 		return false
 	}
@@ -50,7 +50,7 @@ func (a *Account) IsOpen(date *ast.Date) bool {
 	return true
 }
 
-// IsClosed returns true if the account has been closed
-func (a *Account) IsClosed() bool {
+// isClosed returns true if the account has been closed
+func (a *Account) isClosed() bool {
 	return a.CloseDate != nil
 }

@@ -19,11 +19,11 @@ func newDisplayContext() *DisplayContext {
 	return &DisplayContext{fractional: make(map[string]map[int32]int), fixed: make(map[string]int32)}
 }
 
-// Precision returns the fractional digits display_precision fixes for
+// precision returns the fractional digits display_precision fixes for
 // currency, or else the most common number of them among the source
 // amounts in currency, preferring more digits on a tie, and false when
 // neither gives currency one.
-func (dc *DisplayContext) Precision(currency string) (int32, bool) {
+func (dc *DisplayContext) precision(currency string) (int32, bool) {
 	if digits, ok := dc.fixed[currency]; ok {
 		return digits, true
 	}
@@ -52,7 +52,7 @@ func MostCommonDigits(counts map[int32]int) int32 {
 // Quantize rounds number half-to-even to currency's precision, leaving it
 // unchanged for a currency without source amounts.
 func (dc *DisplayContext) Quantize(number decimal.Decimal, currency string) decimal.Decimal {
-	digits, ok := dc.Precision(currency)
+	digits, ok := dc.precision(currency)
 	if !ok {
 		return number
 	}

@@ -10,21 +10,21 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// LotSpec uniquely identifies a lot by its cost basis
+// lotSpec uniquely identifies a lot by its cost basis
 type lotSpec struct {
-	Cost         *decimal.Decimal // Cost per unit (nil if no cost basis)
-	CostCurrency string           // Currency of the cost
-	Date         *ast.Date        // Optional acquisition date
-	Label        string           // Optional label
+	cost         *decimal.Decimal // Cost per unit (nil if no cost basis)
+	costCurrency string           // Currency of the cost
+	date         *ast.Date        // Optional acquisition date
+	label        string           // Optional label
 }
 
-// IsEmpty returns true if this is an empty cost specification {}
-func (ls *lotSpec) IsEmpty() bool {
-	return ls.Cost == nil && ls.CostCurrency == "" && ls.Date == nil && ls.Label == ""
+// isEmpty returns true if this is an empty cost specification {}
+func (ls *lotSpec) isEmpty() bool {
+	return ls.cost == nil && ls.costCurrency == "" && ls.date == nil && ls.label == ""
 }
 
-// Equal checks if two lot specs are equal
-func (ls *lotSpec) Equal(other *lotSpec) bool {
+// equal checks if two lot specs are equal
+func (ls *lotSpec) equal(other *lotSpec) bool {
 	if ls == nil && other == nil {
 		return true
 	}
@@ -33,28 +33,28 @@ func (ls *lotSpec) Equal(other *lotSpec) bool {
 	}
 
 	// Compare cost
-	if (ls.Cost == nil) != (other.Cost == nil) {
+	if (ls.cost == nil) != (other.cost == nil) {
 		return false
 	}
-	if ls.Cost != nil && !ls.Cost.Equal(*other.Cost) {
+	if ls.cost != nil && !ls.cost.Equal(*other.cost) {
 		return false
 	}
 
 	// Compare cost currency
-	if ls.CostCurrency != other.CostCurrency {
+	if ls.costCurrency != other.costCurrency {
 		return false
 	}
 
 	// Compare date
-	if (ls.Date == nil) != (other.Date == nil) {
+	if (ls.date == nil) != (other.date == nil) {
 		return false
 	}
-	if ls.Date != nil && !ls.Date.Equal(other.Date.Time) {
+	if ls.date != nil && !ls.date.Equal(other.date.Time) {
 		return false
 	}
 
 	// Compare label
-	if ls.Label != other.Label {
+	if ls.label != other.label {
 		return false
 	}
 
@@ -67,22 +67,22 @@ func (ls *lotSpec) String() string {
 		return "{}"
 	}
 
-	if ls.IsEmpty() {
+	if ls.isEmpty() {
 		return "{}"
 	}
 
 	parts := make([]string, 0, 3)
 
-	if ls.Cost != nil {
-		parts = append(parts, fmt.Sprintf("%s %s", formatInferredNumber(*ls.Cost), ls.CostCurrency))
+	if ls.cost != nil {
+		parts = append(parts, fmt.Sprintf("%s %s", formatInferredNumber(*ls.cost), ls.costCurrency))
 	}
 
-	if ls.Date != nil {
-		parts = append(parts, ls.Date.String())
+	if ls.date != nil {
+		parts = append(parts, ls.date.String())
 	}
 
-	if ls.Label != "" {
-		parts = append(parts, fmt.Sprintf("\"%s\"", ls.Label))
+	if ls.label != "" {
+		parts = append(parts, fmt.Sprintf("\"%s\"", ls.label))
 	}
 
 	var buf strings.Builder
@@ -98,7 +98,7 @@ func (ls *lotSpec) String() string {
 }
 
 // lotKey identifies a lot among its commodity's lots: two specs have the
-// same key exactly when lotSpec.Equal says they are equal. A lot without a
+// same key exactly when lotSpec.equal says they are equal. A lot without a
 // spec has the empty key, which no spec has, not even an empty {}. It is one
 // string, built once per lot, so the index a clone copies stays small.
 type lotKey string
@@ -111,14 +111,14 @@ func (ls *lotSpec) key() lotKey {
 		return ""
 	}
 	var cost, date string
-	if ls.Cost != nil {
-		cost = pydecimal.Normalize(*ls.Cost).String()
+	if ls.cost != nil {
+		cost = pydecimal.Normalize(*ls.cost).String()
 	}
-	if ls.Date != nil {
-		date = strconv.FormatInt(ls.Date.Unix(), 10) + "." + strconv.Itoa(ls.Date.Nanosecond())
+	if ls.date != nil {
+		date = strconv.FormatInt(ls.date.Unix(), 10) + "." + strconv.Itoa(ls.date.Nanosecond())
 	}
 	b := []byte{'{'}
-	for _, part := range [...]string{cost, ls.CostCurrency, date, ls.Label} {
+	for _, part := range [...]string{cost, ls.costCurrency, date, ls.label} {
 		b = strconv.AppendInt(b, int64(len(part)), 10)
 		b = append(b, ':')
 		b = append(b, part...)
@@ -128,22 +128,22 @@ func (ls *lotSpec) key() lotKey {
 
 // Lot represents a specific lot of a commodity with cost basis
 type lot struct {
-	Commodity string
-	Amount    decimal.Decimal
-	Spec      *lotSpec
-	key       lotKey // Spec's key, which the inventory indexes the lot by
+	commodity string
+	amount    decimal.Decimal
+	spec      *lotSpec
+	key       lotKey // spec's key, which the inventory indexes the lot by
 }
 
 // String returns a string representation of the lot
 func (l *lot) String() string {
-	if l.Spec == nil || l.Spec.IsEmpty() {
-		return fmt.Sprintf("%s %s", formatInferredNumber(l.Amount), l.Commodity)
+	if l.spec == nil || l.spec.isEmpty() {
+		return fmt.Sprintf("%s %s", formatInferredNumber(l.amount), l.commodity)
 	}
-	return fmt.Sprintf("%s %s %s", formatInferredNumber(l.Amount), l.Commodity, l.Spec.String())
+	return fmt.Sprintf("%s %s %s", formatInferredNumber(l.amount), l.commodity, l.spec.String())
 }
 
-// ParseLotSpec creates a LotSpec from ast.Cost
-func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
+// parseLotSpec creates a lotSpec from ast.Cost
+func parseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 	if cost == nil {
 		return nil, nil
 	}
@@ -161,20 +161,20 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 	}
 
 	spec := &lotSpec{
-		Date:  cost.Date,
-		Label: cost.Label,
+		date:  cost.Date,
+		label: cost.Label,
 	}
 
-	// Parse cost amount; a currency-only cost {USD} leaves Cost nil.
+	// Parse cost amount; a currency-only cost {USD} leaves cost nil.
 	if cost.Amount != nil {
-		spec.CostCurrency = cost.Amount.Currency
+		spec.costCurrency = cost.Amount.Currency
 	}
 	if cost.HasNumber() {
 		amount, err := ParseAmount(cost.Amount)
 		if err != nil {
 			return nil, fmt.Errorf("invalid cost amount: %w", err)
 		}
-		spec.Cost = &amount
+		spec.cost = &amount
 	}
 
 	return spec, nil
@@ -183,7 +183,7 @@ func ParseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 // normalizeLotSpecForPosting converts total cost {{}} to per-unit cost for inventory operations.
 // This is called during applyTransaction to ensure inventory uses correct per-unit costs.
 func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
-	if lotSpec == nil || lotSpec.Cost == nil {
+	if lotSpec == nil || lotSpec.cost == nil {
 		return nil
 	}
 
@@ -204,8 +204,8 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		}
 
 		// Calculate per-unit cost: total ÷ quantity
-		perUnitCost := pydecimal.Quo(*lotSpec.Cost, quantity.Abs())
-		lotSpec.Cost = &perUnitCost
+		perUnitCost := pydecimal.Quo(*lotSpec.cost, quantity.Abs())
+		lotSpec.cost = &perUnitCost
 	} else if posting.Cost != nil && posting.Cost.Total != nil {
 		if posting.Amount == nil {
 			return fmt.Errorf("compound cost requires a quantity")
@@ -221,8 +221,8 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 		if err != nil {
 			return fmt.Errorf("invalid compound total: %w", err)
 		}
-		perUnitCost := compoundCostNumber(*lotSpec.Cost, total, quantity)
-		lotSpec.Cost = &perUnitCost
+		perUnitCost := compoundCostNumber(*lotSpec.cost, total, quantity)
+		lotSpec.cost = &perUnitCost
 	}
 
 	return nil
@@ -240,7 +240,7 @@ func compoundCostNumber(perUnit, total, units decimal.Decimal) decimal.Decimal {
 // cost's per-unit part plus its total spread over the units. It is nil
 // without a cost.
 func postingLotSpec(posting *ast.Posting) (*lotSpec, error) {
-	spec, err := ParseLotSpec(posting.Cost)
+	spec, err := parseLotSpec(posting.Cost)
 	if err != nil {
 		return nil, err
 	}
@@ -256,10 +256,10 @@ func postingLotSpec(posting *ast.Posting) (*lotSpec, error) {
 // posting states no cost number.
 func perUnitCost(posting *ast.Posting) (number decimal.Decimal, currency string, ok bool) {
 	spec, err := postingLotSpec(posting)
-	if err != nil || spec == nil || spec.Cost == nil {
+	if err != nil || spec == nil || spec.cost == nil {
 		return decimal.Zero, "", false
 	}
-	return *spec.Cost, spec.CostCurrency, true
+	return *spec.cost, spec.costCurrency, true
 }
 
 // PerUnitPrice returns the per-unit price a posting converts at, as

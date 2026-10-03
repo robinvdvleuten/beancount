@@ -83,9 +83,9 @@ func (p *pads) consume(account, currency string, padding *ast.Transaction) {
 // plugin inserts padding before any assertion is checked. Padding a
 // currency the account holds at cost is an error for each such lot, and
 // the padding, without cost, still applies, as in beancount's ops/pad.py.
-func (p *pads) fill(balance *ast.Balance, inventory *Inventory, tolerance decimal.Decimal) (padding *ast.Transaction, held decimal.Decimal, errs []error) {
+func (p *pads) fill(balance *ast.Balance, inv *inventory, tolerance decimal.Decimal) (padding *ast.Transaction, held decimal.Decimal, errs []error) {
 	currency := balance.Amount.Currency
-	held = inventory.Get(currency)
+	held = inv.get(currency)
 	pad := p.active(string(balance.Account), currency)
 	if pad == nil {
 		return nil, held, nil
@@ -95,8 +95,8 @@ func (p *pads) fill(balance *ast.Balance, inventory *Inventory, tolerance decima
 	if difference.Abs().LessThanOrEqual(tolerance) {
 		return nil, held, nil
 	}
-	for range inventory.countAtCost(currency) {
-		errs = append(errs, NewPadCostError(balance, pad, inventory))
+	for range inv.countAtCost(currency) {
+		errs = append(errs, newPadCostError(balance, pad, inv))
 	}
 	// Like beancount, the padding is the difference as the subtraction
 	// leaves it, with its own exponent.
@@ -130,7 +130,7 @@ func (p *pads) unusedPads() []*ast.Pad {
 func (l *Ledger) applyPadding(ctx context.Context, padding *ast.Transaction) {
 	booked := &bookedTransaction{postings: make([]bookedPosting, len(padding.Postings))}
 	for i, posting := range padding.Postings {
-		positions := []BookedPosition{{Units: MustParseAmount(posting.Amount)}}
+		positions := []BookedPosition{{Units: mustParseAmount(posting.Amount)}}
 		booked.postings[i] = bookedPosting{posting: posting, commodity: posting.Amount.Currency, positions: positions}
 	}
 	l.publishBooking(padding, booked)

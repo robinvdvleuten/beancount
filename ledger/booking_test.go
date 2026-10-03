@@ -8,6 +8,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
@@ -159,7 +160,7 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 func bookAll(t *testing.T, source string) (*booker, map[string][]string, []error) {
 	t.Helper()
 	tree := parser.MustParseString(context.Background(), source)
-	b := newBooker(NewConfig(), newTolerances(nil), tree.Directives)
+	b := newBooker(sharedconfig.New(), newTolerances(nil), tree.Directives)
 	postings := make(map[string][]string)
 	var errs []error
 	for _, directive := range tree.Directives {
@@ -679,6 +680,6 @@ plugin "test.add_transaction"
 
 	cash, ok := l.GetAccount("Assets:Cash")
 	assert.True(t, ok)
-	assert.Equal(t, 0, len(cash.Postings))
-	assert.True(t, cash.Inventory.IsEmpty())
+	assert.Equal(t, 0, len(cash.postings))
+	assert.True(t, cash.inventory.isEmpty())
 }

@@ -35,9 +35,9 @@ func TestAccountPostings_SimpleTransaction(t *testing.T) {
 	accounts := l.Accounts()
 	account := accounts[string(assets)]
 	assert.True(t, account != nil, "account should exist")
-	assert.Equal(t, account.Name, assets)
-	assert.Equal(t, len(account.Postings), 1)
-	assert.Equal(t, account.Postings[0].Posting.Account, assets)
+	assert.Equal(t, account.name, assets)
+	assert.Equal(t, len(account.postings), 1)
+	assert.Equal(t, account.postings[0].posting.Account, assets)
 }
 
 func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {

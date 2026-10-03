@@ -11,8 +11,8 @@ import (
 // Weight represents the contribution of a posting to the transaction balance
 // A posting can contribute multiple weights (e.g., commodity + cost currency)
 type weight struct {
-	Amount   decimal.Decimal
-	Currency string
+	amount   decimal.Decimal
+	currency string
 }
 
 // weightSet is a collection of weights from a single posting
@@ -58,7 +58,7 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 			return nil, fmt.Errorf("invalid cost specification")
 		}
 		weights = weightSet{
-			{Amount: pydecimal.Mul(amount, perUnit), Currency: costCurrency},
+			{amount: pydecimal.Mul(amount, perUnit), currency: costCurrency},
 		}
 
 	} else if hasPrice {
@@ -68,13 +68,13 @@ func calculateWeights(posting *ast.Posting) (weightSet, error) {
 			return nil, fmt.Errorf("invalid price specification")
 		}
 		weights = weightSet{
-			{Amount: pydecimal.Mul(amount, perUnit), Currency: priceCurrency},
+			{amount: pydecimal.Mul(amount, perUnit), currency: priceCurrency},
 		}
 
 	} else {
 		// No cost or price: just the commodity amount
 		weights = weightSet{
-			{Amount: amount, Currency: currency},
+			{amount: amount, currency: currency},
 		}
 	}
 
@@ -89,8 +89,8 @@ func balanceWeights(allWeights []weightSet) map[string]decimal.Decimal {
 
 	for _, weights := range allWeights {
 		for _, weight := range weights {
-			current := balance[weight.Currency]
-			balance[weight.Currency] = pydecimal.Add(current, weight.Amount)
+			current := balance[weight.currency]
+			balance[weight.currency] = pydecimal.Add(current, weight.amount)
 		}
 	}
 

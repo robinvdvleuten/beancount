@@ -6,25 +6,25 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
-// Handler defines the interface for processing directives.
+// handler defines the interface for processing directives.
 // Each directive type has a corresponding handler that validates and applies mutations.
 //
-// Validate reports every error it finds and returns a delta describing the
+// validate reports every error it finds and returns a delta describing the
 // mutations to apply, or nil when nothing can be applied. The two are
 // independent: like beancount, a directive can be reported and still applied
 // (an unbalanced transaction, a posting to a closed account), so later
 // directives see its effects instead of reporting follow-on errors.
 //
-// Apply runs whenever Validate returned a delta, errors or not.
-type Handler interface {
-	// Validate checks a directive without mutating state. It returns the
+// apply runs whenever validate returned a delta, errors or not.
+type handler interface {
+	// validate checks a directive without mutating state. It returns the
 	// errors found and the delta to apply (nil when the directive must not
-	// be applied). The delta type is specific to each handler (OpenDelta,
-	// BalanceDelta, etc.).
-	Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any)
+	// be applied). The delta type is specific to each handler (openDelta,
+	// balanceDelta, etc.).
+	validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any)
 
-	// Apply mutates ledger state with the delta Validate returned.
-	Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any)
+	// apply mutates ledger state with the delta validate returned.
+	apply(ctx context.Context, l *Ledger, d ast.Directive, delta any)
 }
 
 // deltaOf returns d as a handler delta, keeping a nil pointer nil rather
@@ -36,10 +36,10 @@ func deltaOf[T any](d *T) any {
 	return d
 }
 
-// OpenHandler processes Open directives.
-type OpenHandler struct{}
+// openHandler processes Open directives.
+type openHandler struct{}
 
-func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *openHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	open := d.(*ast.Open)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
@@ -47,17 +47,15 @@ func (h *OpenHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) 
 	return errs, deltaOf(delta)
 }
 
-func (h *OpenHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *openHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	open := d.(*ast.Open)
-	openDelta := delta.(*OpenDelta)
-	cfg := l.config
-	l.applyOpen(open, openDelta, cfg)
+	l.applyOpen(open, delta.(*openDelta), l.config)
 }
 
-// CloseHandler processes Close directives.
-type CloseHandler struct{}
+// closeHandler processes Close directives.
+type closeHandler struct{}
 
-func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *closeHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	close := d.(*ast.Close)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
@@ -65,15 +63,14 @@ func (h *CloseHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive)
 	return errs, deltaOf(delta)
 }
 
-func (h *CloseHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	closeDelta := delta.(*CloseDelta)
-	l.applyClose(closeDelta)
+func (h *closeHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+	l.applyClose(delta.(*closeDelta))
 }
 
-// TransactionHandler processes Transaction directives.
-type TransactionHandler struct{}
+// transactionHandler processes Transaction directives.
+type transactionHandler struct{}
 
-func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *transactionHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	txn := d.(*ast.Transaction)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
@@ -81,47 +78,47 @@ func (h *TransactionHandler) Validate(ctx context.Context, l *Ledger, d ast.Dire
 	return errs, deltaOf(booked)
 }
 
-func (h *TransactionHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *transactionHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	txn := d.(*ast.Transaction)
 	l.applyTransaction(txn, delta.(*bookedTransaction))
 }
 
-// BalanceHandler processes Balance directives.
-type BalanceHandler struct{}
+// balanceHandler processes Balance directives.
+type balanceHandler struct{}
 
-func (h *BalanceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *balanceHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	balance := d.(*ast.Balance)
 	v := newValidator(l.accounts, l.opened, l.config)
 
-	var delta *BalanceDelta
+	var delta *balanceDelta
 	errs := v.validateBalance(balance)
 	if len(errs) == 0 {
 		if tolerance, err := l.tolerances.balance(balance); err != nil {
 			errs = append(errs, err)
 		} else {
 			padding, held, padErrs := l.pads.fill(balance, l.inventory(balance.Account), tolerance)
-			delta = &BalanceDelta{AccountName: string(balance.Account), Currency: balance.Amount.Currency, Padding: padding}
+			delta = &balanceDelta{accountName: string(balance.Account), currency: balance.Amount.Currency, padding: padding}
 			errs = append(padErrs, v.checkBalance(balance, held, tolerance)...)
 		}
 	}
 	if l.duplicateBalances[balance] {
-		errs = append(errs, NewDuplicateBalanceError(balance))
+		errs = append(errs, newDuplicateBalanceError(balance))
 	}
 	return errs, deltaOf(delta)
 }
 
-func (h *BalanceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	balanceDelta := delta.(*BalanceDelta)
-	l.pads.consume(balanceDelta.AccountName, balanceDelta.Currency, balanceDelta.Padding)
-	if balanceDelta.Padding != nil {
-		l.applyPadding(ctx, balanceDelta.Padding)
+func (h *balanceHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+	planned := delta.(*balanceDelta)
+	l.pads.consume(planned.accountName, planned.currency, planned.padding)
+	if planned.padding != nil {
+		l.applyPadding(ctx, planned.padding)
 	}
 }
 
-// PadHandler processes Pad directives.
-type PadHandler struct{}
+// padHandler processes Pad directives.
+type padHandler struct{}
 
-func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *padHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	pad := d.(*ast.Pad)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
@@ -130,14 +127,14 @@ func (h *PadHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) (
 	return v.validatePad(pad), pad
 }
 
-func (h *PadHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *padHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	l.pads.add(delta.(*ast.Pad))
 }
 
-// NoteHandler processes Note directives.
-type NoteHandler struct{}
+// noteHandler processes Note directives.
+type noteHandler struct{}
 
-func (h *NoteHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *noteHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	note := d.(*ast.Note)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
@@ -145,14 +142,14 @@ func (h *NoteHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) 
 	return errs, nil
 }
 
-func (h *NoteHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *noteHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	// Note has no state mutation - just validation
 }
 
-// DocumentHandler processes Document directives.
-type DocumentHandler struct{}
+// documentHandler processes Document directives.
+type documentHandler struct{}
 
-func (h *DocumentHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *documentHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	doc := d.(*ast.Document)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
@@ -160,14 +157,14 @@ func (h *DocumentHandler) Validate(ctx context.Context, l *Ledger, d ast.Directi
 	return errs, nil
 }
 
-func (h *DocumentHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *documentHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	// Document has no state mutation - just validation
 }
 
-// PriceHandler processes Price directives.
-type PriceHandler struct{}
+// priceHandler processes Price directives.
+type priceHandler struct{}
 
-func (h *PriceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *priceHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	price := d.(*ast.Price)
 	if errs := validatePrice(price); len(errs) > 0 {
 		return errs, nil
@@ -175,91 +172,91 @@ func (h *PriceHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive)
 	return nil, price
 }
 
-func (h *PriceHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *priceHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	price := delta.(*ast.Price)
 	l.applyPrice(price)
 }
 
-// CommodityHandler processes Commodity directives.
+// commodityHandler processes Commodity directives.
 // Records the declared commodity.
-type CommodityHandler struct{}
+type commodityHandler struct{}
 
-func (h *CommodityHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *commodityHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	commodity := d.(*ast.Commodity)
 	cfg := l.config
 	v := newValidator(l.accounts, l.opened, cfg)
 	errs := v.validateCommodity(commodity)
 	// Like beancount, a currency may be declared only once.
 	if l.commodities[commodity.Currency] {
-		errs = append(errs, NewDuplicateCommodityError(commodity))
+		errs = append(errs, newDuplicateCommodityError(commodity))
 	}
 	if len(errs) > 0 {
 		return errs, nil
 	}
 
-	return nil, &CommodityDelta{CommodityID: commodity.Currency}
+	return nil, &commodityDelta{commodityID: commodity.Currency}
 }
 
-func (h *CommodityHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	l.applyCommodity(delta.(*CommodityDelta))
+func (h *commodityHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+	l.applyCommodity(delta.(*commodityDelta))
 }
 
-// EventHandler processes Event directives.
+// eventHandler processes Event directives.
 // Currently, events are not validated or stored - they're informational only.
-type EventHandler struct{}
+type eventHandler struct{}
 
-func (h *EventHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *eventHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	// Event directives are currently informational and don't require validation
 	return nil, nil
 }
 
-func (h *EventHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *eventHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	// Event directives don't mutate state
 }
 
-// QueryHandler processes Query directives.
+// queryHandler processes Query directives.
 // Query directives are informational and don't affect ledger state.
-type QueryHandler struct{}
+type queryHandler struct{}
 
-func (h *QueryHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *queryHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	return nil, nil
 }
 
-func (h *QueryHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *queryHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	// Query directives don't mutate state
 }
 
-// CustomHandler processes Custom directives.
+// customHandler processes Custom directives.
 // Currently, custom directives are not validated or stored - they're informational only.
-type CustomHandler struct{}
+type customHandler struct{}
 
-func (h *CustomHandler) Validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
+func (h *customHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) ([]error, any) {
 	// Custom directives are currently informational and don't require validation
 	return nil, nil
 }
 
-func (h *CustomHandler) Apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
+func (h *customHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
 	// Custom directives don't mutate state
 }
 
 // handlerRegistry maps directive kinds to their handlers.
-var handlerRegistry = map[ast.DirectiveKind]Handler{
-	ast.KindOpen:        &OpenHandler{},
-	ast.KindClose:       &CloseHandler{},
-	ast.KindTransaction: &TransactionHandler{},
-	ast.KindBalance:     &BalanceHandler{},
-	ast.KindPad:         &PadHandler{},
-	ast.KindNote:        &NoteHandler{},
-	ast.KindDocument:    &DocumentHandler{},
-	ast.KindPrice:       &PriceHandler{},
-	ast.KindCommodity:   &CommodityHandler{},
-	ast.KindEvent:       &EventHandler{},
-	ast.KindQuery:       &QueryHandler{},
-	ast.KindCustom:      &CustomHandler{},
+var handlerRegistry = map[ast.DirectiveKind]handler{
+	ast.KindOpen:        &openHandler{},
+	ast.KindClose:       &closeHandler{},
+	ast.KindTransaction: &transactionHandler{},
+	ast.KindBalance:     &balanceHandler{},
+	ast.KindPad:         &padHandler{},
+	ast.KindNote:        &noteHandler{},
+	ast.KindDocument:    &documentHandler{},
+	ast.KindPrice:       &priceHandler{},
+	ast.KindCommodity:   &commodityHandler{},
+	ast.KindEvent:       &eventHandler{},
+	ast.KindQuery:       &queryHandler{},
+	ast.KindCustom:      &customHandler{},
 }
 
-// GetHandler returns the handler for a given directive kind.
+// getHandler returns the handler for a given directive kind.
 // Returns nil if no handler is registered for the directive kind.
-func GetHandler(kind ast.DirectiveKind) Handler {
+func getHandler(kind ast.DirectiveKind) handler {
 	return handlerRegistry[kind]
 }

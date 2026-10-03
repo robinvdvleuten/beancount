@@ -68,7 +68,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 
 		weights, err := calculateWeights(posting)
 		if err != nil {
-			errs = append(errs, NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
+			errs = append(errs, newInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
 			continue
 		}
 
@@ -83,8 +83,8 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 				var weights weightSet
 				for _, position := range positions {
 					weights = append(weights, weight{
-						Amount:   pydecimal.Mul(position.Units, position.Cost.Number),
-						Currency: position.Cost.Currency,
+						amount:   pydecimal.Mul(position.Units, position.Cost.Number),
+						currency: position.Cost.Currency,
 					})
 				}
 				allWeights = append(allWeights, weights)
@@ -102,7 +102,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// the one place that rule is decided: past it, at most one of the steps
 	// below finds a number to complete.
 	if first := tooManyMissing(group, reducedPositions); first != nil {
-		return nil, []error{NewCurrencyGroupError(txn, first,
+		return nil, []error{newCurrencyGroupError(txn, first,
 			fmt.Sprintf("Too many missing numbers for currency group '%s'", group.currency))}
 	}
 
@@ -129,7 +129,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		}
 		number, nerr := decimal.NewFromString(posting.Amount.Value)
 		if nerr != nil {
-			return nil, []error{NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, nerr)}
+			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Amount.Value, nerr)}
 		}
 		for currency := range balance {
 			amounts[posting] = &ast.Amount{
@@ -148,10 +148,10 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		}
 		units, uerr := ParseAmount(posting.Amount)
 		if uerr != nil {
-			return nil, []error{NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr)}
+			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Amount.Value, uerr)}
 		}
 		if _, perr := decimal.NewFromString(posting.Price.Value); perr != nil {
-			return nil, []error{NewInvalidAmountError(txn, posting.Account, posting.Price.Value, perr)}
+			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Price.Value, perr)}
 		}
 		perUnit, _, _ := PerUnitPrice(posting)
 		currency := posting.Price.Currency
@@ -227,7 +227,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	if posting := valuelessPrice; posting != nil {
 		units, err := ParseAmount(posting.Amount)
 		if err != nil {
-			return nil, []error{NewInvalidAmountError(txn, posting.Account, posting.Amount.Value, err)}
+			return nil, []error{newInvalidAmountError(txn, posting.Account, posting.Amount.Value, err)}
 		}
 
 		currency := posting.Price.Currency

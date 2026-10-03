@@ -1,7 +1,7 @@
 # One position sum shared by the ledger and the query package
 
 The three places that sum positions per lot keep their own types:
-`Inventory` (`ledger/inventory.go`), `lotSums` (`ledger/valuation.go`) and
+`inventory` (`ledger/inventory.go`), `lotSums` (`ledger/valuation.go`) and
 `inventoryValue` (`query/types.go`). The query package also keeps its own
 `positionValue`, `costValue` and `amountValue` rather than holding
 `ledger.Position`. We don't plan to merge them behind one owner in the
@@ -21,7 +21,7 @@ purpose and that nothing is broken:
   so the difference from the ledger's keys has no visible effect.
 - **Each sum has its own job.** `inventoryValue` mirrors beanquery's
   Python inventory (dict order, zero positions removed, `sortkey`
-  ordering) and is held to byte parity. `Inventory` is shaped for Booking
+  ordering) and is held to byte parity. `inventory` is shaped for Booking
   and by the `CheckScaling` benchmark (per-sign lot counts, a cheap
   clone). `lotSums` is 30 lines that keep zero positions for the balance
   tree.

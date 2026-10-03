@@ -20,15 +20,15 @@ type CurrencyAmount struct {
 	Amount   decimal.Decimal
 }
 
-// NewBalance creates an empty balance.
-func NewBalance() *Balance {
+// newBalance creates an empty balance.
+func newBalance() *Balance {
 	return &Balance{entries: []*CurrencyAmount{}}
 }
 
-// NewBalanceFromMap converts a map[string]decimal.Decimal to a sorted Balance.
-func NewBalanceFromMap(m map[string]decimal.Decimal) *Balance {
+// newBalanceFromMap converts a map[string]decimal.Decimal to a sorted Balance.
+func newBalanceFromMap(m map[string]decimal.Decimal) *Balance {
 	if len(m) == 0 {
-		return NewBalance()
+		return newBalance()
 	}
 
 	entries := make([]*CurrencyAmount, 0, len(m))
@@ -63,8 +63,8 @@ func (b *Balance) Get(currency string) decimal.Decimal {
 	return decimal.Zero
 }
 
-// Set sets or updates the amount for a currency.
-func (b *Balance) Set(currency string, amount decimal.Decimal) {
+// set sets or updates the amount for a currency.
+func (b *Balance) set(currency string, amount decimal.Decimal) {
 	for _, e := range b.entries {
 		if e.Currency == currency {
 			e.Amount = amount
@@ -88,10 +88,10 @@ func (b *Balance) Set(currency string, amount decimal.Decimal) {
 	})
 }
 
-// Add adds an amount to an existing currency balance.
-func (b *Balance) Add(currency string, amount decimal.Decimal) {
+// add adds an amount to an existing currency balance.
+func (b *Balance) add(currency string, amount decimal.Decimal) {
 	current := b.Get(currency)
-	b.Set(currency, pydecimal.Add(current, amount))
+	b.set(currency, pydecimal.Add(current, amount))
 }
 
 // IsZero returns true if all amounts are zero or balance is empty.
@@ -104,8 +104,8 @@ func (b *Balance) IsZero() bool {
 	return true
 }
 
-// Currencies returns a sorted list of all currencies in this balance.
-func (b *Balance) Currencies() []string {
+// currencies returns a sorted list of all currencies in this balance.
+func (b *Balance) currencies() []string {
 	currencies := make([]string, len(b.entries))
 	for i, e := range b.entries {
 		currencies[i] = e.Currency
@@ -116,15 +116,6 @@ func (b *Balance) Currencies() []string {
 // Entries returns the underlying sorted list of currency amounts.
 func (b *Balance) Entries() []*CurrencyAmount {
 	return b.entries
-}
-
-// ToMap converts balance to map[string]decimal.Decimal for convenience.
-func (b *Balance) ToMap() map[string]decimal.Decimal {
-	m := make(map[string]decimal.Decimal)
-	for _, e := range b.entries {
-		m[e.Currency] = e.Amount
-	}
-	return m
 }
 
 // String returns a human-readable representation of the balance.
@@ -140,20 +131,20 @@ func (b *Balance) String() string {
 	return strings.Join(parts, ", ")
 }
 
-// Merge combines another balance into this one by adding amounts.
-func (b *Balance) Merge(other *Balance) {
+// merge combines another balance into this one by adding amounts.
+func (b *Balance) merge(other *Balance) {
 	if other == nil {
 		return
 	}
 	for _, e := range other.entries {
-		b.Add(e.Currency, e.Amount)
+		b.add(e.Currency, e.Amount)
 	}
 }
 
-// Copy creates a deep copy of this balance.
-func (b *Balance) Copy() *Balance {
+// copy creates a deep copy of this balance.
+func (b *Balance) copy() *Balance {
 	if b == nil {
-		return NewBalance()
+		return newBalance()
 	}
 	entries := make([]*CurrencyAmount, len(b.entries))
 	for i, e := range b.entries {

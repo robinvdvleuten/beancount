@@ -47,11 +47,11 @@ func TestDisplayContext(t *testing.T) {
 		"MET": 3, "UNI": 2, "PRI": 2, "CPU": 0, "CPC": 3, "CTC": 4, "CMC": 2,
 		"TOL": 1, "PPC": 4, "CUS": 5, "NOC": 1,
 	} {
-		got, ok := dc.Precision(currency)
+		got, ok := dc.precision(currency)
 		assert.True(t, ok, currency)
 		assert.Equal(t, want, got, currency)
 	}
-	_, ok := dc.Precision("NOPE")
+	_, ok := dc.precision("NOPE")
 	assert.False(t, ok)
 
 	assert.Equal(t, "2", dc.Quantize(decimal.RequireFromString("1.5"), "CPU").String())
@@ -82,7 +82,7 @@ option "display_precision" "JPY:1"
 	dc := l.DisplayContext()
 
 	for currency, want := range map[string]int32{"USD": 3, "JPY": 0, "EUR": 2} {
-		got, ok := dc.Precision(currency)
+		got, ok := dc.precision(currency)
 		assert.True(t, ok, currency)
 		assert.Equal(t, want, got, currency)
 	}

@@ -11,13 +11,13 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Plugin is a Built-in Plugin: it rewrites the booked ledger's directives
+// pluginFunc is a Built-in Plugin: it rewrites the booked ledger's directives
 // before validation and returns the errors to report.
-type Plugin func(ctx context.Context, l *Ledger, tree *ast.AST) []error
+type pluginFunc func(ctx context.Context, l *Ledger, tree *ast.AST) []error
 
 // pluginRegistry maps a plugin directive's module name to the Built-in
 // Plugin that reproduces it.
-var pluginRegistry = map[string]Plugin{
+var pluginRegistry = map[string]pluginFunc{
 	"beancount.plugins.auto_accounts":   autoAccounts,
 	"beancount.plugins.implicit_prices": implicitPrices,
 }
@@ -55,14 +55,14 @@ func (l *Ledger) runPlugins(ctx context.Context, tree *ast.AST) {
 		plugin, ok := pluginRegistry[name]
 		if !ok {
 			if strings.HasPrefix(name, "beancount.plugins.") && !ignoredPlugins[name] {
-				l.errors = append(l.errors, NewPluginImportError(directive))
+				l.errors = append(l.errors, newPluginImportError(directive))
 			}
 			continue
 		}
 		// Neither Built-in Plugin takes a configuration; beancount fails
 		// to apply one that is given it.
 		if !directive.Config.IsEmpty() {
-			l.errors = append(l.errors, NewPluginConfigError(directive))
+			l.errors = append(l.errors, newPluginConfigError(directive))
 			continue
 		}
 

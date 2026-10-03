@@ -20,9 +20,9 @@ func testPosting(t *testing.T, posting string) *ast.Posting {
 
 // holding returns an inventory that augmented the postings in a transaction
 // dated date.
-func holding(t *testing.T, date string, postings ...string) *Inventory {
+func holding(t *testing.T, date string, postings ...string) *inventory {
 	t.Helper()
-	inv := NewInventory()
+	inv := newInventory()
 	for _, posting := range postings {
 		inv.augment(testPosting(t, posting), newTestDate(date))
 	}
@@ -40,19 +40,19 @@ func TestBookDecidesReductionOrAugmentation(t *testing.T) {
 		name    string
 		held    []string
 		posting string
-		method  BookingMethod
+		method  bookingMethod
 		reduces bool
 	}{
-		{name: "an opposite-signed lot is reduced", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {5 USD}", method: BookingSTRICT, reduces: true},
-		{name: "a short lot is reduced by a positive posting", held: []string{"-10 HOOL {5 USD}"}, posting: "4 HOOL {}", method: BookingFIFO, reduces: true},
+		{name: "an opposite-signed lot is reduced", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {5 USD}", method: bookingSTRICT, reduces: true},
+		{name: "a short lot is reduced by a positive posting", held: []string{"-10 HOOL {5 USD}"}, posting: "4 HOOL {}", method: bookingFIFO, reduces: true},
 		{name: "the default method books reductions", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {}", reduces: true},
-		{name: "a same-signed posting augments", held: []string{"10 HOOL {5 USD}"}, posting: "4 HOOL {6 USD}", method: BookingSTRICT},
-		{name: "selling what is not held opens a short lot", posting: "-3 HOOL {5 USD}", method: BookingSTRICT},
-		{name: "another commodity is not reduced", held: []string{"10 HOOL {5 USD}"}, posting: "-3 ACME {5 USD}", method: BookingFIFO},
-		{name: "NONE never reduces", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {5 USD}", method: BookingNONE},
-		{name: "units still to be interpolated augment", held: []string{"10 HOOL {5 USD}"}, posting: "HOOL {5 USD}", method: BookingSTRICT},
-		{name: "a posting without cost augments", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL", method: BookingSTRICT},
-		{name: "zero units augment", held: []string{"10 HOOL {5 USD}"}, posting: "0 HOOL {5 USD}", method: BookingSTRICT},
+		{name: "a same-signed posting augments", held: []string{"10 HOOL {5 USD}"}, posting: "4 HOOL {6 USD}", method: bookingSTRICT},
+		{name: "selling what is not held opens a short lot", posting: "-3 HOOL {5 USD}", method: bookingSTRICT},
+		{name: "another commodity is not reduced", held: []string{"10 HOOL {5 USD}"}, posting: "-3 ACME {5 USD}", method: bookingFIFO},
+		{name: "NONE never reduces", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL {5 USD}", method: bookingNONE},
+		{name: "units still to be interpolated augment", held: []string{"10 HOOL {5 USD}"}, posting: "HOOL {5 USD}", method: bookingSTRICT},
+		{name: "a posting without cost augments", held: []string{"10 HOOL {5 USD}"}, posting: "-4 HOOL", method: bookingSTRICT},
+		{name: "zero units augment", held: []string{"10 HOOL {5 USD}"}, posting: "0 HOOL {5 USD}", method: bookingSTRICT},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -81,15 +81,15 @@ func TestBookDecidesReductionOrAugmentation(t *testing.T) {
 // added, reduced, emptied and cloned. Like beancount's same_sign, zero units
 // count as non-negative.
 func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
-	scan := func(inv *Inventory, commodity string, units decimal.Decimal) bool {
+	scan := func(inv *inventory, commodity string, units decimal.Decimal) bool {
 		for _, lot := range inv.lots[commodity] {
-			if lot.Amount.IsNegative() != units.IsNegative() {
+			if lot.amount.IsNegative() != units.IsNegative() {
 				return true
 			}
 		}
 		return false
 	}
-	check := func(inv *Inventory) {
+	check := func(inv *inventory) {
 		t.Helper()
 		for _, commodity := range []string{"HOOL", "ACME"} {
 			for _, units := range []string{"-1", "0", "1"} {
@@ -100,7 +100,7 @@ func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
 
 	inv := holding(t, "2024-01-01", "10 HOOL {5 USD}", "2 HOOL {6 USD}", "0 ACME {1 USD}")
 	check(inv)
-	_, reduced, err := inv.book(testPosting(t, "-12 HOOL {}"), BookingFIFO)
+	_, reduced, err := inv.book(testPosting(t, "-12 HOOL {}"), bookingFIFO)
 	assert.NoError(t, err)
 	assert.True(t, reduced)
 	check(inv)
@@ -118,9 +118,9 @@ func TestHoldsOtherSignAgreesWithTheLots(t *testing.T) {
 // units leave no lot, so a later sale opens a short lot (#600).
 func TestZeroUnitsHoldNoLot(t *testing.T) {
 	inv := holding(t, "2024-01-01", "0 HOOL {5 USD}")
-	assert.True(t, inv.IsEmpty())
+	assert.True(t, inv.isEmpty())
 
-	positions, reduced, err := inv.book(testPosting(t, "-1 HOOL {5 USD}"), BookingSTRICT)
+	positions, reduced, err := inv.book(testPosting(t, "-1 HOOL {5 USD}"), bookingSTRICT)
 	assert.NoError(t, err)
 	assert.False(t, reduced)
 	assert.Zero(t, positions)
@@ -141,204 +141,204 @@ func TestBookReducesTheLotsItsMethodPicks(t *testing.T) {
 		name    string
 		held    []string
 		posting string
-		method  BookingMethod
+		method  bookingMethod
 		want    []BookedPosition
 		wantErr string
 	}{
 		{
-			name: "FIFO reduces the oldest lot first", method: BookingFIFO,
+			name: "FIFO reduces the oldest lot first", method: bookingFIFO,
 			held: threeLots, posting: "-20 STOCK {}",
 			want: []BookedPosition{at("-20", "1", "2024-01-15", "")},
 		},
 		{
-			name: "FIFO spans lots", method: BookingFIFO,
+			name: "FIFO spans lots", method: bookingFIFO,
 			held: threeLots, posting: "-60 STOCK {}",
 			want: []BookedPosition{at("-30", "1", "2024-01-15", ""), at("-30", "1", "2024-02-15", "")},
 		},
 		{
-			name: "FIFO keeps the order of lots of one date", method: BookingFIFO,
+			name: "FIFO keeps the order of lots of one date", method: bookingFIFO,
 			held: sameDate, posting: "-80 STOCK {}",
 			want: []BookedPosition{at("-50", "1", "2024-01-15", ""), at("-30", "2", "2024-01-15", "")},
 		},
 		{
-			name: "LIFO reduces the newest lot first", method: BookingLIFO,
+			name: "LIFO reduces the newest lot first", method: bookingLIFO,
 			held: threeLots, posting: "-40 STOCK {}",
 			want: []BookedPosition{at("-40", "1", "2024-03-15", "")},
 		},
 		{
-			name: "LIFO spans lots", method: BookingLIFO,
+			name: "LIFO spans lots", method: bookingLIFO,
 			held: threeLots, posting: "-60 STOCK {}",
 			want: []BookedPosition{at("-50", "1", "2024-03-15", ""), at("-10", "1", "2024-02-15", "")},
 		},
 		{
-			name: "LIFO keeps the order of lots of one date", method: BookingLIFO,
+			name: "LIFO keeps the order of lots of one date", method: bookingLIFO,
 			held: sameDate, posting: "-80 STOCK {}",
 			want: []BookedPosition{at("-50", "1", "2024-01-15", ""), at("-30", "2", "2024-01-15", "")},
 		},
 		{
-			name: "HIFO reduces the costliest lot first", method: BookingHIFO,
+			name: "HIFO reduces the costliest lot first", method: bookingHIFO,
 			held:    []string{"10 STOCK {100 USD, 2024-01-15}", "10 STOCK {200 USD, 2024-02-15}", "10 STOCK {150 USD, 2024-03-15}"},
 			posting: "-15 STOCK {}",
 			want:    []BookedPosition{at("-10", "200", "2024-02-15", ""), at("-5", "150", "2024-03-15", "")},
 		},
 		{
-			name: "a spec narrows the lots FIFO books", method: BookingFIFO,
+			name: "a spec narrows the lots FIFO books", method: bookingFIFO,
 			held:    []string{"50 STOCK {100 USD, 2024-01-15}", "30 STOCK {100 USD, 2024-02-15}"},
 			posting: "-20 STOCK {100 USD, 2024-02-15}",
 			want:    []BookedPosition{at("-20", "100", "2024-02-15", "")},
 		},
 		{
-			name: "FIFO cannot book more than the lots hold", method: BookingFIFO,
+			name: "FIFO cannot book more than the lots hold", method: bookingFIFO,
 			held: threeLots, posting: "-200 STOCK {}",
 			wantErr: `Not enough lots to reduce "-200 STOCK {}": 30 STOCK {1 USD, 2024-01-15}, 40 STOCK {1 USD, 2024-02-15}, 50 STOCK {1 USD, 2024-03-15}`,
 		},
 		{
-			name: "FIFO finds no lot the spec names", method: BookingFIFO,
+			name: "FIFO finds no lot the spec names", method: bookingFIFO,
 			held: []string{"50 STOCK {100 USD, 2024-01-15}"}, posting: "-30 STOCK {200 USD}",
 			wantErr: `No position matches "-30 STOCK {200 USD}" against balance (50 STOCK {100 USD, 2024-01-15})`,
 		},
 		{
-			name: "STRICT reduces the one lot the spec names", method: BookingSTRICT,
+			name: "STRICT reduces the one lot the spec names", method: bookingSTRICT,
 			held:    []string{"50 STOCK {100 USD, 2024-01-15}", "30 STOCK {200 USD, 2024-01-15}"},
 			posting: "-20 STOCK {100 USD}",
 			want:    []BookedPosition{at("-20", "100", "2024-01-15", "")},
 		},
 		{
-			name: "STRICT matches a label", method: BookingSTRICT,
+			name: "STRICT matches a label", method: bookingSTRICT,
 			held:    []string{`10 STOCK {100 USD, 2024-01-15, "a"}`, `10 STOCK {100 USD, 2024-01-15, "b"}`},
 			posting: `-5 STOCK {"b"}`,
 			want:    []BookedPosition{at("-5", "100", "2024-01-15", "b")},
 		},
 		{
-			name: "STRICT reduces every matching lot in full", method: BookingSTRICT,
+			name: "STRICT reduces every matching lot in full", method: bookingSTRICT,
 			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
 			posting: "-110 STOCK {}",
 			want:    []BookedPosition{at("-50", "10", "2024-01-15", ""), at("-60", "10", "2024-02-15", "")},
 		},
 		{
-			name: "STRICT cannot choose among lots it would reduce in part", method: BookingSTRICT,
+			name: "STRICT cannot choose among lots it would reduce in part", method: bookingSTRICT,
 			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
 			posting: "-40 STOCK {}",
 			wantErr: `Ambiguous matches for "-40 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
 		},
 		{
-			name: "STRICT cannot book more than the lot holds", method: BookingSTRICT,
+			name: "STRICT cannot book more than the lot holds", method: bookingSTRICT,
 			held:    []string{"10 STOCK {100 USD, 2024-01-15}", "10 STOCK {200 USD, 2024-01-15}"},
 			posting: "-20 STOCK {100 USD}",
 			wantErr: `Not enough lots to reduce "-20 STOCK {100 USD}": 10 STOCK {100 USD, 2024-01-15}`,
 		},
 		{
-			name: "STRICT finds no lot the spec names", method: BookingSTRICT,
+			name: "STRICT finds no lot the spec names", method: bookingSTRICT,
 			held: []string{"10 STOCK {100 USD, 2024-01-15}"}, posting: "-5 STOCK {200 USD}",
 			wantErr: `No position matches "-5 STOCK {200 USD}" against balance (10 STOCK {100 USD, 2024-01-15})`,
 		},
 		{
-			name: "STRICT cannot choose among lots too small together", method: BookingSTRICT,
+			name: "STRICT cannot choose among lots too small together", method: bookingSTRICT,
 			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
 			posting: "-200 STOCK {}",
 			wantErr: `Ambiguous matches for "-200 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
 		},
 		{
-			name: "STRICT_WITH_SIZE books the lot of the reduction's size", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE books the lot of the reduction's size", method: bookingSTRICTWithSize,
 			held:    []string{"10 STOCK {1 USD, 2024-01-15}", "5 STOCK {2 USD, 2024-02-15}"},
 			posting: "-5 STOCK {}",
 			want:    []BookedPosition{at("-5", "2", "2024-02-15", "")},
 		},
 		{
-			name: "STRICT_WITH_SIZE books the oldest lot of the size", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE books the oldest lot of the size", method: bookingSTRICTWithSize,
 			held:    []string{"5 STOCK {1 USD, 2024-03-15}", "10 STOCK {3 USD, 2024-01-15}", "5 STOCK {2 USD, 2024-02-15}"},
 			posting: "-5 STOCK {}",
 			want:    []BookedPosition{at("-5", "2", "2024-02-15", "")},
 		},
 		{
-			name: "STRICT_WITH_SIZE books the first of the oldest", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE books the first of the oldest", method: bookingSTRICTWithSize,
 			held:    []string{"5 STOCK {1 USD, 2024-01-15}", "5 STOCK {2 USD, 2024-01-15}"},
 			posting: "-5 STOCK {}",
 			want:    []BookedPosition{at("-5", "1", "2024-01-15", "")},
 		},
 		{
-			name: "STRICT_WITH_SIZE covers a short position of the size", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE covers a short position of the size", method: bookingSTRICTWithSize,
 			held:    []string{"-10 STOCK {5 USD, 2024-01-15}", "-4 STOCK {6 USD, 2024-02-15}"},
 			posting: "4 STOCK {}",
 			want:    []BookedPosition{at("4", "6", "2024-02-15", "")},
 		},
 		{
-			name: "STRICT_WITH_SIZE books as STRICT first", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE books as STRICT first", method: bookingSTRICTWithSize,
 			held:    []string{"5 STOCK {10 USD, 2024-01-15}", "5 STOCK {10 USD, 2024-02-15}"},
 			posting: "-10 STOCK {}",
 			want:    []BookedPosition{at("-5", "10", "2024-01-15", ""), at("-5", "10", "2024-02-15", "")},
 		},
 		{
-			name: "STRICT_WITH_SIZE reports STRICT's error without a lot of the size", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE reports STRICT's error without a lot of the size", method: bookingSTRICTWithSize,
 			held:    []string{"50 STOCK {10 USD, 2024-01-15}", "60 STOCK {10 USD, 2024-02-15}"},
 			posting: "-40 STOCK {}",
 			wantErr: `Ambiguous matches for "-40 STOCK {}": 50 STOCK {10 USD, 2024-01-15}, 60 STOCK {10 USD, 2024-02-15}`,
 		},
 		{
-			name: "STRICT_WITH_SIZE leaves one lot too small to STRICT", method: BookingSTRICTWithSize,
+			name: "STRICT_WITH_SIZE leaves one lot too small to STRICT", method: bookingSTRICTWithSize,
 			held:    []string{"10 STOCK {100 USD, 2024-01-15}"},
 			posting: "-20 STOCK {}",
 			wantErr: `Not enough lots to reduce "-20 STOCK {}": 10 STOCK {100 USD, 2024-01-15}`,
 		},
 		{
-			name: "a labelled lot too small", method: BookingSTRICT,
+			name: "a labelled lot too small", method: bookingSTRICT,
 			held:    []string{`10 STOCK {100 USD, 2024-01-15, "a"}`, `10 STOCK {100 USD, 2024-01-15, "b"}`},
 			posting: `-15 STOCK {"a"}`,
 			wantErr: `Not enough lots to reduce "-15 STOCK {"a"}": 10 STOCK {100 USD, 2024-01-15, "a"}`,
 		},
 		{
-			name: "a short position covered ambiguously", method: BookingSTRICT,
+			name: "a short position covered ambiguously", method: bookingSTRICT,
 			held:    []string{"-10 STOCK {5 USD, 2024-01-15}", "-10 STOCK {6 USD, 2024-01-15}"},
 			posting: "4 STOCK {}",
 			wantErr: `Ambiguous matches for "4 STOCK {}": -10 STOCK {5 USD, 2024-01-15}, -10 STOCK {6 USD, 2024-01-15}`,
 		},
 		{
-			name: "no lot matches a dated spec", method: BookingSTRICT,
+			name: "no lot matches a dated spec", method: bookingSTRICT,
 			held:    []string{"10 STOCK {100 USD, 2024-01-15}"},
 			posting: "-5.50 STOCK {100.00 USD, 2024-01-16}",
 			wantErr: `No position matches "-5.50 STOCK {100.00 USD, 2024-01-16}" against balance (10 STOCK {100 USD, 2024-01-15})`,
 		},
 		{
-			name: "no lot matches a total cost, among other currencies", method: BookingFIFO,
+			name: "no lot matches a total cost, among other currencies", method: bookingFIFO,
 			held:    []string{"7 USD", "10 STOCK {100 USD, 2024-01-15}", "2 AAPL {3 USD, 2024-01-15}"},
 			posting: "-5 STOCK {{65 USD}}",
 			wantErr: `No position matches "-5 STOCK {0 # 65 USD}" against balance (7 USD, 2 AAPL {3 USD, 2024-01-15}, 10 STOCK {100 USD, 2024-01-15})`,
 		},
 		{
-			name: "no lot is held at cost", method: BookingFIFO,
+			name: "no lot is held at cost", method: bookingFIFO,
 			held:    []string{"10 STOCK"},
 			posting: "-1 STOCK {10 # 5 USD}",
 			wantErr: `No position matches "-1 STOCK {10 # 5 USD}" against balance (10 STOCK)`,
 		},
 		{
-			name: "a compound spec without its per-unit number", method: BookingSTRICT,
+			name: "a compound spec without its per-unit number", method: bookingSTRICT,
 			held:    []string{"5 STOCK {10 USD, 2024-01-15}", "5 STOCK {11 USD, 2024-01-15}"},
 			posting: "-3 STOCK {# 4 USD}",
 			wantErr: `Ambiguous matches for "-3 STOCK {# 4 USD}": 5 STOCK {10 USD, 2024-01-15}, 5 STOCK {11 USD, 2024-01-15}`,
 		},
 		{
-			name: "a compound spec without its total", method: BookingSTRICT,
+			name: "a compound spec without its total", method: bookingSTRICT,
 			held:    []string{"5 STOCK {10 USD, 2024-01-15}", "5 STOCK {11 USD, 2024-01-15}"},
 			posting: "-3 STOCK {4 # USD}",
 			wantErr: `Ambiguous matches for "-3 STOCK {4 USD}": 5 STOCK {10 USD, 2024-01-15}, 5 STOCK {11 USD, 2024-01-15}`,
 		},
 		{
-			name: "a total cost names the lot at its per-unit cost", method: BookingSTRICT,
+			name: "a total cost names the lot at its per-unit cost", method: bookingSTRICT,
 			held: []string{"10 STOCK {5 USD, 2024-01-15}"}, posting: "-4 STOCK {{20 USD}}",
 			want: []BookedPosition{at("-4", "5", "2024-01-15", "")},
 		},
 		{
-			name: "a compound cost names the lot at its per-unit cost", method: BookingSTRICT,
+			name: "a compound cost names the lot at its per-unit cost", method: bookingSTRICT,
 			held: []string{"10 STOCK {5 USD, 2024-01-15}"}, posting: "-2 STOCK {3 # 4 USD}",
 			want: []BookedPosition{at("-2", "5", "2024-01-15", "")},
 		},
 		{
-			name: "a short lot is covered", method: BookingFIFO,
+			name: "a short lot is covered", method: bookingFIFO,
 			held: []string{"-10 STOCK {5 USD, 2024-01-15}"}, posting: "4 STOCK {}",
 			want: []BookedPosition{at("4", "5", "2024-01-15", "")},
 		},
 		{
-			name: "AVERAGE fails every reduction, like beancount v2", method: BookingAVERAGE,
+			name: "AVERAGE fails every reduction, like beancount v2", method: bookingAVERAGE,
 			held: []string{"5 STOCK {100 USD, 2024-01-15}"}, posting: "-5 STOCK {}",
 			wantErr: "AVERAGE method is not supported",
 		},
@@ -361,7 +361,7 @@ func TestBookLeavesTheInventoryUnchangedOnFailure(t *testing.T) {
 	inv := holding(t, "2024-01-01", "10 STOCK {1 USD, 2024-01-15}", "20 STOCK {1 USD, 2024-02-15}")
 	before := inv.String()
 
-	_, _, err := inv.book(testPosting(t, "-40 STOCK {}"), BookingFIFO)
+	_, _, err := inv.book(testPosting(t, "-40 STOCK {}"), bookingFIFO)
 	assert.Error(t, err)
 	assert.Equal(t, before, inv.String())
 }
@@ -369,26 +369,26 @@ func TestBookLeavesTheInventoryUnchangedOnFailure(t *testing.T) {
 func TestBookSkipsLotsWithoutCost(t *testing.T) {
 	// Like beancount's book_reductions, a cost spec never books against units
 	// held without cost, although they still make the posting a reduction.
-	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
+	for _, method := range []bookingMethod{bookingSTRICT, bookingFIFO, bookingLIFO, bookingHIFO} {
 		t.Run(string(method), func(t *testing.T) {
 			inv := holding(t, "2024-01-01", "1 HOOL {10 USD, 2024-01-15}", "1 HOOL {12 USD, 2024-02-15}", "1 HOOL")
 
 			positions, _, err := inv.book(testPosting(t, "-2 HOOL {}"), method)
 			assert.NoError(t, err)
 			assert.Equal(t, 2, len(positions))
-			assert.Equal(t, "1", inv.Get("HOOL").String(), "the units without cost remain")
+			assert.Equal(t, "1", inv.get("HOOL").String(), "the units without cost remain")
 		})
 	}
 
 	inv := holding(t, "2024-01-01", "3 HOOL")
-	_, _, err := inv.book(testPosting(t, "-1 HOOL {}"), BookingFIFO)
+	_, _, err := inv.book(testPosting(t, "-1 HOOL {}"), bookingFIFO)
 	assert.Error(t, err)
 }
 
 func TestBookShortPositionAtCost(t *testing.T) {
-	for _, method := range []BookingMethod{BookingSTRICT, BookingFIFO, BookingLIFO, BookingHIFO} {
+	for _, method := range []bookingMethod{bookingSTRICT, bookingFIFO, bookingLIFO, bookingHIFO} {
 		t.Run(string(method), func(t *testing.T) {
-			inv := NewInventory()
+			inv := newInventory()
 
 			// Selling without holdings augments: it opens a short lot, dated
 			// like an acquisition.
@@ -407,7 +407,7 @@ func TestBookShortPositionAtCost(t *testing.T) {
 
 			_, _, err = inv.book(testPosting(t, "1 HOOL {}"), method)
 			assert.NoError(t, err)
-			assert.True(t, inv.IsEmpty())
+			assert.True(t, inv.isEmpty())
 		})
 	}
 }
@@ -488,7 +488,7 @@ func TestInventoryStringIsBeancounts(t *testing.T) {
 	inv := holding(t, "2024-01-01", "20 EUR", "3.0 HOOL {12.50 USD}", "10 USD", "5 GOOG {1 EUR}", "5 HOOL {10 USD}")
 
 	assert.Equal(t, "(10 USD, 20 EUR, 5 GOOG {1 EUR, 2024-01-01}, 5 HOOL {10 USD, 2024-01-01}, 3.0 HOOL {12.50 USD, 2024-01-01})", inv.String())
-	assert.Equal(t, "()", NewInventory().String())
+	assert.Equal(t, "()", newInventory().String())
 }
 
 // TestFIFOLIFOBooking tests FIFO and LIFO booking method semantics.
@@ -525,11 +525,11 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				// Should have 5 shares left from lot 2 at 110 USD
 				assert.Equal(t, 1, len(lots))
-				assert.Equal(t, "5", lots[0].Amount.String())
-				assert.Equal(t, "110", lots[0].Spec.Cost.String())
+				assert.Equal(t, "5", lots[0].amount.String())
+				assert.Equal(t, "110", lots[0].spec.cost.String())
 			},
 		},
 		{
@@ -556,11 +556,11 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				// Should have 5 shares left from lot 1 at 100 USD
 				assert.Equal(t, 1, len(lots))
-				assert.Equal(t, "5", lots[0].Amount.String())
-				assert.Equal(t, "100", lots[0].Spec.Cost.String())
+				assert.Equal(t, "5", lots[0].amount.String())
+				assert.Equal(t, "100", lots[0].spec.cost.String())
 			},
 		},
 		{
@@ -585,10 +585,10 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				// Should have 5 shares left from last lot at 110 USD
 				assert.Equal(t, 1, len(lots))
-				assert.Equal(t, "5", lots[0].Amount.String())
+				assert.Equal(t, "5", lots[0].amount.String())
 			},
 		},
 		{
@@ -662,9 +662,9 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				assert.Equal(t, 1, len(lots))
-				assert.Equal(t, "5", lots[0].Amount.String())
+				assert.Equal(t, "5", lots[0].amount.String())
 			},
 		},
 		{
@@ -689,7 +689,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				assert.Equal(t, 2, len(lots))
 			},
 		},
@@ -715,7 +715,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				assert.Equal(t, 2, len(lots))
 			},
 		},
@@ -741,7 +741,7 @@ func TestLotMatching(t *testing.T) {
 			check: func(t *testing.T, l *Ledger) {
 				acc, ok := l.GetAccount("Assets:Brokerage")
 				assert.True(t, ok)
-				lots := acc.Inventory.GetLots("STOCK")
+				lots := acc.inventory.getLots("STOCK")
 				assert.Equal(t, 2, len(lots))
 			},
 		},
@@ -815,33 +815,33 @@ func TestLotMatching(t *testing.T) {
 	}
 }
 
-// TestLotKeyAgreesWithEqual pins the index's lot identity to lotSpec.Equal:
+// TestLotKeyAgreesWithEqual pins the index's lot identity to lotSpec.equal:
 // two specs share a key exactly when they are the same lot.
 func TestLotKeyAgreesWithEqual(t *testing.T) {
 	dec := func(s string) *decimal.Decimal { d := decimal.RequireFromString(s); return &d }
 	specs := map[string]*lotSpec{
 		"none":        nil,
 		"empty":       {},
-		"100.0 USD":   {Cost: dec("100.0"), CostCurrency: "USD"},
-		"100.00 USD":  {Cost: dec("100.00"), CostCurrency: "USD"},
-		"100 EUR":     {Cost: dec("100"), CostCurrency: "EUR"},
-		"101 USD":     {Cost: dec("101"), CostCurrency: "USD"},
-		"0 USD":       {Cost: dec("0"), CostCurrency: "USD"},
-		"0.00 USD":    {Cost: dec("0.00"), CostCurrency: "USD"},
-		"USD":         {CostCurrency: "USD"},
-		"dated":       {Cost: dec("100"), CostCurrency: "USD", Date: newTestDate("2024-01-01")},
-		"dated again": {Cost: dec("100.000"), CostCurrency: "USD", Date: newTestDate("2024-01-01")},
-		"other date":  {Cost: dec("100"), CostCurrency: "USD", Date: newTestDate("2024-01-02")},
-		"labelled":    {Cost: dec("100"), CostCurrency: "USD", Label: "a"},
-		"other label": {Cost: dec("100"), CostCurrency: "USD", Label: "b"},
-		"label only":  {Label: "a"},
-		"date only":   {Date: newTestDate("2024-01-01")},
-		"all of them": {Cost: dec("100"), CostCurrency: "USD", Date: newTestDate("2024-01-01"), Label: "a"},
-		"all, 100.0 ": {Cost: dec("100.0"), CostCurrency: "USD", Date: newTestDate("2024-01-01"), Label: "a"},
+		"100.0 USD":   {cost: dec("100.0"), costCurrency: "USD"},
+		"100.00 USD":  {cost: dec("100.00"), costCurrency: "USD"},
+		"100 EUR":     {cost: dec("100"), costCurrency: "EUR"},
+		"101 USD":     {cost: dec("101"), costCurrency: "USD"},
+		"0 USD":       {cost: dec("0"), costCurrency: "USD"},
+		"0.00 USD":    {cost: dec("0.00"), costCurrency: "USD"},
+		"USD":         {costCurrency: "USD"},
+		"dated":       {cost: dec("100"), costCurrency: "USD", date: newTestDate("2024-01-01")},
+		"dated again": {cost: dec("100.000"), costCurrency: "USD", date: newTestDate("2024-01-01")},
+		"other date":  {cost: dec("100"), costCurrency: "USD", date: newTestDate("2024-01-02")},
+		"labelled":    {cost: dec("100"), costCurrency: "USD", label: "a"},
+		"other label": {cost: dec("100"), costCurrency: "USD", label: "b"},
+		"label only":  {label: "a"},
+		"date only":   {date: newTestDate("2024-01-01")},
+		"all of them": {cost: dec("100"), costCurrency: "USD", date: newTestDate("2024-01-01"), label: "a"},
+		"all, 100.0 ": {cost: dec("100.0"), costCurrency: "USD", date: newTestDate("2024-01-01"), label: "a"},
 	}
 	for an, a := range specs {
 		for bn, b := range specs {
-			assert.Equal(t, a.Equal(b), a.key() == b.key(), "%s vs %s", an, bn)
+			assert.Equal(t, a.equal(b), a.key() == b.key(), "%s vs %s", an, bn)
 		}
 	}
 }
@@ -874,7 +874,7 @@ func TestLotOrderSurvivesEmptyingALot(t *testing.T) {
 	inv.augment(testPosting(t, "1 AA {1 USD}"), newTestDate("2024-01-01"))
 
 	var order []string
-	for _, lot := range inv.GetLots("AA") {
+	for _, lot := range inv.getLots("AA") {
 		order = append(order, lot.String())
 	}
 	assert.Equal(t, []string{"1 AA {2 USD, 2024-01-01}", "2 AA {3 USD, 2024-01-01}", "1 AA {1 USD, 2024-01-01}"}, order)

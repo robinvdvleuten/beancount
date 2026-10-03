@@ -12,8 +12,8 @@ import (
 	"github.com/shopspring/decimal"
 )
 
-// Inventory tracks lots of commodities with cost basis
-type Inventory struct {
+// inventory tracks lots of commodities with cost basis
+type inventory struct {
 	// Map: commodity -> list of lots, in the order they were added, which
 	// booking methods, reductions and rendering depend on
 	lots map[string][]*lot
@@ -76,7 +76,7 @@ func (p BookedPosition) lotSpec() *lotSpec {
 		return nil
 	}
 	number := p.Cost.Number // A copy, so the lot's spec does not alias the published cost
-	return &lotSpec{Cost: &number, CostCurrency: p.Cost.Currency, Date: p.Cost.Date, Label: p.Cost.Label}
+	return &lotSpec{cost: &number, costCurrency: p.Cost.Currency, date: p.Cost.Date, label: p.Cost.Label}
 }
 
 type reductionPlan struct {
@@ -182,28 +182,28 @@ func reducingPosting(posting *ast.Posting, units decimal.Decimal) string {
 	return fmt.Sprintf("%s %s {%s}", pydecimal.String(units), posting.Amount.Currency, strings.Join(parts, ", "))
 }
 
-type BookingMethod string
+type bookingMethod string
 
 const (
-	BookingSTRICT         BookingMethod = "STRICT"
-	BookingSTRICTWithSize BookingMethod = "STRICT_WITH_SIZE"
-	BookingNONE           BookingMethod = "NONE"
-	BookingFIFO           BookingMethod = "FIFO"
-	BookingLIFO           BookingMethod = "LIFO"
-	BookingHIFO           BookingMethod = "HIFO"
-	BookingAVERAGE        BookingMethod = "AVERAGE"
+	bookingSTRICT         bookingMethod = "STRICT"
+	bookingSTRICTWithSize bookingMethod = "STRICT_WITH_SIZE"
+	bookingNONE           bookingMethod = "NONE"
+	bookingFIFO           bookingMethod = "FIFO"
+	bookingLIFO           bookingMethod = "LIFO"
+	bookingHIFO           bookingMethod = "HIFO"
+	bookingAVERAGE        bookingMethod = "AVERAGE"
 )
 
-func defaultBookingMethod(method BookingMethod) BookingMethod {
+func defaultBookingMethod(method bookingMethod) bookingMethod {
 	if method == "" {
-		return BookingSTRICT
+		return bookingSTRICT
 	}
 	return method
 }
 
-// NewInventory creates a new inventory
-func NewInventory() *Inventory {
-	return &Inventory{
+// newInventory creates a new inventory
+func newInventory() *inventory {
+	return &inventory{
 		lots:  make(map[string][]*lot),
 		index: make(map[string]map[lotKey]int),
 		signs: make(map[string]signCounts),
@@ -212,7 +212,7 @@ func NewInventory() *Inventory {
 
 // countLot adds delta to the count of a commodity's lots holding units of
 // amount's sign.
-func (inv *Inventory) countLot(commodity string, amount decimal.Decimal, delta int) {
+func (inv *inventory) countLot(commodity string, amount decimal.Decimal, delta int) {
 	counts := inv.signs[commodity]
 	counts[signIndex(amount)] += delta
 	if counts == (signCounts{}) {
@@ -224,15 +224,15 @@ func (inv *Inventory) countLot(commodity string, amount decimal.Decimal, delta i
 
 // holdsOtherSign reports whether the inventory holds a lot of commodity
 // whose units' sign differs from units', as beancount's same_sign tells.
-func (inv *Inventory) holdsOtherSign(commodity string, units decimal.Decimal) bool {
+func (inv *inventory) holdsOtherSign(commodity string, units decimal.Decimal) bool {
 	return inv.signs[commodity][1-signIndex(units)] > 0
 }
 
 // clone returns a copy of the inventory whose lots can change without
 // changing the original's. The index holds positions, not lots, so the
 // copy's is the original's copied.
-func (inv *Inventory) clone() *Inventory {
-	cloned := &Inventory{
+func (inv *inventory) clone() *inventory {
+	cloned := &inventory{
 		lots:  make(map[string][]*lot, len(inv.lots)),
 		index: make(map[string]map[lotKey]int, len(inv.index)),
 		signs: maps.Clone(inv.signs),
@@ -252,21 +252,21 @@ func (inv *Inventory) clone() *Inventory {
 	return cloned
 }
 
-// AddLot adds an amount with a specific cost basis and reports whether it
+// addLot adds an amount with a specific cost basis and reports whether it
 // reduced the lot: the inventory held the lot with the opposite sign, like
 // beancount's Inventory.add_amount returning Booking.REDUCED. Like
 // add_amount, it never holds a lot of zero units: zero units added to a lot
 // it does not hold leave it unchanged.
-func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
+func (inv *inventory) addLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
 	// Find existing lot with matching spec
 	key := spec.key()
 	if i, ok := inv.index[commodity][key]; ok {
 		lot := inv.lots[commodity][i]
-		reduced := signIndex(lot.Amount) != signIndex(amount)
-		inv.countLot(commodity, lot.Amount, -1)
-		lot.Amount = pydecimal.Add(lot.Amount, amount)
-		inv.countLot(commodity, lot.Amount, 1)
-		if lot.Amount.IsZero() {
+		reduced := signIndex(lot.amount) != signIndex(amount)
+		inv.countLot(commodity, lot.amount, -1)
+		lot.amount = pydecimal.Add(lot.amount, amount)
+		inv.countLot(commodity, lot.amount, 1)
+		if lot.amount.IsZero() {
 			inv.removeLot(commodity, lot)
 		}
 		return reduced
@@ -275,7 +275,7 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 	if amount.IsZero() {
 		return false
 	}
-	newLot := &lot{Commodity: commodity, Amount: amount, Spec: spec, key: key}
+	newLot := &lot{commodity: commodity, amount: amount, spec: spec, key: key}
 	positions, ok := inv.index[commodity]
 	if !ok {
 		positions = make(map[lotKey]int)
@@ -287,17 +287,17 @@ func (inv *Inventory) AddLot(commodity string, amount decimal.Decimal, spec *lot
 	return false
 }
 
-// Get returns the total amount of a commodity (summing all lots)
-func (inv *Inventory) Get(commodity string) decimal.Decimal {
+// get returns the total amount of a commodity (summing all lots)
+func (inv *inventory) get(commodity string) decimal.Decimal {
 	total := decimal.Zero
 	for _, lot := range inv.lots[commodity] {
-		total = pydecimal.Add(total, lot.Amount)
+		total = pydecimal.Add(total, lot.amount)
 	}
 	return total
 }
 
-// GetLots returns all lots for a commodity
-func (inv *Inventory) GetLots(commodity string) []*lot {
+// getLots returns all lots for a commodity
+func (inv *inventory) getLots(commodity string) []*lot {
 	return inv.lots[commodity]
 }
 
@@ -316,7 +316,7 @@ func (inv *Inventory) GetLots(commodity string) []*lot {
 // numbers may still be interpolated, from the reductions' weights among
 // others, and like beancount the inventory takes it (augment) only once its
 // transaction is booked, so the transaction's own postings never reduce it.
-func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (positions []BookedPosition, reduced bool, err error) {
+func (inv *inventory) book(posting *ast.Posting, method bookingMethod) (positions []BookedPosition, reduced bool, err error) {
 	units, reduces := inv.reducedBy(posting, method)
 	if !reduces {
 		return nil, false, nil
@@ -329,7 +329,7 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 	commodity := posting.Amount.Currency
 	var lots []*lot
 	for _, lot := range inv.lots[commodity] {
-		if signIndex(lot.Amount) != signIndex(units) && lot.Spec != nil && lot.Spec.Cost != nil {
+		if signIndex(lot.amount) != signIndex(units) && lot.spec != nil && lot.spec.cost != nil {
 			lots = append(lots, lot)
 		}
 	}
@@ -368,10 +368,10 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 		if units.IsNegative() {
 			reduction.amount = reduction.amount.Neg()
 		}
-		s := reduction.lot.Spec
+		s := reduction.lot.spec
 		booked = append(booked, BookedPosition{
 			Units:   reduction.amount,
-			Cost:    &BookedCost{Number: *s.Cost, Currency: s.CostCurrency, Date: s.Date, Label: s.Label},
+			Cost:    &BookedCost{Number: *s.cost, Currency: s.costCurrency, Date: s.date, Label: s.label},
 			Reduced: true,
 		})
 	}
@@ -384,7 +384,7 @@ func (inv *Inventory) book(posting *ast.Posting, method BookingMethod) (position
 // reduces when the inventory holds its commodity with the opposite sign,
 // unless its account books with NONE. It changes nothing, so it can be
 // asked of an inventory shared with others.
-func (inv *Inventory) reducedBy(posting *ast.Posting, method BookingMethod) (decimal.Decimal, bool) {
+func (inv *inventory) reducedBy(posting *ast.Posting, method bookingMethod) (decimal.Decimal, bool) {
 	if posting.Cost == nil || posting.Amount == nil || posting.Amount.Value == "" {
 		return decimal.Decimal{}, false
 	}
@@ -392,7 +392,7 @@ func (inv *Inventory) reducedBy(posting *ast.Posting, method BookingMethod) (dec
 	if err != nil {
 		return decimal.Decimal{}, false // A malformed number drops its transaction before Booking
 	}
-	if defaultBookingMethod(method) == BookingNONE || units.IsZero() {
+	if defaultBookingMethod(method) == bookingNONE || units.IsZero() {
 		return decimal.Decimal{}, false
 	}
 	return units, inv.holdsOtherSign(posting.Amount.Currency, units)
@@ -408,7 +408,7 @@ func (inv *Inventory) reducedBy(posting *ast.Posting, method BookingMethod) (dec
 // change and its record, or none for a posting that holds nothing: one
 // without a complete amount, or at a cost whose number was not
 // interpolated.
-func (inv *Inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosition {
+func (inv *inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosition {
 	if posting.Amount == nil || isIncompleteAmount(posting.Amount) {
 		return nil
 	}
@@ -425,25 +425,25 @@ func (inv *Inventory) augment(posting *ast.Posting, date *ast.Date) []BookedPosi
 		if err != nil {
 			return nil
 		}
-		// Known gap (KNOWN_GAPS.md): ParseLotSpec reads a merge cost {*}
+		// Known gap (KNOWN_GAPS.md): parseLotSpec reads a merge cost {*}
 		// as {} and drops the number inferred for it, so an augmentation
 		// at {*} books its units without cost, where beancount v2 books
 		// it at the inferred cost.
-		if spec.Cost != nil {
-			if spec.Date != nil {
-				date = spec.Date
+		if spec.cost != nil {
+			if spec.date != nil {
+				date = spec.date
 			}
-			position.Cost = &BookedCost{Number: *spec.Cost, Currency: spec.CostCurrency, Date: date, Label: spec.Label}
+			position.Cost = &BookedCost{Number: *spec.cost, Currency: spec.costCurrency, Date: date, Label: spec.label}
 		}
 	}
-	position.Reduced = inv.AddLot(posting.Amount.Currency, units, position.lotSpec())
+	position.Reduced = inv.addLot(posting.Amount.Currency, units, position.lotSpec())
 	return []BookedPosition{position}
 }
 
 // removeLot removes a lot from the inventory, keeping the others in order.
-// It builds a new slice, since GetLots hands the old one out.
-func (inv *Inventory) removeLot(commodity string, lotToRemove *lot) {
-	inv.countLot(commodity, lotToRemove.Amount, -1)
+// It builds a new slice, since getLots hands the old one out.
+func (inv *inventory) removeLot(commodity string, lotToRemove *lot) {
+	inv.countLot(commodity, lotToRemove.amount, -1)
 	lots := inv.lots[commodity]
 	if len(lots) == 1 {
 		delete(inv.lots, commodity)
@@ -463,13 +463,13 @@ func (inv *Inventory) removeLot(commodity string, lotToRemove *lot) {
 	}
 }
 
-// IsEmpty returns true if the inventory has no lots
-func (inv *Inventory) IsEmpty() bool {
+// isEmpty returns true if the inventory has no lots
+func (inv *inventory) isEmpty() bool {
 	return len(inv.lots) == 0
 }
 
-// Currencies returns all commodities in the inventory
-func (inv *Inventory) Currencies() []string {
+// currencies returns all commodities in the inventory
+func (inv *inventory) currencies() []string {
 	currencies := make([]string, 0, len(inv.lots))
 	for currency := range inv.lots {
 		currencies = append(currencies, currency)
@@ -479,12 +479,12 @@ func (inv *Inventory) Currencies() []string {
 
 // costCurrencies returns the distinct cost currencies of the lots held at
 // cost, sorted.
-func (inv *Inventory) costCurrencies() []string {
+func (inv *inventory) costCurrencies() []string {
 	var currencies []string
 	for _, lots := range inv.lots {
 		for _, lot := range lots {
-			if lot.Spec != nil && lot.Spec.CostCurrency != "" && !slices.Contains(currencies, lot.Spec.CostCurrency) {
-				currencies = append(currencies, lot.Spec.CostCurrency)
+			if lot.spec != nil && lot.spec.costCurrency != "" && !slices.Contains(currencies, lot.spec.costCurrency) {
+				currencies = append(currencies, lot.spec.costCurrency)
 			}
 		}
 	}
@@ -512,7 +512,7 @@ func CurrencyRank(currency string) int {
 // positions in parentheses, sorted by Position.sortkey (currency rank, cost
 // number, cost currency, then units). Ties fall back to commodity name and
 // lot order, where beancount keeps insertion order.
-func (inv *Inventory) String() string {
+func (inv *inventory) String() string {
 	commodities := make([]string, 0, len(inv.lots))
 	for commodity := range inv.lots {
 		commodities = append(commodities, commodity)
@@ -524,13 +524,13 @@ func (inv *Inventory) String() string {
 		lots = append(lots, inv.lots[commodity]...)
 	}
 	costOf := func(l *lot) (decimal.Decimal, string) {
-		if l.Spec == nil || l.Spec.Cost == nil {
+		if l.spec == nil || l.spec.cost == nil {
 			return decimal.Zero, ""
 		}
-		return *l.Spec.Cost, l.Spec.CostCurrency
+		return *l.spec.cost, l.spec.costCurrency
 	}
 	slices.SortStableFunc(lots, func(a, b *lot) int {
-		if c := CurrencyRank(a.Commodity) - CurrencyRank(b.Commodity); c != 0 {
+		if c := CurrencyRank(a.commodity) - CurrencyRank(b.commodity); c != 0 {
 			return c
 		}
 		an, ac := costOf(a)
@@ -541,7 +541,7 @@ func (inv *Inventory) String() string {
 		if c := strings.Compare(ac, bc); c != 0 {
 			return c
 		}
-		return a.Amount.Cmp(b.Amount)
+		return a.amount.Cmp(b.amount)
 	})
 
 	var buf strings.Builder
@@ -558,10 +558,10 @@ func (inv *Inventory) String() string {
 
 // countAtCost returns how many lots of commodity the inventory holds at
 // cost.
-func (inv *Inventory) countAtCost(commodity string) int {
+func (inv *inventory) countAtCost(commodity string) int {
 	n := 0
 	for _, lot := range inv.lots[commodity] {
-		if lot.Spec != nil {
+		if lot.spec != nil {
 			n++
 		}
 	}
@@ -570,14 +570,14 @@ func (inv *Inventory) countAtCost(commodity string) int {
 
 // planReduction plans reducing amount (a magnitude) from the lots the
 // reduction's spec matches, at least one.
-func planReduction(commodity string, matches []*lot, amount decimal.Decimal, bookingMethod BookingMethod) (*reductionPlan, error) {
+func planReduction(commodity string, matches []*lot, amount decimal.Decimal, bookingMethod bookingMethod) (*reductionPlan, error) {
 	switch bookingMethod {
-	case BookingAVERAGE:
+	case bookingAVERAGE:
 		// Beancount v2 never implemented AVERAGE: every reduction under it fails.
 		return nil, errAverageUnsupported
-	case BookingSTRICT:
+	case bookingSTRICT:
 		return planStrictReduction(commodity, matches, amount)
-	case BookingSTRICTWithSize:
+	case bookingSTRICTWithSize:
 		return planStrictReductionWithSize(commodity, matches, amount)
 	default:
 		return planReductionAcrossLots(commodity, amount, sortedLotsForBooking(matches, bookingMethod))
@@ -589,7 +589,7 @@ func planReduction(commodity string, matches []*lot, amount decimal.Decimal, boo
 // otherwise it cannot choose.
 func planStrictReduction(commodity string, matches []*lot, amount decimal.Decimal) (*reductionPlan, error) {
 	if len(matches) == 1 {
-		if matches[0].Amount.Abs().LessThan(amount) {
+		if matches[0].amount.Abs().LessThan(amount) {
 			return nil, errNotEnoughLots
 		}
 		return &reductionPlan{
@@ -600,14 +600,14 @@ func planStrictReduction(commodity string, matches []*lot, amount decimal.Decima
 
 	total := decimal.Zero
 	for _, lot := range matches {
-		total = pydecimal.Add(total, lot.Amount.Abs())
+		total = pydecimal.Add(total, lot.amount.Abs())
 	}
 	if !total.Equal(amount) {
 		return nil, errAmbiguousMatches
 	}
 	reductions := make([]lotReduction, 0, len(matches))
 	for _, lot := range matches {
-		reductions = append(reductions, lotReduction{lot: lot, amount: lot.Amount.Abs()})
+		reductions = append(reductions, lotReduction{lot: lot, amount: lot.amount.Abs()})
 	}
 	return &reductionPlan{
 		commodity:  commodity,
@@ -625,7 +625,7 @@ func planStrictReductionWithSize(commodity string, matches []*lot, amount decima
 	}
 	var sized []*lot
 	for _, lot := range matches {
-		if lot.Amount.Abs().Equal(amount) {
+		if lot.amount.Abs().Equal(amount) {
 			sized = append(sized, lot)
 		}
 	}
@@ -646,14 +646,14 @@ func planStrictReductionWithSize(commodity string, matches []*lot, amount decima
 // sorts first (beancount fails to compare it).
 func compareLotDates(a, b *lot) int {
 	switch {
-	case a.Spec.Date == nil && b.Spec.Date == nil:
+	case a.spec.date == nil && b.spec.date == nil:
 		return 0
-	case a.Spec.Date == nil:
+	case a.spec.date == nil:
 		return -1
-	case b.Spec.Date == nil:
+	case b.spec.date == nil:
 		return 1
 	}
-	return a.Spec.Date.Compare(b.Spec.Date.Time)
+	return a.spec.date.Compare(b.spec.date.Time)
 }
 
 // planReductionAcrossLots reduces the given amount across lots in order,
@@ -666,7 +666,7 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 			break
 		}
 
-		reduction := decimal.Min(lot.Amount.Abs(), remaining)
+		reduction := decimal.Min(lot.amount.Abs(), remaining)
 		reductions = append(reductions, lotReduction{lot: lot, amount: reduction})
 		remaining = pydecimal.Sub(remaining, reduction)
 	}
@@ -681,27 +681,27 @@ func planReductionAcrossLots(commodity string, amount decimal.Decimal, sortedLot
 	}, nil
 }
 
-func (inv *Inventory) applyReduction(plan *reductionPlan) {
+func (inv *inventory) applyReduction(plan *reductionPlan) {
 	for _, reduction := range plan.reductions {
-		inv.countLot(plan.commodity, reduction.lot.Amount, -1)
-		reduction.lot.Amount = pydecimal.Add(reduction.lot.Amount, reduction.amount)
-		inv.countLot(plan.commodity, reduction.lot.Amount, 1)
-		if reduction.lot.Amount.IsZero() {
+		inv.countLot(plan.commodity, reduction.lot.amount, -1)
+		reduction.lot.amount = pydecimal.Add(reduction.lot.amount, reduction.amount)
+		inv.countLot(plan.commodity, reduction.lot.amount, 1)
+		if reduction.lot.amount.IsZero() {
 			inv.removeLot(plan.commodity, reduction.lot)
 		}
 	}
 }
 
-func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
+func sortedLotsForBooking(lots []*lot, bookingMethod bookingMethod) []*lot {
 	sortedLots := append([]*lot(nil), lots...)
 	method := defaultBookingMethod(bookingMethod)
-	lifo := method == BookingLIFO
+	lifo := method == bookingLIFO
 
-	if method == BookingHIFO {
+	if method == bookingHIFO {
 		// Highest cost basis first; lots without a cost sort last.
 		slices.SortStableFunc(sortedLots, func(a, b *lot) int {
-			aHasCost := a.Spec != nil && a.Spec.Cost != nil
-			bHasCost := b.Spec != nil && b.Spec.Cost != nil
+			aHasCost := a.spec != nil && a.spec.cost != nil
+			bHasCost := b.spec != nil && b.spec.cost != nil
 			if aHasCost != bHasCost {
 				if aHasCost {
 					return -1
@@ -711,14 +711,14 @@ func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 			if !aHasCost {
 				return 0
 			}
-			return b.Spec.Cost.Cmp(*a.Spec.Cost)
+			return b.spec.cost.Cmp(*a.spec.cost)
 		})
 		return sortedLots
 	}
 
 	slices.SortStableFunc(sortedLots, func(a, b *lot) int {
-		aHasDate := a.Spec != nil && a.Spec.Date != nil
-		bHasDate := b.Spec != nil && b.Spec.Date != nil
+		aHasDate := a.spec != nil && a.spec.date != nil
+		bHasDate := b.spec != nil && b.spec.date != nil
 
 		if aHasDate != bHasDate {
 			if lifo {
@@ -736,18 +736,18 @@ func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 			return 0
 		}
 		if lifo {
-			if a.Spec.Date.After(b.Spec.Date.Time) {
+			if a.spec.date.After(b.spec.date.Time) {
 				return -1
 			}
-			if a.Spec.Date.Before(b.Spec.Date.Time) {
+			if a.spec.date.Before(b.spec.date.Time) {
 				return 1
 			}
 			return 0
 		}
-		if a.Spec.Date.Before(b.Spec.Date.Time) {
+		if a.spec.date.Before(b.spec.date.Time) {
 			return -1
 		}
-		if a.Spec.Date.After(b.Spec.Date.Time) {
+		if a.spec.date.After(b.spec.date.Time) {
 			return 1
 		}
 		return 0
@@ -758,29 +758,29 @@ func sortedLotsForBooking(lots []*lot, bookingMethod BookingMethod) []*lot {
 
 func lotMatchesReductionSpec(lot *lot, spec *lotSpec) bool {
 	if spec == nil {
-		return lot.Spec == nil || lot.Spec.IsEmpty()
+		return lot.spec == nil || lot.spec.isEmpty()
 	}
-	if spec.IsEmpty() {
+	if spec.isEmpty() {
 		return true
 	}
-	if lot.Spec == nil {
+	if lot.spec == nil {
 		return false
 	}
 
-	if spec.Cost != nil && (lot.Spec.Cost == nil || !lot.Spec.Cost.Equal(*spec.Cost)) {
+	if spec.cost != nil && (lot.spec.cost == nil || !lot.spec.cost.Equal(*spec.cost)) {
 		return false
 	}
-	if spec.CostCurrency != "" && lot.Spec.CostCurrency != spec.CostCurrency {
+	if spec.costCurrency != "" && lot.spec.costCurrency != spec.costCurrency {
 		return false
 	}
 
-	if spec.Date != nil {
-		if lot.Spec.Date == nil || !lot.Spec.Date.Equal(spec.Date.Time) {
+	if spec.date != nil {
+		if lot.spec.date == nil || !lot.spec.date.Equal(spec.date.Time) {
 			return false
 		}
 	}
 
-	if spec.Label != "" && lot.Spec.Label != spec.Label {
+	if spec.label != "" && lot.spec.label != spec.label {
 		return false
 	}
 

@@ -1,8 +1,8 @@
 # Typed deltas and a shared validator in the handler registry
 
-The ledger's handler registry keeps its current shape: each `Handler` returns
-its delta as `any` from `Validate` and type-asserts it in `Apply`, and each
-`Validate` builds its own `validator` with
+The ledger's handler registry keeps its current shape: each `handler` returns
+its delta as `any` from `validate` and type-asserts it in `apply`, and each
+`validate` builds its own `validator` with
 `newValidator(l.accounts, l.opened, l.config)`.
 We don't plan to type the deltas through a generic adapter, and we don't plan
 to hold one shared validator on the `Ledger`.
@@ -17,7 +17,7 @@ long is doing its job.
 
 The two changes this was once proposed for cost more than they save:
 
-- **Typed deltas.** Each `Apply` asserts only the delta its own `Validate`
+- **Typed deltas.** Each `apply` asserts only the delta its own `validate`
   returned, so every run of the test suite exercises each assertion, and a
   mismatch panics right away in tests rather than misbehaving quietly. A
   generic adapter such as `typedHandler[D]` would add a layer of generics to
@@ -26,7 +26,7 @@ The two changes this was once proposed for cost more than they save:
 - **One validator on the Ledger.** `validator` is a struct with two fields,
   `accounts` and `config`. Building one per directive is one small allocation,
   with no measured cost and no bug behind it. Keeping one on the `Ledger`
-  would also mean `Validate` holds state that has to stay in step with
+  would also mean `validate` holds state that has to stay in step with
   `l.accounts`, which the current code gets for free.
 
 Before #462, the Balance and Pad handlers carried real pad logic, which made

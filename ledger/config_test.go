@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/shopspring/decimal"
 )
 
@@ -12,13 +13,13 @@ func TestConfigFromOptions(t *testing.T) {
 		name        string
 		options     map[string][]string
 		wantErr     bool
-		checkConfig func(t *testing.T, config *Config)
+		checkConfig func(t *testing.T, config *sharedconfig.Config)
 	}{
 		{
 			name:    "empty options - use defaults",
 			options: map[string][]string{},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.5), config.Tolerance.Multiplier)
 				assert.Equal(t, 0, len(config.Tolerance.Defaults))
 				assert.False(t, config.Tolerance.InferFromCost)
@@ -31,7 +32,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"tolerance_multiplier": {"0.6"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.6), config.Tolerance.Multiplier)
 			},
 		},
@@ -41,7 +42,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"inferred_tolerance_default": {"*:0.001"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.001), config.Tolerance.Defaults["*"])
 			},
 		},
@@ -51,7 +52,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"inferred_tolerance_default": {"USD:0.003"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.003), config.Tolerance.Defaults["USD"])
 				_, ok := config.Tolerance.Defaults["*"]
 				assert.False(t, ok)
@@ -63,7 +64,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"infer_tolerance_from_cost": {"TRUE"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.True(t, config.Tolerance.InferFromCost)
 			},
 		},
@@ -73,7 +74,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"infer_tolerance_from_cost": {"false"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.False(t, config.Tolerance.InferFromCost)
 			},
 		},
@@ -86,7 +87,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"booking_method":             {"AVERAGE"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.75), config.Tolerance.Multiplier)
 				assert.Equal(t, decimal.NewFromFloat(0.002), config.Tolerance.Defaults["EUR"])
 				assert.True(t, config.Tolerance.InferFromCost)
@@ -99,7 +100,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"booking_method": {"NONE"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, "NONE", config.BookingMethod)
 			},
 		},
@@ -144,7 +145,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"inferred_tolerance_default": {"USD:0.01", "EUR:0.01", "BTC:0.0001"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.Defaults["USD"])
 				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.Defaults["EUR"])
 				assert.Equal(t, decimal.NewFromFloat(0.0001), config.Tolerance.Defaults["BTC"])
@@ -162,7 +163,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"name_expenses":    {"Ausgaben"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, "Vermoegen", config.AccountNames.Assets)
 				assert.Equal(t, "Verbindlichkeiten", config.AccountNames.Liabilities)
 				assert.Equal(t, "Eigenkapital", config.AccountNames.Equity)
@@ -176,7 +177,7 @@ func TestConfigFromOptions(t *testing.T) {
 				"name_assets": {"Actifs"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *sharedconfig.Config) {
 				assert.Equal(t, "Actifs", config.AccountNames.Assets)
 				// Others should have defaults
 				assert.Equal(t, "Liabilities", config.AccountNames.Liabilities)
@@ -207,7 +208,7 @@ func TestConfigFromOptions(t *testing.T) {
 }
 
 func TestNewConfig(t *testing.T) {
-	cfg := NewConfig()
+	cfg := sharedconfig.New()
 	assert.True(t, cfg != nil)
 	assert.True(t, cfg.Tolerance != nil)
 	assert.Equal(t, "STRICT", cfg.BookingMethod)

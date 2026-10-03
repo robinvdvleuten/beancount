@@ -256,10 +256,14 @@ func TestErrorRenderer_RenderWithSourceContext_BoundsChecking(t *testing.T) {
 }
 
 func TestErrorRenderer_UnusedPadShowsPadOnce(t *testing.T) {
-	tree := parser.MustParseString(t.Context(), "2020-01-02 pad Assets:Cash Equity:Opening\n")
-	pad := tree.Directives[0].(*ast.Pad)
+	tree := parser.MustParseString(t.Context(), "2020-01-01 open Assets:Cash\n2020-01-01 open Equity:Opening\n2020-01-02 pad Assets:Cash Equity:Opening\n")
+	l := ledger.New()
+	_, err := l.Process(t.Context(), tree)
+	assert.NoError(t, err)
+	diagnostics := l.Diagnostics()
+	assert.Equal(t, 1, len(diagnostics))
 
-	output := NewErrorRenderer(nil).Render(ledger.NewUnusedPadWarning(pad))
+	output := NewErrorRenderer(nil).Render(diagnostics[0])
 
 	assert.Equal(t, 1, strings.Count(output, "pad Assets:Cash Equity:Opening"))
 	for _, line := range strings.Split(output, "\n") {

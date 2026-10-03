@@ -4,44 +4,41 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 )
 
-// Deltas are what a directive's handler plans in Validate and hands to its
-// Apply: the changes the directive makes to the ledger's state. They hold
-// no errors, which Validate returns beside them. A transaction has none
+// Deltas are what a directive's handler plans in validate and hands to its
+// apply: the changes the directive makes to the ledger's state. They hold
+// no errors, which validate returns beside them. A transaction has none
 // here: its handler applies what Booking recorded for it (bookedTransaction,
 // booking.go).
 
-// OpenDelta describes changes from opening an account.
+// openDelta describes changes from opening an account.
 // Stores account properties directly to avoid unnecessary allocations.
-type OpenDelta struct {
-	Account              ast.Account
-	OpenDate             *ast.Date
-	ConstraintCurrencies []string
-	Metadata             []*ast.Metadata
+type openDelta struct {
+	account              ast.Account
+	openDate             *ast.Date
+	constraintCurrencies []string
+	metadata             []*ast.Metadata
 }
 
-// HasMetadata returns true if the delta has metadata
-func (d *OpenDelta) HasMetadata() bool {
-	return len(d.Metadata) > 0
+// hasMetadata returns true if the delta has metadata
+func (d *openDelta) hasMetadata() bool {
+	return len(d.metadata) > 0
 }
 
-// CloseDelta describes changes from closing an account
-type CloseDelta struct {
-	AccountName string
-	CloseDate   *ast.Date
+// closeDelta describes changes from closing an account
+type closeDelta struct {
+	accountName string
+	closeDate   *ast.Date
 }
 
-// BalanceDelta describes changes from a balance assertion.
+// balanceDelta describes changes from a balance assertion.
 // Does NOT include validation errors - those are returned separately.
-type BalanceDelta struct {
-	AccountName string
-	Currency    string
-	Padding     *ast.Transaction // Padding the assertion's pad inserts; nil when none
+type balanceDelta struct {
+	accountName string
+	currency    string
+	padding     *ast.Transaction // Padding the assertion's pad inserts; nil when none
 }
 
-// CommodityDelta describes changes from a commodity declaration.
-type CommodityDelta struct {
-	CommodityID string // Currency/commodity code
+// commodityDelta describes changes from a commodity declaration.
+type commodityDelta struct {
+	commodityID string // Currency/commodity code
 }
-
-// NoteDelta - no mutations needed (validation only)
-// DocumentDelta - no mutations needed (validation only)

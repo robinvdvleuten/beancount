@@ -21,11 +21,11 @@ type validator struct {
 	// Every account an open directive names anywhere in the ledger, with
 	// that open, which tells an inactive account from an unknown one
 	opened map[string]*ast.Open
-	config *Config
+	config *sharedconfig.Config
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account, opened map[string]*ast.Open, config *Config) *validator {
+func newValidator(accounts map[string]*Account, opened map[string]*ast.Open, config *sharedconfig.Config) *validator {
 	return &validator{
 		accounts: accounts,
 		opened:   opened,
@@ -39,9 +39,9 @@ func newValidator(accounts map[string]*Account, opened map[string]*ast.Open, con
 // otherwise.
 func (v *validator) accountNotOpenError(d ast.Directive, account ast.Account) error {
 	if v.opened[string(account)] != nil {
-		return NewInactiveAccountError(d, account)
+		return newInactiveAccountError(d, account)
 	}
-	return NewAccountNotOpenError(d, account)
+	return newAccountNotOpenError(d, account)
 }
 
 // validateDateRange checks if a date is within the valid Beancount range (1-9999).
@@ -88,7 +88,7 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 			errs = append(errs, v.accountNotOpenError(txn, posting.Account))
 			continue
 		}
-		if !acc.IsOpen(txn.Date()) {
+		if !acc.isOpen(txn.Date()) {
 			errs = append(errs, v.accountNotOpenError(txn, posting.Account))
 		}
 	}
@@ -136,7 +136,7 @@ func validateMetadataEntries(
 	seen := make(map[string]bool, len(metadata))
 	for _, meta := range metadata {
 		if seen[meta.Key] {
-			errs = append(errs, NewInvalidMetadataError(
+			errs = append(errs, newInvalidMetadataError(
 				txn, account, meta.Key, meta.Value, "duplicate key",
 			))
 			continue
@@ -164,7 +164,7 @@ func validateMetadataEntries(
 // follow-on errors.
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction, booked *bookedTransaction) ([]error, *bookedTransaction) {
 	if booked == nil {
-		return []error{NewUnbookedTransactionError(txn)}, nil
+		return []error{newUnbookedTransactionError(txn)}, nil
 	}
 
 	var errs []error
@@ -185,7 +185,7 @@ func newNotBalancedError(txn *ast.Transaction, residuals map[string]decimal.Deci
 	for currency, amount := range residuals {
 		residualStrings[currency] = amount.String()
 	}
-	return NewTransactionNotBalancedError(txn, residualStrings)
+	return newTransactionNotBalancedError(txn, residualStrings)
 }
 
 // validateBalance checks that a balance directive's date is in range and
@@ -195,11 +195,11 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 		return []error{err}
 	}
 	if _, err := ParseAmount(balance.Amount); err != nil {
-		return []error{NewInvalidAmountError(balance, balance.Account, balance.Amount.Value, err)}
+		return []error{newInvalidAmountError(balance, balance.Account, balance.Amount.Value, err)}
 	}
 	if balance.Tolerance != nil {
 		if _, err := ParseAmount(balance.Tolerance); err != nil {
-			return []error{NewInvalidAmountError(balance, balance.Account, balance.Tolerance.Value, err)}
+			return []error{newInvalidAmountError(balance, balance.Account, balance.Tolerance.Value, err)}
 		}
 	}
 	return nil
@@ -213,19 +213,19 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 // after close).
 func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.Decimal) []error {
 	if v.opened[string(balance.Account)] == nil {
-		return []error{NewAccountNotOpenError(balance, balance.Account)}
+		return []error{newAccountNotOpenError(balance, balance.Account)}
 	}
 
 	var errs []error
 	if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
-		errs = append(errs, NewInactiveAccountError(balance, balance.Account))
+		errs = append(errs, newInactiveAccountError(balance, balance.Account))
 	}
 	if err := v.validateBalanceCurrency(balance); err != nil {
 		errs = append(errs, err)
 	}
 	expected, _ := ParseAmount(balance.Amount)
-	if !AmountEqual(expected, held, tolerance) {
-		errs = append(errs, NewBalanceMismatchError(balance, expected, held))
+	if !amountEqual(expected, held, tolerance) {
+		errs = append(errs, newBalanceMismatchError(balance, expected, held))
 	}
 	return errs
 }
@@ -238,7 +238,7 @@ func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
 	if open == nil || len(open.ConstraintCurrencies) == 0 || slices.Contains(open.ConstraintCurrencies, balance.Amount.Currency) {
 		return nil
 	}
-	return NewBalanceCurrencyError(balance)
+	return newBalanceCurrencyError(balance)
 }
 
 // balanceKey is what makes two balance assertions assert the same thing.
@@ -417,7 +417,7 @@ func (v *validator) validateDocument(doc *ast.Document) []error {
 	// the directory of the file declaring the directive, so an empty path
 	// names that directory and passes, as in bean-check.
 	if _, err := os.Stat(doc.ResolvedPath()); err != nil {
-		errs = append(errs, NewDocumentFileError(doc))
+		errs = append(errs, newDocumentFileError(doc))
 	}
 
 	return errs
@@ -430,7 +430,7 @@ func (v *validator) isAccountOpen(account ast.Account, date *ast.Date) bool {
 	if !ok {
 		return false
 	}
-	return acc.IsOpen(date)
+	return acc.isOpen(date)
 }
 
 // isAccountActiveAllowingClose checks that an account exists and was opened
@@ -457,7 +457,7 @@ func (v *validator) isAccountActiveAllowingClose(account ast.Account, date *ast.
 // Any duplicate open directive is an error, regardless of whether the account
 // was previously closed.
 //
-// Returns validation errors and OpenDelta for the mutations to apply.
+// Returns validation errors and openDelta for the mutations to apply.
 //
 // Example:
 //
@@ -466,7 +466,7 @@ func (v *validator) isAccountActiveAllowingClose(account ast.Account, date *ast.
 //	if len(errs) > 0 {
 //	    // Validation failed
 //	}
-func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, *OpenDelta) {
+func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, *openDelta) {
 	var errs []error
 	accountName := string(open.Account)
 
@@ -478,13 +478,13 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 
 	// 1. Validate account root name is configured
 	if !v.config.IsValidAccountName(open.Account) {
-		errs = append(errs, NewInvalidAccountNameError(open, v.config))
+		errs = append(errs, newInvalidAccountNameError(open, v.config))
 		return errs, nil
 	}
 
 	// Check if account already exists - duplicate open is always an error
 	if existing, ok := v.accounts[accountName]; ok {
-		errs = append(errs, NewAccountAlreadyOpenError(open, existing.OpenDate))
+		errs = append(errs, newAccountAlreadyOpenError(open, existing.OpenDate))
 		return errs, nil
 	}
 
@@ -492,7 +492,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	// matched case-sensitively. Like beancount, an invalid one is reported
 	// and the account still opens; the booker books it with the default.
 	if open.BookingMethod != "" && !sharedconfig.IsBookingMethod(open.BookingMethod) {
-		errs = append(errs, NewInvalidBookingMethodError(open))
+		errs = append(errs, newInvalidBookingMethodError(open))
 	}
 
 	// Copy metadata and constraint currencies to avoid shared references with AST
@@ -503,11 +503,11 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	copy(constraintCurrenciesCopy, open.ConstraintCurrencies)
 
 	// Build delta with account properties (avoid allocating Inventory during validation)
-	delta := &OpenDelta{
-		Account:              open.Account,
-		OpenDate:             open.Date(),
-		ConstraintCurrencies: constraintCurrenciesCopy,
-		Metadata:             metadataCopy,
+	delta := &openDelta{
+		account:              open.Account,
+		openDate:             open.Date(),
+		constraintCurrencies: constraintCurrenciesCopy,
+		metadata:             metadataCopy,
 	}
 
 	return errs, delta
@@ -519,7 +519,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 //   - Account exists in the ledger
 //   - Account is not already closed
 //
-// Returns validation errors and CloseDelta for the mutations to apply.
+// Returns validation errors and closeDelta for the mutations to apply.
 //
 // Example:
 //
@@ -528,7 +528,7 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 //	if len(errs) > 0 {
 //	    // Validation failed
 //	}
-func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]error, *CloseDelta) {
+func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]error, *closeDelta) {
 	var errs []error
 	accountName := string(close.Account)
 
@@ -541,19 +541,19 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	// Check if account exists
 	account, ok := v.accounts[accountName]
 	if !ok {
-		errs = append(errs, NewAccountNotClosedError(close))
+		errs = append(errs, newAccountNotClosedError(close))
 		return errs, nil
 	}
 
 	// Check if already closed
-	if account.IsClosed() {
-		errs = append(errs, NewAccountAlreadyClosedError(close, account.CloseDate))
+	if account.isClosed() {
+		errs = append(errs, newAccountAlreadyClosedError(close, account.CloseDate))
 		return errs, nil
 	}
 
-	delta := &CloseDelta{
-		AccountName: accountName,
-		CloseDate:   close.Date(),
+	delta := &closeDelta{
+		accountName: accountName,
+		closeDate:   close.Date(),
 	}
 
 	return errs, delta
@@ -571,10 +571,10 @@ func (v *validator) validateBookedCosts(txn *ast.Transaction) []error {
 			continue
 		}
 		if units, err := ParseAmount(posting.Amount); err == nil && units.IsZero() {
-			errs = append(errs, NewZeroAmountError(txn, posting))
+			errs = append(errs, newZeroAmountError(txn, posting))
 		}
 		if perUnit, costCurrency, ok := perUnitCost(posting); ok && perUnit.IsNegative() {
-			errs = append(errs, NewNegativeCostError(txn, posting, perUnit, costCurrency))
+			errs = append(errs, newNegativeCostError(txn, posting, perUnit, costCurrency))
 		}
 	}
 	return errs
@@ -595,7 +595,7 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction) []error {
 		}
 
 		// Only check if account has constraint currencies
-		if len(account.ConstraintCurrencies) == 0 {
+		if len(account.constraintCurrencies) == 0 {
 			continue
 		}
 
@@ -608,14 +608,14 @@ func (v *validator) validateConstraintCurrencies(txn *ast.Transaction) []error {
 
 		// Check if currency is allowed
 		allowed := false
-		for _, c := range account.ConstraintCurrencies {
+		for _, c := range account.constraintCurrencies {
 			if c == currency {
 				allowed = true
 				break
 			}
 		}
 		if !allowed {
-			errs = append(errs, NewCurrencyConstraintError(txn, posting.Account, currency))
+			errs = append(errs, newCurrencyConstraintError(txn, posting.Account, currency))
 		}
 	}
 
@@ -628,29 +628,29 @@ func validatePrice(price *ast.Price) []error {
 
 	// Validate commodity is non-empty
 	if price.Commodity == "" {
-		errs = append(errs, NewInvalidDirectivePriceError("price commodity cannot be empty", price))
+		errs = append(errs, newInvalidDirectivePriceError("price commodity cannot be empty", price))
 	}
 
 	// Validate amount is present
 	if price.Amount == nil {
-		errs = append(errs, NewInvalidDirectivePriceError("price amount is required", price))
+		errs = append(errs, newInvalidDirectivePriceError("price amount is required", price))
 		return errs
 	}
 
 	// Validate currency is non-empty
 	if price.Amount.Currency == "" {
-		errs = append(errs, NewInvalidDirectivePriceError("price currency cannot be empty", price))
+		errs = append(errs, newInvalidDirectivePriceError("price currency cannot be empty", price))
 	}
 
 	// Validate amount value is non-empty and parseable
 	if price.Amount.Value == "" {
-		errs = append(errs, NewInvalidDirectivePriceError("price amount value cannot be empty", price))
+		errs = append(errs, newInvalidDirectivePriceError("price amount value cannot be empty", price))
 		return errs
 	}
 
 	// Like beancount, any number is a price, zero and negative included.
 	if _, err := ParseAmount(price.Amount); err != nil {
-		errs = append(errs, NewInvalidDirectivePriceError(fmt.Sprintf("invalid price amount: %v", err), price))
+		errs = append(errs, newInvalidDirectivePriceError(fmt.Sprintf("invalid price amount: %v", err), price))
 	}
 
 	return errs

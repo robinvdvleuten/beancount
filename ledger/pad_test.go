@@ -50,7 +50,7 @@ func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 	// Verify inventory was updated
 	account, ok := ledger.GetAccount("Assets:Checking")
 	assert.True(t, ok, "Assets:Checking should exist")
-	balance := account.Inventory.Get("USD")
+	balance := account.inventory.get("USD")
 	assert.Equal(t, "1000", balance.String(), "Balance should be 1000 USD")
 }
 
@@ -125,8 +125,8 @@ func TestPadWithMultipleCurrencies(t *testing.T) {
 
 	// Verify inventory
 	account, _ := ledger.GetAccount("Assets:Investment")
-	assert.Equal(t, "500", account.Inventory.Get("EUR").String())
-	assert.Equal(t, "750", account.Inventory.Get("GBP").String())
+	assert.Equal(t, "500", account.inventory.get("EUR").String())
+	assert.Equal(t, "750", account.inventory.get("GBP").String())
 }
 
 func TestPadWithExistingBalance(t *testing.T) {
@@ -158,7 +158,7 @@ func TestPadWithExistingBalance(t *testing.T) {
 
 	// Final balance should be 550
 	account, _ := ledger.GetAccount("Assets:Savings")
-	assert.Equal(t, "550", account.Inventory.Get("USD").String())
+	assert.Equal(t, "550", account.inventory.get("USD").String())
 }
 
 func TestPadWithinTolerance(t *testing.T) {
@@ -318,7 +318,7 @@ func TestPadFillsOnlyTheFirstAssertion(t *testing.T) {
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
 	var mismatch *BalanceMismatchError
 	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
-	assert.Equal(t, "5", mismatch.Actual)
+	assert.Equal(t, "5", mismatch.actual)
 }
 
 func TestPaddingKeepsTheDifferencesPrecision(t *testing.T) {
@@ -344,7 +344,7 @@ func TestPaddingKeepsTheDifferencesPrecision(t *testing.T) {
 
 	cash, ok := l.GetAccount("Assets:Cash")
 	assert.True(t, ok)
-	assert.Equal(t, "5", cash.Inventory.Get("USD").String())
+	assert.Equal(t, "5", cash.inventory.get("USD").String())
 }
 
 func TestPadOnACurrencyHeldAtCost(t *testing.T) {
@@ -407,14 +407,14 @@ func TestPadOnACurrencyHeldWithoutCostReportsNothing(t *testing.T) {
 // fillCase builds a pad on Assets:Checking from source, a balance
 // assertion of amount on Assets:Checking, and an inventory holding held
 // USD.
-func fillCase(t *testing.T, source ast.Account, amount, held string) (*pads, *ast.Balance, *Inventory) {
+func fillCase(t *testing.T, source ast.Account, amount, held string) (*pads, *ast.Balance, *inventory) {
 	t.Helper()
 	date, err := ast.NewDate("2020-01-15")
 	assert.NoError(t, err)
 	p := newPads()
 	p.add(ast.NewPad(date, "Assets:Checking", source))
-	inventory := NewInventory()
-	inventory.AddLot("USD", decimal.RequireFromString(held), nil)
+	inventory := newInventory()
+	inventory.addLot("USD", decimal.RequireFromString(held), nil)
 	return p, ast.NewBalance(date, "Assets:Checking", ast.NewAmount(amount, "USD")), inventory
 }
 

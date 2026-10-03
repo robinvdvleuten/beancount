@@ -9,19 +9,20 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
 
 // newTestValidator is a helper for tests that need a validator with default config.
 func newTestValidator(accounts map[string]*Account) *validator {
-	return newValidator(accounts, nil, NewConfig())
+	return newValidator(accounts, nil, sharedconfig.New())
 }
 
 // bookAndValidate books txn against empty inventories and validates the
 // result against the accounts, as Process does.
 func bookAndValidate(accounts map[string]*Account, txn *ast.Transaction) ([]error, *bookedTransaction) {
-	booked, errs := newBooker(NewConfig(), newTolerances(nil), nil).book(txn)
+	booked, errs := newBooker(sharedconfig.New(), newTolerances(nil), nil).book(txn)
 	if len(errs) > 0 {
 		return errs, nil
 	}
@@ -107,16 +108,16 @@ func TestValidateAccountsOpen(t *testing.T) {
 	expenses, _ := ast.NewAccount("Expenses:Groceries")
 
 	openAccount := &Account{
-		Name:      checking,
+		name:      checking,
 		OpenDate:  date2024,
-		Inventory: NewInventory(),
+		inventory: newInventory(),
 	}
 
 	closedAccount := &Account{
-		Name:      checking,
+		name:      checking,
 		OpenDate:  date2024,
 		CloseDate: date2024,
-		Inventory: NewInventory(),
+		inventory: newInventory(),
 	}
 
 	tests := []struct {
@@ -136,14 +137,14 @@ func TestValidateAccountsOpen(t *testing.T) {
 			),
 			accounts: map[string]*Account{
 				"Assets:Checking": &Account{
-					Name:      checking,
+					name:      checking,
 					OpenDate:  date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 				"Expenses:Groceries": &Account{
-					Name:      expenses,
+					name:      expenses,
 					OpenDate:  date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			},
 			wantErrCount: 0,
@@ -182,16 +183,16 @@ func TestValidateAccountsOpen(t *testing.T) {
 			),
 			accounts: map[string]*Account{
 				"Assets:Checking": &Account{
-					Name:      checking,
+					name:      checking,
 					OpenDate:  date2024,
 					CloseDate: date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 				"Expenses:Groceries": &Account{
-					Name:      expenses,
+					name:      expenses,
 					OpenDate:  date2024,
 					CloseDate: date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			},
 			wantErrCount: 2,
@@ -234,20 +235,20 @@ func TestValidateTransaction_Integration(t *testing.T) {
 	// Setup accounts for validator
 	accounts := map[string]*Account{
 		"Assets:Checking": {
-			Name:      checking,
+			name:      checking,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Expenses:Groceries": {
-			Name:      expenses,
+			name:      expenses,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Assets:OldAccount": {
-			Name:      closed,
+			name:      closed,
 			OpenDate:  date,
 			CloseDate: date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 	}
 
@@ -375,8 +376,8 @@ func TestImplicitPostingPerCurrency(t *testing.T) {
 
 	cash, ok := l.GetAccount("Assets:Cash")
 	assert.True(t, ok)
-	assert.Equal(t, "-55", cash.Inventory.Get("USD").String())
-	assert.Equal(t, "-20", cash.Inventory.Get("EUR").String())
+	assert.Equal(t, "-55", cash.inventory.get("USD").String())
+	assert.Equal(t, "-20", cash.inventory.get("EUR").String())
 }
 
 func TestImplicitPostings(t *testing.T) {
@@ -391,34 +392,34 @@ func TestImplicitPostings(t *testing.T) {
 	// Setup accounts for validator
 	accounts := map[string]*Account{
 		"Assets:Checking": {
-			Name:      checking,
+			name:      checking,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Assets:Deposit": {
-			Name:      deposit,
+			name:      deposit,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Assets:Savings": {
-			Name:      savings,
+			name:      savings,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Expenses:Food": {
-			Name:      expenses,
+			name:      expenses,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Income:Salary": {
-			Name:      income,
+			name:      income,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Assets:MultiCurr": {
-			Name:      multiCurr,
+			name:      multiCurr,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 	}
 
@@ -565,14 +566,14 @@ func BenchmarkValidateTransaction(b *testing.B) {
 
 	accounts := map[string]*Account{
 		"Assets:Checking": {
-			Name:      checking,
+			name:      checking,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 		"Expenses:Groceries": {
-			Name:      expenses,
+			name:      expenses,
 			OpenDate:  date,
-			Inventory: NewInventory(),
+			inventory: newInventory(),
 		},
 	}
 
@@ -993,17 +994,17 @@ func TestBalanceTolerance(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			date := newTestDate("2020-01-02")
-			account := &Account{Name: "Assets:Checking", OpenDate: date, Inventory: NewInventory()}
-			account.Inventory.AddLot("USD", decimal.RequireFromString(tt.actual), nil)
-			balance := ast.NewBalance(date, account.Name, ast.NewAmount(tt.asserted, "USD"))
+			account := &Account{name: "Assets:Checking", OpenDate: date, inventory: newInventory()}
+			account.inventory.addLot("USD", decimal.RequireFromString(tt.actual), nil)
+			balance := ast.NewBalance(date, account.name, ast.NewAmount(tt.asserted, "USD"))
 			if tt.tolerance != "" {
 				balance.Tolerance = ast.NewAmount(tt.tolerance, "USD")
 			}
 
-			v := newValidator(map[string]*Account{string(account.Name): account}, map[string]*ast.Open{string(account.Name): ast.NewOpen(date, account.Name, nil, "")}, NewConfig())
+			v := newValidator(map[string]*Account{string(account.name): account}, map[string]*ast.Open{string(account.name): ast.NewOpen(date, account.name, nil, "")}, sharedconfig.New())
 			tolerance, err := newTolerances(nil).balance(balance)
 			assert.NoError(t, err)
-			errs := v.checkBalance(balance, account.Inventory.Get("USD"), tolerance)
+			errs := v.checkBalance(balance, account.inventory.get("USD"), tolerance)
 			assert.Equal(t, tt.wantErr, len(errs) > 0, "errors: %v", errs)
 		})
 	}
@@ -1124,9 +1125,9 @@ func TestValidateOpen(t *testing.T) {
 			name: "account already open",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
-					Name:      checking,
+					name:      checking,
 					OpenDate:  date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			},
 			open:         ast.NewOpen(date2025, checking, nil, ""),
@@ -1136,10 +1137,10 @@ func TestValidateOpen(t *testing.T) {
 			name: "reopening closed account - error (duplicate open)",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
-					Name:      checking,
+					name:      checking,
 					OpenDate:  date2024,
 					CloseDate: date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			},
 			open:         ast.NewOpen(date2025, checking, nil, ""),
@@ -1177,26 +1178,26 @@ func TestValidateOpen(t *testing.T) {
 
 			if tt.wantErrCount == 0 && delta != nil {
 				if tt.wantMetadataCopy {
-					assert.True(t, delta.HasMetadata(), "expected metadata on delta")
+					assert.True(t, delta.hasMetadata(), "expected metadata on delta")
 				}
 
 				if tt.wantConstraintLen > 0 {
-					assert.Equal(t, tt.wantConstraintLen, len(delta.ConstraintCurrencies))
+					assert.Equal(t, tt.wantConstraintLen, len(delta.constraintCurrencies))
 				}
 
 				// Verify no shared references
-				if tt.open.HasMetadata() && delta.HasMetadata() {
+				if tt.open.HasMetadata() && delta.hasMetadata() {
 					// Check that the slices don't point to the same backing array by checking addresses
 					// Using %p format to get pointer addresses as strings
 					openPtr := fmt.Sprintf("%p", &tt.open.Metadata[0])
-					deltaPtr := fmt.Sprintf("%p", &delta.Metadata[0])
+					deltaPtr := fmt.Sprintf("%p", &delta.metadata[0])
 					assert.NotEqual(t, openPtr, deltaPtr)
 				}
 
-				if len(tt.open.ConstraintCurrencies) > 0 && len(delta.ConstraintCurrencies) > 0 {
+				if len(tt.open.ConstraintCurrencies) > 0 && len(delta.constraintCurrencies) > 0 {
 					// Modify delta's copy to verify independence
 					originalFirst := tt.open.ConstraintCurrencies[0]
-					delta.ConstraintCurrencies[0] = "TEST"
+					delta.constraintCurrencies[0] = "TEST"
 					assert.Equal(t, originalFirst, tt.open.ConstraintCurrencies[0])
 				}
 			}
@@ -1211,7 +1212,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 	customAccount := ast.Account("Vermoegen:Checking")
 
 	t.Run("valid custom account type", func(t *testing.T) {
-		cfg := NewConfig()
+		cfg := sharedconfig.New()
 		cfg.AccountNames.Assets = "Vermoegen"
 
 		v := newValidator(map[string]*Account{}, nil, cfg)
@@ -1219,11 +1220,11 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 
 		assert.Equal(t, 0, len(errs))
 		assert.True(t, delta != nil)
-		assert.Equal(t, customAccount, delta.Account)
+		assert.Equal(t, customAccount, delta.account)
 	})
 
 	t.Run("invalid custom account type", func(t *testing.T) {
-		cfg := NewConfig()
+		cfg := sharedconfig.New()
 		// Don't set custom Vermoegen - should reject it
 
 		v := newValidator(map[string]*Account{}, nil, cfg)
@@ -1259,10 +1260,10 @@ func TestValidateClose(t *testing.T) {
 			name: "closing already closed account",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
-					Name:      checking,
+					name:      checking,
 					OpenDate:  date2024,
 					CloseDate: date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			},
 			close:        ast.NewClose(date2025, checking),
@@ -1273,9 +1274,9 @@ func TestValidateClose(t *testing.T) {
 			name: "valid close directive",
 			accounts: map[string]*Account{
 				"Assets:Checking": {
-					Name:      checking,
+					name:      checking,
 					OpenDate:  date2024,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			},
 			close:        ast.NewClose(date2025, checking),
@@ -1376,7 +1377,7 @@ func TestBookingDropsAFailedGroupsReductions(t *testing.T) {
 
 	stock, ok := l.GetAccount("Assets:Stock")
 	assert.True(t, ok)
-	assert.True(t, stock.Inventory.IsEmpty(), "inventory: %s", stock.Inventory)
+	assert.True(t, stock.inventory.isEmpty(), "inventory: %s", stock.inventory)
 }
 
 func TestBookingMethodSemantics(t *testing.T) {
@@ -1559,15 +1560,15 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			accounts := map[string]*Account{
 				"Assets:Checking": {
-					Name:                 checking,
+					name:                 checking,
 					OpenDate:             date,
-					Inventory:            NewInventory(),
-					ConstraintCurrencies: tt.constraints,
+					inventory:            newInventory(),
+					constraintCurrencies: tt.constraints,
 				},
 				"Expenses:Groceries": {
-					Name:      expenses,
+					name:      expenses,
 					OpenDate:  date,
-					Inventory: NewInventory(),
+					inventory: newInventory(),
 				},
 			}
 
@@ -1606,6 +1607,6 @@ func TestOverReductionReportsNotEnoughLots(t *testing.T) {
 		assert.Equal(t, `Not enough lots to reduce "-2 HOOL `+spec+`": 1 HOOL {10 USD, 2020-01-02}`, insufficient.(*Diagnostic).message, spec)
 
 		stock, _ := l.GetAccount("Assets:Stock")
-		assert.Equal(t, "1", stock.Inventory.Get("HOOL").String(), "the failed sale changes nothing")
+		assert.Equal(t, "1", stock.inventory.get("HOOL").String(), "the failed sale changes nothing")
 	}
 }

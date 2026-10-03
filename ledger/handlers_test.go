@@ -34,7 +34,7 @@ func TestHandlerRegistry_GetHandler(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(string(tt.kind), func(t *testing.T) {
-			handler := GetHandler(tt.kind)
+			handler := getHandler(tt.kind)
 			if tt.expects {
 				assert.NotZero(t, handler, "handler should be registered")
 			} else {
@@ -52,21 +52,21 @@ func TestOpenHandler(t *testing.T) {
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
-	handler := &OpenHandler{}
+	handler := &openHandler{}
 	directive := tree.Directives[0]
 
 	// Validate
-	errs, delta := handler.Validate(ctx, ledger, directive)
+	errs, delta := handler.validate(ctx, ledger, directive)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 	assert.NotZero(t, delta, "delta should not be nil")
 
 	// Apply
-	handler.Apply(ctx, ledger, directive, delta)
+	handler.apply(ctx, ledger, directive, delta)
 
 	// Verify
 	acc, ok := ledger.GetAccount("Assets:Checking")
 	assert.True(t, ok, "account should exist")
-	assert.Equal(t, "Assets:Checking", string(acc.Name))
+	assert.Equal(t, "Assets:Checking", string(acc.name))
 }
 
 func TestCloseHandler(t *testing.T) {
@@ -79,23 +79,23 @@ func TestCloseHandler(t *testing.T) {
 	ledger := New()
 
 	// Open first
-	openHandler := &OpenHandler{}
-	_, openDelta := openHandler.Validate(ctx, ledger, tree.Directives[0])
-	openHandler.Apply(ctx, ledger, tree.Directives[0], openDelta)
+	openHandler := &openHandler{}
+	_, openDelta := openHandler.validate(ctx, ledger, tree.Directives[0])
+	openHandler.apply(ctx, ledger, tree.Directives[0], openDelta)
 
 	// Close
-	closeHandler := &CloseHandler{}
+	closeHandler := &closeHandler{}
 	directive := tree.Directives[1]
-	errs, delta := closeHandler.Validate(ctx, ledger, directive)
+	errs, delta := closeHandler.validate(ctx, ledger, directive)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 	assert.NotZero(t, delta, "delta should not be nil")
 
-	closeHandler.Apply(ctx, ledger, directive, delta)
+	closeHandler.apply(ctx, ledger, directive, delta)
 
 	// Verify
 	acc, ok := ledger.GetAccount("Assets:Checking")
 	assert.True(t, ok, "account should exist")
-	assert.True(t, acc.IsClosed(), "account should be closed")
+	assert.True(t, acc.isClosed(), "account should be closed")
 }
 
 func TestTransactionHandler(t *testing.T) {
@@ -113,24 +113,24 @@ func TestTransactionHandler(t *testing.T) {
 
 	// Open accounts
 	for i := 0; i < 2; i++ {
-		handler := GetHandler(tree.Directives[i].Kind())
-		_, delta := handler.Validate(ctx, ledger, tree.Directives[i])
-		handler.Apply(ctx, ledger, tree.Directives[i], delta)
+		handler := getHandler(tree.Directives[i].Kind())
+		_, delta := handler.validate(ctx, ledger, tree.Directives[i])
+		handler.apply(ctx, ledger, tree.Directives[i], delta)
 	}
 
 	// Book, as Process does before validating, then process the transaction
-	txnHandler := &TransactionHandler{}
+	txnHandler := &transactionHandler{}
 	txnDirective := tree.Directives[2]
 	assert.NoError(t, ledger.book(ctx, tree))
-	errs, delta := txnHandler.Validate(ctx, ledger, txnDirective)
+	errs, delta := txnHandler.validate(ctx, ledger, txnDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 	assert.NotZero(t, delta, "delta should not be nil")
 
-	txnHandler.Apply(ctx, ledger, txnDirective, delta)
+	txnHandler.apply(ctx, ledger, txnDirective, delta)
 
 	// Verify
 	checking, _ := ledger.GetAccount("Assets:Checking")
-	assert.Equal(t, "1000", checking.Inventory.Get("USD").String())
+	assert.Equal(t, "1000", checking.inventory.get("USD").String())
 }
 
 func TestBalanceHandler(t *testing.T) {
@@ -144,32 +144,32 @@ func TestBalanceHandler(t *testing.T) {
 	ledger := New()
 
 	// Open account
-	openHandler := &OpenHandler{}
-	_, delta := openHandler.Validate(ctx, ledger, tree.Directives[0])
-	openHandler.Apply(ctx, ledger, tree.Directives[0], delta)
+	openHandler := &openHandler{}
+	_, delta := openHandler.validate(ctx, ledger, tree.Directives[0])
+	openHandler.apply(ctx, ledger, tree.Directives[0], delta)
 
 	// Also need to open equity account for padding
 	tree2 := parser.MustParseString(ctx, "2020-01-01 open Equity:Opening-Balances")
 	ledger.opened = openedAccounts(append(tree.Directives, tree2.Directives...))
-	_, delta = openHandler.Validate(ctx, ledger, tree2.Directives[0])
-	openHandler.Apply(ctx, ledger, tree2.Directives[0], delta)
+	_, delta = openHandler.validate(ctx, ledger, tree2.Directives[0])
+	openHandler.apply(ctx, ledger, tree2.Directives[0], delta)
 
 	// Process pad
-	padHandler := &PadHandler{}
-	_, delta = padHandler.Validate(ctx, ledger, tree.Directives[1])
-	padHandler.Apply(ctx, ledger, tree.Directives[1], delta)
+	padHandler := &padHandler{}
+	_, delta = padHandler.validate(ctx, ledger, tree.Directives[1])
+	padHandler.apply(ctx, ledger, tree.Directives[1], delta)
 
 	// Process balance
-	balanceHandler := &BalanceHandler{}
+	balanceHandler := &balanceHandler{}
 	balanceDirective := tree.Directives[2]
-	errs, delta := balanceHandler.Validate(ctx, ledger, balanceDirective)
+	errs, delta := balanceHandler.validate(ctx, ledger, balanceDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 	assert.NotZero(t, delta, "delta should not be nil")
 
 	// The padding is applied with the assertion.
-	balanceHandler.Apply(ctx, ledger, balanceDirective, delta)
+	balanceHandler.apply(ctx, ledger, balanceDirective, delta)
 	checking, _ := ledger.GetAccount("Assets:Checking")
-	assert.Equal(t, "1000", checking.Inventory.Get("USD").String())
+	assert.Equal(t, "1000", checking.inventory.get("USD").String())
 }
 
 func TestPadHandler(t *testing.T) {
@@ -183,19 +183,19 @@ func TestPadHandler(t *testing.T) {
 	ledger := New()
 
 	// Open accounts
-	openHandler := &OpenHandler{}
+	openHandler := &openHandler{}
 	for i := 0; i < 2; i++ {
-		_, delta := openHandler.Validate(ctx, ledger, tree.Directives[i])
-		openHandler.Apply(ctx, ledger, tree.Directives[i], delta)
+		_, delta := openHandler.validate(ctx, ledger, tree.Directives[i])
+		openHandler.apply(ctx, ledger, tree.Directives[i], delta)
 	}
 
 	// Process pad
-	padHandler := &PadHandler{}
+	padHandler := &padHandler{}
 	padDirective := tree.Directives[2]
-	errs, delta := padHandler.Validate(ctx, ledger, padDirective)
+	errs, delta := padHandler.validate(ctx, ledger, padDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	padHandler.Apply(ctx, ledger, padDirective, delta)
+	padHandler.apply(ctx, ledger, padDirective, delta)
 
 	// Verify pad was stored
 	accountName := string(padDirective.(*ast.Pad).Account)
@@ -212,17 +212,17 @@ func TestNoteHandler(t *testing.T) {
 	ledger := New()
 
 	// Open account
-	openHandler := &OpenHandler{}
-	_, delta := openHandler.Validate(ctx, ledger, tree.Directives[0])
-	openHandler.Apply(ctx, ledger, tree.Directives[0], delta)
+	openHandler := &openHandler{}
+	_, delta := openHandler.validate(ctx, ledger, tree.Directives[0])
+	openHandler.apply(ctx, ledger, tree.Directives[0], delta)
 
 	// Process note
-	noteHandler := &NoteHandler{}
+	noteHandler := &noteHandler{}
 	noteDirective := tree.Directives[1]
-	errs, _ := noteHandler.Validate(ctx, ledger, noteDirective)
+	errs, _ := noteHandler.validate(ctx, ledger, noteDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	noteHandler.Apply(ctx, ledger, noteDirective, nil)
+	noteHandler.apply(ctx, ledger, noteDirective, nil)
 	// Note handler doesn't mutate state
 }
 
@@ -241,17 +241,17 @@ func TestDocumentHandler(t *testing.T) {
 	ledger := New()
 
 	// Open account
-	openHandler := &OpenHandler{}
-	_, delta := openHandler.Validate(ctx, ledger, tree.Directives[0])
-	openHandler.Apply(ctx, ledger, tree.Directives[0], delta)
+	openHandler := &openHandler{}
+	_, delta := openHandler.validate(ctx, ledger, tree.Directives[0])
+	openHandler.apply(ctx, ledger, tree.Directives[0], delta)
 
 	// Process document
-	docHandler := &DocumentHandler{}
+	docHandler := &documentHandler{}
 	docDirective := tree.Directives[1]
-	errs, _ := docHandler.Validate(ctx, ledger, docDirective)
+	errs, _ := docHandler.validate(ctx, ledger, docDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	docHandler.Apply(ctx, ledger, docDirective, nil)
+	docHandler.apply(ctx, ledger, docDirective, nil)
 	// Document handler doesn't mutate state
 }
 
@@ -264,12 +264,12 @@ func TestDocumentHandlerMissingFile(t *testing.T) {
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
-	openHandler := &OpenHandler{}
-	_, delta := openHandler.Validate(ctx, ledger, tree.Directives[0])
-	openHandler.Apply(ctx, ledger, tree.Directives[0], delta)
+	openHandler := &openHandler{}
+	_, delta := openHandler.validate(ctx, ledger, tree.Directives[0])
+	openHandler.apply(ctx, ledger, tree.Directives[0], delta)
 
-	docHandler := &DocumentHandler{}
-	errs, _ := docHandler.Validate(ctx, ledger, tree.Directives[1])
+	docHandler := &documentHandler{}
+	errs, _ := docHandler.validate(ctx, ledger, tree.Directives[1])
 	assert.Equal(t, 1, len(errs), "missing file should be an error like bean-check")
 	assert.Equal(t, "DocumentFileError", kindOf(errs[0]))
 }
@@ -283,13 +283,13 @@ func TestPriceHandler(t *testing.T) {
 	ledger := New()
 
 	// Process price
-	priceHandler := &PriceHandler{}
+	priceHandler := &priceHandler{}
 	priceDirective := tree.Directives[0]
-	errs, delta := priceHandler.Validate(ctx, ledger, priceDirective)
+	errs, delta := priceHandler.validate(ctx, ledger, priceDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 	assert.NotZero(t, delta, "delta should not be nil")
 
-	priceHandler.Apply(ctx, ledger, priceDirective, delta)
+	priceHandler.apply(ctx, ledger, priceDirective, delta)
 
 	// Verify price was stored
 	date := newTestDate("2024-01-15")
@@ -308,17 +308,17 @@ func TestCommodityHandler(t *testing.T) {
 	ledger := New()
 
 	// Process commodity
-	commodityHandler := &CommodityHandler{}
+	commodityHandler := &commodityHandler{}
 	commodityDirective := tree.Directives[0]
-	errs, delta := commodityHandler.Validate(ctx, ledger, commodityDirective)
+	errs, delta := commodityHandler.validate(ctx, ledger, commodityDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	commodityHandler.Apply(ctx, ledger, commodityDirective, delta)
+	commodityHandler.apply(ctx, ledger, commodityDirective, delta)
 
 	// Verify the commodity was recorded as declared, so a second
 	// declaration is reported
 	assert.True(t, ledger.commodities["USD"], "commodity should be declared")
-	errs, delta = commodityHandler.Validate(ctx, ledger, commodityDirective)
+	errs, delta = commodityHandler.validate(ctx, ledger, commodityDirective)
 	assert.Equal(t, 1, len(errs))
 	assert.Equal(t, "DuplicateCommodityError", kindOf(errs[0]))
 	assert.Zero(t, delta)
@@ -333,12 +333,12 @@ func TestEventHandler(t *testing.T) {
 	ledger := New()
 
 	// Process event
-	eventHandler := &EventHandler{}
+	eventHandler := &eventHandler{}
 	eventDirective := tree.Directives[0]
-	errs, _ := eventHandler.Validate(ctx, ledger, eventDirective)
+	errs, _ := eventHandler.validate(ctx, ledger, eventDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	eventHandler.Apply(ctx, ledger, eventDirective, nil)
+	eventHandler.apply(ctx, ledger, eventDirective, nil)
 	// Event handler doesn't mutate state currently
 }
 
@@ -348,14 +348,14 @@ func TestCustomHandler(t *testing.T) {
 	ledger := New()
 	ctx := context.Background()
 
-	customHandler := &CustomHandler{}
+	customHandler := &customHandler{}
 	date := newTestDate("2024-01-01")
 	custom := ast.NewCustom(date, "test", nil)
 
-	errs, _ := customHandler.Validate(ctx, ledger, custom)
+	errs, _ := customHandler.validate(ctx, ledger, custom)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	customHandler.Apply(ctx, ledger, custom, nil)
+	customHandler.apply(ctx, ledger, custom, nil)
 	// Custom handler doesn't mutate state currently
 }
 
@@ -367,12 +367,12 @@ func TestQueryHandler(t *testing.T) {
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
-	queryHandler := &QueryHandler{}
+	queryHandler := &queryHandler{}
 	queryDirective := tree.Directives[0]
-	errs, _ := queryHandler.Validate(ctx, ledger, queryDirective)
+	errs, _ := queryHandler.validate(ctx, ledger, queryDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
-	queryHandler.Apply(ctx, ledger, queryDirective, nil)
+	queryHandler.apply(ctx, ledger, queryDirective, nil)
 	// Query handler doesn't mutate state
 }
 
@@ -392,12 +392,12 @@ func TestCommodityValidation_ValidCodes(t *testing.T) {
 	ledger := New()
 
 	for _, directive := range tree.Directives {
-		handler := &CommodityHandler{}
-		errs, delta := handler.Validate(ctx, ledger, directive)
+		handler := &commodityHandler{}
+		errs, delta := handler.validate(ctx, ledger, directive)
 		assert.Equal(t, len(errs), 0, "valid commodity codes should have no errors")
 		assert.NotZero(t, delta, "delta should be returned")
 
-		handler.Apply(ctx, ledger, directive, delta)
+		handler.apply(ctx, ledger, directive, delta)
 	}
 
 	// Verify all commodities were declared

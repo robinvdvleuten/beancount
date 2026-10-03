@@ -39,6 +39,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
@@ -57,7 +58,7 @@ type Ledger struct {
 	prices priceIndex
 	// Currencies declared by a commodity directive
 	commodities map[string]bool
-	config      *Config
+	config      *sharedconfig.Config
 	// The tolerances Booking and balance assertions check against, from
 	// the config's tolerance options
 	tolerances tolerances
@@ -82,7 +83,7 @@ type Ledger struct {
 
 // New creates a new empty ledger
 func New() *Ledger {
-	cfg := NewConfig()
+	cfg := sharedconfig.New()
 	return &Ledger{
 		accounts:        make(map[string]*Account),
 		config:          cfg,
@@ -103,7 +104,7 @@ func New() *Ledger {
 func (l *Ledger) GetAccountTypeFromName(name string) (ast.AccountType, bool) {
 	cfg := l.config
 	if cfg == nil {
-		cfg = NewConfig()
+		cfg = sharedconfig.New()
 	}
 	return cfg.GetAccountTypeFromName(name)
 }
@@ -202,7 +203,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 		_ = ast.SortDirectives(tree)
 	}
 	for _, pad := range l.pads.unusedPads() {
-		l.errors = append(l.errors, NewUnusedPadWarning(pad))
+		l.errors = append(l.errors, newUnusedPadWarning(pad))
 	}
 
 	return tree, nil
@@ -300,7 +301,7 @@ func (l *Ledger) BookedPositions(posting *ast.Posting) []BookedPosition {
 
 // Config returns the options the processed tree sets, beancount's defaults
 // for the ones it does not.
-func (l *Ledger) Config() *Config {
+func (l *Ledger) Config() *sharedconfig.Config {
 	return l.config
 }
 
@@ -337,44 +338,44 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 }
 
 // processDirective validates a directive, records its errors, and applies
-// its delta if Validate returned one.
+// its delta if validate returned one.
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
-	handler := GetHandler(directive.Kind())
+	handler := getHandler(directive.Kind())
 	if handler == nil {
 		// Unknown directive kind - ignore
 		return
 	}
 
-	errs, delta := handler.Validate(ctx, l, directive)
+	errs, delta := handler.validate(ctx, l, directive)
 	l.errors = append(l.errors, errs...)
 	if delta != nil {
-		handler.Apply(ctx, l, directive, delta)
+		handler.apply(ctx, l, directive, delta)
 	}
 }
 
 // applyOpen applies the open delta to the ledger (mutation only)
-func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
-	accountName := string(delta.Account)
+func (l *Ledger) applyOpen(open *ast.Open, delta *openDelta, cfg *sharedconfig.Config) {
+	accountName := string(delta.account)
 
 	// Extract account type root name (e.g., "Assets" from "Assets:Checking")
-	idx := strings.IndexByte(string(delta.Account), ':')
+	idx := strings.IndexByte(string(delta.account), ':')
 	accountTypeRoot := ""
 	if idx > 0 {
-		accountTypeRoot = string(delta.Account)[:idx]
+		accountTypeRoot = string(delta.account)[:idx]
 	}
 
 	account := &Account{
-		Name:                 delta.Account,
+		name:                 delta.account,
 		Type:                 accountTypeRoot,
-		OpenDate:             delta.OpenDate,
-		ConstraintCurrencies: delta.ConstraintCurrencies,
-		Metadata:             delta.Metadata,
-		Inventory:            NewInventory(),
+		OpenDate:             delta.openDate,
+		constraintCurrencies: delta.constraintCurrencies,
+		metadata:             delta.metadata,
+		inventory:            newInventory(),
 	}
 	// Postings made before the open keep counting, as in beancount.
 	if early, ok := l.unopened[accountName]; ok {
-		account.Inventory = early.Inventory
-		account.Postings = early.Postings
+		account.inventory = early.inventory
+		account.postings = early.postings
 		delete(l.unopened, accountName)
 	}
 	l.accounts[accountName] = account
@@ -382,20 +383,20 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *OpenDelta, cfg *Config) {
 
 // inventory returns what an account holds, posted to before its open too,
 // or an empty inventory for an account nothing was posted to.
-func (l *Ledger) inventory(account ast.Account) *Inventory {
+func (l *Ledger) inventory(account ast.Account) *inventory {
 	if acc, ok := l.accounts[string(account)]; ok {
-		return acc.Inventory
+		return acc.inventory
 	}
 	if acc, ok := l.unopened[string(account)]; ok {
-		return acc.Inventory
+		return acc.inventory
 	}
-	return NewInventory()
+	return newInventory()
 }
 
 // applyClose applies the close delta to the ledger (mutation only)
-func (l *Ledger) applyClose(delta *CloseDelta) {
-	if account, ok := l.accounts[delta.AccountName]; ok {
-		account.CloseDate = delta.CloseDate
+func (l *Ledger) applyClose(delta *closeDelta) {
+	if account, ok := l.accounts[delta.accountName]; ok {
+		account.CloseDate = delta.closeDate
 	}
 }
 
@@ -414,16 +415,16 @@ func (l *Ledger) applyTransaction(txn *ast.Transaction, booked *bookedTransactio
 		if !ok {
 			account, ok = l.unopened[accountName]
 			if !ok {
-				account = &Account{Name: bp.posting.Account, Inventory: NewInventory()}
+				account = &Account{name: bp.posting.Account, inventory: newInventory()}
 				l.unopened[accountName] = account
 			}
 		}
 		for _, position := range bp.positions {
-			account.Inventory.AddLot(bp.commodity, position.Units, position.lotSpec())
+			account.inventory.addLot(bp.commodity, position.Units, position.lotSpec())
 		}
-		account.Postings = append(account.Postings, &AccountPosting{
-			Transaction: txn,
-			Posting:     bp.posting,
+		account.postings = append(account.postings, &accountPosting{
+			transaction: txn,
+			posting:     bp.posting,
 		})
 	}
 }
@@ -438,6 +439,6 @@ func (l *Ledger) applyPrice(price *ast.Price) {
 }
 
 // applyCommodity records a declared commodity (mutation only)
-func (l *Ledger) applyCommodity(delta *CommodityDelta) {
-	l.commodities[delta.CommodityID] = true
+func (l *Ledger) applyCommodity(delta *commodityDelta) {
+	l.commodities[delta.commodityID] = true
 }

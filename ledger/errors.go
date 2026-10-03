@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/internal/pyrepr"
@@ -62,9 +63,6 @@ func (e *Diagnostic) GetDirective() ast.Directive { return e.directive }
 // GetAccount returns the account the error is about, or "".
 func (e *Diagnostic) GetAccount() ast.Account { return e.account }
 
-// GetDate returns the date of the directive the error is about, or nil.
-func (e *Diagnostic) GetDate() *ast.Date { return e.date }
-
 // Severity is fatal for every ledger error, like bean-check's.
 func (e *Diagnostic) Severity() diagnostic.Severity { return diagnostic.SeverityError }
 
@@ -99,50 +97,50 @@ func (e *Diagnostic) location() string {
 // its amounts, which print reads to show the difference.
 type BalanceMismatchError struct {
 	Diagnostic
-	Expected string // Expected amount
-	Actual   string // Actual amount in inventory
+	expected string // Expected amount
+	actual   string // Actual amount in inventory
 	// Difference is the actual amount less the expected one, like
 	// beancount's diff_amount, with the exponent the subtraction leaves.
 	Difference decimal.Decimal
 }
 
-// NewBalanceMismatchError creates an error for a balance assertion whose
+// newBalanceMismatchError creates an error for a balance assertion whose
 // account holds actual instead of the expected amount.
-func NewBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Decimal) *BalanceMismatchError {
+func newBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Decimal) *BalanceMismatchError {
 	currency := balance.Amount.Currency
 	return &BalanceMismatchError{
 		Diagnostic: *newError("BalanceMismatchError", balance, balance.Account,
 			"Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
 			balance.Account, expected.String(), currency, actual.String(), currency),
-		Expected:   expected.String(),
-		Actual:     actual.String(),
+		expected:   expected.String(),
+		actual:     actual.String(),
 		Difference: pydecimal.Sub(actual, expected),
 	}
 }
 
-// NewAccountNotOpenError creates an error for a directive that references an
+// newAccountNotOpenError creates an error for a directive that references an
 // account the ledger never opens.
-func NewAccountNotOpenError(d ast.Directive, account ast.Account) *Diagnostic {
+func newAccountNotOpenError(d ast.Directive, account ast.Account) *Diagnostic {
 	return newError("AccountNotOpenError", d, account, "Invalid reference to unknown account '%s'", account)
 }
 
-// NewInactiveAccountError creates an error for a directive that references an
+// newInactiveAccountError creates an error for a directive that references an
 // account the ledger opens, but not over the directive's date: before its
 // open or after its close.
-func NewInactiveAccountError(d ast.Directive, account ast.Account) *Diagnostic {
+func newInactiveAccountError(d ast.Directive, account ast.Account) *Diagnostic {
 	return newError("AccountNotOpenError", d, account, "Invalid reference to inactive account '%s'", account)
 }
 
-// NewAccountAlreadyOpenError creates an error for opening an account that is
+// newAccountAlreadyOpenError creates an error for opening an account that is
 // already open.
-func NewAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *Diagnostic {
+func newAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *Diagnostic {
 	return newError("AccountAlreadyOpenError", open, open.Account,
 		"Account %s is already open (opened on %s)", open.Account, openedDate.String())
 }
 
-// NewInvalidAccountNameError creates an error for an account whose type is
+// newInvalidAccountNameError creates an error for an account whose type is
 // not one of the configured account types.
-func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *Diagnostic {
+func newInvalidAccountNameError(open *ast.Open, cfg *sharedconfig.Config) *Diagnostic {
 	validAccountTypes := []string{
 		cfg.AccountNames.Assets,
 		cfg.AccountNames.Liabilities,
@@ -159,105 +157,105 @@ func NewInvalidAccountNameError(open *ast.Open, cfg *Config) *Diagnostic {
 		open.Account, accountType, strings.Join(validAccountTypes, ", "))
 }
 
-// NewAccountAlreadyClosedError creates an error for closing an account that
+// newAccountAlreadyClosedError creates an error for closing an account that
 // is already closed.
-func NewAccountAlreadyClosedError(close *ast.Close, closedDate *ast.Date) *Diagnostic {
+func newAccountAlreadyClosedError(close *ast.Close, closedDate *ast.Date) *Diagnostic {
 	return newError("AccountAlreadyClosedError", close, close.Account,
 		"Account %s is already closed (closed on %s)", close.Account, closedDate.String())
 }
 
-// NewAccountNotClosedError creates an error for closing an account that was
+// newAccountNotClosedError creates an error for closing an account that was
 // never opened.
-func NewAccountNotClosedError(close *ast.Close) *Diagnostic {
+func newAccountNotClosedError(close *ast.Close) *Diagnostic {
 	return newError("AccountNotClosedError", close, close.Account,
 		"Cannot close account %s that was never opened", close.Account)
 }
 
-// NewDuplicateCommodityError creates an error for a repeated commodity
+// newDuplicateCommodityError creates an error for a repeated commodity
 // directive.
-func NewDuplicateCommodityError(commodity *ast.Commodity) *Diagnostic {
+func newDuplicateCommodityError(commodity *ast.Commodity) *Diagnostic {
 	return newError("DuplicateCommodityError", commodity, "",
 		"Duplicate commodity directives for '%s'", commodity.Currency)
 }
 
-// NewBalanceCurrencyError creates an error for a balance assertion in a
+// newBalanceCurrencyError creates an error for a balance assertion in a
 // currency its account does not allow.
-func NewBalanceCurrencyError(balance *ast.Balance) *Diagnostic {
+func newBalanceCurrencyError(balance *ast.Balance) *Diagnostic {
 	return newError("BalanceCurrencyError", balance, balance.Account,
 		"Invalid currency '%s' for Balance directive: ", balance.Amount.Currency)
 }
 
-// NewDuplicateBalanceError creates an error for a balance assertion that
+// newDuplicateBalanceError creates an error for a balance assertion that
 // repeats an earlier one with a different amount.
-func NewDuplicateBalanceError(balance *ast.Balance) *Diagnostic {
+func newDuplicateBalanceError(balance *ast.Balance) *Diagnostic {
 	return newError("DuplicateBalanceError", balance, balance.Account,
 		"Duplicate balance assertion with different amounts")
 }
 
-// NewNegativeCostError creates an error for a posting booked at a negative
+// newNegativeCostError creates an error for a posting booked at a negative
 // cost. Like beancount, it blames the posting's line.
-func NewNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *Diagnostic {
+func newNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *Diagnostic {
 	return newError("NegativeCostError", txn, posting.Account,
 		"Cost is negative: %s %s (account %s)", cost.String(), currency, posting.Account).atPosting(posting)
 }
 
-// NewZeroAmountError creates an error for a posting booked at cost with zero
+// newZeroAmountError creates an error for a posting booked at cost with zero
 // units. Like beancount, it blames the posting's line.
-func NewZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+func newZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("ZeroAmountError", txn, posting.Account,
 		"Amount is zero: \"%s %s\"", posting.Amount.Value, posting.Amount.Currency).atPosting(posting)
 }
 
-// NewMergeCostError creates an error for a posting with a merge cost {*},
+// newMergeCostError creates an error for a posting with a merge cost {*},
 // which beancount v2 rejects and then books like an empty cost {}. Like
 // beancount, it blames the posting's line and uses its words.
-func NewMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+func newMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("MergeCostError", txn, posting.Account,
 		"Cost merging is not supported yet").atPosting(posting)
 }
 
-// NewNegativePriceError creates an error for a posting with a negative
+// newNegativePriceError creates an error for a posting with a negative
 // price, which beancount books at its absolute value. Like beancount, it
 // blames the posting's line.
-func NewNegativePriceError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+func newNegativePriceError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("NegativePriceError", txn, posting.Account,
 		"Negative prices are not allowed: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
 }
 
-// NewTotalPriceWithoutUnitsError creates an error for a total price (@@) on
+// newTotalPriceWithoutUnitsError creates an error for a total price (@@) on
 // a posting without units, which beancount drops. Like beancount, it blames
 // the posting's line.
-func NewTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+func newTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("TotalPriceWithoutUnitsError", txn, posting.Account,
 		"Total price on a posting without units: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
 }
 
-// NewCurrencyGroupError creates an error for a posting that Booking cannot
+// newCurrencyGroupError creates an error for a posting that Booking cannot
 // sort into a Currency group, or whose group's missing numbers it cannot
 // complete. Like beancount, it blames the posting's line and prints the
 // message alone.
-func NewCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
+func newCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
 	return newError("CurrencyGroupError", txn, posting.Account, "%s", message).atPosting(posting)
 }
 
-// NewInvalidBookingMethodError creates an error for an open directive with an
+// newInvalidBookingMethodError creates an error for an open directive with an
 // unknown booking method.
-func NewInvalidBookingMethodError(open *ast.Open) *Diagnostic {
+func newInvalidBookingMethodError(open *ast.Open) *Diagnostic {
 	return newError("InvalidBookingMethodError", open, open.Account,
 		"Invalid booking method: %s", open.BookingMethod)
 }
 
-// NewUnbookedTransactionError creates an error for a transaction that
+// newUnbookedTransactionError creates an error for a transaction that
 // reached validation without a booking result, because a Plugin added it
 // after Booking ran.
-func NewUnbookedTransactionError(txn *ast.Transaction) *Diagnostic {
+func newUnbookedTransactionError(txn *ast.Transaction) *Diagnostic {
 	return newError("UnbookedTransactionError", txn, "",
 		"Transaction was not booked: it was added after Booking")
 }
 
-// NewTransactionNotBalancedError creates an error for a transaction that does
+// newTransactionNotBalancedError creates an error for a transaction that does
 // not balance, listing its residuals by currency.
-func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *Diagnostic {
+func newTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *Diagnostic {
 	var buf strings.Builder
 	if len(residuals) > 0 {
 		currencies := make([]string, 0, len(residuals))
@@ -279,38 +277,38 @@ func NewTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]s
 	return newError("TransactionNotBalancedError", txn, "", "Transaction does not balance: %s", buf.String())
 }
 
-// NewInvalidAmountError creates an error for an amount that cannot be parsed.
-func NewInvalidAmountError(d ast.Directive, account ast.Account, value string, err error) *Diagnostic {
+// newInvalidAmountError creates an error for an amount that cannot be parsed.
+func newInvalidAmountError(d ast.Directive, account ast.Account, value string, err error) *Diagnostic {
 	return newError("InvalidAmountError", d, account, "Invalid amount %q for account %s: %v", value, account, err)
 }
 
-// NewInvalidCostError creates an error for an invalid cost specification.
-func NewInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *Diagnostic {
+// newInvalidCostError creates an error for an invalid cost specification.
+func newInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex int, costSpec string, err error) *Diagnostic {
 	return newError("InvalidCostError", txn, account,
 		"Invalid cost specification%s: %s: %v", postingInfo(postingIndex, account), costSpec, err)
 }
 
-// NewTotalCostError creates an error for an invalid total cost {{}}, such as
+// newTotalCostError creates an error for an invalid total cost {{}}, such as
 // one on zero units.
-func NewTotalCostError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
+func newTotalCostError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
 	return newError("TotalCostError", txn, posting.Account, "Invalid total cost specification: %s", message)
 }
 
-// NewTotalCompoundCostError creates an error for a compound cost inside
+// newTotalCompoundCostError creates an error for a compound cost inside
 // total braces ({{5 # 3 USD}}), whose per-unit number beancount ignores. Like
 // beancount, it blames the posting's line and quotes the compound amount's
 // Python repr.
-func NewTotalCompoundCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
+func newTotalCompoundCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("TotalCostError", txn, posting.Account,
 		"Per-unit cost may not be specified using total cost syntax: '%s'; ignoring per-unit cost",
 		compoundAmountRepr(posting.Cost)).atPosting(posting)
 }
 
-// NewDuplicateCostComponentError creates an error for a component a cost
+// newDuplicateCostComponentError creates an error for a component a cost
 // spec repeats (a Cost of ast.Cost.Duplicates), which beancount reports and
 // ignores, keeping the first. Like beancount, it blames the posting's line
 // and uses its words.
-func NewDuplicateCostComponentError(txn *ast.Transaction, posting *ast.Posting, duplicate *ast.Cost) *Diagnostic {
+func newDuplicateCostComponentError(txn *ast.Transaction, posting *ast.Posting, duplicate *ast.Cost) *Diagnostic {
 	var message string
 	switch {
 	case duplicate.Amount != nil:
@@ -348,8 +346,8 @@ func compoundAmountRepr(cost *ast.Cost) string {
 		number(cost.Amount), number(cost.Total), currency)
 }
 
-// NewInvalidPriceError creates an error for an invalid price specification.
-func NewInvalidPriceError(txn *ast.Transaction, account ast.Account, postingIndex int, priceSpec string, err error) *Diagnostic {
+// newInvalidPriceError creates an error for an invalid price specification.
+func newInvalidPriceError(txn *ast.Transaction, account ast.Account, postingIndex int, priceSpec string, err error) *Diagnostic {
 	return newError("InvalidPriceError", txn, account,
 		"Invalid price specification%s: %s: %v", postingInfo(postingIndex, account), priceSpec, err)
 }
@@ -363,9 +361,9 @@ func postingInfo(postingIndex int, account ast.Account) string {
 	return fmt.Sprintf(" (Posting #%d: %s)", postingIndex+1, account)
 }
 
-// NewInvalidMetadataError creates an error for invalid metadata, on a
+// newInvalidMetadataError creates an error for invalid metadata, on a
 // directive or, with an account, on one of its postings.
-func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key string, value *ast.MetadataValue, reason string) *Diagnostic {
+func newInvalidMetadataError(directive ast.Directive, account ast.Account, key string, value *ast.MetadataValue, reason string) *Diagnostic {
 	accountInfo := ""
 	if account != "" {
 		accountInfo = fmt.Sprintf(" (account %s)", account)
@@ -378,61 +376,61 @@ func NewInvalidMetadataError(directive ast.Directive, account ast.Account, key s
 		"Invalid metadata%s: key=%q, value=%q: %s", accountInfo, key, valueStr, reason)
 }
 
-// NewInsufficientInventoryError creates an error for a reduction the
+// newInsufficientInventoryError creates an error for a reduction the
 // account's lots cannot cover, or that matches none of them, worded by
 // details as beancount words it.
-func NewInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
+func newInsufficientInventoryError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
 	return newError("InsufficientInventoryError", txn, account, "%v", details)
 }
 
-// NewAmbiguousBookingError creates an error for a reduction that matches
+// newAmbiguousBookingError creates an error for a reduction that matches
 // several lots under STRICT booking, worded by details as beancount words
 // it.
-func NewAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
+func newAmbiguousBookingError(txn *ast.Transaction, account ast.Account, details error) *Diagnostic {
 	return newError("AmbiguousBookingError", txn, account, "%v", details)
 }
 
-// NewCurrencyConstraintError creates an error for a posting in a currency its
+// newCurrencyConstraintError creates an error for a posting in a currency its
 // account does not allow, worded as beancount words it.
-func NewCurrencyConstraintError(txn *ast.Transaction, account ast.Account, currency string) *Diagnostic {
+func newCurrencyConstraintError(txn *ast.Transaction, account ast.Account, currency string) *Diagnostic {
 	return newError("CurrencyConstraintError", txn, account,
 		"Invalid currency %s for account '%s'", currency, account)
 }
 
-// NewPadCostError creates an error for a pad that fills a currency its
+// newPadCostError creates an error for a pad that fills a currency its
 // account holds at cost. Like beancount's, it is reported on the balance
 // assertion's line, shows the pad, and lists the account's inventory as it is
 // before the padding.
-func NewPadCostError(balance *ast.Balance, pad *ast.Pad, inventory *Inventory) *Diagnostic {
-	e := newError("PadError", pad, pad.Account, "Attempt to pad an entry with cost for balance: %s", inventory.String())
+func newPadCostError(balance *ast.Balance, pad *ast.Pad, inv *inventory) *Diagnostic {
+	e := newError("PadError", pad, pad.Account, "Attempt to pad an entry with cost for balance: %s", inv.String())
 	e.pos = balance.Position()
 	e.date = balance.Date()
 	return e
 }
 
-// NewUnusedPadWarning creates an error for a pad that inserted no padding.
+// newUnusedPadWarning creates an error for a pad that inserted no padding.
 // It is fatal, as official bean-check rejects unused pad entries.
-func NewUnusedPadWarning(pad *ast.Pad) *Diagnostic {
+func newUnusedPadWarning(pad *ast.Pad) *Diagnostic {
 	return newError("UnusedPadWarning", pad, pad.Account, "Unused Pad entry")
 }
 
-// NewDocumentFileError creates an error for a document directive referencing
+// newDocumentFileError creates an error for a document directive referencing
 // a file that does not exist, matching beancount's
 // verify_document_files_exist.
-func NewDocumentFileError(doc *ast.Document) *Diagnostic {
+func newDocumentFileError(doc *ast.Document) *Diagnostic {
 	return newError("DocumentFileError", doc, doc.Account, "File does not exist: %q", doc.ResolvedPath())
 }
 
-// NewInvalidDirectivePriceError creates an error for a price directive with
+// newInvalidDirectivePriceError creates an error for a price directive with
 // invalid data.
-func NewInvalidDirectivePriceError(message string, price *ast.Price) *Diagnostic {
+func newInvalidDirectivePriceError(message string, price *ast.Price) *Diagnostic {
 	return newError("InvalidDirectivePriceError", price, "", "%s", message)
 }
 
-// NewPluginConfigError creates an error for a plugin directive that passes a
+// newPluginConfigError creates an error for a plugin directive that passes a
 // configuration to a Built-in Plugin that takes none. Beancount fails to
 // apply such a plugin; so do we.
-func NewPluginConfigError(plugin *ast.Plugin) *Diagnostic {
+func newPluginConfigError(plugin *ast.Plugin) *Diagnostic {
 	return &Diagnostic{
 		kind:    "PluginConfigError",
 		message: fmt.Sprintf("Plugin %q takes no configuration", plugin.Name.String()),
@@ -440,10 +438,10 @@ func NewPluginConfigError(plugin *ast.Plugin) *Diagnostic {
 	}
 }
 
-// NewPluginImportError creates an error for a plugin directive naming a
+// newPluginImportError creates an error for a plugin directive naming a
 // module under beancount.plugins that beancount v2 does not ship, which it
 // fails to import.
-func NewPluginImportError(plugin *ast.Plugin) *Diagnostic {
+func newPluginImportError(plugin *ast.Plugin) *Diagnostic {
 	return &Diagnostic{
 		kind:    "PluginImportError",
 		message: fmt.Sprintf("Error importing %q", plugin.Name.String()),
