@@ -414,3 +414,15 @@ func TestPositionedErrors(t *testing.T) {
 		})
 	}
 }
+
+// TestCheckDirectoryReportsTheLoadError pins that a load that cannot go
+// on is reported even when its source cannot be read again for context.
+func TestCheckDirectoryReportsTheLoadError(t *testing.T) {
+	dir := t.TempDir()
+	_, stderr, err := runCommand(t, "check", dir)
+	var cmdErr *CommandError
+	assert.True(t, errors.As(err, &cmdErr), "got %v", err)
+	assert.Contains(t, stderr, "failed to read "+dir)
+	assert.Contains(t, stderr, "is a directory")
+	assert.NotContains(t, stderr, "error context")
+}

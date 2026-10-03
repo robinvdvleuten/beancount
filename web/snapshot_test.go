@@ -319,3 +319,28 @@ func TestSnapshotIsNotChangedByAReload(t *testing.T) {
 	assert.Equal(t, 1, len(loaded.errors))
 	assert.Equal(t, nil, loaded.loadErr)
 }
+
+// TestIncludesAreInLoadOrder pins that /api/source lists the includes in
+// the order the ledger loads them, the same on every server.
+func TestIncludesAreInLoadOrder(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "main.beancount")
+	assert.NoError(t, os.WriteFile(root, []byte("include \"c.beancount\"\ninclude \"a.beancount\"\ninclude \"b.beancount\"\n"), 0600))
+	for _, name := range []string{"a", "b", "c"} {
+		assert.NoError(t, os.WriteFile(filepath.Join(dir, name+".beancount"), nil, 0600))
+	}
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "a.beancount"), []byte("include \"nested.beancount\"\n"), 0600))
+	assert.NoError(t, os.WriteFile(filepath.Join(dir, "nested.beancount"), nil, 0600))
+
+	want := []string{
+		filepath.Join(dir, "c.beancount"),
+		filepath.Join(dir, "a.beancount"),
+		filepath.Join(dir, "nested.beancount"),
+		filepath.Join(dir, "b.beancount"),
+	}
+	for range 5 {
+		code, body := request(t, newTestHandler(t, root), http.MethodGet, "/api/source", "")
+		assert.Equal(t, http.StatusOK, code)
+		assert.Equal(t, want, decodeSource(t, body).Files.Includes)
+	}
+}

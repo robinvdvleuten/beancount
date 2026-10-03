@@ -71,14 +71,14 @@ func printLoadFailure(stderr io.Writer, renderer *ErrorRenderer, layout loadFail
 }
 
 // reportLoadFailure reports on stderr a load of f that cannot go on, in
-// the context of its source, which it reads again, and returns the
-// command's failure.
+// the context of its source, which it reads again, or without context when
+// it cannot be read (a directory, say), and returns the command's failure.
 func (f *FileOrStdin) reportLoadFailure(stderr io.Writer, layout loadFailureLayout, err error) error {
-	source, readErr := f.GetSourceContent()
-	if readErr != nil {
-		return fmt.Errorf("failed to read file for error context: %w", readErr)
+	renderer := NewErrorRenderer(nil)
+	if source, readErr := f.GetSourceContent(); readErr == nil {
+		renderer = f.errorRenderer(source)
 	}
-	printLoadFailure(stderr, f.errorRenderer(source), layout, err)
+	printLoadFailure(stderr, renderer, layout, err)
 	return NewCommandError(1)
 }
 

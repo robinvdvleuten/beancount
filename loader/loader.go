@@ -47,8 +47,9 @@ type LoadResult struct {
 	AST *ast.AST
 	// Root is the absolute path of the root file that was loaded.
 	Root string
-	// Includes contains the absolute paths of all included files (not including the root).
-	// This is only populated when FollowIncludes is enabled.
+	// Includes contains the absolute paths of all included files (not
+	// including the root), in the order they were loaded. This is only
+	// populated when FollowIncludes is enabled.
 	Includes []string
 	// Diagnostics contains non-fatal warnings produced while loading.
 	Diagnostics []error
@@ -308,13 +309,8 @@ func (l *Loader) Load(ctx context.Context, src Source) (*LoadResult, error) {
 		return nil, err
 	}
 
-	// Extract includes from visited map (excluding the root file)
-	var includes []string
-	for path := range state.visited {
-		if path != absPath {
-			includes = append(includes, path)
-		}
-	}
+	// The included files, in the order they were loaded: the root is first.
+	includes := state.order[1:]
 
 	if l.DiscoverDocuments {
 		state.diagnostics = append(state.diagnostics, discoverDocuments(ast, absPath)...)
@@ -427,6 +423,7 @@ func (l *Loader) MustLoad(ctx context.Context, src Source) *LoadResult {
 // loaderState tracks state during recursive loading.
 type loaderState struct {
 	visited        map[string]bool     // Absolute paths of files already loaded
+	order          []string            // The same paths, in the order they were loaded
 	sources        map[string][]byte   // Text of each file read, by the filename its positions carry
 	collector      telemetry.Collector // Telemetry collector for tracking load operations
 	rootTimer      telemetry.Timer     // Root check timer from context
@@ -474,6 +471,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, src Source) (*ast.AST, 
 		return &ast.AST{}, nil
 	}
 	l.visited[absPath] = true
+	l.order = append(l.order, absPath)
 
 	// Create load timer - hierarchical or flat depending on rootTimer presence
 	var loadTimer telemetry.Timer

@@ -1,3 +1,4 @@
+import * as fs from "node:fs";
 import * as path from "node:path";
 import { type Plugin, defineConfig } from "vite";
 import tailwindcss from "@tailwindcss/vite";
@@ -44,8 +45,23 @@ function globalsPlugin(): Plugin {
   };
 }
 
+const outDir = path.resolve(__dirname, "../web/dist");
+
+// Plugin to write back the .gitignore the build empties out of the output
+// directory, which keeps the directory, and nothing in it, in git so the Go
+// embed compiles before a build.
+function keepOutDirPlugin(): Plugin {
+  return {
+    name: "keep-out-dir",
+    apply: "build",
+    writeBundle() {
+      fs.writeFileSync(path.join(outDir, ".gitignore"), "*\n!.gitignore\n");
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [solid(), solidSvg(), tailwindcss(), globalsPlugin()],
+  plugins: [solid(), solidSvg(), tailwindcss(), globalsPlugin(), keepOutDirPlugin()],
 
   server: {
     proxy: {
@@ -54,8 +70,9 @@ export default defineConfig({
   },
 
   build: {
-    outDir: path.resolve(__dirname, "../web/dist"),
-    emptyOutDir: false,
+    outDir,
+    // Each build replaces the last, so the binary embeds only its bundles.
+    emptyOutDir: true,
     manifest: true,
     rollupOptions: {
       input: {
