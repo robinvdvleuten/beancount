@@ -1,0 +1,33 @@
+; A cost spec without a currency takes its Currency group's, as beancount's
+; replace_currencies gives it before booking, and a reduction then matches
+; only the lots held in it. Beside an uncosted posting of the commodity, a
+; label-only reduction is in the commodity's own group, so no lot matches;
+; beside a posting in the lots' cost currency, it books the labelled lot.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Income:Gains
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lot a"
+  Assets:Stock  10 HOOL {10 USD}
+  Equity:Open
+
+2020-01-03 * "Lot b"
+  Assets:Stock  10 HOOL {20 USD, "lotb"}
+  Equity:Open
+
+2020-02-01 * "Beside an uncosted posting"
+  Income:Gains
+  Assets:Stock  10 HOOL
+  Assets:Stock  -3 HOOL {"lotb"}
+
+2020-02-02 * "Beside a posting in the cost currency"
+  Assets:Cash   60 USD
+  Assets:Stock  -3 HOOL {"lotb"}
+
+2020-02-03 * "Alone with an auto-posting"
+  Income:Gains
+  Assets:Stock  -2 HOOL {"lotb"}
+
+2020-03-01 balance Assets:Stock  15 HOOL
+2020-03-01 balance Income:Gains  40 USD
