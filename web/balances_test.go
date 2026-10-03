@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -47,11 +46,7 @@ func TestAPIBalances(t *testing.T) {
 	assert.NoError(t, err)
 	_ = tmpFile.Close()
 
-	server := New(8080, tmpFile.Name())
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, tmpFile.Name())
 
 	t.Run("TrialBalance", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/balances", nil)
@@ -255,11 +250,7 @@ func TestAPIBalances(t *testing.T) {
 		assert.NoError(t, err)
 		_ = tmpFileEmpty.Close()
 
-		serverEmpty := New(8080, tmpFileEmpty.Name())
-		_, err = serverEmpty.reloadLedger(context.Background())
-		assert.NoError(t, err)
-		muxEmpty, err := serverEmpty.setupRouter()
-		assert.NoError(t, err)
+		muxEmpty := newTestHandler(t, tmpFileEmpty.Name())
 
 		req := httptest.NewRequest(http.MethodGet, "/api/balances", nil)
 		rec := httptest.NewRecorder()
@@ -329,11 +320,7 @@ func TestAPIBalances(t *testing.T) {
 		assert.NoError(t, err)
 		_ = tmpFilePrecise.Close()
 
-		serverPrecise := New(8080, tmpFilePrecise.Name())
-		_, err = serverPrecise.reloadLedger(context.Background())
-		assert.NoError(t, err)
-		muxPrecise, err := serverPrecise.setupRouter()
-		assert.NoError(t, err)
+		muxPrecise := newTestHandler(t, tmpFilePrecise.Name())
 
 		req := httptest.NewRequest(http.MethodGet, "/api/balances?types=Assets", nil)
 		rec := httptest.NewRecorder()
@@ -362,11 +349,7 @@ option "operating_currency" "EUR"
 `), 0600)
 	assert.NoError(t, err)
 
-	server := New(8080, ledgerFile)
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, ledgerFile)
 
 	req := httptest.NewRequest(http.MethodGet, "/api/balances", nil)
 	rec := httptest.NewRecorder()
@@ -380,7 +363,7 @@ option "operating_currency" "EUR"
 
 // getBalances serves a GET of /api/balances with query and returns the
 // status and, when it is 200, the decoded response.
-func getBalances(t *testing.T, mux *http.ServeMux, query string) (int, *BalancesResponse) {
+func getBalances(t *testing.T, mux http.Handler, query string) (int, *BalancesResponse) {
 	t.Helper()
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/balances?"+query, nil))
@@ -393,11 +376,7 @@ func getBalances(t *testing.T, mux *http.ServeMux, query string) (int, *Balances
 }
 
 func TestAPIBalancesValuation(t *testing.T) {
-	server := New(8080, filepath.Join("..", "testdata", "example.beancount"))
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, filepath.Join("..", "testdata", "example.beancount"))
 
 	t.Run("DefaultsToCost", func(t *testing.T) {
 		// select cost(sum(position)) where account ~ '^Assets'
@@ -473,11 +452,7 @@ func rootsTotal(t *testing.T, roots []*BalanceNodeResponse) map[string]string {
 }
 
 func TestAPIBalancesClosed(t *testing.T) {
-	server := New(8080, filepath.Join("..", "testdata", "example.beancount"))
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, filepath.Join("..", "testdata", "example.beancount"))
 	const sheet = "types=Assets,Liabilities,Equity&closed=true"
 
 	balance := func(response *BalancesResponse, account string) map[string]string {

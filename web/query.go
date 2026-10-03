@@ -41,17 +41,12 @@ func (s *Server) handleQuery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	if s.ast == nil {
+	qctx := s.snapshot().queryContext()
+	if qctx == nil {
 		http.Error(w, "the ledger failed to load, so there is nothing to query", http.StatusConflict)
 		return
 	}
 
-	// A Context holds per-run state (FROM's summarization), so each request
-	// gets its own.
-	qctx := &query.Context{Ledger: s.ledger, Config: s.config, AST: s.ast}
 	var output strings.Builder
 	if err := query.Run(r.Context(), qctx, strings.TrimSpace(request.Query), format, false, &output); err != nil {
 		var queryErr *query.Error

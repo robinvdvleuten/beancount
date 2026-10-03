@@ -49,11 +49,7 @@ func TestAPISource(t *testing.T) {
 	assert.NoError(t, err)
 	_ = tmpFile.Close()
 
-	server := New(8080, tmpFile.Name())
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, tmpFile.Name())
 
 	t.Run("WithDefaultFile", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/source", nil)
@@ -102,9 +98,7 @@ func TestAPISource(t *testing.T) {
 	})
 
 	t.Run("NoFilepathNoDefault", func(t *testing.T) {
-		serverNoDefault := New(8080, "")
-		muxNoDefault, err := serverNoDefault.setupRouter()
-		assert.NoError(t, err)
+		muxNoDefault := newUnloadedTestHandler(t)
 		req := httptest.NewRequest(http.MethodGet, "/api/source", nil)
 		rec := httptest.NewRecorder()
 
@@ -224,11 +218,7 @@ func TestAPISource(t *testing.T) {
 		assert.NoError(t, err)
 		_ = tmpFileErr.Close()
 
-		serverErr := New(8080, tmpFileErr.Name())
-		_, err = serverErr.reloadLedger(context.Background())
-		assert.NoError(t, err)
-		muxErr, err := serverErr.setupRouter()
-		assert.NoError(t, err)
+		muxErr := newTestHandler(t, tmpFileErr.Name())
 
 		req := httptest.NewRequest(http.MethodGet, "/api/source", nil)
 		rec := httptest.NewRecorder()
@@ -253,11 +243,7 @@ func TestAPISourceIncludeParseErrorStillSavesFile(t *testing.T) {
 	err = os.WriteFile(includeFile, []byte("2024-01-01 open Assets:Checking\n"), 0600)
 	assert.NoError(t, err)
 
-	server := New(8080, rootFile)
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, rootFile)
 
 	invalidContent := "garbage @@@"
 	requestBody := map[string]string{
@@ -297,13 +283,7 @@ func TestAPISourceInitialParseErrorStillServesEditor(t *testing.T) {
 	assert.NoError(t, err)
 	_ = tmpFile.Close()
 
-	server := New(8080, tmpFile.Name())
-	err = server.initializeSourceState(context.Background())
-	assert.NoError(t, err)
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, tmpFile.Name())
 
 	req := httptest.NewRequest(http.MethodGet, "/api/source", nil)
 	rec := httptest.NewRecorder()
@@ -339,12 +319,7 @@ func TestSyntaxErrorsLeaveTheRestOfTheLedgerLoaded(t *testing.T) {
 		"2024-01-04 open\n"
 	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
 
-	server := New(8080, ledgerFile)
-	assert.NoError(t, server.initializeSourceState(context.Background()))
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, ledgerFile)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
@@ -378,11 +353,7 @@ func TestWatcherReloadsAnIncludeOfALedgerWithASyntaxError(t *testing.T) {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	server := New(8080, rootFile)
-	server.sseClients = make(map[chan string]struct{})
-	assert.NoError(t, server.initializeSourceState(ctx))
-	_, err := server.reloadLedger(ctx)
-	assert.NoError(t, err)
+	server, mux := newTestServer(t, rootFile)
 	assert.NoError(t, server.startWatcher(ctx))
 
 	events := make(chan string, 10)
@@ -397,10 +368,9 @@ func TestWatcherReloadsAnIncludeOfALedgerWithASyntaxError(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("no reload after the include changed")
 	}
-	server.mu.RLock()
-	_, ok := server.ledger.GetAccount("Assets:Bank")
-	server.mu.RUnlock()
-	assert.True(t, ok, "the reloaded ledger has the include's new account")
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/accounts", nil))
+	assert.Contains(t, rec.Body.String(), `"Assets:Bank"`, "the reloaded ledger has the include's new account")
 }
 
 func decodeSourceResponse(t *testing.T, rec *httptest.ResponseRecorder) map[string]interface{} {
@@ -434,22 +404,24 @@ func TestConcurrentReloadLedger(t *testing.T) {
 	assert.NoError(t, err)
 	_ = tmpFile.Close()
 
-	server := New(8080, tmpFile.Name())
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
+	server, mux := newTestServer(t, tmpFile.Name())
 
-	// Run concurrent reloads — with -race flag this catches data races
+	// Run concurrent reloads and requests — with -race flag this catches data races
 	done := make(chan struct{})
 	for i := 0; i < 5; i++ {
 		go func() {
 			defer func() { done <- struct{}{} }()
 			for j := 0; j < 10; j++ {
-				oldIncludes, err := server.reloadLedger(context.Background())
-				if err != nil {
+				if _, _, err := server.reloadLedger(context.Background()); err != nil {
 					return
 				}
-				// oldIncludes should be a valid snapshot, not a partially updated slice
-				_ = oldIncludes
+				for _, path := range []string{"/api/source", "/api/accounts", "/api/balances"} {
+					rec := httptest.NewRecorder()
+					mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, path, nil))
+					if rec.Code != http.StatusOK {
+						t.Errorf("GET %s: status %d", path, rec.Code)
+					}
+				}
 			}
 		}()
 	}
@@ -473,11 +445,7 @@ func TestAPIAccounts(t *testing.T) {
 	assert.NoError(t, err)
 	_ = tmpFile.Close()
 
-	server := New(8080, tmpFile.Name())
-	_, err = server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, tmpFile.Name())
 
 	t.Run("ReturnsSortedAccounts", func(t *testing.T) {
 		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
@@ -506,11 +474,7 @@ func TestAPIAccounts(t *testing.T) {
 	})
 
 	t.Run("EmptyArrayWhenNoFile", func(t *testing.T) {
-		serverNoFile := New(8080, "")
-		// Manually initialize empty ledger for testing (since we're not calling Start())
-		serverNoFile.ledger = ledger.New()
-		muxNoFile, err := serverNoFile.setupRouter()
-		assert.NoError(t, err)
+		muxNoFile := newUnloadedTestHandler(t)
 
 		req := httptest.NewRequest(http.MethodGet, "/api/accounts", nil)
 		rec := httptest.NewRecorder()
@@ -560,11 +524,7 @@ func TestAPISourceLedgerErrorsKeepTypeAndPosition(t *testing.T) {
 		"2024-01-02 document Assets:Checking \"missing.pdf\"\n"
 	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
 
-	server := New(8080, ledgerFile)
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, ledgerFile)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
@@ -587,11 +547,7 @@ func TestAPISourceOptionErrorsKeepTypeAndPosition(t *testing.T) {
 		"option \"inferred_tolerance_multiplier\" \"0.5\"\n"
 	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
 
-	server := New(8080, ledgerFile)
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, ledgerFile)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))
@@ -622,11 +578,7 @@ func TestAPISourceLoadErrorsKeepTypeAndPosition(t *testing.T) {
 	assert.NoError(t, os.WriteFile(ledgerFile, []byte(source), 0600))
 	assert.NoError(t, os.WriteFile(filepath.Join(dir, "sub.beancount"), []byte("2024-01-01 open Assets:Cash\n"), 0600))
 
-	server := New(8080, ledgerFile)
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newTestHandler(t, ledgerFile)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/source", nil))

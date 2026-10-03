@@ -48,16 +48,12 @@ func (s *Server) mountAssets(mux *http.ServeMux) {
 
 	// Register catch-all route for SPA (serves index.html for all unmatched paths)
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		s.mu.RLock()
-		title := s.config.Title
-		s.mu.RUnlock()
-
 		metadataJSON, err := json.Marshal(metadata{
 			Version:   s.Version,
 			CommitSHA: s.CommitSHA,
 			ReadOnly:  s.ReadOnly,
 			Watching:  s.WatchEnabled,
-			Title:     title,
+			Title:     s.snapshot().ledger.Config().Title,
 		})
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

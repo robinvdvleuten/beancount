@@ -62,15 +62,14 @@ type BalanceNodeResponse struct {
 //   - GET /api/balances?types=Assets,Liabilities,Equity&endDate=2024-01-31&closed=true - Balance sheet
 //   - GET /api/balances?types=Income,Expenses&startDate=2024-01-01&endDate=2024-01-31 - Income statement
 func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	l := s.snapshot().ledger
 
 	// Parse account types
 	var accountTypes []ast.AccountType
 	if typesParam := r.URL.Query().Get("types"); typesParam != "" {
 		for _, t := range strings.Split(typesParam, ",") {
 			typeName := strings.TrimSpace(t)
-			accountType, ok := s.ledger.GetAccountTypeFromName(typeName)
+			accountType, ok := l.GetAccountTypeFromName(typeName)
 			if !ok {
 				http.Error(w, "invalid account type: "+t, http.StatusBadRequest)
 				return
@@ -119,15 +118,15 @@ func (s *Server) handleGetBalances(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Get balance tree from ledger
-	tree, err := s.ledger.GetBalanceTree(accountTypes, startDate, endDate, valuation, closed)
+	tree, err := l.GetBalanceTree(accountTypes, startDate, endDate, valuation, closed)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
 	// Convert to response format
-	response := convertBalanceTree(tree, s.ledger.DisplayContext())
-	response.OperatingCurrencies = operatingCurrencies(s.config)
+	response := convertBalanceTree(tree, l.DisplayContext())
+	response.OperatingCurrencies = operatingCurrencies(l.Config())
 	writeJSONResponse(w, response)
 }
 

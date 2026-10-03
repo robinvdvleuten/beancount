@@ -4,12 +4,9 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
-	"slices"
 
 	"github.com/robinvdvleuten/beancount/diagnostic"
 )
@@ -85,79 +82,11 @@ func computeFingerprint(content []byte) string {
 	return hex.EncodeToString(hash[:])[:8]
 }
 
-// isAllowedFile checks if the given path is in the allowlist (root or includes).
-// Must be called with s.mu held for reading.
-func (s *Server) isAllowedFile(path string) bool {
-	return path == s.rootFile || slices.Contains(s.includeFiles, path)
-}
-
-// resolveFilepathFromString resolves a filepath string to an absolute path.
-// If the path is empty, returns the server's root file.
-// The resolved path is validated against the allowlist.
-func (s *Server) resolveFilepathFromString(path string) (string, error) {
-	if path == "" {
-		s.mu.RLock()
-		root := s.rootFile
-		s.mu.RUnlock()
-
-		if root == "" {
-			return "", fmt.Errorf("no filepath provided and no root file configured")
-		}
-		return root, nil
-	}
-
-	absPath, err := filepath.Abs(path)
-	if err != nil {
-		return "", fmt.Errorf("invalid filepath: %w", err)
-	}
-
-	s.mu.RLock()
-	allowed := s.isAllowedFile(absPath)
-	s.mu.RUnlock()
-
-	if !allowed {
-		return "", fmt.Errorf("access denied: file not in ledger")
-	}
-
-	return absPath, nil
-}
-
-// resolveFilepath extracts the filepath from the request query parameters.
-// If no filepath is provided, returns the server's root file.
-// The returned path is always absolute and validated against the allowlist.
-func (s *Server) resolveFilepath(r *http.Request) (string, error) {
-	filename := r.URL.Query().Get("filepath")
-	return s.resolveFilepathFromString(filename)
-}
-
-// buildResponse creates a SourceResponse from the current ledger state.
-// Must be called with s.mu held for reading.
-func (s *Server) buildResponse(source []byte) *SourceResponse {
-	includes := s.includeFiles
-	if includes == nil {
-		includes = []string{}
-	}
-	errors := []error{}
-	if s.reloadErr != nil {
-		errors = []error{s.reloadErr}
-	} else {
-		errors = append(errors, s.ledgerErrors...)
-	}
-	return &SourceResponse{
-		Source:      string(source),
-		Fingerprint: computeFingerprint(source),
-		Errors:      errors,
-		Files: Files{
-			Root:     s.rootFile,
-			Includes: includes,
-		},
-	}
-}
-
 // handleGetSource handles GET requests to /api/source.
 // Returns the file content, validation errors, and files list as JSON.
 func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
-	filename, err := s.resolveFilepath(r)
+	snap := s.snapshot()
+	filename, err := snap.resolve(r.URL.Query().Get("filepath"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -173,12 +102,7 @@ func (s *Server) handleGetSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Read lock for accessing ledger state
-	s.mu.RLock()
-	response := s.buildResponse(content)
-	s.mu.RUnlock()
-
-	writeJSONResponse(w, response)
+	writeJSONResponse(w, snap.sourceResponse(content))
 }
 
 // handlePutSource handles PUT requests to /api/source.
@@ -197,7 +121,7 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filename, err := s.resolveFilepathFromString(request.Filepath)
+	filename, err := s.snapshot().resolve(request.Filepath)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
@@ -227,14 +151,11 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 
 	// Reload ledger after save. Parse/validation errors are expected and
 	// returned to the client — only log unexpected failures.
-	if _, err := s.reloadLedger(r.Context()); err != nil {
+	_, snap, err := s.reloadLedger(r.Context())
+	if err != nil {
 		log.Printf("Warning: ledger reload after save: %v", err)
 	}
 
-	// Build response from reloaded state (includes any validation errors)
-	s.mu.RLock()
-	response := s.buildResponse([]byte(request.Source))
-	s.mu.RUnlock()
-
-	writeJSONResponse(w, response)
+	// The response is the reloaded ledger's (includes any validation errors)
+	writeJSONResponse(w, snap.sourceResponse([]byte(request.Source)))
 }

@@ -16,20 +16,12 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
 	"path/filepath"
 	"sync"
 	"time"
 
 	"github.com/fsnotify/fsnotify"
 
-	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/config"
-	"github.com/robinvdvleuten/beancount/diagnostic"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/ledgerload"
-	"github.com/robinvdvleuten/beancount/loader"
-	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -41,17 +33,16 @@ type Server struct {
 	ReadOnly     bool
 	WatchEnabled bool
 
-	mu           sync.RWMutex
-	ledger       *ledger.Ledger
-	config       *config.Config // Options of the loaded ledger
-	ast          *ast.AST       // Directives the ledger processed, booked; nil until a load succeeds
-	rootFile     string         // Absolute path of the root ledger file
-	includeFiles []string       // Absolute paths of included files
-	reloadErr    error          // Last error that stopped a load, such as a missing file
-	ledgerErrors []error        // Errors of the last load that went on: its load errors, then the ledger's
+	// mu guards state, the ledger the handlers answer from. Read it
+	// through snapshot; only reloadLedger replaces it.
+	mu    sync.RWMutex
+	state *snapshot
+	// reloadMu makes reloads follow one another, so each snapshot is built
+	// from the one before it and the last reload to start is the one served.
+	reloadMu sync.Mutex
 
-	// inputFile is the file path passed to New(), used only for initial loading.
-	// After loading, rootFile contains the resolved absolute path.
+	// inputFile is the ledger file passed to New(), which every load reads.
+	// A snapshot holds its resolved absolute path.
 	inputFile string
 
 	// SSE clients for broadcasting reload events
@@ -65,14 +56,22 @@ func New(port int, ledgerFile string) *Server {
 
 func NewWithVersion(port int, ledgerFile, version, commitSHA string) *Server {
 	return &Server{
-		Port:      port,
-		Host:      "127.0.0.1",
-		Version:   version,
-		CommitSHA: commitSHA,
-		ledger:    ledger.New(),
-		config:    config.New(),
-		inputFile: ledgerFile,
+		Port:       port,
+		Host:       "127.0.0.1",
+		Version:    version,
+		CommitSHA:  commitSHA,
+		state:      newSnapshot(),
+		inputFile:  ledgerFile,
+		sseClients: make(map[chan string]struct{}),
 	}
+}
+
+// snapshot returns the ledger as last loaded. A handler takes it once and
+// answers from it alone.
+func (s *Server) snapshot() *snapshot {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.state
 }
 
 func (s *Server) Start(ctx context.Context) error {
@@ -84,15 +83,14 @@ func (s *Server) Start(ctx context.Context) error {
 	if s.inputFile == "" {
 		return fmt.Errorf("ledger file is required")
 	}
-	if err := s.initializeSourceState(ctx); err != nil {
+	// A ledger that fails to load is still served, but not one whose path
+	// cannot be resolved, which leaves no snapshot to build.
+	if _, err := absolutePath(s.inputFile); err != nil {
 		return err
 	}
 
-	// Initialize SSE clients map
-	s.sseClients = make(map[chan string]struct{})
-
 	loadTimer := timer.Child(fmt.Sprintf("web.load_ledger %s", filepath.Base(s.inputFile)))
-	if _, err := s.reloadLedger(ctx); err != nil {
+	if _, _, err := s.reloadLedger(ctx); err != nil {
 		log.Printf("Warning: initial ledger load failed: %v", err)
 	}
 	loadTimer.End()
@@ -145,48 +143,6 @@ func (s *Server) Start(ctx context.Context) error {
 	return fmt.Errorf("failed to serve on %s: %w", addr, err)
 }
 
-func (s *Server) initializeSourceState(ctx context.Context) error {
-	rootFile, err := filepath.Abs(s.inputFile)
-	if err != nil {
-		return fmt.Errorf("failed to resolve absolute path for %s: %w", s.inputFile, err)
-	}
-
-	// The root's own includes, which a ledger that fails to load still
-	// names, so they can be edited and watched.
-	includes := []string{}
-	data, err := os.ReadFile(rootFile)
-	var tree *ast.AST
-	if err == nil {
-		// A syntax error leaves the rest of the file parsed.
-		tree, _ = parser.ParseBytesWithFilename(ctx, rootFile, data)
-	}
-	if tree != nil {
-		baseDir := filepath.Dir(rootFile)
-		includes = make([]string, 0, len(tree.Includes))
-		for _, inc := range tree.Includes {
-			includePath := inc.Filename.Value
-			if !filepath.IsAbs(includePath) {
-				includePath = filepath.Join(baseDir, includePath)
-			}
-			absPath, err := filepath.Abs(includePath)
-			if err != nil {
-				continue
-			}
-			includes = append(includes, absPath)
-		}
-	}
-
-	s.mu.Lock()
-	s.rootFile = rootFile
-	s.includeFiles = includes
-	if s.ledger == nil {
-		s.ledger = ledger.New()
-	}
-	s.mu.Unlock()
-
-	return nil
-}
-
 func (s *Server) setupRouter() (*http.ServeMux, error) {
 	mux := http.NewServeMux()
 
@@ -215,40 +171,27 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
-// reloadLedger loads or reloads the ledger from disk.
+// reloadLedger loads the ledger from disk and swaps in the snapshot that
+// follows from it. It returns the snapshot it replaced and the one now
+// served, and the error of a load that could not go on, which the new
+// snapshot carries too. When no snapshot could be built, the one served
+// stays, and is returned as both.
 // Caller must NOT hold the mutex - this method acquires it internally.
-// Returns the old include files for comparison by the caller.
-func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err error) {
-	// Like check and query, a syntax error drops the directive it is in
-	// and the rest of the ledger still loads.
-	result, err := ledgerload.Load(ctx, loader.Source{Path: s.inputFile})
+func (s *Server) reloadLedger(ctx context.Context) (prev, next *snapshot, err error) {
+	s.reloadMu.Lock()
+	defer s.reloadMu.Unlock()
+
+	prev = s.snapshot()
+	next, err = prev.reload(ctx, s.inputFile)
 	if err != nil {
-		if initErr := s.initializeSourceState(ctx); initErr != nil {
-			return nil, initErr
-		}
-		s.mu.Lock()
-		s.reloadErr = jsonSafeSourceError(err)
-		s.ledgerErrors = nil
-		s.mu.Unlock()
-		return nil, err // I/O error
-	}
-	ledgerErrors := diagnostic.Errors(result.Diagnostics())
-	for i, ledgerErr := range ledgerErrors {
-		ledgerErrors[i] = jsonSafeSourceError(ledgerErr)
+		return prev, prev, err
 	}
 
 	s.mu.Lock()
-	oldIncludes = s.includeFiles
-	s.ledger = result.Ledger
-	s.config = result.Ledger.Config()
-	s.ast = result.AST
-	s.rootFile = result.Root
-	s.includeFiles = result.Includes
-	s.reloadErr = nil
-	s.ledgerErrors = ledgerErrors
+	s.state = next
 	s.mu.Unlock()
 
-	return oldIncludes, nil
+	return prev, next, next.loadErr
 }
 
 // startWatcher starts a file watcher for the root file and all includes.
@@ -260,9 +203,8 @@ func (s *Server) startWatcher(ctx context.Context) error {
 	}
 
 	// Add root file and all includes to watch
-	s.mu.RLock()
-	filesToWatch := append([]string{s.rootFile}, s.includeFiles...)
-	s.mu.RUnlock()
+	snap := s.snapshot()
+	filesToWatch := append([]string{snap.root}, snap.includes...)
 
 	for _, file := range filesToWatch {
 		if err := watcher.Add(file); err != nil {
@@ -325,8 +267,8 @@ func (s *Server) runWatcher(ctx context.Context, watcher *fsnotify.Watcher) {
 
 // handleFileChange reloads the ledger and updates the watch list.
 func (s *Server) handleFileChange(ctx context.Context, watcher *fsnotify.Watcher) {
-	// Reload ledger — returns old includes atomically captured under the write lock
-	prevIncludes, err := s.reloadLedger(ctx)
+	// Reload ledger — returns the snapshot it replaced and the one it built
+	prev, next, err := s.reloadLedger(ctx)
 	if err != nil {
 		log.Printf("Failed to reload ledger: %v", err)
 		s.broadcast("reload")
@@ -334,18 +276,14 @@ func (s *Server) handleFileChange(ctx context.Context, watcher *fsnotify.Watcher
 	}
 
 	oldIncludes := make(map[string]bool)
-	for _, f := range prevIncludes {
+	for _, f := range prev.includes {
 		oldIncludes[f] = true
 	}
-
-	// Read new state under lock
-	s.mu.RLock()
 	newIncludes := make(map[string]bool)
-	for _, f := range s.includeFiles {
+	for _, f := range next.includes {
 		newIncludes[f] = true
 	}
-	newRoot := s.rootFile
-	s.mu.RUnlock()
+	newRoot := next.root
 
 	// Remove watches for files no longer included
 	for file := range oldIncludes {

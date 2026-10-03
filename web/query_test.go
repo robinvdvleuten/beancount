@@ -1,7 +1,6 @@
 package web
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -28,12 +27,8 @@ func TestAPIQuery(t *testing.T) {
 	}
 	writeLedger("1000.00")
 
-	server := New(8080, ledgerFile)
+	server, mux := newTestServer(t, ledgerFile)
 	server.ReadOnly = true
-	_, err := server.reloadLedger(context.Background())
-	assert.NoError(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
 
 	run := func(t *testing.T, body string) (int, string) {
 		t.Helper()
@@ -83,8 +78,7 @@ func TestAPIQuery(t *testing.T) {
 
 	t.Run("SeesReloadedLedger", func(t *testing.T) {
 		writeLedger("250.00")
-		_, err := server.reloadLedger(context.Background())
-		assert.NoError(t, err)
+		reload(t, server)
 
 		code, output := run(t, `{"query": "select sum(position) where account = 'Assets:Checking'"}`)
 		assert.Equal(t, http.StatusOK, code)
@@ -96,11 +90,7 @@ func TestAPIQueryWithoutLoadedLedger(t *testing.T) {
 	// A syntax error leaves the rest loaded; a missing file loads nothing.
 	ledgerFile := filepath.Join(t.TempDir(), "missing.beancount")
 
-	server := New(8080, ledgerFile)
-	_, err := server.reloadLedger(context.Background())
-	assert.Error(t, err)
-	mux, err := server.setupRouter()
-	assert.NoError(t, err)
+	mux := newFailedTestHandler(t, ledgerFile)
 
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/api/query", strings.NewReader(`{"query": "select 1"}`)))

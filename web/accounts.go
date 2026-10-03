@@ -19,13 +19,12 @@ type AccountsResponse struct {
 // handleGetAccounts handles GET requests to /api/accounts.
 // Returns all accounts from the ledger, sorted alphabetically by name.
 func (s *Server) handleGetAccounts(w http.ResponseWriter, r *http.Request) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	ledgerAccounts := s.snapshot().ledger.Accounts()
 
 	// Pre-allocate slice with capacity hint
-	accounts := make([]AccountInfo, 0, len(s.ledger.Accounts()))
+	accounts := make([]AccountInfo, 0, len(ledgerAccounts))
 
-	for name, account := range s.ledger.Accounts() {
+	for name, account := range ledgerAccounts {
 		accounts = append(accounts, AccountInfo{
 			Name: name,
 			Type: account.Type, // Type is now a string (account root name)
