@@ -52,12 +52,12 @@ func newContextFromSource(t *testing.T, source string) *Context {
 	assert.NoError(t, err)
 
 	l := ledger.New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	processed := l.MustProcess(context.Background(), tree)
 
 	cfg, err := config.FromAST(tree)
 	assert.NoError(t, err)
 
-	return &Context{Ledger: l, Config: cfg, AST: tree}
+	return &Context{Ledger: l, Config: cfg, AST: processed}
 }
 
 func mustCompile(t *testing.T, ctx *Context, query string) *compiledSelect {

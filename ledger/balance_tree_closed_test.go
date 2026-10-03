@@ -22,7 +22,7 @@ func loadLedger(t *testing.T, source string) *ledger.Ledger {
 	tree, err := parser.ParseString(ctx, source)
 	assert.NoError(t, err)
 	l := ledger.New()
-	assert.NoError(t, l.Process(ctx, tree))
+	l.MustProcess(ctx, tree)
 	return l
 }
 

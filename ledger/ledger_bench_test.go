@@ -23,7 +23,7 @@ func BenchmarkProcessTransaction(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(context.Background(), ast)
+		_, _ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -45,7 +45,7 @@ func BenchmarkProcessTransactionWithCost(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(context.Background(), ast)
+		_, _ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -65,7 +65,7 @@ func BenchmarkProcessTransactionWithInference(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(context.Background(), ast)
+		_, _ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -93,7 +93,7 @@ func BenchmarkProcessTransactionComplex(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(context.Background(), ast)
+		_, _ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -115,7 +115,7 @@ func BenchmarkProcessBalance(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(context.Background(), ast)
+		_, _ = l.Process(context.Background(), ast)
 	}
 }
 
@@ -138,6 +138,6 @@ func BenchmarkProcessPad(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		l := New()
-		_ = l.Process(context.Background(), ast)
+		_, _ = l.Process(context.Background(), ast)
 	}
 }

@@ -266,7 +266,7 @@ func TestLedgerDuplicate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			l := New()
-			err := l.Process(ctx, parser.MustParseBytes(ctx, []byte(opens+tt.ledger)))
+			_, err := processErr(ctx, l, parser.MustParseBytes(ctx, []byte(opens+tt.ledger)))
 			assert.NoError(t, err)
 			extracted := parser.MustParseBytes(ctx, []byte(tt.extracted))
 

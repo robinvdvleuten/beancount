@@ -3,6 +3,7 @@ package ledger
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -10,6 +11,28 @@ import (
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/parser"
 )
+
+// processErr processes tree into l and returns the processed tree and an
+// error joining every diagnostic it reports, or Process's own error: nil
+// means the tree processed without a single diagnostic.
+func processErr(ctx context.Context, l *Ledger, tree *ast.AST) (*ast.AST, error) {
+	processed, err := l.Process(ctx, tree)
+	if err != nil {
+		return nil, err
+	}
+	return processed, errors.Join(l.Diagnostics()...)
+}
+
+// processDiagnostics processes tree into l and returns the processed tree
+// and its diagnostics, of which it must report at least one.
+func processDiagnostics(t *testing.T, l *Ledger, tree *ast.AST) (*ast.AST, []error) {
+	t.Helper()
+	processed, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+	diagnostics := l.Diagnostics()
+	assert.NotEqual(t, 0, len(diagnostics), "want diagnostics")
+	return processed, diagnostics
+}
 
 func TestLedger_ProcessOpen(t *testing.T) {
 	tests := []struct {
@@ -92,7 +115,7 @@ option "booking_method" "LIFO"
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -121,13 +144,65 @@ poptag #trip
 	txn := tree.Directives[0].(*ast.Transaction)
 	assert.Equal(t, 0, len(txn.Tags))
 
-	l := New()
-	err := l.Process(context.Background(), tree)
-	assert.NoError(t, err)
+	processed := New().MustProcess(context.Background(), tree)
 
-	assert.Equal(t, "Assets:Checking", string(tree.Directives[0].(*ast.Open).Account))
-	assert.Equal(t, 1, len(txn.Tags))
-	assert.Equal(t, ast.Tag("trip"), txn.Tags[0])
+	assert.Equal(t, "Assets:Checking", string(processed.Directives[0].(*ast.Open).Account))
+	booked := processed.Directives[2].(*ast.Transaction)
+	assert.Equal(t, []ast.Tag{"trip"}, booked.Tags)
+	// The tree as parsed is left as it is.
+	assert.Equal(t, ast.Directive(txn), tree.Directives[0])
+	assert.Equal(t, 0, len(txn.Tags))
+}
+
+// TestProcessLeavesItsInputAlone processes a tree that exercises
+// everything Process writes, and checks that the tree is the tree as parsed
+// afterwards, so the same tree processes twice with the same result.
+func TestProcessLeavesItsInputAlone(t *testing.T) {
+	source := `option "booking_method" "FIFO"
+plugin "beancount.plugins.auto_accounts"
+plugin "beancount.plugins.implicit_prices"
+pushtag #trip
+pushmeta trip: "yes"
+2024-01-05 * "interpolated, split over two currencies"
+  Assets:Cash   -10.00 USD
+  Assets:Cash    -5.00 EUR
+  Expenses:Food
+popmeta trip:
+poptag #trip
+2024-01-01 open Assets:Cash
+2024-01-01 open Expenses:Food
+2024-01-01 open Equity:Opening
+2024-01-02 note Assets:Cash "a note"
+2024-01-06 * "cost without currency, negative price, total braces"
+  Assets:Stock   2 HOOL {10}
+  Assets:Stock   1 HOOL {{}} @ -10 USD
+  Assets:Cash   -30 USD
+2024-01-07 * "sold"
+  Assets:Stock  -1 HOOL {}
+  Assets:Cash    12 USD
+  Income:Gains
+2024-01-08 * "dropped: two auto-postings"
+  Assets:Cash
+  Expenses:Food
+2024-01-09 pad Assets:Cash Equity:Opening
+2024-01-10 balance Assets:Cash 100 USD
+`
+	ctx := context.Background()
+	tree := parser.MustParseString(ctx, source)
+	pristine := parser.MustParseString(ctx, source)
+
+	first := New()
+	processed, err := first.Process(ctx, tree)
+	assert.NoError(t, err)
+	assert.Equal(t, pristine, tree)
+	assert.NotEqual(t, len(tree.Directives), len(processed.Directives))
+
+	second := New()
+	again, err := second.Process(ctx, tree)
+	assert.NoError(t, err)
+	assert.Equal(t, pristine, tree)
+	assert.Equal(t, processed, again)
+	assert.Equal(t, fmt.Sprint(first.Diagnostics()), fmt.Sprint(second.Diagnostics()))
 }
 
 func TestLedger_ProcessClose(t *testing.T) {
@@ -186,7 +261,7 @@ func TestLedger_ProcessClose(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -347,7 +422,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -505,7 +580,7 @@ func TestLedger_ProcessBalance(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -682,7 +757,7 @@ func TestAccountLifecycleEdgeCases(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -745,7 +820,7 @@ option "title" "Test"
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 			assert.NoError(t, err)
 
 			if tt.checkFunc != nil {
@@ -794,7 +869,7 @@ func TestDatedAndLabeledLotReduction(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 			assert.NoError(t, err)
 
 			acc, ok := l.GetAccount("Assets:Brokerage")
@@ -932,7 +1007,7 @@ plugin "beancount.plugins.auto_accounts"
 	tree := parser.MustParseString(ctx, source)
 
 	ledger := New()
-	err := ledger.Process(ctx, tree)
+	_, err := processErr(ctx, ledger, tree)
 	assert.NoError(t, err)
 
 	// Verify prices were indexed
@@ -980,7 +1055,7 @@ func TestLedger_OpensAnAccountThatIsAlsoAParent(t *testing.T) {
 	tree := parser.MustParseString(ctx, source)
 	ledger := New()
 
-	err := ledger.Process(ctx, tree)
+	_, err := processErr(ctx, ledger, tree)
 	assert.NoError(t, err)
 
 	account, ok := ledger.GetAccount("Expenses:Taxes:Y2021:US:Federal")
@@ -1008,7 +1083,7 @@ func TestLedger_GetPriceBeforeAnyPrice(t *testing.T) {
 	tree := parser.MustParseString(ctx, source)
 
 	ledger := New()
-	err := ledger.Process(ctx, tree)
+	_, err := processErr(ctx, ledger, tree)
 	assert.NoError(t, err)
 
 	// Before the first price, should not be found
@@ -1049,7 +1124,7 @@ func TestLedger_PricesWithAccounts(t *testing.T) {
 	tree := parser.MustParseString(ctx, source)
 
 	ledger := New()
-	err := ledger.Process(ctx, tree)
+	_, err := processErr(ctx, ledger, tree)
 	assert.NoError(t, err)
 
 	// Verify account was created
@@ -1075,7 +1150,7 @@ func TestZeroPrice(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	l.MustProcess(context.Background(), tree)
 
 	date, _ := ast.NewDate("2020-01-03")
 	rate, ok := l.GetPrice(date, "HOOL", "USD")
@@ -1099,7 +1174,7 @@ func TestGetPriceUsesOnlyTheDirectPair(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	l.MustProcess(context.Background(), tree)
 	date, _ := ast.NewDate("2020-01-02")
 
 	rate, ok := l.GetPrice(date, "EUR", "USD")
@@ -1133,7 +1208,7 @@ func TestLedger_BookedPositions(t *testing.T) {
   Assets:Cash
 `)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	tree = l.MustProcess(context.Background(), tree)
 
 	posting := func(narration string, account ast.Account) *ast.Posting {
 		t.Helper()
@@ -1175,10 +1250,9 @@ func TestLedger_InterpolatedUnitsLeaveTheLotUndated(t *testing.T) {
   Assets:Cash
 `)
 	l := New()
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
-	assert.Equal(t, 1, len(validationErrors.Errors))
-	assert.Contains(t, validationErrors.Errors[0].Error(), "No position matches")
+	tree, validationErrors := processDiagnostics(t, l, tree)
+	assert.Equal(t, 1, len(validationErrors))
+	assert.Contains(t, validationErrors[0].Error(), "No position matches")
 
 	buy := tree.Directives[2].(*ast.Transaction)
 	assert.Equal(t, []BookedPosition{{
@@ -1214,7 +1288,7 @@ func TestLedger_UnknownVersusInactiveAccount(t *testing.T) {
   Income:Salary
 `
 	l := New()
-	_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
+	_, _ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
 
 	var messages []string
 	for _, err := range l.Errors() {
@@ -1238,7 +1312,7 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 	// opened is beancount's "does not exist", and is not checked.
 	messages := func(source string) []string {
 		l := New()
-		_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
+		_, _ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
 		var messages []string
 		for _, err := range l.Errors() {
 			messages = append(messages, err.Error())
@@ -1343,11 +1417,10 @@ func TestLedger_CurrencyGroupErrorsReadAsBeancounts(t *testing.T) {
   Assets:C  -7 USD
   Assets:D
 `)
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(New().Process(context.Background(), tree), &validationErrors))
+	_, validationErrors := processDiagnostics(t, New(), tree)
 
 	var messages []string
-	for _, err := range validationErrors.Errors {
+	for _, err := range validationErrors {
 		diagnostic := err.(*Diagnostic)
 		assert.Equal(t, "CurrencyGroupError", diagnostic.kind)
 		assert.NotZero(t, diagnostic.account)
@@ -1381,16 +1454,15 @@ func TestLedger_CostNumberWithoutCurrency(t *testing.T) {
   Assets:C  60 USD
 `)
 	l := New()
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
+	tree, validationErrors := processDiagnostics(t, l, tree)
 
 	buy := tree.Directives[2].(*ast.Transaction)
 	positions := l.BookedPositions(buy.Postings[0])
 	assert.Equal(t, 1, len(positions))
 	assert.Equal(t, "USD", positions[0].Cost.Currency)
 
-	assert.Equal(t, 1, len(validationErrors.Errors))
-	sell := validationErrors.Errors[0].(*Diagnostic)
+	assert.Equal(t, 1, len(validationErrors))
+	sell := validationErrors[0].(*Diagnostic)
 	assert.Equal(t, `Not enough lots to reduce "-6 HOOL {10 USD}": 5 HOOL {10 USD, 2020-01-02}`, sell.message)
 	assert.Equal(t, "", sell.directive.(*ast.Transaction).Postings[0].Cost.Amount.Currency, "the error shows the cost as written")
 }
@@ -1422,7 +1494,7 @@ func TestLedger_CompoundCostMissingNumber(t *testing.T) {
   Assets:C  -3 USD
 `)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	tree, _ = l.Process(context.Background(), tree)
 
 	var costs []string
 	for _, directive := range tree.Directives {
@@ -1509,7 +1581,7 @@ option "tolerance_multiplier" "1.1"`,
 		t.Run(tt.name, func(t *testing.T) {
 			tree := parser.MustParseString(context.Background(), tt.options+"\n"+transactions)
 			l := New()
-			_ = l.Process(context.Background(), tree)
+			tree, _ = l.Process(context.Background(), tree)
 
 			var got []string
 			for _, directive := range tree.Directives {
@@ -1544,7 +1616,7 @@ func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {
   Assets:Cash   -30.00 USD
 `)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	tree = l.MustProcess(context.Background(), tree)
 
 	var costs []string
 	for _, directive := range tree.Directives {

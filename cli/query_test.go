@@ -10,23 +10,12 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/config"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/query"
 )
 
 func TestQueryShell(t *testing.T) {
 	ctx := context.Background()
-	ldr := loader.New(loader.WithFollowIncludes())
-	result, err := ldr.Load(ctx, "../testdata/compliance/query/ledger.beancount")
-	assert.NoError(t, err)
-
-	l := ledger.New()
-	assert.NoError(t, l.Process(ctx, result.AST))
-	cfg, err := config.FromAST(result.AST)
-	assert.NoError(t, err)
-	qctx := &query.Context{Ledger: l, Config: cfg, AST: result.AST}
+	qctx := loadQueryLedger(t)
 
 	in := strings.NewReader("help\nerrors\nselect count(date);\nbogus query\nexit\n")
 	var out, errOut strings.Builder
@@ -96,16 +85,19 @@ func TestQueryEmpty(t *testing.T) {
 
 func TestQueryShellEOF(t *testing.T) {
 	ctx := context.Background()
-	ldr := loader.New(loader.WithFollowIncludes())
-	result, err := ldr.Load(ctx, "../testdata/compliance/query/ledger.beancount")
-	assert.NoError(t, err)
-
-	l := ledger.New()
-	assert.NoError(t, l.Process(ctx, result.AST))
-	cfg, err := config.FromAST(result.AST)
-	assert.NoError(t, err)
-
 	var out strings.Builder
-	assert.NoError(t, runShell(ctx, &query.Context{Ledger: l, Config: cfg, AST: result.AST},
+	assert.NoError(t, runShell(ctx, loadQueryLedger(t),
 		query.FormatText, false, strings.NewReader(""), &out, &out, nil, nil))
+}
+
+// loadQueryLedger loads the shared query ledger like the query command,
+// which reports no errors for it.
+func loadQueryLedger(t *testing.T) *query.Context {
+	t.Helper()
+	var stderr strings.Builder
+	qctx, result, err := loadQueryContext(context.Background(), &stderr, &FileOrStdin{Filename: "../testdata/compliance/query/ledger.beancount"})
+	assert.NoError(t, err)
+	assert.Equal(t, "", stderr.String())
+	assert.Equal(t, 0, len(result.Ledger.Diagnostics()))
+	return qctx
 }

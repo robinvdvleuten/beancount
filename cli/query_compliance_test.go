@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	stdErrors "errors"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,9 +11,6 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/config"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/query"
 )
 
@@ -65,30 +63,17 @@ type queryOutput struct {
 
 // runOurQuery executes a fixture through the same load, process, run and
 // error-reporting steps as the query command and returns what the command
-// prints for it and how it exits.
+// prints for it and how it exits. Like beanquery's shell, whose text stands
+// in for bean-query's on a failed statement, it leaves out the ledger's own
+// errors, which the command prints first.
 func runOurQuery(t *testing.T, fixture queryFixture, format string, numberify bool) queryOutput {
 	t.Helper()
 
 	ctx := context.Background()
-	// Like the query command, load the ledger by its absolute path, which
-	// the filename and meta columns name.
-	path, err := filepath.Abs(fixture.ledger)
-	assert.NoError(t, err)
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
-	result, err := ldr.Load(ctx, path)
-	assert.NoError(t, err)
-
-	l := ledger.New()
-	if err := l.Process(ctx, result.AST); err != nil {
-		var validationErrors *ledger.ValidationErrors
-		assert.True(t, stdErrors.As(err, &validationErrors), "unexpected process error: %v", err)
-	}
-
-	cfg, err := config.FromAST(result.AST)
+	qctx, _, err := loadQueryContext(ctx, io.Discard, &FileOrStdin{Filename: fixture.ledger})
 	assert.NoError(t, err)
 
 	var stdout, stderr strings.Builder
-	qctx := &query.Context{Ledger: l, Config: cfg, AST: result.AST}
 	err = reportQueryError(&stderr, query.Run(ctx, qctx, fixture.query, query.Format(format), numberify, &stdout))
 	output := queryOutput{stdout: stdout.String(), stderr: stderr.String()}
 	var cmdErr *CommandError

@@ -114,8 +114,7 @@ func (cmd *FormatCmd) format(ctx context.Context, stderr io.Writer, file *FileOr
 		return false, fmt.Errorf("failed to read file: %w", err)
 	}
 
-	ldr := loader.New()
-	loadResult, err := file.LoadResult(ctx, ldr)
+	loadResult, err := loader.New().Load(ctx, file.Source())
 	if err != nil {
 		formatted := file.errorRenderer(sourceContent).Render(err)
 		_, _ = fmt.Fprint(stderr, formatted)

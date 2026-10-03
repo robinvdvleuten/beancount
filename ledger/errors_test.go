@@ -132,11 +132,10 @@ func TestMergeCostErrorReadsAsBeancounts(t *testing.T) {
   Income:G
 `)
 	l := New()
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
-	assert.Equal(t, 1, len(validationErrors.Errors))
-	assert.Equal(t, "MergeCostError", kindOf(validationErrors.Errors[0]))
-	assert.Equal(t, "Cost merging is not supported yet", validationErrors.Errors[0].(*Diagnostic).message)
+	_, validationErrors := processDiagnostics(t, l, tree)
+	assert.Equal(t, 1, len(validationErrors))
+	assert.Equal(t, "MergeCostError", kindOf(validationErrors[0]))
+	assert.Equal(t, "Cost merging is not supported yet", validationErrors[0].(*Diagnostic).message)
 }
 
 func TestCurrencyConstraintErrorReadsAsBeancounts(t *testing.T) {
@@ -150,9 +149,8 @@ func TestCurrencyConstraintErrorReadsAsBeancounts(t *testing.T) {
   Equity:O
 `)
 	l := New()
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(l.Process(context.Background(), tree), &validationErrors))
-	assert.Equal(t, 1, len(validationErrors.Errors))
-	assert.Equal(t, "CurrencyConstraintError", kindOf(validationErrors.Errors[0]))
-	assert.Equal(t, "Invalid currency USD for account 'Assets:Euro'", validationErrors.Errors[0].(*Diagnostic).message)
+	_, validationErrors := processDiagnostics(t, l, tree)
+	assert.Equal(t, 1, len(validationErrors))
+	assert.Equal(t, "CurrencyConstraintError", kindOf(validationErrors[0]))
+	assert.Equal(t, "Invalid currency USD for account 'Assets:Euro'", validationErrors[0].(*Diagnostic).message)
 }

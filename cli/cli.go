@@ -2,7 +2,6 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -12,7 +11,6 @@ import (
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/loader"
 )
 
@@ -147,10 +145,11 @@ func (f *FileOrStdin) errorRenderer(content []byte) *ErrorRenderer {
 	return NewErrorRenderer(map[string][]byte{f.GetAbsoluteFilename(): content})
 }
 
-// GetAbsoluteFilename returns the absolute path, or "<stdin>" for stdin.
+// GetAbsoluteFilename returns the absolute path, or for stdin /dev/stdin,
+// the file it loads as (loader.Stdin).
 func (f *FileOrStdin) GetAbsoluteFilename() string {
 	if f.Filename == "<stdin>" {
-		return f.Filename
+		return loader.Stdin(nil).Path
 	}
 	absPath, err := filepath.Abs(f.Filename)
 	if err != nil {
@@ -159,21 +158,12 @@ func (f *FileOrStdin) GetAbsoluteFilename() string {
 	return absPath
 }
 
-// LoadAST loads the AST using LoadBytes for stdin or Load for files.
-func (f *FileOrStdin) LoadAST(ctx context.Context, ldr *loader.Loader) (*ast.AST, error) {
-	result, err := f.LoadResult(ctx, ldr)
-	if err != nil {
-		return nil, err
-	}
-	return result.AST, nil
-}
-
-// LoadResult loads an AST together with non-fatal loader diagnostics.
-func (f *FileOrStdin) LoadResult(ctx context.Context, ldr *loader.Loader) (*loader.LoadResult, error) {
-	absFilename := f.GetAbsoluteFilename()
-
+// Source returns what the loader reads: the file at its absolute path, or
+// what was read from stdin, which loads like bean-check /dev/stdin
+// (loader.Stdin).
+func (f *FileOrStdin) Source() loader.Source {
 	if f.Filename == "<stdin>" {
-		return ldr.LoadBytesResult(ctx, absFilename, f.Contents)
+		return loader.Stdin(f.Contents)
 	}
-	return ldr.Load(ctx, absFilename)
+	return loader.Source{Path: f.GetAbsoluteFilename()}
 }

@@ -51,7 +51,7 @@ func TestBalanceInACurrencyTheAccountDoesNotAllow(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
@@ -76,7 +76,7 @@ func TestDuplicateBalanceWithADifferentAmount(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	// Line 10 fails and repeats line 9 with another amount; line 11 is an
 	// identical repeat.

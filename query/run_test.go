@@ -9,8 +9,7 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/config"
-	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
 )
 
@@ -372,19 +371,10 @@ func loadFixture(t *testing.T, name string) (string, *Context) {
 		ledgerPath = filepath.Join(fixtureDir, "ledger.beancount")
 	}
 
-	ctx := context.Background()
-	result, err := loader.New(loader.WithFollowIncludes()).Load(ctx, ledgerPath)
+	result, err := ledgerload.Load(context.Background(), loader.Source{Path: ledgerPath})
 	assert.NoError(t, err)
 
-	l := ledger.New()
-	if err := l.Process(ctx, result.AST); err != nil {
-		var validationErrors *ledger.ValidationErrors
-		assert.True(t, stdErrors.As(err, &validationErrors), "unexpected process error: %v", err)
-	}
-	cfg, err := config.FromAST(result.AST)
-	assert.NoError(t, err)
-
-	return strings.TrimSpace(string(source)), &Context{Ledger: l, Config: cfg, AST: result.AST}
+	return strings.TrimSpace(string(source)), &Context{Ledger: result.Ledger, Config: result.Ledger.Config(), AST: result.AST}
 }
 
 func run(t *testing.T, qctx *Context, text string, format Format, numberify bool) string {

@@ -17,9 +17,8 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/alecthomas/kong"
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/formatter"
-	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
 )
@@ -80,17 +79,12 @@ func TestComplianceFixtures(t *testing.T) {
 				t.Skipf("known gap, see %s", filepath.Join(complianceDir, "KNOWN_GAPS.md"))
 			}
 
-			ctx := context.Background()
-			ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery())
-			result, err := ldr.Load(ctx, fixture.path)
+			result, err := ledgerload.Load(context.Background(), loader.Source{Path: fixture.path})
 			if err == nil {
-				err = ledger.New().Process(ctx, result.AST)
-			}
-			if err == nil {
-				// Fatal load diagnostics fail a check like validation errors do.
-				if loadErrs := diagnostic.Errors(result.Diagnostics); len(loadErrs) > 0 {
-					err = errors.Join(loadErrs...)
-				}
+				// Fatal load diagnostics fail a check like validation
+				// diagnostics do.
+				loadErrors, validationErrors := ledgerErrors(result)
+				err = errors.Join(append(loadErrors, validationErrors...)...)
 			}
 
 			if fixture.wantPass {
@@ -340,12 +334,11 @@ func TestNoFollowOnErrors(t *testing.T) {
 	official := hasOfficialTool(t, "bean-check", 3)
 	for _, path := range paths {
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".fail.beancount"), func(t *testing.T) {
-			ctx := context.Background()
-			result, err := loader.New(loader.WithFollowIncludes()).Load(ctx, path)
+			result, err := ledgerload.Load(context.Background(), loader.Source{Path: path})
 			assert.NoError(t, err)
-			var validationErrs *ledger.ValidationErrors
-			assert.True(t, errors.As(ledger.New().Process(ctx, result.AST), &validationErrs))
-			assert.Equal(t, 1, len(validationErrs.Errors), "%v", validationErrs)
+			loadErrors, validationErrors := ledgerErrors(result)
+			assert.Equal(t, 0, len(loadErrors), "%v", loadErrors)
+			assert.Equal(t, 1, len(validationErrors), "%v", validationErrors)
 
 			if !official {
 				return

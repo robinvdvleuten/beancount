@@ -20,7 +20,7 @@ func loadValuationLedger(t *testing.T) *ledger.Ledger {
 	tree, err := parser.ParseBytes(ctx, source)
 	assert.NoError(t, err)
 	l := ledger.New()
-	assert.NoError(t, l.Process(ctx, tree))
+	l.MustProcess(ctx, tree)
 	return l
 }
 

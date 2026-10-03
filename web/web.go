@@ -16,6 +16,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"sync"
 	"time"
@@ -26,7 +27,9 @@ import (
 	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -148,12 +151,19 @@ func (s *Server) initializeSourceState(ctx context.Context) error {
 		return fmt.Errorf("failed to resolve absolute path for %s: %w", s.inputFile, err)
 	}
 
+	// The root's own includes, which a ledger that fails to load still
+	// names, so they can be edited and watched.
 	includes := []string{}
-	if result, err := loader.New(loader.WithSyntaxRecovery()).Load(ctx, s.inputFile); err == nil {
-		rootFile = result.Root
-		baseDir := filepath.Dir(result.Root)
-		includes = make([]string, 0, len(result.AST.Includes))
-		for _, inc := range result.AST.Includes {
+	data, err := os.ReadFile(rootFile)
+	var tree *ast.AST
+	if err == nil {
+		// A syntax error leaves the rest of the file parsed.
+		tree, _ = parser.ParseBytesWithFilename(ctx, rootFile, data)
+	}
+	if tree != nil {
+		baseDir := filepath.Dir(rootFile)
+		includes = make([]string, 0, len(tree.Includes))
+		for _, inc := range tree.Includes {
 			includePath := inc.Filename.Value
 			if !filepath.IsAbs(includePath) {
 				includePath = filepath.Join(baseDir, includePath)
@@ -211,9 +221,7 @@ func (s *Server) requireWritable(next http.HandlerFunc) http.HandlerFunc {
 func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err error) {
 	// Like check and query, a syntax error drops the directive it is in
 	// and the rest of the ledger still loads.
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
-
-	result, err := ldr.Load(ctx, s.inputFile)
+	result, err := ledgerload.Load(ctx, loader.Source{Path: s.inputFile})
 	if err != nil {
 		if initErr := s.initializeSourceState(ctx); initErr != nil {
 			return nil, initErr
@@ -224,20 +232,15 @@ func (s *Server) reloadLedger(ctx context.Context) (oldIncludes []string, err er
 		s.mu.Unlock()
 		return nil, err // I/O error
 	}
-	loadErrors := diagnostic.Errors(result.Diagnostics)
+	loadErrors := diagnostic.Errors(result.LoadDiagnostics)
 	for i, loadErr := range loadErrors {
 		loadErrors[i] = jsonSafeSourceError(loadErr)
 	}
 
-	l := ledger.New()
-	_ = l.Process(ctx, result.AST) // Validation errors in l.Errors()
-	// Invalid options were reported by the ledger above.
-	cfg, _ := config.ParseOptions(result.AST)
-
 	s.mu.Lock()
 	oldIncludes = s.includeFiles
-	s.ledger = l
-	s.config = cfg
+	s.ledger = result.Ledger // Validation errors in Ledger.Errors()
+	s.config = result.Ledger.Config()
 	s.ast = result.AST
 	s.rootFile = result.Root
 	s.includeFiles = result.Includes

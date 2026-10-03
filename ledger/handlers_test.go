@@ -424,7 +424,7 @@ func TestCommodityIntegrationWithOtherDirectives(t *testing.T) {
 	ledger := New()
 
 	// Process all directives
-	err := ledger.Process(ctx, tree)
+	_, err := processErr(ctx, ledger, tree)
 	assert.NoError(t, err, "should process without errors")
 
 	// Verify the commodity is declared alongside the accounts

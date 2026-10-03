@@ -13,8 +13,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/telemetry"
@@ -59,10 +58,9 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		defer reportTelemetry()
 	}
 
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
-	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
+	result, err := ledgerload.Load(runCtx, cmd.File.Source())
 	if cmd.JSON {
-		return cmd.writeJSON(runCtx, ctx.Stdout, loadResult, err)
+		return writeJSONErrors(ctx.Stdout, checkJSONErrors(result, err))
 	}
 	if err != nil {
 		sourceContent, readErr := cmd.File.GetSourceContent()
@@ -78,11 +76,7 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
-	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, cmd.File.GetAbsoluteFilename())
-	if err != nil {
-		return err
-	}
-	if errorCount > 0 {
+	if errorCount := checkLedger(ctx.Stderr, result, cmd.File.GetAbsoluteFilename()); errorCount > 0 {
 		reportTelemetry()
 		return NewCommandError(1)
 	}
@@ -92,20 +86,16 @@ func (cmd *CheckCmd) Run(ctx *kong.Context, globals *Globals) error {
 	return nil
 }
 
-// checkLedger prints the load diagnostics, processes the loaded AST and
-// prints its validation errors, each in the context of the loaded file its
-// position names. It returns how many errors it printed.
-func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadResult, mainFile string) (int, error) {
-	for _, warning := range diagnostic.Warnings(loadResult.Diagnostics) {
+// checkLedger prints the load diagnostics and the validation errors of a
+// loaded ledger, each in the context of the loaded file its position names.
+// It returns how many errors it printed.
+func checkLedger(stderr io.Writer, result *ledgerload.Result, mainFile string) int {
+	for _, warning := range diagnostic.Warnings(result.LoadDiagnostics) {
 		printInfof(stderr, "%s", warning)
 	}
-	l := ledger.New()
-	loadErrors, validationErrors, err := ledgerErrors(ctx, l, loadResult)
-	if err != nil {
-		return 0, err
-	}
+	loadErrors, validationErrors := ledgerErrors(result)
 	// Like bean-check, an error's transaction shows its postings as booked.
-	renderer := NewErrorRenderer(loadResult.Sources, printer.WithBookedPositions(l.BookedPositions))
+	renderer := NewErrorRenderer(result.Sources, printer.WithBookedPositions(result.Ledger.BookedPositions))
 	for _, loadErr := range loadErrors {
 		// A syntax error in the main file is shown in its source context,
 		// like a failed load.
@@ -128,22 +118,13 @@ func checkLedger(ctx context.Context, stderr io.Writer, loadResult *loader.LoadR
 		_, _ = fmt.Fprintln(stderr)
 		total := len(validationErrors) + len(loadErrors)
 		printError(stderr, fmt.Sprintf("%d validation error(s) found", total))
-		return total, nil
+		return total
 	}
-	return len(loadErrors), nil
+	return len(loadErrors)
 }
 
-// ledgerErrors processes the loaded AST into l and returns the errors
-// check reports, in its order: the fatal load diagnostics, then the
-// validation errors.
-func ledgerErrors(ctx context.Context, l *ledger.Ledger, loadResult *loader.LoadResult) (loadErrors, validationErrors []error, err error) {
-	loadErrors = diagnostic.Errors(loadResult.Diagnostics)
-	if err := l.Process(ctx, loadResult.AST); err != nil {
-		var validation *ledger.ValidationErrors
-		if !errors.As(err, &validation) {
-			return nil, nil, err
-		}
-		validationErrors = validation.Errors
-	}
-	return loadErrors, validationErrors, nil
+// ledgerErrors returns the errors check reports for a loaded ledger, in its
+// order: the fatal load diagnostics, then every validation diagnostic.
+func ledgerErrors(result *ledgerload.Result) (loadErrors, validationErrors []error) {
+	return diagnostic.Errors(result.LoadDiagnostics), result.Ledger.Diagnostics()
 }

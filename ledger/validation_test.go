@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -345,7 +344,7 @@ func TestImplicitPostingPerCurrency(t *testing.T) {
 	tree, err := parser.ParseString(context.Background(), source)
 	assert.NoError(t, err)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	tree = l.MustProcess(context.Background(), tree)
 
 	var booked []string
 	for _, directive := range tree.Directives {
@@ -853,7 +852,7 @@ option "booking_method" "NONE"
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -955,7 +954,7 @@ func TestPadTiming(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1021,7 +1020,7 @@ func TestBalanceTolerance(t *testing.T) {
 2020-01-03 pad Assets:Checking Equity:Opening
 2020-01-04 balance Assets:Checking 100.00 USD
 `)
-		assert.NoError(t, New().Process(context.Background(), tree))
+		New().MustProcess(context.Background(), tree)
 	})
 }
 
@@ -1090,7 +1089,7 @@ func TestConstraintCurrencyEnforcement(t *testing.T) {
 			ast := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), ast)
+			_, err := processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1335,7 +1334,7 @@ func TestBookingReductions(t *testing.T) {
 `, tt.held, tt.posting)
 			tree := parser.MustParseString(context.Background(), source)
 			l := New()
-			_ = l.Process(context.Background(), tree)
+			_, _ = l.Process(context.Background(), tree)
 
 			errs := l.Errors()
 			assert.Equal(t, tt.wantErrs, len(errs), "errors: %v", errs)
@@ -1369,7 +1368,7 @@ func TestBookingDropsAFailedGroupsReductions(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
@@ -1463,7 +1462,7 @@ option "booking_method" "STRICT"
 			tree := parser.MustParseString(context.Background(), tt.input)
 
 			l := New()
-			err := l.Process(context.Background(), tree)
+			_, err := processErr(context.Background(), l, tree)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -1600,13 +1599,10 @@ func TestOverReductionReportsNotEnoughLots(t *testing.T) {
 		tree, err := parser.ParseString(context.Background(), source)
 		assert.NoError(t, err)
 		l := New()
-		err = l.Process(context.Background(), tree)
-
-		var validationErrors *ValidationErrors
-		assert.True(t, errors.As(err, &validationErrors), spec)
-		assert.Equal(t, 1, len(validationErrors.Errors), spec)
-		assert.Equal(t, "InsufficientInventoryError", kindOf(validationErrors.Errors[0]), spec)
-		insufficient := validationErrors.Errors[0]
+		_, validationErrors := processDiagnostics(t, l, tree)
+		assert.Equal(t, 1, len(validationErrors), spec)
+		assert.Equal(t, "InsufficientInventoryError", kindOf(validationErrors[0]), spec)
+		insufficient := validationErrors[0]
 		assert.Equal(t, `Not enough lots to reduce "-2 HOOL `+spec+`": 1 HOOL {10 USD, 2020-01-02}`, insufficient.(*Diagnostic).message, spec)
 
 		stock, _ := l.GetAccount("Assets:Stock")

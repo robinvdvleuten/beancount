@@ -14,6 +14,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
 )
@@ -67,24 +68,18 @@ func TestMissingOpenPasteBack(t *testing.T) {
 			out := runOurMissingOpen(t, path)
 
 			ctx := context.Background()
-			result, err := loader.New(loader.WithFollowIncludes()).Load(ctx, path)
+			result, err := ledgerload.Load(ctx, loader.Source{Path: path})
 			assert.NoError(t, err)
 			opens, err := parser.ParseBytesWithFilename(ctx, "missing_open", []byte(out))
 			assert.NoError(t, err)
-			result.AST.Directives = append(result.AST.Directives, opens.Directives...)
 			opened := make(map[ast.Account]bool)
 			for _, directive := range opens.Directives {
 				opened[directive.(*ast.Open).Account] = true
 			}
 
-			var validationErrs *ledger.ValidationErrors
-			if err := ledger.New().Process(ctx, result.AST); err != nil {
-				assert.True(t, errors.As(err, &validationErrs), "unexpected process error: %v", err)
-			}
-			if validationErrs == nil {
-				return
-			}
-			for _, err := range validationErrs.Errors {
+			pasted, err := result.With(ctx, opens.Directives)
+			assert.NoError(t, err)
+			for _, err := range pasted.Ledger.Diagnostics() {
 				var diag *ledger.Diagnostic
 				if !errors.As(err, &diag) || diag.Kind() != "AccountNotOpenError" {
 					continue

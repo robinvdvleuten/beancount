@@ -210,7 +210,7 @@ func TestStdinIntegration(t *testing.T) {
 		output, err := checkCmd.CombinedOutput()
 		assert.Error(t, err)
 		// Reported like a file's syntax error, in its source context.
-		assert.Contains(t, string(output), "<stdin>:1:12: invalid token")
+		assert.Contains(t, string(output), "/dev/stdin:1:12: invalid token")
 	})
 
 	t.Run("CheckStdinWithIncludesError", func(t *testing.T) {
@@ -220,13 +220,14 @@ func TestStdinIntegration(t *testing.T) {
 		assert.NoError(t, cmd.Run())
 		defer cleanupBinary(binaryName)
 
-		// Test include directive error with stdin
+		// Like bean-check /dev/stdin, a relative include on stdin resolves
+		// against /dev, where it matches nothing.
 		checkCmd := exec.Command("./"+binaryName, "check", "-")
 		checkCmd.Stdin = strings.NewReader(`include "accounts.beancount"
 2024-01-01 open Assets:Checking USD`)
 		output, err := checkCmd.CombinedOutput()
 		assert.Error(t, err)
-		assert.Contains(t, string(output), "include directives are not supported when reading from stdin")
+		assert.Contains(t, string(output), `/dev/stdin:1: File glob "accounts.beancount" does not match any files`)
 	})
 }
 

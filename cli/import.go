@@ -15,6 +15,7 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/importer"
 	"github.com/robinvdvleuten/beancount/ledger"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/printer"
@@ -60,26 +61,21 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 		return NewCommandError(1)
 	}
 
-	source, err := os.ReadFile(cmd.Ledger)
+	existing, err := ledgerload.Load(runCtx, loader.Source{Path: cmd.Ledger})
 	if err != nil {
-		return fmt.Errorf("failed to read %s: %w", cmd.Ledger, err)
-	}
-	loadResult, ok := cmd.loadLedger(runCtx, ctx.Stderr, source)
-	if !ok {
+		source, readErr := os.ReadFile(cmd.Ledger)
+		if readErr != nil {
+			return fmt.Errorf("failed to read %s: %w", cmd.Ledger, readErr)
+		}
+		_, _ = fmt.Fprintln(ctx.Stderr, NewErrorRenderer(map[string][]byte{cmd.Ledger: source}).Render(err))
+		_, _ = fmt.Fprintln(ctx.Stderr)
+		printError(ctx.Stderr, "parse error")
 		return NewCommandError(1)
 	}
 
 	// Duplicates are looked up in the ledger alone. Its errors are reported
-	// by the check below, which loads the ledger again, because processing
-	// rewrites the tree it processes.
-	existing := ledger.New()
-	if err := existing.Process(runCtx, loadResult.AST); err != nil {
-		var validationErrors *ledger.ValidationErrors
-		if !stdErrors.As(err, &validationErrors) {
-			return err
-		}
-	}
-	directives, err = dropDuplicates(runCtx, ctx.Stderr, existing, directives)
+	// by the check below, of the ledger with the Extracted directives.
+	directives, err = dropDuplicates(runCtx, ctx.Stderr, existing.Ledger, directives)
 	if err != nil {
 		return err
 	}
@@ -108,38 +104,16 @@ func (cmd *ImportCmd) Run(ctx *kong.Context) error {
 		return NewCommandError(1)
 	}
 
-	loadResult, ok = cmd.loadLedger(runCtx, ctx.Stderr, source)
-	if !ok {
-		return NewCommandError(1)
-	}
-	loadResult.AST.Directives = append(loadResult.AST.Directives, extracted.Directives...)
-	if err := ast.SortDirectives(loadResult.AST); err != nil {
-		return err
-	}
-
-	errorCount, err := checkLedger(runCtx, ctx.Stderr, loadResult, loadResult.Root)
+	checked, err := existing.With(runCtx, extracted.Directives)
 	if err != nil {
 		return err
 	}
-	if errorCount > 0 {
+	if checkLedger(ctx.Stderr, checked, checked.Root) > 0 {
 		return NewCommandError(1)
 	}
 
 	_, err = ctx.Stdout.Write(text)
 	return err
-}
-
-// loadLedger loads the ledger with its includes, reporting a failed load
-// on stderr.
-func (cmd *ImportCmd) loadLedger(ctx context.Context, stderr io.Writer, source []byte) (*loader.LoadResult, bool) {
-	loadResult, err := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery()).Load(ctx, cmd.Ledger)
-	if err != nil {
-		_, _ = fmt.Fprintln(stderr, NewErrorRenderer(map[string][]byte{cmd.Ledger: source}).Render(err))
-		_, _ = fmt.Fprintln(stderr)
-		printError(stderr, "parse error")
-		return nil, false
-	}
-	return loadResult, true
 }
 
 // dropDuplicates returns the Extracted directives the ledger does not

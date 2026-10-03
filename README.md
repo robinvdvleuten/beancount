@@ -5,7 +5,7 @@
 A [Beancount](https://beancount.github.io/) toolkit written in Go, for bookkeeping with AI agents and for extending in your own code. An agent edits your plain-text ledger, and one command checks each change. It rejects wrong entries with a line number and a reason, so the agent can fix them before they reach your books. When the built-in checks are not enough, you write your own in Go, using the same parser and ledger that the command line uses, and build it into one binary. Every check, format, and query result is tested against the official Beancount tools.
 
 - **Built for agents.** The ledger is a text file, so the agent edits it like code, and you review each change as a `git diff`. Errors give the file, the line, and a reason, plus exit code `1`.
-- **Extend in plain Go.** Write importers, house rules, and reports with the `loader`, `ast`, `ledger`, `formatter`, `printer`, and `query` packages. You get typed directives, typed errors, and a source position on each one.
+- **Extend in plain Go.** Write importers, house rules, and reports with the `ledgerload`, `loader`, `ast`, `ledger`, `formatter`, `printer`, and `query` packages. You get typed directives, typed errors, and a source position on each one.
 - **Same answers as the official tools.** Every ledger fixture runs through both this tool and `bean-check` from Beancount 3.2.3. Every BQL query fixture is compared byte for byte with beanquery 0.2.0, Beancount 3's `bean-query`, in both text and CSV. The rare differences are listed in [`KNOWN_GAPS.md`](testdata/compliance/KNOWN_GAPS.md).
 - **Quick enough to run after every edit.** On a 59,000-line ledger, `beancount check` takes 0.19 s, against 1.34 s for `bean-check` 3.2.3, which has to reparse the ledger after each edit (Apple M1 Pro).
 - **Clean diffs.** `beancount format` aligns amounts with the same rules as `bean-format`, so agent edits and hand edits look the same.
@@ -14,10 +14,8 @@ A [Beancount](https://beancount.github.io/) toolkit written in Go, for bookkeepi
 The built-in checks plus a house rule of your own, in a few lines of Go:
 
 ```go
-result, _ := loader.New(loader.WithFollowIncludes()).Load(ctx, "ledger.beancount")
-l := ledger.New()
-l.Process(ctx, result.AST)
-for _, err := range l.Errors() {
+result, _ := ledgerload.Load(ctx, loader.Source{Path: "ledger.beancount"})
+for _, err := range result.Ledger.Errors() {
     fmt.Println(err) // ledger.beancount:7: Invalid reference to unknown account 'Expenses:Coffee'
 }
 for _, d := range result.AST.Directives {
@@ -271,25 +269,24 @@ Every command is built from Go packages you can import. Use them when you need s
 go get github.com/robinvdvleuten/beancount
 ```
 
-**Load and check a ledger.** `Errors()` returns typed errors, such as `*ledger.TransactionNotBalancedError`, and each one carries its source position:
+**Load and check a ledger.** `ledgerload.Load` loads and processes it the way `beancount check` does, and `Errors()` returns typed errors, such as `*ledger.TransactionNotBalancedError`, each with its source position:
 
 ```go
 ctx := context.Background()
-result, err := loader.New(loader.WithFollowIncludes()).Load(ctx, "ledger.beancount")
+result, err := ledgerload.Load(ctx, loader.Source{Path: "ledger.beancount"})
 if err != nil {
-    log.Fatal(err) // I/O and syntax errors
+    log.Fatal(err) // I/O errors
 }
 
-l := ledger.New()
-if err := l.Process(ctx, result.AST); err != nil {
-    log.Fatal(err)
+for _, err := range diagnostic.Errors(result.LoadDiagnostics) {
+    fmt.Println(err) // syntax errors, includes that match nothing
 }
-for _, err := range l.Errors() {
+for _, err := range result.Ledger.Errors() {
     fmt.Println(err)
 }
 ```
 
-**Add a house rule.** Walk the directives, which are ordinary Go structs, after the ledger has processed them:
+**Add a house rule.** Walk the directives, which are ordinary Go structs, as the ledger has processed them:
 
 ```go
 for _, d := range result.AST.Directives {

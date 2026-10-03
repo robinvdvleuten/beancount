@@ -365,7 +365,9 @@ func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
 	tree, err := parser.ParseString(context.Background(), source)
 	assert.NoError(t, err)
 	l := ledger.New()
-	assert.Error(t, l.Process(context.Background(), tree))
+	tree, err = l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+	assert.NotEqual(t, 0, len(l.Diagnostics()))
 	ctx := &Context{Ledger: l, Config: config.New(), AST: tree}
 
 	out := run(t, ctx, "PRINT FROM type = 'balance'", FormatText, false)

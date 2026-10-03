@@ -4,7 +4,7 @@
 //
 // The loader supports two modes of operation:
 //   - Simple mode: parses a single raw source AST with include directives preserved
-//   - Follow mode: recursively loads all included files and merges them into one processed AST
+//   - Follow mode: recursively loads all included files and merges them into one AST
 //
 // When following includes, the loader resolves relative paths from the directory of
 // the file containing the include directive, and deduplicates files that are included
@@ -13,12 +13,15 @@
 // Example usage:
 //
 //	// Load a single file without following includes
-//	loader := loader.New()
-//	ast, err := loader.Load("main.beancount")
+//	ldr := loader.New()
+//	result, err := ldr.Load(ctx, loader.Source{Path: "main.beancount"})
 //
 //	// Load with recursive include resolution
-//	loader := loader.New(loader.WithFollowIncludes())
-//	ast, err := loader.Load("main.beancount")
+//	ldr := loader.New(loader.WithFollowIncludes())
+//	result, err := ldr.Load(ctx, loader.Source{Path: "main.beancount"})
+//
+//	// Load a ledger read from stdin
+//	result, err := ldr.Load(ctx, loader.Stdin(data))
 package loader
 
 import (
@@ -142,8 +145,7 @@ type Loader struct {
 
 	// SyntaxRecovery keeps loading past syntax errors, like beancount: each
 	// one becomes a diagnostic and drops only the directive it is in.
-	// Without it, the first syntax error fails the load. LoadBytes always
-	// fails on the first one, since it returns no diagnostics.
+	// Without it, the first syntax error fails the load.
 	SyntaxRecovery bool
 }
 
@@ -196,27 +198,59 @@ func New(opts ...Option) *Loader {
 	return l
 }
 
-// Load parses a beancount file with optional recursive include resolution.
-func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error) {
+// Source is what Load reads: a file, or text that stands for one.
+type Source struct {
+	// Path locates the source: Load reads the file there when Data is
+	// nil, and relative include and documents paths resolve against its
+	// directory.
+	Path string
+	// Data is the source text, read instead of the file at Path. Its
+	// positions carry Path all the same.
+	Data []byte
+}
+
+// Stdin returns the source of a ledger read from standard input. Like
+// bean-check /dev/stdin, it is loaded as the file /dev/stdin: relative
+// include and documents paths resolve against /dev, and its positions carry
+// /dev/stdin.
+func Stdin(data []byte) Source {
+	return Source{Path: "/dev/stdin", Data: data}
+}
+
+// read returns the source text: Data, or else the file at Path.
+func (s Source) read() ([]byte, error) {
+	if s.Data != nil {
+		return s.Data, nil
+	}
+	data, err := os.ReadFile(s.Path)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read %s: %w", s.Path, err)
+	}
+	return data, nil
+}
+
+// Load parses a source with optional recursive include resolution. Every
+// option applies alike to a file and to text given as Data.
+func (l *Loader) Load(ctx context.Context, src Source) (*LoadResult, error) {
 	// Extract telemetry collector from context
 	collector := telemetry.FromContext(ctx)
 
 	// Get absolute path for the root file
-	absPath, err := filepath.Abs(filename)
+	absPath, err := filepath.Abs(src.Path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
+		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", src.Path, err)
 	}
 
 	if !l.FollowIncludes {
 		// Simple case: just parse the single file
-		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(filename)))
+		parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", filepath.Base(src.Path)))
 		defer parseTimer.End()
 
-		data, err := os.ReadFile(filename)
+		data, err := src.read()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
+			return nil, err
 		}
-		result, diagnostics, err := parseFile(ctx, filename, data, l.SyntaxRecovery)
+		result, diagnostics, err := parseFile(ctx, src.Path, data, l.SyntaxRecovery)
 		if err != nil {
 			return nil, err
 		}
@@ -228,7 +262,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 			Root:        absPath,
 			Includes:    nil,
 			Diagnostics: diagnostics,
-			Sources:     map[string][]byte{filename: data},
+			Sources:     map[string][]byte{src.Path: data},
 		}, nil
 	}
 
@@ -244,7 +278,7 @@ func (l *Loader) Load(ctx context.Context, filename string) (*LoadResult, error)
 		syntaxRecovery: l.SyntaxRecovery,
 	}
 
-	ast, err := state.loadRecursive(ctx, filename)
+	ast, err := state.loadRecursive(ctx, src)
 	if err != nil {
 		return nil, err
 	}
@@ -350,99 +384,15 @@ func discoverDocuments(tree *ast.AST, rootFile string) []error {
 	return diagnostics
 }
 
-// MustLoad loads a beancount file, panicking on error.
+// MustLoad loads a source, panicking on error.
 // Intended for use in tests and examples where error handling is not needed.
 //
 // Example:
 //
 //	loader := loader.New(loader.WithFollowIncludes())
-//	result := loader.MustLoad(context.Background(), "main.beancount")
-func (l *Loader) MustLoad(ctx context.Context, filename string) *LoadResult {
-	result, err := l.Load(ctx, filename)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
-// LoadBytes parses beancount content from bytes with optional include resolution.
-// The filename parameter is used only for error reporting and position tracking in
-// parse errors. It does not need to be a real file path.
-//
-// When FollowIncludes is enabled and the content contains include directives:
-//   - If filename is "<stdin>", an error is returned (includes not supported for stdin)
-//   - If filename is a real path, includes are resolved relative to that path's directory
-//
-// When FollowIncludes is disabled, include directives are preserved in the AST and
-// no resolution occurs.
-//
-// Example usage:
-//
-//	// Parse from stdin
-//	ldr := loader.New(loader.WithFollowIncludes())
-//	ast, err := ldr.LoadBytes(ctx, "<stdin>", stdinBytes)
-//
-//	// Parse from bytes with file context for includes
-//	ast, err := ldr.LoadBytes(ctx, "/path/to/main.beancount", mainBytes)
-func (l *Loader) LoadBytes(ctx context.Context, filename string, data []byte) (*ast.AST, error) {
-	result, err := l.loadBytes(ctx, filename, data, false)
-	if err != nil {
-		return nil, err
-	}
-	return result.AST, nil
-}
-
-// LoadBytesResult parses data like LoadBytes and returns it with its
-// diagnostics: under SyntaxRecovery, like Load, its syntax errors.
-func (l *Loader) LoadBytesResult(ctx context.Context, filename string, data []byte) (*LoadResult, error) {
-	return l.loadBytes(ctx, filename, data, l.SyntaxRecovery)
-}
-
-func (l *Loader) loadBytes(ctx context.Context, filename string, data []byte, syntaxRecovery bool) (*LoadResult, error) {
-	collector := telemetry.FromContext(ctx)
-
-	// For display in telemetry, use basename
-	displayName := filepath.Base(filename)
-	parseTimer := collector.Start(fmt.Sprintf("loader.parse %s", displayName))
-	defer parseTimer.End()
-
-	result, diagnostics, err := parseFile(ctx, filename, data, syntaxRecovery)
-	if err != nil {
-		return nil, err
-	}
-
-	// If following includes is requested but we're parsing from stdin,
-	// we can't resolve includes (no base directory context)
-	if l.FollowIncludes && filename == "<stdin>" && len(result.Includes) > 0 {
-		return nil, fmt.Errorf("include directives are not supported when reading from stdin")
-	}
-
-	// If following includes is requested and filename is a real path,
-	// we could support it by falling back to Load() for the include resolution.
-	// However, this is not the primary use case for LoadBytes, so we keep it simple.
-	if l.FollowIncludes && filename != "<stdin>" && len(result.Includes) > 0 {
-		// Could implement include resolution here, but simpler to just error
-		// Users should use Load() if they need includes
-		return nil, fmt.Errorf("include directives found; use Load() instead of LoadBytes() to resolve includes")
-	}
-
-	return &LoadResult{
-		AST:         result,
-		Root:        filename,
-		Diagnostics: diagnostics,
-		Sources:     map[string][]byte{filename: data},
-	}, nil
-}
-
-// MustLoadBytes parses beancount content from bytes, panicking on error.
-// Intended for use in tests and examples where error handling is not needed.
-//
-// Example:
-//
-//	loader := loader.New()
-//	ast := loader.MustLoadBytes(context.Background(), "test.beancount", data)
-func (l *Loader) MustLoadBytes(ctx context.Context, filename string, data []byte) *ast.AST {
-	result, err := l.LoadBytes(ctx, filename, data)
+//	result := loader.MustLoad(context.Background(), loader.Source{Path: "main.beancount"})
+func (l *Loader) MustLoad(ctx context.Context, src Source) *LoadResult {
+	result, err := l.Load(ctx, src)
 	if err != nil {
 		panic(err)
 	}
@@ -485,11 +435,12 @@ func parseFile(ctx context.Context, filename string, data []byte, recovery bool)
 // loadRecursive recursively loads a file and all its includes.
 // When l.rootTimer is set, creates hierarchical child timers.
 // When l.rootTimer is nil, creates flat root-level timers.
-func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.AST, error) {
+func (l *loaderState) loadRecursive(ctx context.Context, src Source) (*ast.AST, error) {
+	filename := src.Path
 	// Get absolute path for deduplication
-	absPath, err := filepath.Abs(filename)
+	absPath, err := filepath.Abs(src.Path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", filename, err)
+		return nil, fmt.Errorf("failed to resolve absolute path for %s: %w", src.Path, err)
 	}
 
 	// Check if already visited (deduplication - same file included multiple times)
@@ -520,11 +471,11 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 	}
 
 	// Read and parse the file
-	data, err := os.ReadFile(filename)
+	data, err := src.read()
 	if err != nil {
 		parseTimer.End()
 		loadTimer.End()
-		return nil, fmt.Errorf("failed to read %s: %w", filename, err)
+		return nil, err
 	}
 	l.sources[filename] = data
 
@@ -614,7 +565,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, filename string) (*ast.
 			}
 
 			// Recursively load the included file
-			includedAST, err := l.loadRecursive(ctx, path)
+			includedAST, err := l.loadRecursive(ctx, Source{Path: path})
 			if err != nil {
 				mergeTimer.End()
 				// Don't wrap ParseError - it already contains full path information

@@ -33,7 +33,7 @@ func TestLoadSingleFile(t *testing.T) {
 
 	// Test without FollowIncludes
 	ldr := New()
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result.AST.Directives))
 	assert.Equal(t, absMainFile, result.Root)
@@ -41,7 +41,7 @@ func TestLoadSingleFile(t *testing.T) {
 
 	// Test with FollowIncludes (should behave the same for single file)
 	ldr = New(WithFollowIncludes())
-	result, err = ldr.Load(context.Background(), mainFile)
+	result, err = ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result.AST.Directives))
 	assert.Equal(t, absMainFile, result.Root)
@@ -72,7 +72,7 @@ include "included.beancount"
 
 	// Load without following includes
 	ldr := New()
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Should have 1 directive (only from main file)
@@ -114,7 +114,7 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Should have 3 directives (merged from both files)
@@ -147,14 +147,14 @@ func TestLoadKeepsEachFilesSourceByItsPositionsFilename(t *testing.T) {
 	assert.NoError(t, os.WriteFile(mainFile, []byte(mainSource), 0o644))
 	assert.NoError(t, os.WriteFile(subFile, []byte(subSource), 0o644))
 
-	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	open := result.AST.Directives[0]
 	assert.Equal(t, subSource, string(result.Sources[open.Position().Filename]))
 	assert.Equal(t, map[string][]byte{mainFile: []byte(mainSource), subFile: []byte(subSource)}, result.Sources)
 
-	result, err = New().Load(context.Background(), mainFile)
+	result, err = New().Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, map[string][]byte{mainFile: []byte(mainSource)}, result.Sources)
 }
@@ -181,7 +181,7 @@ poptag #main
 	assert.NoError(t, err)
 
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	var txn *ast.Transaction
@@ -194,9 +194,13 @@ poptag #main
 	assert.True(t, txn != nil)
 	assert.Equal(t, []ast.Tag{"main"}, txn.Tags)
 
-	l := ledger.New()
-	assert.NoError(t, l.Process(context.Background(), result.AST))
+	processed := ledger.New().MustProcess(context.Background(), result.AST)
 	assert.Equal(t, []ast.Tag{"main"}, txn.Tags)
+	for _, directive := range processed.Directives {
+		if booked, ok := directive.(*ast.Transaction); ok {
+			assert.Equal(t, []ast.Tag{"main"}, booked.Tags)
+		}
+	}
 }
 
 func TestLoadNestedIncludes(t *testing.T) {
@@ -232,7 +236,7 @@ include "b.beancount"
 
 	// Load A with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), fileA)
+	result, err := ldr.Load(context.Background(), Source{Path: fileA})
 	assert.NoError(t, err)
 
 	// Should have 3 directives (from A, B, and C)
@@ -284,7 +288,7 @@ include "c.beancount"
 
 	// Load A with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), fileA)
+	result, err := ldr.Load(context.Background(), Source{Path: fileA})
 	assert.NoError(t, err)
 
 	// Should have 3 directives
@@ -323,7 +327,7 @@ include "a.beancount"
 	// non-fatal error like beancount's "Duplicate filename parsed".
 	// A is loaded first, then B is loaded, then A is requested again but already visited
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), fileA)
+	result, err := ldr.Load(context.Background(), Source{Path: fileA})
 	assert.NoError(t, err)
 
 	// Should have 2 directives (one from A, one from B)
@@ -367,7 +371,7 @@ include "accounts/savings.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Should have 2 directives
@@ -404,7 +408,7 @@ include "`+includePath+`"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Should have 2 directives
@@ -440,7 +444,7 @@ include "common.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Should have 2 directives (not 3): the second include is skipped and
@@ -484,7 +488,7 @@ include "accounts/*.beancount"
 	assert.NoError(t, err)
 
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// All 3 directives merged (2 matched files + main).
@@ -508,7 +512,7 @@ include "accounts/*.beancount"
 `), 0644))
 
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// No files matched, so only the main file's directive is present.
@@ -543,7 +547,7 @@ func TestLoadWithIncludeGlobRecursive(t *testing.T) {
 	mainFile := filepath.Join(tmpDir, "main.beancount")
 	assert.NoError(t, os.WriteFile(mainFile, []byte(`include "journal/**/*.beancount"`+"\n"), 0644))
 
-	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(result.Diagnostics))
 
@@ -569,7 +573,7 @@ func TestLoadWithIncludeGlobExplicitDotfile(t *testing.T) {
 	mainFile := filepath.Join(tmpDir, "main.beancount")
 	assert.NoError(t, os.WriteFile(mainFile, []byte(`include ".*.beancount"`+"\n"), 0644))
 
-	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result.Includes))
 }
@@ -582,7 +586,7 @@ func TestLoadWithIncludeGlobMetacharsInBaseDir(t *testing.T) {
 	mainFile := filepath.Join(tmpDir, "main.beancount")
 	assert.NoError(t, os.WriteFile(mainFile, []byte(`include "a*.beancount"`+"\n"), 0644))
 
-	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(result.Diagnostics))
 	assert.Equal(t, 1, len(result.Includes))
@@ -599,7 +603,7 @@ include "accounts/[.beancount"
 `), 0644))
 
 	ldr := New(WithFollowIncludes())
-	_, err := ldr.Load(context.Background(), mainFile)
+	_, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid include pattern")
 }
@@ -623,7 +627,7 @@ include "`+pattern+`"
 `), 0644))
 
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	assert.Equal(t, 2, len(result.AST.Directives))
@@ -642,7 +646,7 @@ include "does-not-exist.beancount"
 `), 0644))
 
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Like bean-check, a missing plain include is an unmatched glob: a load
@@ -679,7 +683,7 @@ include "included.beancount"
 
 	// Load with following includes
 	ldr := New(WithFollowIncludes())
-	result, err := ldr.Load(context.Background(), mainFile)
+	result, err := ldr.Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	// Main file options should take precedence
@@ -711,7 +715,7 @@ option "inferred_tolerance_multiplier" "zz"
 	assert.NoError(t, os.WriteFile(mainFile, []byte(`include "included.beancount"
 `), 0644))
 
-	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(result.AST.Options))
 
@@ -747,7 +751,7 @@ option "documents" "docs"
 2020-01-01 open Assets:Checking
 `), 0o644))
 
-	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(result.Diagnostics))
 
@@ -792,7 +796,7 @@ func TestDocumentsDiscoveryThroughSymlinkedRoot(t *testing.T) {
 2020-01-01 open Assets:Cash
 `), 0o644))
 
-	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(result.Diagnostics))
 
@@ -817,7 +821,7 @@ option "documents" "no-such-dir"
 2020-01-01 open Assets:Checking
 `), 0o644))
 
-	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes(), WithDocumentsDiscovery()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result.Diagnostics))
 	assert.Equal(t, diagnostic.SeverityError, diagnostic.SeverityOf(result.Diagnostics[0]))
@@ -848,15 +852,15 @@ include "included.beancount"
 2024-01-02 open Assets:Checking USD
 `), 0o644))
 
-	result, err := New(WithFollowIncludes()).Load(context.Background(), mainFile)
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
 	assert.NoError(t, err)
 
 	assert.Equal(t, 1, len(result.AST.Plugins))
 	assert.Equal(t, "beancount.plugins.check_commodity", result.AST.Plugins[0].Name.Value)
 }
 
-func TestLoadBytes(t *testing.T) {
-	t.Run("BasicLoadBytes", func(t *testing.T) {
+func TestLoadData(t *testing.T) {
+	t.Run("BasicLoadData", func(t *testing.T) {
 		testData := []byte(`
 2024-01-01 open Assets:Checking USD
 2024-01-02 * "Test"
@@ -866,18 +870,19 @@ func TestLoadBytes(t *testing.T) {
 
 		// Test without FollowIncludes
 		ldr := New()
-		tree, err := ldr.LoadBytes(context.Background(), "test.beancount", testData)
+		result, err := ldr.Load(context.Background(), Source{Path: "test.beancount", Data: testData})
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(tree.Directives))
+		assert.Equal(t, 2, len(result.AST.Directives))
 
 		// Test with FollowIncludes (should work the same for data without includes)
 		ldr = New(WithFollowIncludes())
-		tree, err = ldr.LoadBytes(context.Background(), "test.beancount", testData)
+		result, err = ldr.Load(context.Background(), Source{Path: "test.beancount", Data: testData})
 		assert.NoError(t, err)
-		assert.Equal(t, 2, len(tree.Directives))
+		assert.Equal(t, 2, len(result.AST.Directives))
+		assert.Equal(t, testData, result.Sources["test.beancount"])
 	})
 
-	t.Run("LoadBytesWithIncludesNoFollow", func(t *testing.T) {
+	t.Run("LoadDataWithIncludesNoFollow", func(t *testing.T) {
 		testData := []byte(`
 include "accounts.beancount"
 
@@ -886,78 +891,40 @@ include "accounts.beancount"
 
 		// Without FollowIncludes, includes should be preserved
 		ldr := New()
-		tree, err := ldr.LoadBytes(context.Background(), "main.beancount", testData)
+		result, err := ldr.Load(context.Background(), Source{Path: "main.beancount", Data: testData})
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(tree.Includes))
-		assert.Equal(t, "accounts.beancount", tree.Includes[0].Filename.Value)
+		assert.Equal(t, 1, len(result.AST.Includes))
+		assert.Equal(t, "accounts.beancount", result.AST.Includes[0].Filename.Value)
 	})
 
-	t.Run("LoadBytesWithIncludesFollowStdin", func(t *testing.T) {
+	t.Run("LoadDataFollowsIncludesFromItsPath", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "accounts.beancount"), []byte("2024-01-01 open Assets:Savings USD\n"), 0644))
 		testData := []byte(`
 include "accounts.beancount"
 
 2024-01-01 open Assets:Checking USD
 `)
 
-		// With FollowIncludes and stdin filename, should error
+		// The data stands for a file at Path, whose directory its relative
+		// includes resolve against.
 		ldr := New(WithFollowIncludes())
-		_, err := ldr.LoadBytes(context.Background(), "<stdin>", testData)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "include directives are not supported when reading from stdin")
-	})
-
-	t.Run("LoadBytesWithIncludesFollowFile", func(t *testing.T) {
-		testData := []byte(`
-include "accounts.beancount"
-
-2024-01-01 open Assets:Checking USD
-`)
-
-		// With FollowIncludes and file filename, should error (for simplicity)
-		ldr := New(WithFollowIncludes())
-		_, err := ldr.LoadBytes(context.Background(), "/path/to/main.beancount", testData)
-		assert.Error(t, err)
-		assert.Contains(t, err.Error(), "include directives found; use Load() instead of LoadBytes() to resolve includes")
-	})
-
-	t.Run("LoadBytesStdinFilename", func(t *testing.T) {
-		testData := []byte(`
-2024-01-01 open Assets:Checking USD
-`)
-
-		// Test with stdin filename
-		ldr := New()
-		tree, err := ldr.LoadBytes(context.Background(), "<stdin>", testData)
+		result, err := ldr.Load(context.Background(), Source{Path: filepath.Join(tmpDir, "main.beancount"), Data: testData})
 		assert.NoError(t, err)
-		assert.Equal(t, 1, len(tree.Directives))
+		assert.Equal(t, 2, len(result.AST.Directives))
+		assert.Equal(t, 0, len(result.Diagnostics))
 	})
 
-	t.Run("LoadBytesParseError", func(t *testing.T) {
+	t.Run("LoadDataParseError", func(t *testing.T) {
 		testData := []byte(`2024-01-01 invalid directive`)
 
 		ldr := New()
-		_, err := ldr.LoadBytes(context.Background(), "test.beancount", testData)
+		_, err := ldr.Load(context.Background(), Source{Path: "test.beancount", Data: testData})
 		assert.Error(t, err)
 		// Should be a ParseError
 		var parseErr *parser.ParseError
 		assert.True(t, errors.As(err, &parseErr))
 	})
-}
-func TestMustLoadBytes(t *testing.T) {
-	ctx := context.Background()
-	ldr := New()
-
-	data := []byte(`2024-01-01 open Assets:Checking
-2024-01-01 open Expenses:Groceries
-2024-01-15 * "Buy groceries"
-  Assets:Checking     -45.60 USD
-  Expenses:Groceries   45.60 USD
-`)
-
-	// Should not panic on valid input
-	tree := ldr.MustLoadBytes(ctx, "test.beancount", data)
-	assert.True(t, tree != nil)
-	assert.Equal(t, len(tree.Directives), 3)
 }
 
 func TestMustLoad(t *testing.T) {
@@ -978,12 +945,18 @@ func TestMustLoad(t *testing.T) {
 	ldr := New()
 
 	// Should not panic on valid file
-	result := ldr.MustLoad(ctx, tmpFile)
+	result := ldr.MustLoad(ctx, Source{Path: tmpFile})
 	assert.True(t, result != nil)
 	assert.Equal(t, len(result.AST.Directives), 3)
+
+	// Nor on the same text given as data, or on empty text
+	result = ldr.MustLoad(ctx, Source{Path: "test.beancount", Data: content})
+	assert.Equal(t, len(result.AST.Directives), 3)
+	result = ldr.MustLoad(ctx, Source{Path: "empty.beancount", Data: []byte("")})
+	assert.Equal(t, len(result.AST.Directives), 0)
 }
 
-func TestMustLoadBytesInvalidPanics(t *testing.T) {
+func TestMustLoadInvalidPanics(t *testing.T) {
 	ctx := context.Background()
 	ldr := New()
 
@@ -991,7 +964,7 @@ func TestMustLoadBytesInvalidPanics(t *testing.T) {
 	data := []byte(`2024-01-01 open Assets:Checking "unclosed`)
 
 	assert.Panics(t, func() {
-		ldr.MustLoadBytes(ctx, "invalid.beancount", data)
+		ldr.MustLoad(ctx, Source{Path: "invalid.beancount", Data: data})
 	})
 }
 
@@ -1001,32 +974,69 @@ func TestMustLoadNonexistentFilePanics(t *testing.T) {
 
 	// Nonexistent file should panic
 	assert.Panics(t, func() {
-		ldr.MustLoad(ctx, "/nonexistent/file.beancount")
+		ldr.MustLoad(ctx, Source{Path: "/nonexistent/file.beancount"})
 	})
 }
 
-func TestMustLoadBytesEmpty(t *testing.T) {
-	ctx := context.Background()
-	ldr := New()
+// TestLoadStdin pins how a ledger read from stdin loads, which is how
+// bean-check /dev/stdin loads it: as the file /dev/stdin, recovering from
+// syntax errors, following includes and discovering documents, with
+// relative paths resolved against /dev. Its own positions carry /dev/stdin.
+func TestLoadStdin(t *testing.T) {
+	ldr := New(WithFollowIncludes(), WithDocumentsDiscovery(), WithSyntaxRecovery())
 
-	// Empty input should parse successfully
-	tree := ldr.MustLoadBytes(ctx, "empty.beancount", []byte(""))
-	assert.True(t, tree != nil)
-	assert.Equal(t, len(tree.Directives), 0)
-}
+	t.Run("RecoversFromSyntaxErrors", func(t *testing.T) {
+		data := []byte("2024-01-01 open Assets:A\ngarbage\n2024-01-02 open Assets:B\nmore junk\n")
 
-func TestLoadBytesResultRecoversFromSyntaxErrors(t *testing.T) {
-	data := []byte("2024-01-01 open Assets:A\ngarbage\n2024-01-02 open Assets:B\nmore junk\n")
+		// Like a file, every syntax error is a diagnostic and the rest loads.
+		result, err := ldr.Load(context.Background(), Stdin(data))
+		assert.NoError(t, err)
+		assert.Equal(t, 2, len(result.AST.Directives))
+		// Like beancount's lexer, each invalid word is one (more, junk).
+		assert.Equal(t, 3, len(result.Diagnostics))
+		var syntaxErr *parser.ParseError
+		assert.True(t, errors.As(result.Diagnostics[0], &syntaxErr))
+		assert.Equal(t, "/dev/stdin", syntaxErr.Pos.Filename)
+		assert.Equal(t, data, result.Sources["/dev/stdin"])
 
-	// Like Load, every syntax error is a diagnostic and the rest loads.
-	result, err := New(WithSyntaxRecovery()).LoadBytesResult(context.Background(), "<stdin>", data)
-	assert.NoError(t, err)
-	assert.Equal(t, 2, len(result.AST.Directives))
-	// Like beancount's lexer, each invalid word is one (more, junk).
-	assert.Equal(t, 3, len(result.Diagnostics))
-	assert.Equal(t, data, result.Sources["<stdin>"])
+		// Without recovery, the first one fails the load.
+		_, err = New().Load(context.Background(), Stdin(data))
+		assert.Error(t, err)
+	})
 
-	// Without it, the first one fails the load.
-	_, err = New().LoadBytesResult(context.Background(), "<stdin>", data)
-	assert.Error(t, err)
+	t.Run("RelativeIncludeResolvesAgainstDev", func(t *testing.T) {
+		data := []byte("include \"inc.beancount\"\n2024-01-01 open Assets:A\n")
+
+		result, err := ldr.Load(context.Background(), Stdin(data))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result.AST.Directives))
+		assert.Equal(t, 1, len(result.Diagnostics))
+		var noMatch *IncludeGlobNoMatchError
+		assert.True(t, errors.As(result.Diagnostics[0], &noMatch), "%v", result.Diagnostics[0])
+		assert.Equal(t, "/dev/stdin:1: File glob \"inc.beancount\" does not match any files", noMatch.Error())
+	})
+
+	t.Run("AbsoluteIncludeIsFollowed", func(t *testing.T) {
+		included := filepath.Join(t.TempDir(), "inc.beancount")
+		assert.NoError(t, os.WriteFile(included, []byte("2024-01-01 open Assets:B\n"), 0644))
+		data := []byte("include \"" + filepath.ToSlash(included) + "\"\n2024-01-01 open Assets:A\n")
+
+		result, err := ldr.Load(context.Background(), Stdin(data))
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(result.Diagnostics))
+		assert.Equal(t, 2, len(result.AST.Directives))
+		assert.Equal(t, []string{included}, result.Includes)
+	})
+
+	t.Run("RelativeDocumentsRootResolvesAgainstDev", func(t *testing.T) {
+		data := []byte("option \"documents\" \"docs\"\n2024-01-01 open Assets:A\n")
+
+		result, err := ldr.Load(context.Background(), Stdin(data))
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(result.Diagnostics))
+		var rootErr *DocumentRootError
+		assert.True(t, errors.As(result.Diagnostics[0], &rootErr), "%v", result.Diagnostics[0])
+		assert.Equal(t, filepath.Join(filepath.Dir(result.Root), "docs"), rootErr.Dir)
+		assert.Equal(t, "/dev/stdin", rootErr.GetPosition().Filename)
+	})
 }

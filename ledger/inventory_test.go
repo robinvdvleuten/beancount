@@ -617,7 +617,7 @@ func TestFIFOLIFOBooking(t *testing.T) {
 			assert.NoError(t, err, "parsing should succeed")
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			_, err = processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -801,7 +801,7 @@ func TestLotMatching(t *testing.T) {
 			assert.NoError(t, err, "parsing should succeed")
 
 			l := New()
-			err = l.Process(context.Background(), ast)
+			_, err = processErr(context.Background(), l, ast)
 
 			if tt.wantErr {
 				assert.Error(t, err)

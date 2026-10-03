@@ -24,7 +24,7 @@ func TestPadGeneratesSyntheticTransaction(t *testing.T) {
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err := ledger.Process(context.Background(), tree)
+	tree, err := processErr(context.Background(), ledger, tree)
 	assert.NoError(t, err)
 
 	// Find padding transactions in AST
@@ -68,7 +68,7 @@ func TestPaddingLocationsAndMetadata(t *testing.T) {
   note: "counted"
 `
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, New().Process(context.Background(), tree))
+	tree = New().MustProcess(context.Background(), tree)
 
 	var pad *ast.Pad
 	var balance *ast.Balance
@@ -102,7 +102,7 @@ func TestPadWithMultipleCurrencies(t *testing.T) {
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err := ledger.Process(context.Background(), tree)
+	tree, err := processErr(context.Background(), ledger, tree)
 	assert.NoError(t, err)
 
 	// Should generate 2 padding transactions (one per currency)
@@ -145,7 +145,7 @@ func TestPadWithExistingBalance(t *testing.T) {
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err := ledger.Process(context.Background(), tree)
+	tree, err := processErr(context.Background(), ledger, tree)
 	assert.NoError(t, err)
 
 	paddingTxns := findPaddingTransactions(tree)
@@ -176,17 +176,14 @@ func TestPadWithinTolerance(t *testing.T) {
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
-	ledger := New()
-	err := ledger.Process(context.Background(), tree)
+	tree, validationErrors := processDiagnostics(t, New(), tree)
 
 	// No padding needed - balance already matches, so the pad inserts
 	// nothing and beancount reports it as unused.
 	paddingTxns := findPaddingTransactions(tree)
 	assert.Equal(t, 0, len(paddingTxns), "Expected no padding transactions when balance already matches")
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(err, &validationErrors))
-	assert.Equal(t, 1, len(validationErrors.Errors))
-	assert.Equal(t, "UnusedPadWarning", kindOf(validationErrors.Errors[0]))
+	assert.Equal(t, 1, len(validationErrors))
+	assert.Equal(t, "UnusedPadWarning", kindOf(validationErrors[0]))
 }
 
 func TestUnusedPadWarning(t *testing.T) {
@@ -199,18 +196,10 @@ func TestUnusedPadWarning(t *testing.T) {
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
-	ledger := New()
-	err := ledger.Process(context.Background(), tree)
-
 	// Should have a warning about unused pad
-	assert.Error(t, err, "Expected error for unused pad")
-
-	valErrs, ok := err.(*ValidationErrors)
-	assert.True(t, ok, "Expected ValidationErrors")
-	assert.Equal(t, 1, len(valErrs.Errors))
-
-	ok = kindOf(valErrs.Errors[0]) == "UnusedPadWarning"
-	assert.True(t, ok, "Expected UnusedPadWarning")
+	_, diagnostics := processDiagnostics(t, New(), tree)
+	assert.Equal(t, 1, len(diagnostics))
+	assert.Equal(t, "UnusedPadWarning", kindOf(diagnostics[0]))
 }
 
 func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
@@ -225,7 +214,7 @@ func TestPadDateIsUsedNotBalanceDate(t *testing.T) {
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
 	ledger := New()
-	err := ledger.Process(context.Background(), tree)
+	tree, err := processErr(context.Background(), ledger, tree)
 	assert.NoError(t, err)
 
 	paddingTxns := findPaddingTransactions(tree)
@@ -246,13 +235,7 @@ func TestPadSyntheticTransactionValidationErrorDoesNotPanic(t *testing.T) {
 `
 
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
-	ledger := New()
-	err := ledger.Process(context.Background(), tree)
-
-	assert.Error(t, err)
-	validationErrs, ok := err.(*ValidationErrors)
-	assert.True(t, ok)
-	assert.True(t, len(validationErrs.Errors) > 0)
+	processDiagnostics(t, New(), tree)
 }
 
 // Helper function to find padding transactions in AST
@@ -292,11 +275,9 @@ func TestPadFromItselfDoesNotSatisfyBalance(t *testing.T) {
 `
 	tree := parser.MustParseBytes(context.Background(), []byte(source))
 
-	err := New().Process(context.Background(), tree)
-	var validationErrors *ValidationErrors
-	assert.True(t, errors.As(err, &validationErrors))
+	_, validationErrors := processDiagnostics(t, New(), tree)
 	var mismatch *BalanceMismatchError
-	assert.True(t, slices.ContainsFunc(validationErrors.Errors, func(err error) bool { return errors.As(err, &mismatch) }))
+	assert.True(t, slices.ContainsFunc(validationErrors, func(err error) bool { return errors.As(err, &mismatch) }))
 }
 
 func TestPaddingAppliesAtItsBalanceAssertion(t *testing.T) {
@@ -315,7 +296,7 @@ func TestPaddingAppliesAtItsBalanceAssertion(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	tree = l.MustProcess(context.Background(), tree)
 	assert.Equal(t, 1, len(findPaddingTransactions(tree)))
 }
 
@@ -331,7 +312,7 @@ func TestPadFillsOnlyTheFirstAssertion(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
@@ -354,7 +335,7 @@ func TestPaddingKeepsTheDifferencesPrecision(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	tree = l.MustProcess(context.Background(), tree)
 
 	padding := findPaddingTransactions(tree)
 	assert.Equal(t, 1, len(padding))
@@ -389,7 +370,7 @@ option "booking_method" "FIFO"
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 2, len(errs), "errors: %v", errs)
@@ -418,7 +399,7 @@ func TestPadOnACurrencyHeldWithoutCostReportsNothing(t *testing.T) {
 2020-01-03 balance Assets:Invest 10 USD
 `
 	l := New()
-	_ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
+	_, _ = l.Process(context.Background(), parser.MustParseString(context.Background(), source))
 
 	assert.Equal(t, 0, len(l.Errors()), "errors: %v", l.Errors())
 }

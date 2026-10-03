@@ -14,10 +14,8 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/printer"
 	"github.com/robinvdvleuten/beancount/query"
 )
@@ -38,41 +36,10 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 
 	runCtx := context.Background()
 
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
-	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
+	qctx, result, err := loadQueryContext(runCtx, ctx.Stderr, &cmd.File)
 	if err != nil {
-		sourceContent, readErr := cmd.File.GetSourceContent()
-		if readErr != nil {
-			return fmt.Errorf("failed to read file for error context: %w", readErr)
-		}
-		_, _ = fmt.Fprintln(ctx.Stderr, cmd.File.errorRenderer(sourceContent).Render(err))
-		return NewCommandError(1)
+		return err
 	}
-	tree := loadResult.AST
-
-	// Like bean-query, load errors (syntax errors included) are reported and
-	// the rest of the ledger is queried.
-	for _, loadErr := range diagnostic.Errors(loadResult.Diagnostics) {
-		_, _ = fmt.Fprintln(ctx.Stderr, loadErr.Error())
-	}
-
-	// Like bean-query, validation problems are reported but do not prevent
-	// querying the loadable portion of the ledger.
-	var validationErrors *ledger.ValidationErrors
-	l := ledger.New()
-	if err := l.Process(runCtx, tree); err != nil {
-		if stdErrors.As(err, &validationErrors) {
-			renderer := NewErrorRenderer(loadResult.Sources, printer.WithBookedPositions(l.BookedPositions))
-			_, _ = fmt.Fprintln(ctx.Stderr, renderer.RenderAll(validationErrors.Errors))
-		} else {
-			return err
-		}
-	}
-
-	// Invalid options were reported by the ledger above.
-	cfg, _ := config.ParseOptions(tree)
-
-	qctx := &query.Context{Ledger: l, Config: cfg, AST: tree}
 	format := query.Format(cmd.Format)
 
 	// Without a query argument, a terminal gets the interactive shell and
@@ -80,7 +47,7 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	// query, given or piped, prints nothing (query.Run).
 	if len(cmd.Query) == 0 {
 		if cmd.File.Filename != "<stdin>" && term.IsTerminal(int(os.Stdin.Fd())) {
-			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, ctx.Stderr, validationErrors, loadResult.Sources)
+			return runShell(runCtx, qctx, format, cmd.Numberify, os.Stdin, ctx.Stdout, ctx.Stderr, result.Ledger.Diagnostics(), result.Sources)
 		}
 		piped, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -99,6 +66,33 @@ func (cmd *QueryCmd) Run(ctx *kong.Context, globals *Globals) error {
 	}
 
 	return reportQueryError(ctx.Stderr, query.Run(runCtx, qctx, queryText, format, cmd.Numberify, ctx.Stdout))
+}
+
+// loadQueryContext loads and processes file and returns the context queries
+// run against, and the loaded ledger. Like bean-query, the ledger's load
+// errors (syntax errors included) and validation diagnostics are printed on
+// stderr, and the rest of the ledger is queried. A load that cannot go on
+// is reported on stderr as a failed command.
+func loadQueryContext(ctx context.Context, stderr io.Writer, file *FileOrStdin) (*query.Context, *ledgerload.Result, error) {
+	result, err := ledgerload.Load(ctx, file.Source())
+	if err != nil {
+		sourceContent, readErr := file.GetSourceContent()
+		if readErr != nil {
+			return nil, nil, fmt.Errorf("failed to read file for error context: %w", readErr)
+		}
+		_, _ = fmt.Fprintln(stderr, file.errorRenderer(sourceContent).Render(err))
+		return nil, nil, NewCommandError(1)
+	}
+
+	for _, loadErr := range diagnostic.Errors(result.LoadDiagnostics) {
+		_, _ = fmt.Fprintln(stderr, loadErr.Error())
+	}
+	if diagnostics := result.Ledger.Diagnostics(); len(diagnostics) > 0 {
+		renderer := NewErrorRenderer(result.Sources, printer.WithBookedPositions(result.Ledger.BookedPositions))
+		_, _ = fmt.Fprintln(stderr, renderer.RenderAll(diagnostics))
+	}
+	qctx := &query.Context{Ledger: result.Ledger, Config: result.Ledger.Config(), AST: result.AST}
+	return qctx, result, nil
 }
 
 // lazyFile creates its file on the first write, like the lazy file behind
@@ -141,7 +135,7 @@ func reportQueryError(stderr io.Writer, err error) error {
 
 // runShell is the interactive query REPL: one query per line, with help,
 // errors, and exit commands.
-func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out, errOut io.Writer, validationErrors *ledger.ValidationErrors, sources map[string][]byte) error {
+func runShell(ctx context.Context, qctx *query.Context, format query.Format, numberify bool, in io.Reader, out, errOut io.Writer, validationErrors []error, sources map[string][]byte) error {
 	printShellBanner(out, qctx.AST)
 
 	scanner := bufio.NewScanner(in)
@@ -163,12 +157,12 @@ func runShell(ctx context.Context, qctx *query.Context, format query.Format, num
 			_, _ = fmt.Fprintln(out, "Commands: errors (show ledger errors), exit or quit (leave the shell).")
 			continue
 		case "errors":
-			if validationErrors == nil || len(validationErrors.Errors) == 0 {
+			if len(validationErrors) == 0 {
 				_, _ = fmt.Fprintln(out, "(no errors)")
 				continue
 			}
 			renderer := NewErrorRenderer(sources, printer.WithBookedPositions(qctx.Ledger.BookedPositions))
-			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors.Errors))
+			_, _ = fmt.Fprintln(out, renderer.RenderAll(validationErrors))
 			continue
 		}
 		// Like beanquery's shell, report a failed statement on stderr and

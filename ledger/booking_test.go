@@ -37,7 +37,7 @@ func TestBookingKeepsTransactionsThatFailValidation(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 2, len(errs), "errors: %v", errs)
@@ -66,7 +66,7 @@ func TestBookingErrorListsLotsAtTheFailedPosting(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
@@ -88,7 +88,7 @@ func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	tree, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
@@ -129,7 +129,7 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	tree, _ = l.Process(context.Background(), tree)
 
 	var kinds []string
 	for _, err := range l.Errors() {
@@ -357,7 +357,7 @@ plugin "beancount.plugins.implicit_prices"
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tree := parser.MustParseString(context.Background(), tt.source)
-			_ = New().Process(context.Background(), tree)
+			tree, _ = New().Process(context.Background(), tree)
 
 			var prices []string
 			for _, d := range tree.Directives {
@@ -414,7 +414,7 @@ plugin "beancount.plugins.implicit_prices"
   Assets:Stock  1 WW {5.00 USD}
   Assets:Cash
 `)
-	_ = New().Process(context.Background(), tree)
+	tree, _ = New().Process(context.Background(), tree)
 
 	var prices []string
 	for _, d := range tree.Directives {
@@ -850,7 +850,7 @@ plugin "test.add_transaction"
 `
 	tree := parser.MustParseString(context.Background(), source)
 	l := New()
-	_ = l.Process(context.Background(), tree)
+	_, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)

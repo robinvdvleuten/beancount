@@ -1,40 +1,33 @@
 package cli
 
 import (
-	"context"
 	"fmt"
 	"io"
 	"strconv"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/parser"
 )
 
-// writeJSON prints the errors check finds as bean-check --json does:
-// {"errors": [...]} alone on stdout, in Python's json.dump spelling, each
-// error its message, filename and line. A load that fails is its one error.
-func (cmd *CheckCmd) writeJSON(ctx context.Context, stdout io.Writer, loadResult *loader.LoadResult, loadErr error) error {
-	var errs []error
+// checkJSONErrors returns the errors check --json prints: those of the
+// loaded ledger, or a load that fails as its one error.
+func checkJSONErrors(result *ledgerload.Result, loadErr error) []error {
 	switch joined := loadErr.(type) {
 	case nil:
-		loadErrors, validationErrors, err := ledgerErrors(ctx, ledger.New(), loadResult)
-		if err != nil {
-			return err
-		}
-		errs = append(loadErrors, validationErrors...)
+		loadErrors, validationErrors := ledgerErrors(result)
+		return append(loadErrors, validationErrors...)
 	case interface{ Unwrap() []error }:
-		errs = joined.Unwrap()
+		return joined.Unwrap()
 	default:
-		errs = []error{loadErr}
+		return []error{loadErr}
 	}
-	return writeJSONErrors(stdout, errs)
 }
 
-// writeJSONErrors prints errs as {"errors": [...]} and fails the command
-// when there are any.
+// writeJSONErrors prints errs as bean-check --json does: {"errors": [...]}
+// alone on stdout, in Python's json.dump spelling, each error its message,
+// filename and line. It fails the command when there are any.
 func writeJSONErrors(stdout io.Writer, errs []error) error {
 	var b strings.Builder
 	b.WriteString(`{"errors": [`)

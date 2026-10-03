@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/loader"
 )
 
@@ -66,15 +67,11 @@ func BenchmarkCheckScaling(b *testing.B) {
 
 				ctx := context.Background()
 				for b.Loop() {
-					ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
-					result, err := ldr.Load(ctx, path)
+					result, err := ledgerload.Load(ctx, loader.Source{Path: path})
 					if err != nil {
 						b.Fatal(err)
 					}
-					errorCount, err := checkLedger(ctx, io.Discard, result, path)
-					if err != nil {
-						b.Fatal(err)
-					}
+					errorCount := checkLedger(io.Discard, result, path)
 					if want := sc.errors(n); errorCount != want {
 						b.Fatalf("got %d errors, want %d", errorCount, want)
 					}

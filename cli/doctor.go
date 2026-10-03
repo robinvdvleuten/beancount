@@ -2,14 +2,13 @@ package cli
 
 import (
 	"context"
-	stdErrors "errors"
 	"fmt"
 
 	"github.com/alecthomas/kong"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/ledger"
-	"github.com/robinvdvleuten/beancount/loader"
+	"github.com/robinvdvleuten/beancount/ledgerload"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/printer"
 )
@@ -82,8 +81,10 @@ func (cmd *MissingOpenCmd) Run(ctx *kong.Context) error {
 	}
 
 	runCtx := context.Background()
-	ldr := loader.New(loader.WithFollowIncludes(), loader.WithDocumentsDiscovery(), loader.WithSyntaxRecovery())
-	loadResult, err := cmd.File.LoadResult(runCtx, ldr)
+	// Like bean-doctor, the ledger's load and validation errors are not
+	// reported: a directive that fails validation is still applied, and so
+	// still uses its accounts.
+	result, err := ledgerload.Load(runCtx, cmd.File.Source())
 	if err != nil {
 		sourceContent, readErr := cmd.File.GetSourceContent()
 		if readErr != nil {
@@ -95,17 +96,7 @@ func (cmd *MissingOpenCmd) Run(ctx *kong.Context) error {
 		return NewCommandError(1)
 	}
 
-	// Like bean-doctor, the ledger's load and validation errors are not
-	// reported: a directive that fails validation is still applied, and so
-	// still uses its accounts.
-	if err := ledger.New().Process(runCtx, loadResult.AST); err != nil {
-		var validationErrors *ledger.ValidationErrors
-		if !stdErrors.As(err, &validationErrors) {
-			return err
-		}
-	}
-
-	opens := ledger.MissingOpens(loadResult.AST)
+	opens := ledger.MissingOpens(result.AST)
 	directives := make(ast.Directives, len(opens))
 	for i, open := range opens {
 		directives[i] = open

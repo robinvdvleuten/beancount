@@ -100,17 +100,9 @@ func TestFullTransactionWithCost(t *testing.T) {
 	ast := parser.MustParseString(context.Background(), input)
 
 	l := New()
-	err := l.Process(context.Background(), ast)
+	_, err := processErr(context.Background(), l, ast)
 
 	// Should have NO errors - transaction should balance!
-	if err != nil {
-		t.Logf("Errors: %v", err)
-		if valErr, ok := err.(*ValidationErrors); ok {
-			for _, e := range valErr.Errors {
-				t.Logf("  - %v", e)
-			}
-		}
-	}
 	assert.NoError(t, err, "transaction with cost should balance")
 }
 

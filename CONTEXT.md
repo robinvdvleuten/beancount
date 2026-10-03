@@ -60,6 +60,10 @@ _Avoid_: partial transaction, dropped postings
 A transaction that was booked, so later directives see its effects, even when it is reported for another error such as not balancing or posting to an unopened or closed account.
 _Avoid_: valid transaction, accepted transaction
 
+**Processed tree**:
+The directives as the ledger leaves them once it has processed a loaded tree: sorted, with booked postings, without Dropped transactions, and with the directives Plugins and pads add. Processing builds it from a copy, so the loaded tree stays as it was and can be processed again. Every record the ledger keeps about a directive or a posting names a node of the processed tree.
+_Avoid_: booked AST, mutated tree
+
 **Booked position**:
 The units a booked posting of an Applied transaction adds to or takes from one lot of its account, with that lot's per-unit cost, cost date and label. A reduction has one per lot it is booked against; any other posting has one of its own. It reduced its lot when the account held that lot with the opposite sign; `implicit_prices` emits no price from the cost of such a position.
 _Avoid_: booked lot, lot change

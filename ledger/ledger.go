@@ -15,26 +15,25 @@
 // Example usage:
 //
 //	// Parse a Beancount file
-//	ast, err := parser.ParseBytes([]byte(source))
+//	tree, err := parser.ParseBytes(ctx, []byte(source))
 //	if err != nil {
 //	    log.Fatal(err)
 //	}
 //
 //	// Create and process ledger
-//	ledger := ledger.New()
-//	err = ledger.Process(ast)
+//	l := ledger.New()
+//	processed, err := l.Process(ctx, tree)
 //	if err != nil {
-//	    // Handle validation errors
-//	    if verr, ok := err.(*ledger.ValidationErrors); ok {
-//	        for _, e := range verr.Errors {
-//	            fmt.Println(e)
-//	        }
-//	    }
+//	    log.Fatal(err) // cancelled, or the directives cannot be sorted
+//	}
+//	for _, diagnostic := range l.Diagnostics() {
+//	    fmt.Println(diagnostic)
 //	}
 package ledger
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -81,33 +80,6 @@ type Ledger struct {
 	display         *DisplayContext
 }
 
-// ValidationErrors wraps multiple validation errors
-type ValidationErrors struct {
-	Errors []error
-}
-
-func (e *ValidationErrors) Error() string {
-	if len(e.Errors) == 1 {
-		return e.Errors[0].Error()
-	}
-
-	// Show all errors plus summary
-	var buf strings.Builder
-	for i, err := range e.Errors {
-		if i > 0 {
-			buf.WriteString("\n\n")
-		}
-		buf.WriteString(err.Error())
-	}
-	fmt.Fprintf(&buf, "\n\n%d validation error(s) found", len(e.Errors))
-	return buf.String()
-}
-
-// Unwrap returns the underlying errors for error unwrapping
-func (e *ValidationErrors) Unwrap() []error {
-	return e.Errors
-}
-
 // New creates a new empty ledger
 func New() *Ledger {
 	cfg := NewConfig()
@@ -136,18 +108,26 @@ func (l *Ledger) GetAccountTypeFromName(name string) (ast.AccountType, bool) {
 	return cfg.GetAccountTypeFromName(name)
 }
 
-// Process processes an AST and builds the ledger state
-func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
+// Process processes an AST and builds the ledger state. It leaves tree as
+// it is and returns the processed tree: sorted, with pushed tags and
+// metadata applied, booked postings, Dropped transactions left out, and the
+// directives Plugins and pads add. Everything the ledger keys by directive
+// or posting (BookedPositions, a Diagnostic's directive) is a node of the
+// processed tree. Diagnostics, errors and warnings alike, are read from
+// Diagnostics; the error is a failure to process at all: a cancelled
+// context, or directives that cannot be sorted.
+func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 	// Extract telemetry collector from context
 	collector := telemetry.FromContext(ctx)
 
 	prepareTimer := collector.Start("ledger.prepare_ast")
+	tree = copyTree(tree)
 	// Unbalanced pushes and pops are reported like validation errors; the
 	// ledger is still processed.
 	l.errors = append(l.errors, ast.ApplyPushPopDirectives(tree)...)
 	if err := ast.SortDirectives(tree); err != nil {
 		prepareTimer.End()
-		return err
+		return nil, err
 	}
 	prepareTimer.End()
 
@@ -178,7 +158,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 
 	if err := l.book(ctx, tree); err != nil {
 		processTimer.End()
-		return err
+		return nil, err
 	}
 	l.runPlugins(ctx, tree)
 	l.opened = openedAccounts(tree.Directives)
@@ -202,7 +182,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 				validationTimer.End()
 			}
 			processTimer.End()
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 
@@ -225,36 +205,83 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) error {
 		l.errors = append(l.errors, NewUnusedPadWarning(pad))
 	}
 
-	// Return collected errors
-	if len(l.errors) > 0 {
-		return &ValidationErrors{Errors: l.errors}
-	}
-
-	return nil
+	return tree, nil
 }
 
-// MustProcess processes an AST, panicking on validation errors.
+// copyTree returns a copy of tree that Process can work on without touching
+// tree: its own directive list, and its own copy of every directive Process
+// writes to. Pushed tags and metadata are written onto transactions, notes
+// and documents; Booking replaces a transaction's postings and fills in
+// their numbers, costs and prices. Booking only ever replaces a posting's
+// amount, cost or price, so a posting's copy shares them with the original.
+func copyTree(tree *ast.AST) *ast.AST {
+	copied := *tree
+	copied.Directives = make(ast.Directives, len(tree.Directives))
+	for i, directive := range tree.Directives {
+		switch directive := directive.(type) {
+		case *ast.Transaction:
+			copied.Directives[i] = copyTransaction(directive)
+		case *ast.Note:
+			note := *directive
+			note.Tags = slices.Clone(directive.Tags)
+			copied.Directives[i] = &note
+		case *ast.Document:
+			document := *directive
+			document.Tags = slices.Clone(directive.Tags)
+			copied.Directives[i] = &document
+		default:
+			copied.Directives[i] = directive
+		}
+	}
+	return &copied
+}
+
+// copyTransaction copies a transaction and its postings, keeping its body
+// items pointing at its own postings.
+func copyTransaction(txn *ast.Transaction) *ast.Transaction {
+	copied := *txn
+	copied.Tags = slices.Clone(txn.Tags)
+	copied.Postings = make([]*ast.Posting, len(txn.Postings))
+	postings := make(map[*ast.Posting]*ast.Posting, len(txn.Postings))
+	for i, posting := range txn.Postings {
+		p := *posting
+		copied.Postings[i] = &p
+		postings[posting] = &p
+	}
+	if len(txn.BodyItems) > 0 {
+		copied.BodyItems = slices.Clone(txn.BodyItems)
+		for i, item := range copied.BodyItems {
+			if item.Posting != nil {
+				copied.BodyItems[i].Posting = postings[item.Posting]
+			}
+		}
+	}
+	return &copied
+}
+
+// MustProcess processes an AST and returns the processed tree, panicking
+// when processing fails or reports any diagnostic.
 // Intended for use in tests and examples where error handling is not needed.
 //
 // Example:
 //
 //	ledger := ledger.New()
-//	ledger.MustProcess(context.Background(), ast)
-func (l *Ledger) MustProcess(ctx context.Context, tree *ast.AST) {
-	err := l.Process(ctx, tree)
+//	processed := ledger.MustProcess(context.Background(), ast)
+func (l *Ledger) MustProcess(ctx context.Context, tree *ast.AST) *ast.AST {
+	processed, err := l.Process(ctx, tree)
 	if err != nil {
 		panic(err)
 	}
+	if len(l.errors) > 0 {
+		panic(errors.Join(l.errors...))
+	}
+	return processed
 }
 
-// Errors returns all collected errors
+// Errors returns the diagnostics of severity error collected while
+// processing.
 func (l *Ledger) Errors() []error {
 	return diagnostic.Errors(l.errors)
-}
-
-// Warnings returns non-fatal diagnostics collected while processing.
-func (l *Ledger) Warnings() []error {
-	return diagnostic.Warnings(l.errors)
 }
 
 // Diagnostics returns all diagnostics in processing order.
@@ -269,6 +296,12 @@ func (l *Ledger) Diagnostics() []error {
 // units alone without cost. A posting of a Dropped group has none.
 func (l *Ledger) BookedPositions(posting *ast.Posting) []BookedPosition {
 	return l.bookedPositions[posting]
+}
+
+// Config returns the options the processed tree sets, beancount's defaults
+// for the ones it does not.
+func (l *Ledger) Config() *Config {
+	return l.config
 }
 
 // DisplayContext returns the per-currency display precision of the

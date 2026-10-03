@@ -2,7 +2,6 @@ package ledger
 
 import (
 	"context"
-	"errors"
 	"strings"
 	"testing"
 
@@ -21,11 +20,9 @@ func TestPluginsBeancountV3Removed(t *testing.T) {
 		source.WriteString(`plugin "beancount.plugins.` + name + "\"\n")
 	}
 
-	err := New().Process(context.Background(), parser.MustParseString(context.Background(), source.String()))
-	var validation *ValidationErrors
-	assert.True(t, errors.As(err, &validation), "%v", err)
+	_, diagnostics := processDiagnostics(t, New(), parser.MustParseString(context.Background(), source.String()))
 	var lines []int
-	for _, e := range validation.Errors {
+	for _, e := range diagnostics {
 		diagnostic := e.(*Diagnostic)
 		assert.Equal(t, "PluginImportError", diagnostic.Kind())
 		lines = append(lines, diagnostic.GetPosition().Line)

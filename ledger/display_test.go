@@ -40,7 +40,7 @@ func TestDisplayContext(t *testing.T) {
 `)
 	assert.NoError(t, err)
 	l := New()
-	_ = l.Process(context.Background(), tree) // Balance failures are irrelevant here.
+	_, _ = l.Process(context.Background(), tree) // Balance failures are irrelevant here.
 	dc := l.DisplayContext()
 
 	for currency, want := range map[string]int32{
@@ -78,7 +78,7 @@ option "display_precision" "JPY:1"
 `)
 	assert.NoError(t, err)
 	l := New()
-	assert.NoError(t, l.Process(context.Background(), tree))
+	l.MustProcess(context.Background(), tree)
 	dc := l.DisplayContext()
 
 	for currency, want := range map[string]int32{"USD": 3, "JPY": 0, "EUR": 2} {
