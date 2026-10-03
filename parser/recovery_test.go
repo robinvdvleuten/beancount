@@ -193,3 +193,33 @@ func TestSkippedInvalidTokensAreReported(t *testing.T) {
 	}, got)
 	assert.Equal(t, 1, len(tree.Directives))
 }
+
+// TestSkippedInvalidAccountNamesAreReported pins beancount's lexer, which
+// rejects an account-like word whose component is empty or starts or goes
+// on with an ASCII character its account pattern does not take, even in a
+// directive the grammar drops. A component that starts with a non-ASCII
+// character passes its lexer, and a trailing colon is a token of its own,
+// so the dropped directive reports neither.
+func TestSkippedInvalidAccountNamesAreReported(t *testing.T) {
+	source := "2020-01-02 * \"x\"\n  garbage\n" +
+		"  Assets:A  1 USD Assets:x\n  Assets:A  1 USD Assets:-X\n  Assets:A  1 USD Assets::X\n" +
+		"  Assets:A  1 USD Assets:X_y\n  Assets:A  1 USD Assets:X.y\n  Assets:A  1 USD Assets:X'y\n" +
+		"  Assets:A  1 USD Assets:1x\n  Assets:A  1 USD Assets:\u00e9x\n  Assets:A  1 USD Assets:X:\n"
+	_, err := ParseString(context.Background(), source)
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	var got []string
+	for _, e := range syntaxErrs {
+		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Message))
+	}
+	assert.Equal(t, []string{
+		`2:3 invalid token "garbage"`,
+		`3:19 invalid token "Assets:x"`,
+		`4:19 invalid token "Assets:-X"`,
+		`5:19 invalid token "Assets::X"`,
+		`6:19 invalid token "Assets:X_y"`,
+		`7:19 invalid token "Assets:X.y"`,
+		`8:19 invalid token "Assets:X'y"`,
+	}, got)
+}

@@ -187,9 +187,15 @@ func (p *Parser) recover(err error) {
 		if tok.Line > parseErr.Pos.Line && tok.Column == 1 {
 			return
 		}
-		if tok.Type == ILLEGAL && tok.Start > parseErr.Pos.Offset && p.lexerRejects(tok) {
+		if tok.Start > parseErr.Pos.Offset {
 			var skipped *ParseError
-			if errors.As(p.errorAtToken(tok, ""), &skipped) {
+			switch {
+			case tok.Type == ILLEGAL && p.lexerRejects(tok):
+				errors.As(p.errorAtToken(tok, ""), &skipped)
+			case tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)):
+				errors.As(p.errorAtToken(tok, "invalid token %q", tok.String(p.source)), &skipped)
+			}
+			if skipped != nil {
 				p.errs = append(p.errs, skipped)
 			}
 		}

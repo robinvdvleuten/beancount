@@ -1,8 +1,10 @@
 package parser
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
 )
@@ -925,6 +927,30 @@ func (p *Parser) lexerRejects(tok Token) bool {
 		return false
 	}
 	return true
+}
+
+// lexerRejectsAccount reports whether beancount's lexer rejects an ACCOUNT
+// token as an invalid token: one with an empty component, or one whose
+// component starts with an ASCII character other than a capital letter (or a
+// digit, past the first) or goes on with one other than a letter, a digit or
+// a dash. Non-ASCII characters pass its lexer, and only the account pattern
+// rejects them; a trailing colon is a token of its own.
+func lexerRejectsAccount(name []byte) bool {
+	name = bytes.TrimSuffix(name, []byte(":"))
+	for i, component := range bytes.Split(name, []byte(":")) {
+		if len(component) == 0 {
+			return true
+		}
+		if first := component[0]; first < utf8.RuneSelf && !isUppercaseLetter(first) && (i == 0 || !isDigit(first)) {
+			return true
+		}
+		for _, ch := range component[1:] {
+			if ch < utf8.RuneSelf && !isLetter(ch) && !isDigit(ch) && ch != '-' {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func (p *Parser) error(format string, args ...any) error {

@@ -1,0 +1,8 @@
+; Like beancount's lexer, an account name with a component its lexer
+; rejects is an invalid token even in a transaction a syntax error drops;
+; a used one is reported once, on its line.
+2020-01-01 open Assets:A
+2020-01-02 * "x"
+  garbage
+  Assets:A  1 USD Assets:x
+2020-01-03 open Assets:bank
