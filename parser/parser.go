@@ -31,9 +31,14 @@ type Parser struct {
 
 	// recovered is set once a syntax error has been recovered from, and
 	// recoveredEnd is the offset the recovery skipped to: the end of the
-	// last token it dropped.
-	recovered    bool
-	recoveredEnd int
+	// last token it dropped. resumedAt is the offset of the token the last
+	// recovery resumed at (-1 before any), and resumedMidLine says it was
+	// not the first token of a line in column 1 but one that can start a
+	// declaration, where Bison resumes wherever it stands.
+	recovered      bool
+	recoveredEnd   int
+	resumedAt      int
+	resumedMidLine bool
 
 	lineStarts []int // Byte offset of each line's start, built on the first error
 }
@@ -41,10 +46,11 @@ type Parser struct {
 // NewParser creates a new parser with the given source and tokens.
 func NewParser(source []byte, tokens []Token, filename string, interner *Interner) *Parser {
 	return &Parser{
-		source:   source,
-		tokens:   tokens,
-		filename: filename,
-		interner: interner,
+		source:    source,
+		tokens:    tokens,
+		filename:  filename,
+		interner:  interner,
+		resumedAt: -1,
 	}
 }
 
@@ -64,7 +70,10 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		tok := p.peek()
 		tokType := tok.Type
 		continuesDirective := tokType == COMMENT && p.indented(tok) && tok.Line == continuationLine
-		if p.indented(tok) && tokType != NEWLINE && tokType != EOF && !continuesDirective {
+		// A token recovery resumed at past column 1 has had its
+		// indentation reported, as Bison reports the INDENT before it.
+		resumed := p.resumedMidLine && tok.Start == p.resumedAt
+		if p.indented(tok) && tokType != NEWLINE && tokType != EOF && !continuesDirective && !resumed {
 			// A line continuing a dated directive that is none of its
 			// lines is a syntax error inside it: like beancount, drop it.
 			if tok.Line == continuationLine && len(tree.Directives) > 0 {
@@ -186,9 +195,12 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 // recover records a syntax error and skips to the next line that starts in
 // column 1, dropping the rest of the directive the error is in, like
-// beancount's grammar. Parsing resumes there. Like beancount's lexer, which
-// reports each invalid token whatever the grammar is doing, every invalid
-// token it skips past the error is reported too.
+// beancount's grammar. Parsing resumes there, or, like Bison, which retries
+// each token after the error, at an earlier token that can start a
+// declaration: the token that raised the error, one later on its line, or
+// one on an indented line. Like beancount's lexer, which reports each
+// invalid token whatever the grammar is doing, every invalid token it skips
+// past the error is reported too.
 //
 // Like the Bison parser beancount generates, a grammar error is reported
 // only once three tokens have been shifted since the last error, reported
@@ -199,7 +211,7 @@ func (p *Parser) recover(err error) {
 	if !errors.As(err, &parseErr) {
 		parseErr = NewParseError(p.filename, err)
 	}
-	if !p.recovered || p.lexerErrorAt(parseErr.Pos.Offset) || p.shiftedSince(p.recoveredEnd, parseErr.Pos.Offset) >= 3 {
+	if !p.recovered || p.lexerErrorAt(parseErr.Pos.Offset) || p.shiftedSince(parseErr.Pos.Offset) >= 3 {
 		p.errs = append(p.errs, parseErr)
 	}
 	p.recovered = true
@@ -207,6 +219,13 @@ func (p *Parser) recover(err error) {
 	for !p.isAtEnd() {
 		tok := p.peek()
 		if tok.Line > parseErr.Pos.Line && !p.indented(tok) {
+			p.resumedAt, p.resumedMidLine = tok.Start, false
+			return
+		}
+		// A declaration that fails at its own first token is skipped, so
+		// recovery always moves on.
+		if tok.Start >= parseErr.Pos.Offset && startsDeclaration(tok.Type) && tok.Start != p.resumedAt {
+			p.resumedAt, p.resumedMidLine = tok.Start, true
 			return
 		}
 		if tok.Start > parseErr.Pos.Offset {
@@ -242,15 +261,20 @@ func (p *Parser) lexerErrorAt(offset int) bool {
 		(tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)))
 }
 
-// shiftedSince counts the tokens beancount's grammar shifts after recovering
-// from a syntax error that ends at offset start, up to the error at offset
-// end. Bison drops the rest of the erroneous line and shifts its line break
-// (an indented line after it is an error of its own, so recovery skips it
-// too); from there each line break counts, as does an indented line's
-// INDENT and every token but a comment, a signed number counting its sign.
-func (p *Parser) shiftedSince(start, end int) int {
-	if lineEnd := bytes.IndexByte(p.source[start:], '\n'); lineEnd >= 0 {
-		start += lineEnd
+// shiftedSince counts the tokens beancount's grammar shifts after the last
+// recovery, up to the error at offset end. Resumed at a token that can
+// start a declaration, Bison shifts from that token on; otherwise it drops
+// the rest of the erroneous line and shifts its line break (an indented
+// line after it is an error of its own, so recovery skips it too). From
+// there each line break counts, as does an indented line's INDENT and
+// every token but a comment, a signed number counting its sign.
+func (p *Parser) shiftedSince(end int) int {
+	start, line := p.resumedAt, 0
+	if p.resumedMidLine {
+		// The resumed token's INDENT, if any, was dropped with the error.
+		line = p.tokens[p.tokenIndexAt(start)].Line
+	} else if lineEnd := bytes.IndexByte(p.source[p.recoveredEnd:], '\n'); lineEnd >= 0 {
+		start = p.recoveredEnd + lineEnd
 	} else {
 		start = len(p.source)
 	}
@@ -258,8 +282,7 @@ func (p *Parser) shiftedSince(start, end int) int {
 		return 0
 	}
 	n := bytes.Count(p.source[start:end], []byte("\n"))
-	line := 0
-	for i := sort.Search(len(p.tokens), func(i int) bool { return p.tokens[i].Start >= start }); i < len(p.tokens) && p.tokens[i].Start < end; i++ {
+	for i := p.tokenIndexAt(start); i < len(p.tokens) && p.tokens[i].Start < end; i++ {
 		tok := p.tokens[i]
 		if tok.Type == NEWLINE || tok.Type == EOF {
 			continue
@@ -279,6 +302,22 @@ func (p *Parser) shiftedSince(start, end int) int {
 		}
 	}
 	return n
+}
+
+// tokenIndexAt returns the index of the first token starting at or after
+// offset.
+func (p *Parser) tokenIndexAt(offset int) int {
+	return sort.Search(len(p.tokens), func(i int) bool { return p.tokens[i].Start >= offset })
+}
+
+// startsDeclaration reports whether a token of type t can start one of
+// beancount's declarations: a dated directive or an undated line.
+func startsDeclaration(t TokenType) bool {
+	switch t {
+	case DATE, OPTION, INCLUDE, PLUGIN, PUSHTAG, POPTAG, PUSHMETA, POPMETA:
+		return true
+	}
+	return false
 }
 
 // parseComment parses a comment token into a Comment AST node.

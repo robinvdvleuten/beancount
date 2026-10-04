@@ -1,0 +1,32 @@
+; Like Bison's error recovery, which retries each token after a syntax
+; error, a token that can start a declaration resumes parsing wherever it
+; stands: the token that raised the error, one later on its line, or the
+; first on an indented line.
+option "booking_method" "STRICT"
+2020-01-01 open Assets:Cash
+
+2020-01-02 open Assets:B 2020-01-03 balance Assets:Cash 1 USD
+2020-01-02 open Assets:C 5 6 2020-01-03 balance Assets:Cash 2 USD
+2020-01-02 open Assets:D 2020-01-03 2020-01-04 balance Assets:Cash 3 USD
+2020-01-04 balance Assets:Cash 4 USD 2020-01-05 balance Assets:Cash 5 USD
+
+2020-01-06 open Assets:E pushtag #a
+2020-01-07 balance Assets:Cash 6 USD
+2020-01-08 open Assets:F poptag #a
+2020-01-08 open Assets:G pushmeta k: "v"
+2020-01-08 open Assets:H plugin "beancount.plugins.auto_accounts"
+2020-01-09 balance Assets:Z 7 USD
+
+  2020-01-10 balance Assets:Cash 8 USD
+
+2020-01-11 *
+  Assets:Cash 1 USD
+  2020-01-12 balance Assets:Cash 9 USD
+
+2020-01-13 open Assets:I
+  2020-01-14 balance Assets:Cash 10 USD
+"a"
+  2020-01-15 balance Assets:Cash 11 USD
+2020-01-16 open Assets:J 2020-01-17 *
+  Assets:Cash 1 USD
+  Assets:J
