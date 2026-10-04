@@ -101,3 +101,45 @@ func loadQueryLedger(t *testing.T) *query.Context {
 	assert.Equal(t, 0, len(result.Ledger.Diagnostics()))
 	return qctx
 }
+
+// TestQueryLedgerErrorsOnStderr pins the layout bean-query gives the errors
+// it loads a ledger with: beancount's print_errors follows each one, plain
+// or with its directive, with a blank line.
+func TestQueryLedgerErrorsOnStderr(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		source string
+		want   string
+	}{
+		{
+			name:   "one plain error",
+			source: "include \"missing.beancount\"\n",
+			want:   "FILE:1: File glob \"missing.beancount\" does not match any files\n\n",
+		},
+		{
+			name:   "an error with its directive",
+			source: "2024-01-01 note Assets:Z \"x\"\n",
+			want: "FILE:1: Invalid reference to unknown account 'Assets:Z'\n\n" +
+				"   2024-01-01 note Assets:Z \"x\"\n\n\n",
+		},
+		{
+			name: "two errors",
+			source: "include \"missing.beancount\"\n" +
+				"2024-01-01 open Assets:A\n" +
+				"2024-01-02 *\n  Assets:A  1 USD\n  Assets:Z\n" +
+				"2024-01-03 note Assets:Y \"x\"\n",
+			want: "FILE:1: File glob \"missing.beancount\" does not match any files\n\n" +
+				"FILE:3: Invalid reference to unknown account 'Assets:Z'\n\n" +
+				"   2024-01-02 * \n     Assets:A   1 USD\n     Assets:Z  -1 USD\n\n\n" +
+				"FILE:6: Invalid reference to unknown account 'Assets:Y'\n\n" +
+				"   2024-01-03 note Assets:Y \"x\"\n\n\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := writeLedger(t, t.TempDir(), "main.beancount", tc.source)
+			_, stderr, err := runCommand(t, "query", path, "select 1")
+			assert.NoError(t, err)
+			assert.Equal(t, tc.want, strings.ReplaceAll(stderr, path, "FILE"))
+		})
+	}
+}

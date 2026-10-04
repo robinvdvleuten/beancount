@@ -79,12 +79,16 @@ func loadQueryContext(ctx context.Context, stderr io.Writer, file *FileOrStdin) 
 	}
 
 	// The load's errors are printed plain; the ledger's diagnostics, each
-	// with its directive or source lines.
+	// with its directive or source lines. Like beancount's print_errors,
+	// a blank line follows each one.
 	for _, loadErr := range diagnostic.Errors(result.LoadDiagnostics) {
-		_, _ = fmt.Fprintln(stderr, loadErr.Error())
+		_, _ = fmt.Fprintf(stderr, "%s\n\n", loadErr.Error())
 	}
 	if validationErrors := result.Ledger.Diagnostics(); len(validationErrors) > 0 {
-		_, _ = fmt.Fprintln(stderr, newLedgerErrorRenderer(result).RenderAll(validationErrors))
+		renderer := newLedgerErrorRenderer(result)
+		for _, validationErr := range validationErrors {
+			_, _ = fmt.Fprintf(stderr, "%s\n\n", renderer.Render(validationErr))
+		}
 	}
 	qctx := &query.Context{Ledger: result.Ledger, Config: result.Ledger.Config(), AST: result.AST}
 	return qctx, result, nil
