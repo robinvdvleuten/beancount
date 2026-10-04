@@ -1,0 +1,13 @@
+; A component a cost spec repeats is reported and ignored, but its amount
+; still counts towards display precision.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "kept"
+  Assets:A   20.00 USD
+  Assets:B  -20.00 USD
+
+2020-01-03 * "repeated cost"
+  Assets:B   1 HOOL {{1 USD, 3 USD}}
+  Assets:B   1 HOOL {1 USD, 3 USD}
+  Assets:B

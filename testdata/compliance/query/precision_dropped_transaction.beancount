@@ -1,0 +1,16 @@
+; Like beancount's parser, which feeds its display context with each amount
+; it reads, the amounts of a transaction a syntax error drops count towards
+; display precision: USD has no digits four times and two digits twice.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "kept"
+  Assets:A   20.00 USD
+  Assets:B  -20.00 USD
+
+2020-01-03 * "dropped by a syntax error"
+  Assets:A   1 USD
+  Assets:B  -1 USD
+  Assets:B   3 USD 4
+
+2020-01-04 balance Assets:A 20 USD

@@ -24,7 +24,7 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 
 	var tolerance *ast.Amount
 	if p.match(TILDE) {
-		toleranceTok, toleranceIsExpression, toleranceValue, err := p.parseAmountValueToken()
+		toleranceTok, _, toleranceValue, err := p.parseAmountValueToken()
 		if err != nil {
 			return nil, err
 		}
@@ -33,7 +33,7 @@ func (p *Parser) parseBalance(pos ast.Position, date *ast.Date) (*ast.Balance, e
 		}
 		currTok := p.advance()
 		amount := p.amountFromValueToken(valueTok, currTok, isExpression, value)
-		tolerance = p.amountFromValueToken(toleranceTok, currTok, toleranceIsExpression, toleranceValue)
+		tolerance = p.unrecordedAmount(toleranceTok, currTok, toleranceValue)
 
 		bal := &ast.Balance{
 			Account:   account,

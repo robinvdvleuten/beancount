@@ -75,12 +75,18 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	return p.amountFromValueToken(valueTok, currTok, isExpression, value), nil
 }
 
+// amountFromValueToken builds an amount the parser read, which it records
+// as beancount's grammar feeds its display context with each one.
 func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool, value string) *ast.Amount {
-	currency := p.internCurrency(currTok)
+	amount := p.unrecordedAmount(valueTok, currTok, value)
+	p.read = append(p.read, amount)
+	return amount
+}
 
-	raw := valueTok.String(p.source)
-
-	return ast.NewAmountWithRaw(raw, value, currency)
+// unrecordedAmount builds an amount beancount's grammar does not feed its
+// display context with, such as a balance's tolerance.
+func (p *Parser) unrecordedAmount(valueTok, currTok Token, value string) *ast.Amount {
+	return ast.NewAmountWithRaw(valueTok.String(p.source), value, p.internCurrency(currTok))
 }
 
 // indented reports whether tok is indented, as beancount's lexer decides

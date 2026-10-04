@@ -45,6 +45,12 @@ type Parser struct {
 	// allowPipe is the allow_pipe_separator option in effect, which, as in
 	// beancount's parser, only the file's own options above set.
 	allowPipe bool
+
+	// read holds the amounts read since the current declaration started,
+	// and dropped those of the declarations a syntax error dropped, which
+	// like beancount's parser, which feeds its display context as it reads
+	// each amount, still count towards display precision.
+	read, dropped []*ast.Amount
 }
 
 // NewParser creates a new parser with the given source and tokens.
@@ -82,7 +88,9 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			// lines is a syntax error inside it: like beancount, drop it.
 			if tok.Line == continuationLine && len(tree.Directives) > 0 {
 				tree.Directives = tree.Directives[:len(tree.Directives)-1]
+				p.dropRead()
 			}
+			p.read = nil
 			p.recover(p.errorAtToken(tok, "unexpected indentation"))
 			continuationLine = 0
 			continue
@@ -93,7 +101,9 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		// on, and Bison's recovery discards the directive.
 		if tok.Line == continuationLine && p.lexerErrorAt(tok.Start) && len(tree.Directives) > 0 {
 			tree.Directives = tree.Directives[:len(tree.Directives)-1]
+			p.dropRead()
 		}
+		p.read = nil
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0
 		}
@@ -207,6 +217,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		}
 	}
 
+	tree.DroppedAmounts = p.dropped
 	if len(p.errs) > 0 {
 		return tree, p.errs
 	}
@@ -236,6 +247,7 @@ func (p *Parser) recover(err error) {
 	}
 	p.recovered = true
 	p.recoveredEnd = max(p.recoveredEnd, parseErr.Pos.Offset)
+	p.dropRead()
 	for !p.isAtEnd() {
 		tok := p.peek()
 		if tok.Line > parseErr.Pos.Line && !p.indented(tok) {
@@ -267,6 +279,12 @@ func (p *Parser) recover(err error) {
 		}
 		p.advance()
 	}
+}
+
+// dropRead records the amounts read in a declaration being dropped.
+func (p *Parser) dropRead() {
+	p.dropped = append(p.dropped, p.read...)
+	p.read = nil
 }
 
 // lexerErrorAt reports whether the token at offset is one beancount's lexer

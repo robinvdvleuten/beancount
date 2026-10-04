@@ -1,0 +1,15 @@
+; The amounts of a price, a balance, a custom directive and metadata that a
+; syntax error drops count too, but not a balance's tolerance.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "kept"
+  Assets:A   20.00 USD
+  Assets:B  -20.00 USD
+
+2020-01-03 price HOOL 1 USD x
+2020-01-03 balance Assets:B 1 ~ 0.5 USD x
+2020-01-03 custom "budget" 1 USD x
+2020-01-03 * "metadata"
+  amount: 1 USD
+  other: 1 USD x

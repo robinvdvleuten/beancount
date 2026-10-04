@@ -160,6 +160,9 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 		}
 		l.display.updateFromDirective(directive)
 	}
+	for _, amount := range tree.DroppedAmounts {
+		l.display.update(amount)
+	}
 
 	if err := l.book(ctx, tree); err != nil {
 		processTimer.End()

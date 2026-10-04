@@ -87,8 +87,9 @@ func (dc *DisplayContext) update(amount *ast.Amount) {
 }
 
 // updateFromDirective records the amounts beancount's parser feeds its
-// display context: posting units, prices, and costs; balance (not its
-// tolerance), price, and custom amounts; and amount-valued metadata.
+// display context: posting units, prices, and costs, a repeated cost
+// component included; balance (not its tolerance), price, and custom
+// amounts; and amount-valued metadata.
 func (dc *DisplayContext) updateFromDirective(d ast.Directive) {
 	dc.updateFromMetadata(d.GetMetadata())
 
@@ -98,8 +99,11 @@ func (dc *DisplayContext) updateFromDirective(d ast.Directive) {
 			dc.update(posting.Amount)
 			dc.update(posting.Price)
 			if posting.Cost != nil {
-				dc.update(posting.Cost.Amount)
-				dc.update(posting.Cost.Total)
+				// Like beancount, a component the cost repeats counts too.
+				for _, cost := range append([]*ast.Cost{posting.Cost}, posting.Cost.Duplicates...) {
+					dc.update(cost.Amount)
+					dc.update(cost.Total)
+				}
 			}
 			dc.updateFromMetadata(posting.Metadata)
 		}

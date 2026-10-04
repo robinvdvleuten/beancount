@@ -32,6 +32,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -632,9 +633,11 @@ func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 	// Add main file directives
 	result.Directives = append(result.Directives, main.Directives...)
 
-	// Add directives from all included files
+	// Add directives, and the amounts of dropped ones, from all included files
+	result.DroppedAmounts = slices.Clone(main.DroppedAmounts)
 	for _, inc := range included {
 		result.Directives = append(result.Directives, inc.Directives...)
+		result.DroppedAmounts = append(result.DroppedAmounts, inc.DroppedAmounts...)
 	}
 
 	_ = ast.SortDirectives(result)

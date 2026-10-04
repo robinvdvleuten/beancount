@@ -1,0 +1,13 @@
+; An amount past the syntax error is never read, so it does not count:
+; USD has no digits once and two digits twice.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "kept"
+  Assets:A   20.00 USD
+  Assets:B  -20.00 USD
+
+2020-01-03 * "dropped by a syntax error"
+  Assets:A   1 USD 5
+  Assets:B  -1 USD
+  Assets:B  -1 USD

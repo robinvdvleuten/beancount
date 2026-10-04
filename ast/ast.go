@@ -95,6 +95,9 @@ type AST struct {
 	Popmetas   []*Popmeta
 	Comments   []*Comment
 	BlankLines []*BlankLine
+	// DroppedAmounts are the amounts read in directives a syntax error
+	// dropped, which like beancount's still count towards display precision.
+	DroppedAmounts []*Amount
 
 	pushPopApplied bool
 }
