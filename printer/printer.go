@@ -228,13 +228,18 @@ func unitsText(amount *ast.Amount) string {
 }
 
 // priceText spells a posting's price as beancount's parser keeps it, per
-// unit; a price it cannot spread over the units is spelled as parsed.
+// unit; a price it cannot spread over the units is spelled as parsed. A
+// price with a currency but no number is per unit to beancount, whose empty
+// number leaves its separating space: `@  USD`.
 func priceText(posting *ast.Posting) string {
 	if posting.Price == nil {
 		return ""
 	}
 	if number, currency, ok := ledger.PerUnitPrice(posting); ok {
 		return " @ " + amountText(numberText(number), currency)
+	}
+	if posting.Price.Value == "" && posting.Price.Currency != "" {
+		return " @  " + posting.Price.Currency
 	}
 	marker := " @"
 	if posting.PriceTotal {

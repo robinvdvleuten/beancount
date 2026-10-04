@@ -1,0 +1,23 @@
+; A price left without a number stays on the booked transaction, as
+; beancount keeps it, and printer.py renders its empty number: two spaces
+; before the currency, after @ and after @@ alike.
+option "booking_method" "HIFO"
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:Open
+
+2020-01-02 * "Lot a"
+  Assets:Stock  10 HOOL {10 USD}
+  Equity:Open
+
+2020-01-03 * "Lot b"
+  Assets:Stock  10 HOOL {20 USD, "lotb"}
+  Equity:Open
+
+2020-02-01 * "Per-unit price without a number"
+  Assets:Cash   0 USD
+  Assets:Stock  -3 HOOL {} @ USD
+
+2020-02-02 * "Total price without a number"
+  Assets:Cash   0 USD
+  Assets:Stock  -2 HOOL {} @@ USD
