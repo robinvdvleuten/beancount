@@ -68,7 +68,7 @@ func TestErrorKinds(t *testing.T) {
 		{newMergeCostError(txn, posting), "MergeCostError", 11, nil},
 		{newDuplicateCostComponentError(txn, posting, &ast.Cost{Label: "b"}), "DuplicateCostComponentError", 11, txn},
 		{newCurrencyGroupError(txn, posting, "Failed to categorize posting 1"), "CurrencyGroupError", 11, txn},
-		{newInterpolationError(txn, posting, "Too many missing numbers"), "CurrencyGroupError", 11, nil},
+		{newInterpolationError(txn, posting, "Too many missing numbers"), "InterpolationError", 11, nil},
 		{newNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
 		{newTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
 		{newInvalidBookingMethodError(open), "InvalidBookingMethodError", 10, open},

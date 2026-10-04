@@ -220,7 +220,7 @@ func TestBookingStagesTheGroupsItBooks(t *testing.T) {
 `)
 	assert.Equal(t, 2, len(errs), "errors: %v", errs)
 	assert.Equal(t, "InsufficientInventoryError", kindOf(errs[0]), "got %v", errs[0])
-	assert.Equal(t, "CurrencyGroupError", kindOf(errs[1]), "got %v", errs[1])
+	assert.Equal(t, "InterpolationError", kindOf(errs[1]), "got %v", errs[1])
 	assert.Equal(t, []string{"-4 AA {5 USD, 2024-01-02}", "20 USD {}"}, postings["the EUR group fails booking"])
 	assert.Zero(t, postings["the GBP group fails interpolation"])
 	assert.Equal(t, "()", b.inventory("Assets:Stock").String())

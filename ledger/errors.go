@@ -251,7 +251,7 @@ func newCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message s
 // group's missing numbers Booking cannot complete. Like beancount's
 // InterpolationError, it blames the posting's line, with no entry.
 func newInterpolationError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
-	return newCurrencyGroupError(txn, posting, message).entryless()
+	return newError("InterpolationError", txn, posting.Account, "%s", message).atPosting(posting).entryless()
 }
 
 // newInvalidBookingMethodError creates an error for an open directive with an

@@ -1441,13 +1441,14 @@ func TestLedger_CurrencyGroupErrorsReadAsBeancounts(t *testing.T) {
 `)
 	_, validationErrors := processDiagnostics(t, New(), tree)
 
-	var messages []string
+	var kinds, messages []string
 	for _, err := range validationErrors {
 		diagnostic := err.(*Diagnostic)
-		assert.Equal(t, "CurrencyGroupError", diagnostic.kind)
 		assert.NotZero(t, diagnostic.account)
+		kinds = append(kinds, diagnostic.kind)
 		messages = append(messages, diagnostic.message)
 	}
+	assert.Equal(t, []string{"CurrencyGroupError", "CurrencyGroupError", "InterpolationError"}, kinds)
 	assert.Equal(t, []string{
 		"Failed to categorize posting 1",
 		"You may not have more than one auto-posting per currency",
