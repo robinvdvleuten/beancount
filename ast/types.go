@@ -149,12 +149,12 @@ func (a *Account) Capture(values []string) error {
 	// Validate first segment (account type) - must be a valid identifier
 	// Actual type validation (checking against configured names) happens in ledger validation,
 	// allowing for custom account types via name_* options
-	if !isValidAccountSegment(parts[0]) {
+	if !isValidAccountType(parts[0]) {
 		return fmt.Errorf("invalid account type at position 0: %s", parts[0])
 	}
 
 	for i := 1; i < len(parts); i++ {
-		if !LexesAccountComponent(parts[i], false) {
+		if !lexesAccountComponent(parts[i]) {
 			return fmt.Errorf("invalid account segment at position %d: %s", i, parts[i])
 		}
 	}
@@ -208,40 +208,52 @@ func (a Account) Root() string {
 	return string(a)[:idx]
 }
 
-// LexesAccountComponent reports whether beancount's lexer reads component
-// as one of an account's colon-separated components: not empty, starting
-// with an ASCII capital letter (or a digit, past the account's type) or any
-// non-ASCII character, and going on with ASCII letters, digits and dashes or
-// non-ASCII characters. Only its grammar's account pattern looks at the
-// non-ASCII characters.
-func LexesAccountComponent(component string, isType bool) bool {
-	if component == "" {
+// LexesAccount reports whether beancount's lexer reads name as an account:
+// colon-separated components, the first a type starting with an ASCII
+// capital letter or a non-ASCII character, each other one starting with an
+// ASCII capital letter, an ASCII digit or a non-ASCII character. Only its
+// grammar's account pattern looks at the non-ASCII characters.
+func LexesAccount(name string) bool {
+	components := strings.Split(name, ":")
+	if len(components) < 2 {
 		return false
 	}
-	if first := component[0]; first < utf8.RuneSelf && !isASCIIUpper(first) && (isType || !isASCIIDigit(first)) {
-		return false
-	}
-	for i := 1; i < len(component); i++ {
-		if ch := component[i]; ch < utf8.RuneSelf && !isASCIIUpper(ch) && !isASCIILower(ch) && !isASCIIDigit(ch) && ch != '-' {
+	for i, component := range components {
+		if !lexesAccountComponent(component) || (i == 0 && '0' <= component[0] && component[0] <= '9') {
 			return false
 		}
 	}
 	return true
 }
 
-func isASCIIUpper(ch byte) bool { return 'A' <= ch && ch <= 'Z' }
-func isASCIILower(ch byte) bool { return 'a' <= ch && ch <= 'z' }
-func isASCIIDigit(ch byte) bool { return '0' <= ch && ch <= '9' }
+// lexesAccountComponent reports whether beancount's lexer reads component
+// as an account component: not empty, starting with an ASCII capital letter,
+// an ASCII digit or a non-ASCII character, and going on with ASCII letters,
+// digits and dashes or non-ASCII characters.
+func lexesAccountComponent(component string) bool {
+	if component == "" {
+		return false
+	}
+	if first := component[0]; first < utf8.RuneSelf && (first < 'A' || first > 'Z') && (first < '0' || first > '9') {
+		return false
+	}
+	for i := 1; i < len(component); i++ {
+		ch := component[i]
+		if ch < utf8.RuneSelf && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
+			return false
+		}
+	}
+	return true
+}
 
-// accountSegmentRegex validates an account's type segment, its root, which
-// the ledger checks against the configured names: an uppercase letter, a
-// digit or a letter of a script without case, then letters, digits and
-// hyphens.
-var accountSegmentRegex = regexp.MustCompile(`^[\p{Lu}\p{Nd}\p{Lo}][\p{L}\p{Nd}-]*$`)
+// accountTypeRegex validates an account's type, its root, which the ledger
+// checks against the configured names: an uppercase letter or a letter of a
+// script without case, then letters, digits and hyphens.
+var accountTypeRegex = regexp.MustCompile(`^[\p{Lu}\p{Lo}][\p{L}\p{Nd}-]*$`)
 
-// isValidAccountSegment checks whether an account's type segment is valid.
-func isValidAccountSegment(segment string) bool {
-	return len(segment) > 0 && accountSegmentRegex.MatchString(segment)
+// isValidAccountType checks whether an account's type segment is valid.
+func isValidAccountType(segment string) bool {
+	return accountTypeRegex.MatchString(segment)
 }
 
 // Date represents a calendar date in ISO 8601 format (YYYY-MM-DD). All Beancount

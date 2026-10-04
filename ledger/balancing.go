@@ -90,6 +90,23 @@ type residual struct {
 	number   decimal.Decimal
 }
 
+// sortKey is the residual's Position.sortkey, a position without cost.
+func (r residual) sortKey() SortKey {
+	return SortKey{Currency: r.currency, Number: r.number}
+}
+
+// residualsBeyond returns the residuals in balance larger than their
+// currency's tolerance, in residualCurrencies' order.
+func residualsBeyond(allWeights []weightSet, balance map[string]decimal.Decimal, tolerance func(currency string) decimal.Decimal) []residual {
+	var residuals []residual
+	for _, currency := range residualCurrencies(allWeights, balance) {
+		if number := balance[currency]; number.Abs().GreaterThan(tolerance(currency)) {
+			residuals = append(residuals, residual{currency, number})
+		}
+	}
+	return residuals
+}
+
 // residualCurrencies returns the currencies with a non-zero residual, in the
 // order their weights first appear in the transaction (beancount orders its
 // currency groups by first posting), then any others sorted.

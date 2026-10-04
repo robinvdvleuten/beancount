@@ -130,6 +130,7 @@ func TestNewAccount(t *testing.T) {
 
 		// Invalid cases
 		{"LowercaseStart", "Assets:bank:Account", true},
+		{"TypeStartsWithDigit", "1Assets:Bank", true},
 		{"SpecialChar", "Assets:Bank$Account", true},
 		{"Space", "Assets:Bank Account", true},
 	}

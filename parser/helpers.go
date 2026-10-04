@@ -990,12 +990,7 @@ func lexerRejectsAccount(name []byte) bool {
 	if !bytes.Contains(name, []byte(":")) {
 		return !isCurrencyWord(name)
 	}
-	for i, component := range strings.Split(string(name), ":") {
-		if !ast.LexesAccountComponent(component, i == 0) {
-			return true
-		}
-	}
-	return false
+	return !ast.LexesAccount(string(name))
 }
 
 // isCurrencyWord reports whether name matches beancount's currency pattern

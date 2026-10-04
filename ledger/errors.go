@@ -275,9 +275,7 @@ func newUnbookedTransactionError(txn *ast.Transaction) *Diagnostic {
 // each number as Python's str() writes it.
 func newTransactionNotBalancedError(txn *ast.Transaction, residuals []residual) *Diagnostic {
 	sorted := slices.Clone(residuals)
-	slices.SortStableFunc(sorted, func(a, b residual) int {
-		return SortKey{Currency: a.currency, Number: a.number}.Compare(SortKey{Currency: b.currency, Number: b.number})
-	})
+	slices.SortStableFunc(sorted, func(a, b residual) int { return a.sortKey().Compare(b.sortKey()) })
 	parts := make([]string, len(sorted))
 	for i, r := range sorted {
 		parts[i] = pydecimal.String(r.number) + " " + r.currency

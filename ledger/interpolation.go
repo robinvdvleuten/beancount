@@ -254,11 +254,8 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 
 		if len(balance) > 1 {
 			// Multiple currencies - ambiguous
-			var residuals []residual
-			for _, currency := range residualCurrencies(allWeights, balance) {
-				residuals = append(residuals, residual{currency, balance[currency]})
-			}
-			return nil, []error{newTransactionNotBalancedError(txn, residuals)}
+			nonZero := func(string) decimal.Decimal { return decimal.Zero }
+			return nil, []error{newTransactionNotBalancedError(txn, residualsBeyond(allWeights, balance, nonZero))}
 		}
 		// The group's residual, zero when nothing else in the group
 		// weighs, as for {USD} next to postings in other currencies.
@@ -301,12 +298,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// booked postings: interpolated amounts count, and costs count per
 	// unit, with inferred cost numbers resolved.
 	bookedTolerances := specTolerances.tolerances.booked(txn.Postings, amounts, costs, reducedPositions)
-	var residuals []residual
-	for _, currency := range residualCurrencies(allWeights, balance) {
-		if number := balance[currency]; number.Abs().GreaterThan(bookedTolerances.of(currency)) {
-			residuals = append(residuals, residual{currency, number})
-		}
-	}
+	residuals := residualsBeyond(allWeights, balance, bookedTolerances.of)
 
 	interpolated := &interpolatedGroup{
 		postings:  make([]interpolatedPosting, len(group.postings)),
