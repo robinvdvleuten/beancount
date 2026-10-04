@@ -36,11 +36,18 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	}
 	tok := p.advance()
 
+	// Like any invalid token, an account word beancount's lexer rejects is a
+	// syntax error, which drops the directive it is in.
+	if lexerRejectsAccount(tok.Bytes(p.source)) {
+		return "", p.errorAtToken(tok, "invalid token %q", tok.String(p.source))
+	}
+
 	// Intern account name for memory efficiency
 	accountStr := p.internIdent(tok)
 
 	// Like beancount, an account its lexer reads but its account pattern
-	// rejects is reported and still read, so the directive stays.
+	// rejects (a non-ASCII character it does not admit) is reported and
+	// still read, so the directive stays.
 	var account ast.Account
 	if err := account.Capture([]string{accountStr}); err != nil {
 		pos := tokenPosition(tok, p.filename)

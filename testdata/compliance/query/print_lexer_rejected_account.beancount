@@ -1,0 +1,17 @@
+; An account word beancount's lexer rejects is an invalid token, which drops
+; the directive it is in, a transaction it is posted to or written in as a
+; metadata value included.
+2020-01-01 open Assets:bank
+2020-01-01 open Assets:Ok
+2020-01-02 note Assets:bank "x"
+
+2020-01-03 * "posting"
+  Assets:Ok     1 USD
+  Assets:bank  -1 USD
+
+2020-01-04 * "metadata"
+  ref: Assets:bank
+  Assets:Ok   1 USD
+  Assets:Ok  -1 USD
+
+2020-01-05 balance Assets:Ok 0 USD
