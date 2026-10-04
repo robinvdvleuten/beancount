@@ -114,6 +114,11 @@ var knownDivergences = []struct {
 	{"check-lines", "KNOWN_GAPS.md, deliberate: a tag or link after a posting is a syntax error on its own line", bodyTagAfterPosting.MatchString},
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
+	{"", "#689: a posting with a cost and no units takes another posting's currency", costWithoutUnits.MatchString},
+	{"check-lines", "#690: a duplicate open's currencies do not replace the first open's", hasDuplicateOpen},
+	{"query", "#694: a tag or link after a posting drops the transaction", bodyTagAfterPosting.MatchString},
+	{"query", "#695: the deprecated pipe between payee and narration drops the transaction", payeePipe.MatchString},
+	{"query", "#698: a directive with an account beancount's lexer rejects is not dropped", lowercaseAccount.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
 }
 
@@ -121,8 +126,23 @@ var (
 	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
 	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+[A-Z].*\n[ \t]+[#^]`)
+	costWithoutUnits    = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+\{[^}\n]*\}[ \t\r]*$`)
+	openLine            = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+open\s+(\S+)`)
+	payeePipe           = regexp.MustCompile(`"[ \t]*\|[ \t]*"`)
+	lowercaseAccount    = regexp.MustCompile(`\b[A-Z][A-Za-z0-9-]*:[a-z]`)
 	customAccount       = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
 )
+
+func hasDuplicateOpen(src string) bool {
+	opened := map[string]bool{}
+	for _, open := range openLine.FindAllStringSubmatch(src, -1) {
+		if opened[open[1]] {
+			return true
+		}
+		opened[open[1]] = true
+	}
+	return false
+}
 
 func hasIgnoredPlugin(src string) bool {
 	for _, plugin := range pluginLine.FindAllStringSubmatch(src, -1) {
@@ -904,6 +924,14 @@ func TestKnownDivergences(t *testing.T) {
 
 	assert.True(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\nplugin \"beancount.plugins.leafonly\"\n"))
 	assert.False(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\n"))
+
+	assert.True(t, costWithoutUnits.MatchString("2020-01-02 *\n  Assets:Cash    {1.5 USD}\n"))
+	assert.False(t, costWithoutUnits.MatchString("2020-01-02 *\n  Assets:Cash  1 HOOL {1.5 USD}\n"))
+	assert.True(t, hasDuplicateOpen("2020-01-01 open Assets:A USD\n2020-01-02 open Assets:A EUR\n"))
+	assert.False(t, hasDuplicateOpen("2020-01-01 open Assets:A\n2020-01-02 open Assets:B\n"))
+	assert.True(t, payeePipe.MatchString("2020-01-02 * \"Payee\" | \"Narration\"\n"))
+	assert.True(t, lowercaseAccount.MatchString("2020-01-01 open Assets:bank\n"))
+	assert.False(t, lowercaseAccount.MatchString("2020-01-01 open Assets:Bank\n  key: \"v\"\n"))
 
 	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
 	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))
