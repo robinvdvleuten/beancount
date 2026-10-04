@@ -104,6 +104,10 @@ type BalanceMismatchError struct {
 	Difference decimal.Decimal
 }
 
+// Unwrap returns the embedded Diagnostic, so that errors.As matches a failed
+// assertion as a *Diagnostic, like every other ledger error.
+func (e *BalanceMismatchError) Unwrap() error { return &e.Diagnostic }
+
 // newBalanceMismatchError creates an error for a balance assertion whose
 // account holds actual instead of the expected amount.
 func newBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Decimal) *BalanceMismatchError {

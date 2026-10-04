@@ -88,3 +88,21 @@ func TestDuplicateBalanceWithADifferentAmount(t *testing.T) {
 	duplicate := errs[1]
 	assert.Equal(t, 10, duplicate.(*Diagnostic).GetPosition().Line)
 }
+
+// TestBalanceMismatchMatchesDiagnostic checks that errors.As matches a failed
+// balance assertion as a *Diagnostic, as it does every other ledger error,
+// and as a *BalanceMismatchError.
+func TestBalanceMismatchMatchesDiagnostic(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), "2020-01-01 open Assets:Cash\n2020-01-02 balance Assets:Cash 1 USD\n")
+	l := New()
+	_, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	var d *Diagnostic
+	assert.True(t, errors.As(errs[0], &d), "got %v", errs[0])
+	assert.Equal(t, "BalanceMismatchError", d.Kind())
+	var mismatch *BalanceMismatchError
+	assert.True(t, errors.As(errs[0], &mismatch), "got %v", errs[0])
+}

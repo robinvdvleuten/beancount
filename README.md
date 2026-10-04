@@ -269,7 +269,7 @@ Every command is built from Go packages you can import. Use them when you need s
 go get github.com/robinvdvleuten/beancount
 ```
 
-**Load and check a ledger.** `ledgerload.Load` loads and processes it the way `beancount check` does, and `Errors()` returns the errors it found. Each is a `*ledger.Diagnostic`, with its `Kind()` (such as `"AccountNotOpenError"`), its `Message()` and its source position, `GetPosition()`. A failed balance assertion is a `*ledger.BalanceMismatchError`, which embeds one and adds the `Difference`; it is the one type to match with `errors.As`:
+**Load and check a ledger.** `ledgerload.Load` loads and processes it the way `beancount check` does, and `Errors()` returns the errors it found. Each is a `*ledger.Diagnostic` to `errors.As`, with its `Kind()` (such as `"AccountNotOpenError"`), its `Message()` and its source position, `GetPosition()`. A failed balance assertion is also a `*ledger.BalanceMismatchError`, which embeds one and adds the `Difference`:
 
 ```go
 ctx := context.Background()
