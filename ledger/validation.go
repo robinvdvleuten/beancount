@@ -399,7 +399,7 @@ func (v *validator) isAccountActiveAllowingClose(account ast.Account, date *ast.
 //
 // It validates that:
 //   - Account does not already exist (duplicate open directives are errors)
-//   - Copies metadata and constraint currencies to avoid shared AST references
+//   - Copies metadata to avoid shared AST references
 //
 // Beancount compliance: Reopening a closed account is NOT allowed.
 // Any duplicate open directive is an error, regardless of whether the account

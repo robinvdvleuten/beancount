@@ -76,51 +76,37 @@ func keepLastMetadata(metadata []*ast.Metadata) []*ast.Metadata {
 // withMetadata returns a copy of a directive other than a transaction,
 // holding the metadata given.
 func withMetadata(directive ast.Directive, metadata []*ast.Metadata) ast.Directive {
-	switch d := directive.(type) {
-	case *ast.Commodity:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Open:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Close:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Balance:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Pad:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Note:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Document:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Price:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Event:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Query:
-		c := *d
-		c.Metadata = metadata
-		return &c
-	case *ast.Custom:
-		c := *d
-		c.Metadata = metadata
-		return &c
+	copyOf, ok := metadataCopiers[directive.Kind()]
+	if !ok {
+		return directive
 	}
-	return directive
+	return copyOf(directive, metadata)
+}
+
+// metadataCopiers copies each kind of directive but a transaction with
+// other metadata.
+var metadataCopiers = map[ast.DirectiveKind]func(ast.Directive, []*ast.Metadata) ast.Directive{
+	ast.KindCommodity: copyWithMetadata[ast.Commodity],
+	ast.KindOpen:      copyWithMetadata[ast.Open],
+	ast.KindClose:     copyWithMetadata[ast.Close],
+	ast.KindBalance:   copyWithMetadata[ast.Balance],
+	ast.KindPad:       copyWithMetadata[ast.Pad],
+	ast.KindNote:      copyWithMetadata[ast.Note],
+	ast.KindDocument:  copyWithMetadata[ast.Document],
+	ast.KindPrice:     copyWithMetadata[ast.Price],
+	ast.KindEvent:     copyWithMetadata[ast.Event],
+	ast.KindQuery:     copyWithMetadata[ast.Query],
+	ast.KindCustom:    copyWithMetadata[ast.Custom],
+}
+
+// copyWithMetadata copies a directive of type T and gives the copy the
+// metadata given.
+func copyWithMetadata[T any, P interface {
+	*T
+	ast.Directive
+	SetMetadata([]*ast.Metadata)
+}](directive ast.Directive, metadata []*ast.Metadata) ast.Directive {
+	copied := *directive.(P)
+	P(&copied).SetMetadata(metadata)
+	return P(&copied)
 }

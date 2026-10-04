@@ -125,6 +125,9 @@ func (w *withMetadata) AddMetadata(m ...*Metadata) {
 
 func (w *withMetadata) GetMetadata() []*Metadata { return w.Metadata }
 
+// SetMetadata replaces the metadata.
+func (w *withMetadata) SetMetadata(m []*Metadata) { w.Metadata = m }
+
 func (w *withMetadata) HasMetadata() bool {
 	return len(w.Metadata) > 0
 }
