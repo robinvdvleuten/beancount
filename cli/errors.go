@@ -86,9 +86,12 @@ func (f *FileOrStdin) reportLoadFailure(stderr io.Writer, layout loadFailureLayo
 // an error about a directive shows the directive under it.
 func (r *ErrorRenderer) Render(err error) string {
 	if e, ok := err.(interface{ GetDirective() ast.Directive }); ok {
+		// A ledger error with no directive, like one beancount raises
+		// with no entry, is printed on its own.
 		if context := directiveContext(e.GetDirective(), r.print...); context != "" {
 			return errorStyle.Render(err.Error()) + "\n\n" + context
 		}
+		return errorStyle.Render(err.Error())
 	}
 
 	if e, ok := err.(*parser.ParseError); ok {

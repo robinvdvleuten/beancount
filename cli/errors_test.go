@@ -317,12 +317,10 @@ func TestCheckShowsAMainFilePluginErrorInTheMainFile(t *testing.T) {
 		"plugin \"beancount.plugins.nope\"\n\ninclude \"sub.beancount\"\n\n2020-01-01 open Assets:Cash\n",
 		"2020-01-01 open Assets:Bank\n")
 
+	// Like an error beancount raises with no entry, it is printed alone.
 	output := runOurCheck(t, mainPath)
-	assert.Contains(t, output, mainPath+":1: Error importing \"beancount.plugins.nope\"\n\n"+
-		"   plugin \"beancount.plugins.nope\"\n"+
-		"   ^\n"+
-		"   \n"+
-		"   include \"sub.beancount\"\n")
+	assert.Equal(t, mainPath+":1: Error importing \"beancount.plugins.nope\"\n\n"+
+		"✗ 1 validation error(s) found\n", output)
 }
 
 func TestCheckShowsAnIncludedSyntaxErrorWithoutContext(t *testing.T) {
@@ -425,4 +423,33 @@ func TestCheckDirectoryReportsTheLoadError(t *testing.T) {
 	assert.Contains(t, stderr, "failed to read "+dir)
 	assert.Contains(t, stderr, "is a directory")
 	assert.NotContains(t, stderr, "error context")
+}
+
+// TestCheckShowsAnEntrylessErrorAlone pins check's layout against
+// bean-check's for an error beancount raises with no entry ("Cannot infer
+// price ...", from interpolate_group): the error line alone, while an error
+// about the transaction shows it under the line.
+func TestCheckShowsAnEntrylessErrorAlone(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "main.beancount")
+	assert.NoError(t, os.WriteFile(path, []byte(`option "booking_method" "HIFO"
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Stock
+2020-01-01 open Equity:Open
+
+2020-01-03 * "Lot b"
+  Assets:Stock  10 HOOL {20 USD, "lotb"}
+  Equity:Open
+
+2020-02-01 *
+  Assets:Cash   0 USD
+  Assets:Stock  -3 HOOL {} @ USD
+`), 0o644))
+
+	output := runOurCheck(t, path)
+	assert.Equal(t, path+":12: Cannot infer price for postings with units held at cost\n\n"+
+		path+":10: Transaction does not balance: (-60 USD)\n\n"+
+		"   2020-02-01 * \n"+
+		"     Assets:Cash    0 USD\n"+
+		"     Assets:Stock  -3 HOOL {20 USD, 2020-01-03, \"lotb\"} @  USD\n\n\n"+
+		"✗ 2 validation error(s) found\n", output)
 }

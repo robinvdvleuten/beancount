@@ -107,7 +107,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// the one place that rule is decided: past it, at most one of the steps
 	// below finds a number to complete.
 	if first := tooManyMissing(group, reducedPositions); first != nil {
-		return nil, []error{newCurrencyGroupError(txn, first,
+		return nil, []error{newInterpolationError(txn, first,
 			fmt.Sprintf("Too many missing numbers for currency group '%s'", group.currency))}
 	}
 
@@ -158,7 +158,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// without the posting, and its residual reported.
 	var kept []error
 	if posting := currencyOnlyAmount; posting != nil && zeroPerUnitCost(posting.Cost) {
-		kept = append(kept, newCurrencyGroupError(txn, posting, "Cannot infer per-unit cost only from total"))
+		kept = append(kept, newInterpolationError(txn, posting, "Cannot infer per-unit cost only from total"))
 		leftOut = append(leftOut, posting)
 		currencyOnlyAmount = nil
 	}
@@ -173,7 +173,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		if !ok {
 			// Past tooManyMissing and zeroPerUnitCost, only a zero price
 			// is left, at which beancount fails dividing by zero.
-			return nil, []error{newCurrencyGroupError(txn, posting, "Cannot infer units at a zero price")}
+			return nil, []error{newInterpolationError(txn, posting, "Cannot infer units at a zero price")}
 		}
 
 		weight := balance[weightCurrency].Neg()
@@ -211,7 +211,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// the group is still booked, the posting weighing at its cost and its
 	// price left without a number, and its residual reported.
 	if posting := valuelessPrice; posting != nil && posting.Cost != nil {
-		kept = append(kept, newCurrencyGroupError(txn, posting, "Cannot infer price for postings with units held at cost"))
+		kept = append(kept, newInterpolationError(txn, posting, "Cannot infer price for postings with units held at cost"))
 		valuelessPrice = nil
 	}
 	if posting := valuelessPrice; posting != nil {

@@ -46,6 +46,14 @@ func (e *Diagnostic) atPosting(posting *ast.Posting) *Diagnostic {
 	return e
 }
 
+// entryless drops the error's directive, keeping its position, date and
+// account, for an error beancount raises with no entry: bean-check prints
+// it on its own.
+func (e *Diagnostic) entryless() *Diagnostic {
+	e.directive = nil
+	return e
+}
+
 var _ diagnostic.Positioned = (*Diagnostic)(nil)
 
 // Kind names the kind of error, e.g. "AccountNotOpenError".
@@ -195,17 +203,17 @@ func newDuplicateBalanceError(balance *ast.Balance) *Diagnostic {
 }
 
 // newNegativeCostError creates an error for a posting booked at a negative
-// cost. Like beancount, it blames the posting's line.
+// cost. Like beancount, it blames the posting's line, with no entry.
 func newNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *Diagnostic {
 	return newError("NegativeCostError", txn, posting.Account,
-		"Cost is negative: %s %s (account %s)", pydecimal.String(cost), currency, posting.Account).atPosting(posting)
+		"Cost is negative: %s %s (account %s)", pydecimal.String(cost), currency, posting.Account).atPosting(posting).entryless()
 }
 
 // newZeroAmountError creates an error for a posting booked at cost with zero
-// units. Like beancount, it blames the posting's line.
+// units. Like beancount, it blames the posting's line, with no entry.
 func newZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("ZeroAmountError", txn, posting.Account,
-		"Amount is zero: \"%s %s\"", posting.Amount.Value, posting.Amount.Currency).atPosting(posting)
+		"Amount is zero: \"%s %s\"", posting.Amount.Value, posting.Amount.Currency).atPosting(posting).entryless()
 }
 
 // newMergeCostError creates an error for a posting with a merge cost {*},
@@ -213,7 +221,7 @@ func newZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic 
 // beancount, it blames the posting's line and uses its words.
 func newMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("MergeCostError", txn, posting.Account,
-		"Cost merging is not supported yet").atPosting(posting)
+		"Cost merging is not supported yet").atPosting(posting).entryless()
 }
 
 // newNegativePriceError creates an error for a posting with a negative
@@ -233,11 +241,17 @@ func newTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) 
 }
 
 // newCurrencyGroupError creates an error for a posting that Booking cannot
-// sort into a Currency group, or whose group's missing numbers it cannot
-// complete. Like beancount, it blames the posting's line and prints the
-// message alone.
+// sort into a Currency group. Like beancount's CategorizationError, it
+// blames the posting's line and carries the transaction.
 func newCurrencyGroupError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
 	return newError("CurrencyGroupError", txn, posting.Account, "%s", message).atPosting(posting)
+}
+
+// newInterpolationError creates an error for a posting whose Currency
+// group's missing numbers Booking cannot complete. Like beancount's
+// InterpolationError, it blames the posting's line, with no entry.
+func newInterpolationError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
+	return newCurrencyGroupError(txn, posting, message).entryless()
 }
 
 // newInvalidBookingMethodError creates an error for an open directive with an
