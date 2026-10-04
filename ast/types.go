@@ -5,6 +5,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+	"unicode"
+	"unicode/utf8"
 )
 
 // RawString stores both the raw token (including quotes and escapes) and the unquoted
@@ -124,8 +126,9 @@ func (c *Cost) IsMergeCost() bool {
 
 // Account represents a Beancount account name consisting of at least two colon-separated
 // segments. The first segment (account type) must be one of the five account categories:
-// Assets, Liabilities, Equity, Income, or Expenses. Subsequent segments must start with
-// an uppercase letter or digit and can contain letters, numbers, and hyphens.
+// Assets, Liabilities, Equity, Income, or Expenses. Like beancount's grammar, which
+// matches its account pattern at the start only, the name is valid once the second
+// segment starts with an uppercase letter or a digit; the rest is not checked.
 //
 // Example accounts:
 //
@@ -150,11 +153,13 @@ func (a *Account) Capture(values []string) error {
 		return fmt.Errorf("invalid account type at position 0: %s", parts[0])
 	}
 
-	// Validate subsequent segments
 	for i := 1; i < len(parts); i++ {
-		if !isValidAccountSegment(parts[i]) {
+		if !LexesAccountComponent(parts[i], false) {
 			return fmt.Errorf("invalid account segment at position %d: %s", i, parts[i])
 		}
+	}
+	if first, _ := utf8.DecodeRuneInString(parts[1]); !unicode.In(first, unicode.Lu, unicode.Nd) {
+		return fmt.Errorf("invalid account segment at position 1: %s", parts[1])
 	}
 
 	*a = Account(values[0])
@@ -203,19 +208,38 @@ func (a Account) Root() string {
 	return string(a)[:idx]
 }
 
-// accountSegmentRegex validates account segments (after first).
-// Must start with uppercase Unicode letter, digit, or any non-ASCII Unicode character.
-// Can contain Unicode letters, digits, and hyphens.
-// Matches official beancount behavior supporting international characters including
-// scripts without case distinction (Chinese, Japanese, Korean, Arabic, Hebrew, Thai, etc.).
-// Pattern: [\p{Lu}\p{Nd}\p{Lo}][\p{L}\p{Nd}-]*
-// - \p{Lu} = Unicode uppercase letters (Latin, Cyrillic, Greek, etc.)
-// - \p{Nd} = Unicode decimal digits
-// - \p{Lo} = Other letters (Chinese, Japanese, Korean, Arabic, Hebrew, etc.)
-// - \p{L}  = All Unicode letters (any case, any script)
+// LexesAccountComponent reports whether beancount's lexer reads component
+// as one of an account's colon-separated components: not empty, starting
+// with an ASCII capital letter (or a digit, past the account's type) or any
+// non-ASCII character, and going on with ASCII letters, digits and dashes or
+// non-ASCII characters. Only its grammar's account pattern looks at the
+// non-ASCII characters.
+func LexesAccountComponent(component string, isType bool) bool {
+	if component == "" {
+		return false
+	}
+	if first := component[0]; first < utf8.RuneSelf && !isASCIIUpper(first) && (isType || !isASCIIDigit(first)) {
+		return false
+	}
+	for i := 1; i < len(component); i++ {
+		if ch := component[i]; ch < utf8.RuneSelf && !isASCIIUpper(ch) && !isASCIILower(ch) && !isASCIIDigit(ch) && ch != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func isASCIIUpper(ch byte) bool { return 'A' <= ch && ch <= 'Z' }
+func isASCIILower(ch byte) bool { return 'a' <= ch && ch <= 'z' }
+func isASCIIDigit(ch byte) bool { return '0' <= ch && ch <= '9' }
+
+// accountSegmentRegex validates an account's type segment, its root, which
+// the ledger checks against the configured names: an uppercase letter, a
+// digit or a letter of a script without case, then letters, digits and
+// hyphens.
 var accountSegmentRegex = regexp.MustCompile(`^[\p{Lu}\p{Nd}\p{Lo}][\p{L}\p{Nd}-]*$`)
 
-// isValidAccountSegment checks if an account segment (after first) is valid.
+// isValidAccountSegment checks whether an account's type segment is valid.
 func isValidAccountSegment(segment string) bool {
 	return len(segment) > 0 && accountSegmentRegex.MatchString(segment)
 }

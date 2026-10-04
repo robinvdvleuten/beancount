@@ -990,17 +990,9 @@ func lexerRejectsAccount(name []byte) bool {
 	if !bytes.Contains(name, []byte(":")) {
 		return !isCurrencyWord(name)
 	}
-	for i, component := range bytes.Split(name, []byte(":")) {
-		if len(component) == 0 {
+	for i, component := range strings.Split(string(name), ":") {
+		if !ast.LexesAccountComponent(component, i == 0) {
 			return true
-		}
-		if first := component[0]; first < utf8.RuneSelf && !isUppercaseLetter(first) && (i == 0 || !isDigit(first)) {
-			return true
-		}
-		for _, ch := range component[1:] {
-			if ch < utf8.RuneSelf && !isLetter(ch) && !isDigit(ch) && ch != '-' {
-				return true
-			}
 		}
 	}
 	return false

@@ -1,0 +1,13 @@
+; An account whose first component does not start with an uppercase letter
+; or a digit is invalid, even when beancount's lexer reads it.
+2020-01-01 open Equity:Open
+2020-01-01 open Assets:́X
+2020-01-01 open Assets:日本
+
+2020-01-02 *
+  Assets:́X  1 USD
+  Equity:Open
+
+2020-01-03 *
+  Assets:日本  1 USD
+  Equity:Open

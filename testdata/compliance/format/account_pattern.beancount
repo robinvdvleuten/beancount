@@ -1,15 +1,16 @@
-; beancount's account pattern wants each component to start with an
-; uppercase letter or a digit, so bean-format leaves an account with a
-; component starting otherwise as written: not aligned, not re-indented,
-; and not counted for the column widths or the posting indent.
+; bean-format's account pattern wants each component to start with an
+; uppercase letter or a digit, while beancount's grammar checks only the
+; first, so bean-format leaves a valid account with a later component
+; starting otherwise as written: not aligned, not re-indented, and not
+; counted for the column widths or the posting indent.
 2020-01-01 open Assets:Cash
-2020-01-01 open Assets:日本
+2020-01-01 open Assets:X:日本
 2020-01-01 open Assets:Cash:日本
 2020-01-01 open Assets:Ébène
 
 2020-01-02 *
-    Assets:日本 100 JPY
-    Assets:日本 100 JPY
+    Assets:X:日本 100 JPY
+    Assets:X:日本 100 JPY
     Assets:Cash:日本   100 JPY
   Assets:Ébène 1 JPY
   Assets:Cash -301 JPY

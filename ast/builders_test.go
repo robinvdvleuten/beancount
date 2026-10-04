@@ -105,13 +105,19 @@ func TestNewAccount(t *testing.T) {
 		{"French", "Assets:Bank:Société-Générale", false},
 		{"German", "Expenses:Café:München", false},
 		{"Spanish", "Liabilities:Préstamos", false},
-		{"Chinese", "Assets:银行:中国", false},
-		{"Japanese", "Income:会社:給料", false},
-		{"Korean", "Assets:은행:계좌", false},
 		{"Cyrillic", "Expenses:Кафе:Москва", false},
 		{"Greek", "Assets:Τράπεζα:Αθήνα", false},
-		{"Arabic", "Assets:بنك:حساب", false},
 		{"Mixed", "Assets:Café:München:中国", false},
+		// Like beancount, only the second segment's first character must be
+		// an uppercase letter or a digit; the rest is not checked.
+		{"Emoji", "Assets:X\U0001F389", false},
+		{"CombiningMark", "Assets:Cafe\u0301:\u0301B", false},
+		// A script without case has no uppercase letter to start with.
+		{"Chinese", "Assets:银行:中国", true},
+		{"Japanese", "Income:会社:給料", true},
+		{"Korean", "Assets:은행:계좌", true},
+		{"Arabic", "Assets:بنك:حساب", true},
+		{"CombiningMarkFirst", "Assets:\u0301X", true},
 
 		// Custom root names (allowed by parser, validated in ledger)
 		{"CustomRoot", "Vermoegen:Checking", false},

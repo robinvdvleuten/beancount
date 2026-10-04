@@ -1,0 +1,24 @@
+; Like beancount's grammar, which matches its account pattern at the start
+; only, an account is valid once its root and first component's first
+; character match: an emoji or a combining mark after them is not checked.
+2020-01-01 open Equity:Open
+2020-01-01 open Assets:X🎉
+2020-01-01 open Assets:Café
+2020-01-01 open Assets:Á:́B
+2020-01-01 open Assets:Cash:X🎉:Y
+
+2020-01-02 *
+  Assets:X🎉  1 USD
+  Equity:Open
+
+2020-01-03 *
+  Assets:Café  1 USD
+  Equity:Open
+
+2020-01-04 *
+  Assets:Á:́B  1 USD
+  Equity:Open
+
+2020-01-05 *
+  Assets:Cash:X🎉:Y  1 USD
+  Equity:Open
