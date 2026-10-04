@@ -412,7 +412,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 				assert.Equal(t, 1, len(errs))
 				assert.Equal(t, "TransactionNotBalancedError", kindOf(errs[0]))
 				// Should have residuals for both currencies
-				assert.Contains(t, errs[0].Error(), "(50 EUR, -100 USD)")
+				assert.Contains(t, errs[0].Error(), "(50.00 EUR, -100.00 USD)")
 			},
 		},
 	}
@@ -1649,4 +1649,43 @@ func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []string{"5.00", "7.50"}, costs)
+}
+
+// TestNotBalancedResidualKeepsTrailingZeros pins the residuals in "Transaction
+// does not balance" as bean-check prints them, Python's str() of the Decimal
+// the residual arithmetic leaves, trailing zeros included.
+func TestNotBalancedResidualKeepsTrailingZeros(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:Euros
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Other
+
+2020-01-02 *
+  Assets:Euros 33.333 EUR
+  Assets:Euros 100 EUR @ EUR
+
+2020-01-03 *
+  Assets:Cash 100 USD
+  Assets:Stock HOOL {10 # 5 USD}
+
+2020-01-04 *
+  Assets:Cash 100 USD
+  Assets:Other 10 HOOL {10 # 5 USD}
+`)
+	l := New()
+	_, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+
+	var messages []string
+	for _, err := range l.Errors() {
+		if kindOf(err) == "TransactionNotBalancedError" {
+			messages = append(messages, err.(*Diagnostic).message)
+		}
+	}
+	assert.Equal(t, []string{
+		"Transaction does not balance: (66.66600 EUR)",
+		"Transaction does not balance: (-10.0000000000000000000000000 USD)",
+		"Transaction does not balance: (205.0 USD)",
+	}, messages)
 }

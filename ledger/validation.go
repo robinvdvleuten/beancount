@@ -8,6 +8,7 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -183,7 +184,7 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 func newNotBalancedError(txn *ast.Transaction, residuals map[string]decimal.Decimal) error {
 	residualStrings := make(map[string]string, len(residuals))
 	for currency, amount := range residuals {
-		residualStrings[currency] = amount.String()
+		residualStrings[currency] = pydecimal.String(amount)
 	}
 	return newTransactionNotBalancedError(txn, residualStrings)
 }
