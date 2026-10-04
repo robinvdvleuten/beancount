@@ -510,8 +510,8 @@ func TestLedger_ProcessBalance(t *testing.T) {
 				balErr, ok := errs[0].(*BalanceMismatchError)
 				assert.True(t, ok, "should be BalanceMismatchError")
 				assert.Equal(t, "500", balErr.Difference.String())
-				assert.Contains(t, balErr.Error(), "Expected: 500 USD")
-				assert.Contains(t, balErr.Error(), "Actual:   1000 USD")
+				assert.Contains(t, balErr.Error(), "Expected: 500.00 USD")
+				assert.Contains(t, balErr.Error(), "Actual:   1000.00 USD")
 			},
 		},
 		{
@@ -1688,4 +1688,52 @@ func TestNotBalancedResidualKeepsTrailingZeros(t *testing.T) {
 		"Transaction does not balance: (-10.0000000000000000000000000 USD)",
 		"Transaction does not balance: (205.0 USD)",
 	}, messages)
+}
+
+// TestNegativeCostKeepsTrailingZeros pins the cost in "Cost is negative" as
+// Python's str() of its Decimal, trailing zeros included.
+func TestNegativeCostKeepsTrailingZeros(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:S
+2020-01-01 open Assets:C
+
+2020-01-02 *
+  Assets:S  1 HOOL {-5.00 USD}
+  Assets:C
+`)
+	l := New()
+	_, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+
+	var messages []string
+	for _, err := range l.Errors() {
+		if kindOf(err) == "NegativeCostError" {
+			messages = append(messages, err.(*Diagnostic).message)
+		}
+	}
+	assert.Equal(t, []string{"Cost is negative: -5.00 USD (account Assets:S)"}, messages)
+}
+
+// TestBalanceMismatchKeepsTrailingZeros pins the amounts in a balance
+// mismatch as Python's str() of their Decimals, trailing zeros included.
+func TestBalanceMismatchKeepsTrailingZeros(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Open
+
+2020-01-02 *
+  Assets:Cash  -5.00 USD
+  Equity:Open
+
+2020-01-03 balance Assets:Cash 1.000 USD
+`)
+	l := New()
+	_, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+
+	errs := l.Errors()
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	var mismatch *BalanceMismatchError
+	assert.True(t, errors.As(errs[0], &mismatch))
+	assert.Equal(t, "Balance mismatch for Assets:Cash:\n  Expected: 1.000 USD\n  Actual:   -5.00 USD", mismatch.message)
 }

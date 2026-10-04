@@ -115,7 +115,7 @@ func newBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Deci
 	return &BalanceMismatchError{
 		Diagnostic: *newError("BalanceMismatchError", balance, balance.Account,
 			"Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
-			balance.Account, expected.String(), currency, actual.String(), currency),
+			balance.Account, pydecimal.String(expected), currency, pydecimal.String(actual), currency),
 		Difference: pydecimal.Sub(actual, expected),
 	}
 }
@@ -198,7 +198,7 @@ func newDuplicateBalanceError(balance *ast.Balance) *Diagnostic {
 // cost. Like beancount, it blames the posting's line.
 func newNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *Diagnostic {
 	return newError("NegativeCostError", txn, posting.Account,
-		"Cost is negative: %s %s (account %s)", cost.String(), currency, posting.Account).atPosting(posting)
+		"Cost is negative: %s %s (account %s)", pydecimal.String(cost), currency, posting.Account).atPosting(posting)
 }
 
 // newZeroAmountError creates an error for a posting booked at cost with zero
