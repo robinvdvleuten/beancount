@@ -1,6 +1,9 @@
 version: "2"
 run:
   tests: true
+  # The differential fuzzer is in no test job, so lint is what compiles it.
+  build-tags:
+    - difffuzz
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0
