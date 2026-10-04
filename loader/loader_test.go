@@ -986,7 +986,7 @@ func TestLoadStdin(t *testing.T) {
 	ldr := New(WithFollowIncludes(), WithDocumentsDiscovery(), WithSyntaxRecovery())
 
 	t.Run("RecoversFromSyntaxErrors", func(t *testing.T) {
-		data := []byte("2024-01-01 open Assets:A\ngarbage\n2024-01-02 open Assets:B\nmore junk\n")
+		data := []byte("2024-01-01 open Assets:A\n\ngarbage\n2024-01-02 open Assets:B\n\nmore junk\n")
 
 		// Like a file, every syntax error is a diagnostic and the rest loads.
 		result, err := ldr.Load(context.Background(), Stdin(data))

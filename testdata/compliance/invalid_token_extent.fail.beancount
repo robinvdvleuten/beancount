@@ -1,0 +1,6 @@
+; Each invalid token runs to the next whitespace, and a keyword starting a
+; word is a token of its own.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A Ab"x y
+2020-01-03 opener Assets:A
+2020-01-04 note Assets:A $x"y .5 'P'

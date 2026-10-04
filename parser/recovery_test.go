@@ -12,7 +12,8 @@ import (
 
 // TestSyntaxErrorRecovery pins beancount's recovery: a syntax error drops
 // the directive it is in, indented lines included, and parsing resumes at
-// the next line that starts in column 1.
+// the next line that starts in column 1. An invalid token starting the line
+// after a directive drops that directive too ("fine").
 func TestSyntaxErrorRecovery(t *testing.T) {
 	source := `2020-01-01 open Assets:A
 2020-01-02 * "typo in a posting"
@@ -45,11 +46,10 @@ option "title"
 	}
 	assert.Equal(t, []string{
 		"2020-01-01 open",
-		"2020-01-03 transaction",
 		"2020-01-04 balance",
 		"2020-01-05 transaction",
 	}, kept)
-	assert.Equal(t, 1, len(tree.Directives[3].(*ast.Transaction).Postings))
+	assert.Equal(t, 1, len(tree.Directives[2].(*ast.Transaction).Postings))
 }
 
 // TestDirectiveHeaderEndsAtItsLine pins beancount's grammar, where a dated

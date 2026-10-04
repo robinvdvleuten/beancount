@@ -441,7 +441,7 @@ func TestParseMetadataRejectsUnsupportedUnquotedValues(t *testing.T) {
 		{
 			name:   "UnterminatedString",
 			source: "2024-01-01 commodity USD\n  name: \"unterminated\n",
-			want:   "unterminated string",
+			want:   `invalid token "\"unterminated"`,
 		},
 	}
 

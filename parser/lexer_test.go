@@ -762,14 +762,15 @@ func TestTransactionFlagTokens(t *testing.T) {
 func TestCapitalLetterTokens(t *testing.T) {
 	// Like beancount v3's CAPITAL token, [A-Z]/[ \t\n], a capital letter
 	// before whitespace is a currency or a flag: an IDENT. Before anything
-	// else, or at the end of the input, it is an invalid token.
+	// else, or at the end of the input, it starts an invalid token, which
+	// runs to the next whitespace.
 	tokens, err := NewLexer([]byte(" P V\tM Z\n"), "test.beancount").ScanAll()
 	assert.NoError(t, err)
 	assert.Equal(t, []TokenType{IDENT, IDENT, IDENT, IDENT, EOF}, tokenTypes(tokens))
 
 	tokens, err = NewLexer([]byte("V,P}V"), "test.beancount").ScanAll()
 	assert.NoError(t, err)
-	assert.Equal(t, []TokenType{ILLEGAL, COMMA, ILLEGAL, RBRACE, ILLEGAL, EOF}, tokenTypes(tokens))
+	assert.Equal(t, []TokenType{ILLEGAL, EOF}, tokenTypes(tokens))
 }
 
 func TestNonDirectiveLinesAreComments(t *testing.T) {

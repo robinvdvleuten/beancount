@@ -1,0 +1,17 @@
+; An invalid token starting the line after a dated directive drops the
+; directive, as Bison discards it while it waits to see whether it goes on.
+; A blank or comment line between keeps it.
+2020-01-01 open Assets:A
+yy
+2020-01-01 open Assets:A
+
+yy
+2020-01-02 * "x"
+  Assets:A   1 USD
+  Assets:A  -1 USD
+yy
+2020-01-02 * "x"
+  Assets:A   1 USD
+  Assets:A  -1 USD
+; c
+yy

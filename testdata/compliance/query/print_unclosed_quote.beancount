@@ -1,0 +1,7 @@
+; A quote no string closes is an invalid token up to the next whitespace, as
+; in beancount, and lexing goes on with the rest of the line and the file:
+; "closed" is the keyword close and an invalid d.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A "never closed
+2020-01-03 open Assets:B
+2020-01-04 open Assets:B

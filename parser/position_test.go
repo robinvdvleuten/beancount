@@ -351,7 +351,7 @@ func TestIllegalTokenDiagnostics(t *testing.T) {
 		{
 			name:    "unterminated string",
 			source:  `"missing`,
-			message: "unterminated string",
+			message: `invalid token "\"missing"`,
 		},
 		{
 			name: "unmatched expression",

@@ -83,6 +83,13 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			continuationLine = 0
 			continue
 		}
+		// Like an indented line, an invalid token starting the line after a
+		// dated directive drops it: beancount's lexer returns its error
+		// while the grammar still waits to see whether the directive goes
+		// on, and Bison's recovery discards the directive.
+		if tok.Line == continuationLine && p.lexerErrorAt(tok.Start) && len(tree.Directives) > 0 {
+			tree.Directives = tree.Directives[:len(tree.Directives)-1]
+		}
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0
 		}

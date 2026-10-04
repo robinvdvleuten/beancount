@@ -1,0 +1,7 @@
+; An invalid token runs to the next whitespace, a quote in it included,
+; so no string opens there.
+2020-01-01 open Assets:A
+y" #tag ; c
+2020-01-03 open Assets:B
+y" ; c
+2020-01-04 open Assets:B

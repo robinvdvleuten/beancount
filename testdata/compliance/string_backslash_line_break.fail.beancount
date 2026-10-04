@@ -1,0 +1,6 @@
+; Like beancount's string pattern, whose escape matches any character but a
+; line break, a backslash ending a line closes no string.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A "a\
+b"
+2020-01-03 note Assets:A "ok"

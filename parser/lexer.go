@@ -260,15 +260,13 @@ func (l *Lexer) scanToken() Token {
 			tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 		}
 
-	default:
-		if isControlChar(ch) {
-			// Like beancount's lexer, which skips an invalid token up to
-			// the next whitespace.
-			for l.pos < len(l.source) && !isWhitespaceOrLineBreak(l.source[l.pos]) {
-				l.advance()
-			}
-		}
+	// A sign, a closing parenthesis and a pipe are tokens of beancount's
+	// own, which only its grammar rejects.
+	case ch == '+' || ch == '-' || ch == ')' || ch == '|':
 		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
+
+	default:
+		tok = l.invalidToken(start, startLine, startCol)
 	}
 
 	// Consume trailing spaces/tabs only when they are followed by a line break.
@@ -452,41 +450,64 @@ func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
 }
 
 // scanString scans a quoted string: "..."
-// Strings may span multiple physical lines.
+// Strings may span multiple physical lines. Like beancount's string
+// pattern, a quote with no closing quote after it, or none before a
+// backslash ending a line, opens no string: it starts an invalid token.
 func (l *Lexer) scanString(start, line, col int) Token {
 	// Opening quote already consumed
+	if !l.closingQuoteAhead() {
+		return l.invalidToken(start, line, col)
+	}
 
-	// Scan until closing quote or end of source
-	closed := false
-	for l.pos < len(l.source) {
+	// Scan to the closing quote, counting the lines on the way.
+	for {
 		if l.lineBreakLenAt(l.pos) > 0 {
 			l.consumeLineBreak()
 			continue
 		}
-		ch := l.source[l.pos]
+		ch := l.advance()
 		if ch == '"' {
-			l.advance() // consume closing quote
-			closed = true
-			break
+			return Token{STRING, start, l.pos, line, col}
 		}
-		// Handle escape sequences
-		if ch == '\\' && l.pos+1 < len(l.source) {
-			l.advance() // skip backslash
+		// An escaped character, a \r of a \r\n line break included.
+		if ch == '\\' {
 			if l.lineBreakLenAt(l.pos) > 0 {
 				l.consumeLineBreak()
 			} else {
-				l.advance() // skip escaped char
+				l.advance()
 			}
-		} else {
-			l.advance()
 		}
 	}
+}
 
-	if !closed {
-		return Token{ILLEGAL, start, l.pos, line, col}
+// closingQuoteAhead reports whether beancount's string pattern,
+// "([^\\"]|\\.)*", finds the closing quote of a string opened just
+// before the current position: one not escaped, with no backslash before
+// a \n on the way, since its escape matches any character but \n.
+func (l *Lexer) closingQuoteAhead() bool {
+	for i := l.pos; i < len(l.source); i++ {
+		switch l.source[i] {
+		case '"':
+			return true
+		case '\\':
+			if i+1 == len(l.source) || l.source[i+1] == '\n' {
+				return false
+			}
+			i++
+		}
 	}
+	return false
+}
 
-	return Token{STRING, start, l.pos, line, col}
+// invalidToken returns an ILLEGAL token from start up to the next
+// whitespace, as beancount's lexer skips an invalid token when no rule
+// matches its first character: a quote or any other character in it
+// included.
+func (l *Lexer) invalidToken(start, line, col int) Token {
+	for l.pos < len(l.source) && !isWhitespaceOrLineBreak(l.source[l.pos]) {
+		l.advance()
+	}
+	return Token{ILLEGAL, start, l.pos, line, col}
 }
 
 // scanTag scans a tag: #[A-Za-z0-9_-]+
@@ -565,7 +586,7 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 			l.column = col + n
 			return Token{identType(value[:n]), start, l.pos, line, col}
 		}
-		return Token{ILLEGAL, start, l.pos, line, col}
+		return l.invalidToken(start, line, col)
 	}
 
 	return Token{identType(value), start, l.pos, line, col}
@@ -586,8 +607,12 @@ func identType(word []byte) TokenType {
 
 // scanKeywordOrIdent scans a word starting with a lowercase letter. Like
 // beancount's lexer, which has no lowercase identifier, it is a keyword or a
-// metadata key (a word followed directly by a colon); any other lowercase
-// word, such as a lowercase currency, is ILLEGAL.
+// metadata key (a word of two characters at least followed directly by a
+// colon, [a-z][a-zA-Z0-9\-_]+:). Like flex's longest match, a keyword
+// starting any other word is a token of its own (closed is close, then d);
+// the rest of the word, or a word with no keyword in front, such as a
+// lowercase currency or a one-letter key, is an invalid token up to the next
+// whitespace.
 func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 	// First character already consumed
 
@@ -595,19 +620,21 @@ func (l *Lexer) scanKeywordOrIdent(start, line, col int) Token {
 		l.advance()
 	}
 
-	tokType := l.keywordType(l.source[start:l.pos])
-	if tokType == IDENT && (l.pos >= len(l.source) || l.source[l.pos] != ':') {
-		tokType = ILLEGAL
+	word := l.source[start:l.pos]
+	if tokType := l.keywordType(word); tokType != IDENT {
+		return Token{tokType, start, l.pos, line, col}
 	}
-	// beancount's key has two characters at least ([a-z][a-zA-Z0-9\-_]+:):
-	// its lexer rejects a one-letter key up to the next whitespace (a:).
-	if tokType == IDENT && l.pos-start == 1 {
-		for l.pos < len(l.source) && !isWhitespaceOrLineBreak(l.source[l.pos]) {
-			l.advance()
+	if len(word) > 1 && l.pos < len(l.source) && l.source[l.pos] == ':' {
+		return Token{IDENT, start, l.pos, line, col}
+	}
+	for n := len(word) - 1; n > 0; n-- {
+		if tokType := l.keywordType(word[:n]); tokType != IDENT {
+			l.pos = start + n
+			l.column = col + n
+			return Token{tokType, start, l.pos, line, col}
 		}
-		tokType = ILLEGAL
 	}
-	return Token{tokType, start, l.pos, line, col}
+	return l.invalidToken(start, line, col)
 }
 
 // keywordType returns the token type for a keyword, or IDENT if not a keyword.

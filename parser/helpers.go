@@ -962,8 +962,6 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 	switch {
 	case ast.IsDateLiteralShape(bytes):
 		return fmt.Sprintf("invalid date %q", text)
-	case strings.HasPrefix(text, `"`):
-		return "unterminated string"
 	case p.isExpressionStartToken(tok):
 		return "unmatched parentheses in expression"
 	default:
@@ -972,8 +970,8 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 }
 
 // lexerRejects reports whether beancount's lexer, too, rejects an invalid
-// token: a word, a number or date it cannot convert, an unterminated string
-// or a stray character. The rest are characters it lexes as tokens of their
+// token: a word, a number or date it cannot convert, a quote no string
+// closes or a stray character. The rest are characters it lexes as tokens of their
 // own (an unmatched parenthesis in an expression, a lone sign, a slash or a
 // pipe), which only its grammar rejects.
 func (p *Parser) lexerRejects(tok Token) bool {
