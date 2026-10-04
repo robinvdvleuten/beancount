@@ -434,13 +434,19 @@ type loaderState struct {
 
 // parseFile parses one file. With recovery, its syntax errors come back as
 // diagnostics alongside the AST of the directives that parsed; without, the
-// first one fails the load.
+// first one that drops a directive fails the load, and those that keep it
+// are left out, since the AST holds the whole source.
 func parseFile(ctx context.Context, filename string, data []byte, recovery bool) (*ast.AST, []error, error) {
 	tree, err := parser.ParseBytesWithFilename(ctx, filename, data)
 	var syntaxErrs parser.ParseErrors
 	if errors.As(err, &syntaxErrs) {
 		if !recovery {
-			return nil, nil, syntaxErrs[0]
+			for _, syntaxErr := range syntaxErrs {
+				if !syntaxErr.Kept {
+					return nil, nil, syntaxErr
+				}
+			}
+			return tree, nil, nil
 		}
 		diagnostics := make([]error, len(syntaxErrs))
 		for i, syntaxErr := range syntaxErrs {

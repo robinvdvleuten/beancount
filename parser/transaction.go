@@ -43,25 +43,37 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	// If one string: it's the narration
 	// If two strings: first is payee, second is narration
 	// Strings belong to the transaction header, which ends at EOL in the
-	// official grammar; never absorb strings from following lines.
-	if p.check(STRING) && p.continuesPreviousLine() {
-		first, err := p.parseString()
+	// official grammar; never absorb strings from following lines. Like
+	// beancount's txn_strings, a deprecated pipe may stand anywhere among
+	// them: each is reported, unless allow_pipe_separator is set, and the
+	// transaction is kept. Like Bison's location of the rule that reports
+	// it, a pipe is reported where the header's strings start.
+	var strs []ast.RawString
+	stringsStart := p.peek()
+	for (p.check(STRING) || p.check(PIPE)) && p.continuesPreviousLine() {
+		if p.check(PIPE) {
+			p.advance()
+			if !p.allowPipe {
+				pos := tokenPosition(stringsStart, p.filename)
+				p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "Pipe symbol is deprecated.").kept())
+			}
+			continue
+		}
+		if len(strs) == 2 {
+			tok := p.peek()
+			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+		}
+		str, err := p.parseString()
 		if err != nil {
 			return nil, err
 		}
-
-		if p.check(STRING) && p.continuesPreviousLine() {
-			// Two strings: payee and narration
-			second, err := p.parseString()
-			if err != nil {
-				return nil, err
-			}
-			txn.Payee = first
-			txn.Narration = second
-		} else {
-			// One string: just narration
-			txn.Narration = first
-		}
+		strs = append(strs, str)
+	}
+	switch len(strs) {
+	case 1:
+		txn.Narration = strs[0]
+	case 2:
+		txn.Payee, txn.Narration = strs[0], strs[1]
 	}
 
 	tags, links, err := p.parseTagsLinks()

@@ -41,6 +41,10 @@ type Parser struct {
 	resumedMidLine bool
 
 	lineStarts []int // Byte offset of each line's start, built on the first error
+
+	// allowPipe is the allow_pipe_separator option in effect, which, as in
+	// beancount's parser, only the file's own options above set.
+	allowPipe bool
 }
 
 // NewParser creates a new parser with the given source and tokens.
@@ -115,6 +119,15 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				continue
 			}
 			tree.Options = append(tree.Options, opt)
+			if opt.Name.Value == "allow_pipe_separator" {
+				// Like beancount's options_validate_boolean.
+				switch strings.ToLower(opt.Value.Value) {
+				case "1", "true", "yes":
+					p.allowPipe = true
+				default:
+					p.allowPipe = false
+				}
+			}
 
 		case INCLUDE:
 			inc, err := p.parseInclude()

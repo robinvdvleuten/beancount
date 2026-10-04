@@ -12,10 +12,14 @@ type ParseError struct {
 	Pos         ast.Position
 	Msg         string      // The message without its Error line
 	SourceRange SourceRange // Range in source for context extraction
+	// Kept reports that the directive the error is in stays in the AST,
+	// as beancount's parser reports some errors and keeps the directive.
+	Kept bool
 }
 
 // ParseErrors lists a source's syntax errors in source order. The parser
-// drops the directive each one is in and returns it with the AST of the rest.
+// drops the directive each one is in, unless the error is Kept, and returns
+// it with the AST of the rest.
 type ParseErrors []*ParseError
 
 func (e ParseErrors) Error() string {
@@ -66,6 +70,12 @@ func newErrorfWithSource(pos ast.Position, sourceRange SourceRange, format strin
 		Msg:         fmt.Sprintf(format, args...),
 		SourceRange: sourceRange,
 	}
+}
+
+// kept marks the error as one that leaves its directive in the AST.
+func (e *ParseError) kept() *ParseError {
+	e.Kept = true
+	return e
 }
 
 // NewParseError wraps an existing parse error with filename context.

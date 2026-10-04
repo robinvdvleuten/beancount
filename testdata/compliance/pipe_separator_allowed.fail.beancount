@@ -1,0 +1,14 @@
+; The allow_pipe_separator option, deprecated itself, lets a pipe stand
+; between the strings of a transaction below it.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "P" | "N"
+  Assets:A   1 USD
+  Assets:B  -1 USD
+
+option "allow_pipe_separator" "TRUE"
+
+2020-01-03 * "P" | "N"
+  Assets:A   1 USD
+  Assets:B  -1 USD

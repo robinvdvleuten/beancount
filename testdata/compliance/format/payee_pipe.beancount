@@ -1,0 +1,6 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Payee" | "Narration"
+  Assets:A   1 USD
+  Assets:B     -1 USD

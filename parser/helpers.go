@@ -51,7 +51,7 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	var account ast.Account
 	if err := account.Capture([]string{accountStr}); err != nil {
 		pos := tokenPosition(tok, p.filename)
-		p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "invalid account name %s: %v", accountStr, err))
+		p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "invalid account name %s: %v", accountStr, err).kept())
 		account = ast.Account(accountStr)
 	}
 
@@ -972,11 +972,11 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 // lexerRejects reports whether beancount's lexer, too, rejects an invalid
 // token: a word, a number or date it cannot convert, a quote no string
 // closes or a stray character. The rest are characters it lexes as tokens of their
-// own (an unmatched parenthesis in an expression, a lone sign, a slash or a
-// pipe), which only its grammar rejects.
+// own (an unmatched parenthesis in an expression, a lone sign or a slash),
+// which only its grammar rejects.
 func (p *Parser) lexerRejects(tok Token) bool {
 	switch p.source[tok.Start] {
-	case '(', ')', '+', '-', '/', '|':
+	case '(', ')', '+', '-', '/':
 		return false
 	}
 	return true

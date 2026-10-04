@@ -115,7 +115,6 @@ var knownDivergences = []struct {
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
 	{"query", "#694: a tag or link after a posting drops the transaction", bodyTagAfterPosting.MatchString},
-	{"query", "#695: the deprecated pipe between payee and narration drops the transaction", payeePipe.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
 }
 
@@ -123,7 +122,6 @@ var (
 	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
 	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+[A-Z].*\n[ \t]+[#^]`)
-	payeePipe           = regexp.MustCompile(`"[ \t]*\|[ \t]*"`)
 	customAccount       = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
 )
 
@@ -907,8 +905,6 @@ func TestKnownDivergences(t *testing.T) {
 
 	assert.True(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\nplugin \"beancount.plugins.leafonly\"\n"))
 	assert.False(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\n"))
-
-	assert.True(t, payeePipe.MatchString("2020-01-02 * \"Payee\" | \"Narration\"\n"))
 
 	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
 	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))

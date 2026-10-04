@@ -59,6 +59,7 @@ const (
 	LDBRACE  // {{
 	RDBRACE  // }}
 	MINUS    // - (for negative numbers)
+	PIPE     // |, the deprecated separator of a payee and a narration
 )
 
 var tokenNames = map[TokenType]string{
@@ -112,6 +113,7 @@ var tokenNames = map[TokenType]string{
 	LDBRACE:  "{{",
 	RDBRACE:  "}}",
 	MINUS:    "-",
+	PIPE:     "|",
 }
 
 func (t TokenType) String() string {

@@ -308,7 +308,7 @@ func TestOfficialFormatParity(t *testing.T) {
 
 			ctx := context.Background()
 			tree, err := parser.ParseBytesWithFilename(ctx, path, source)
-			assert.NoError(t, err)
+			assertParsesWhole(t, err)
 			// The format command loads through the loader, which applies
 			// pushed tags and metadata; none may reach the output.
 			assert.Zero(t, ast.ApplyPushPopDirectives(tree))
@@ -341,7 +341,7 @@ func TestFormatFixturesReachFixedPoint(t *testing.T) {
 		t.Helper()
 		ctx := context.Background()
 		tree, err := parser.ParseBytes(ctx, source)
-		assert.NoError(t, err)
+		assertParsesWhole(t, err)
 		var out bytes.Buffer
 		assert.NoError(t, formatter.New().Format(ctx, tree, source, &out))
 		return out.String()
@@ -356,10 +356,26 @@ func TestFormatFixturesReachFixedPoint(t *testing.T) {
 	}
 }
 
+// assertParsesWhole fails unless every directive of a source parsed, as the
+// format command requires: an error that keeps its directive, such as a
+// deprecated pipe, is one the format command leaves out too.
+func assertParsesWhole(t *testing.T, err error) {
+	t.Helper()
+	var syntaxErrs parser.ParseErrors
+	if errors.As(err, &syntaxErrs) {
+		for _, syntaxErr := range syntaxErrs {
+			assert.True(t, syntaxErr.Kept, "%v", syntaxErr)
+		}
+		return
+	}
+	assert.NoError(t, err)
+}
+
 // TestNoFollowOnErrors checks the applied_ fixtures, whose one erroneous
 // directive is still applied like beancount applies it: the later directives
 // that depend on it must pass, so both implementations report exactly one
-// error. Exit codes alone cannot show a follow-on error.
+// error, a syntax error that keeps its directive or a validation error.
+// Exit codes alone cannot show a follow-on error.
 func TestNoFollowOnErrors(t *testing.T) {
 	paths, err := filepath.Glob(filepath.Join(complianceDir, "applied_*.fail.beancount"))
 	assert.NoError(t, err)
@@ -371,8 +387,7 @@ func TestNoFollowOnErrors(t *testing.T) {
 			result, err := ledgerload.Load(context.Background(), loader.Source{Path: path})
 			assert.NoError(t, err)
 			loadErrors, validationErrors := diagnostic.Errors(result.LoadDiagnostics), result.Ledger.Diagnostics()
-			assert.Equal(t, 0, len(loadErrors), "%v", loadErrors)
-			assert.Equal(t, 1, len(validationErrors), "%v", validationErrors)
+			assert.Equal(t, 1, len(loadErrors)+len(validationErrors), "%v %v", loadErrors, validationErrors)
 
 			if !official {
 				return

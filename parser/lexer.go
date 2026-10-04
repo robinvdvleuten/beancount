@@ -260,9 +260,12 @@ func (l *Lexer) scanToken() Token {
 			tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 		}
 
-	// A sign, a closing parenthesis and a pipe are tokens of beancount's
-	// own, which only its grammar rejects.
-	case ch == '+' || ch == '-' || ch == ')' || ch == '|':
+	case ch == '|':
+		tok = Token{PIPE, start, l.pos, startLine, startCol}
+
+	// A sign and a closing parenthesis are tokens of beancount's own,
+	// which only its grammar rejects.
+	case ch == '+' || ch == '-' || ch == ')':
 		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 
 	default:
