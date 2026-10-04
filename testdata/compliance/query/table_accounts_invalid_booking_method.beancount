@@ -1,0 +1,15 @@
+; An open with an invalid booking method takes the booking_method option in
+; effect on its line: the default above the option, the option's value below.
+2020-01-01 open Assets:Before "BOGUS"
+option "booking_method" "FIFO"
+2020-01-01 open Assets:After "fifo"
+2020-01-01 open Equity:Opening
+
+2020-01-02 * "Buy"
+  Assets:After  1 HOOL {10 USD}
+  Assets:After  1 HOOL {20 USD}
+  Equity:Opening
+
+2020-01-03 * "Sell, booked FIFO"
+  Assets:After  -1 HOOL {}
+  Equity:Opening

@@ -71,7 +71,7 @@ func TestErrorKinds(t *testing.T) {
 		{newInterpolationError(txn, posting, "Too many missing numbers"), "InterpolationError", 11, nil},
 		{newNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
 		{newTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
-		{newInvalidBookingMethodError(open), "InvalidBookingMethodError", 10, open},
+		{newInvalidBookingMethodError(open, "BOGUS"), "InvalidBookingMethodError", 10, open},
 		{newUnbookedTransactionError(txn), "UnbookedTransactionError", 10, txn},
 		{newTransactionNotBalancedError(txn, []residual{{"USD", decimal.NewFromInt(1)}}), "TransactionNotBalancedError", 10, txn},
 		{newInvalidAmountError(txn, account, "x", details), "InvalidAmountError", 10, txn},

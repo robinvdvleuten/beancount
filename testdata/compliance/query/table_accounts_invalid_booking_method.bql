@@ -1,0 +1,1 @@
+SELECT account, open.booking, str(open.booking) AS b FROM "accounts"

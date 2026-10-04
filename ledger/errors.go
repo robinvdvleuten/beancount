@@ -254,11 +254,12 @@ func newInterpolationError(txn *ast.Transaction, posting *ast.Posting, message s
 	return newError("InterpolationError", txn, posting.Account, "%s", message).atPosting(posting).entryless()
 }
 
-// newInvalidBookingMethodError creates an error for an open directive with an
-// unknown booking method.
-func newInvalidBookingMethodError(open *ast.Open) *Diagnostic {
+// newInvalidBookingMethodError creates an error for an open directive whose
+// booking method, as written, is unknown. Like beancount's, it carries the
+// open with the method it falls back to.
+func newInvalidBookingMethodError(open *ast.Open, written string) *Diagnostic {
 	return newError("InvalidBookingMethodError", open, open.Account,
-		"Invalid booking method: %s", open.BookingMethod)
+		"Invalid booking method: %s", written)
 }
 
 // newUnbookedTransactionError creates an error for a transaction that

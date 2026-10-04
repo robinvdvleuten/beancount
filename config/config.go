@@ -151,6 +151,20 @@ func ParseOptions(tree *ast.AST) (*Config, []error) {
 	return cfg, errs
 }
 
+// OptionsAt returns the configuration in effect at pos, as beancount's
+// parser holds it while reading that line: the options written above it in
+// its file applied in order, their errors left to ParseOptions.
+func OptionsAt(options []*ast.Option, pos ast.Position) *Config {
+	cfg := New()
+	for _, option := range options {
+		at := option.Position()
+		if at.Filename == pos.Filename && at.Offset < pos.Offset {
+			cfg.applyOption(option)
+		}
+	}
+	return cfg
+}
+
 // CheckOption returns the errors beancount reports for an option directive
 // without applying it anywhere, as for an option in an included file, which
 // beancount checks and then ignores.

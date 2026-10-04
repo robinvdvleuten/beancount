@@ -478,13 +478,6 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 		return errs, nil
 	}
 
-	// A per-account booking method must name one of beancount's methods,
-	// matched case-sensitively. Like beancount, an invalid one is reported
-	// and the account still opens; the booker books it with the default.
-	if open.BookingMethod != "" && !sharedconfig.IsBookingMethod(open.BookingMethod) {
-		errs = append(errs, newInvalidBookingMethodError(open))
-	}
-
 	// Copy metadata and constraint currencies to avoid shared references with AST
 	metadataCopy := make([]*ast.Metadata, len(open.Metadata))
 	copy(metadataCopy, open.Metadata)

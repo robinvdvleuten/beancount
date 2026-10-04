@@ -1,0 +1,3 @@
+; An open with an invalid booking method takes the default, STRICT.
+2020-01-01 open Assets:A USD "fifo"
+2020-01-01 open Assets:B "BOGUS"

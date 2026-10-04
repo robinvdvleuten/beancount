@@ -683,3 +683,58 @@ plugin "test.add_transaction"
 	assert.Equal(t, 0, len(cash.postings))
 	assert.True(t, len(cash.inventory.lots) == 0)
 }
+
+func TestInvalidBookingMethodFallsBackToTheOptionInEffect(t *testing.T) {
+	// Like beancount's parser, an open with an unknown booking method takes
+	// the booking_method option in effect on its line: STRICT above the
+	// option, which cannot choose between the two lots, and FIFO below it,
+	// which books the oldest.
+	source := `
+2020-01-01 open Assets:Before "BOGUS"
+option "booking_method" "FIFO"
+2020-01-01 open Assets:After "fifo"
+2020-01-01 open Equity:Opening
+
+2020-01-02 * "buy"
+  Assets:Before  1 HOOL {10 USD}
+  Assets:Before  1 HOOL {20 USD}
+  Assets:After   1 HOOL {10 USD}
+  Assets:After   1 HOOL {20 USD}
+  Equity:Opening
+
+2020-01-03 * "sell"
+  Assets:Before  -1 HOOL {}
+  Equity:Opening
+
+2020-01-03 * "sell"
+  Assets:After  -1 HOOL {}
+  Equity:Opening
+`
+	tree := parser.MustParseString(context.Background(), source)
+	l := New()
+	tree, _ = l.Process(context.Background(), tree)
+
+	errs := l.Errors()
+	assert.Equal(t, 3, len(errs), "errors: %v", errs)
+	assert.Equal(t, "Invalid booking method: BOGUS", errs[0].(*Diagnostic).Message())
+	assert.Equal(t, "Invalid booking method: fifo", errs[1].(*Diagnostic).Message())
+	assert.Equal(t, "AmbiguousBookingError", kindOf(errs[2]), "got %v", errs[2])
+
+	methods := map[ast.Account]string{}
+	var sold *ast.Posting
+	for _, d := range tree.Directives {
+		switch d := d.(type) {
+		case *ast.Open:
+			methods[d.Account] = d.BookingMethod
+		case *ast.Transaction:
+			if d.Narration.Value == "sell" && len(d.Postings) > 0 {
+				sold = d.Postings[0]
+			}
+		}
+	}
+	assert.Equal(t, map[ast.Account]string{"Assets:Before": "STRICT", "Assets:After": "FIFO", "Equity:Opening": ""}, methods)
+	assert.Equal(t, ast.Account("Assets:After"), sold.Account)
+	booked := l.BookedPositions(sold)
+	assert.Equal(t, 1, len(booked))
+	assert.Equal(t, "10", booked[0].Cost.Number.String())
+}
