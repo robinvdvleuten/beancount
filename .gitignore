@@ -1,3 +1,4 @@
+.difffuzz/
 .gocache/
 .vale/styles/*
 !.vale/styles/Beancount/
