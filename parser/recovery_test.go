@@ -309,3 +309,23 @@ func TestSyntaxErrorsCloseTogetherAreReportedOnce(t *testing.T) {
 		})
 	}
 }
+
+// TestRejectedWordAtLineStartIsInvalidToken pins the message for a word in
+// column 1 that beancount's lexer rejects (`Invalid token: 'T:'`), while a
+// valid account there is the grammar's error.
+func TestRejectedWordAtLineStartIsInvalidToken(t *testing.T) {
+	source := "T:\n\n\nTx:y\n\n\nAssets:Cash\n"
+	_, err := ParseString(context.Background(), source)
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	var got []string
+	for _, e := range syntaxErrs {
+		got = append(got, fmt.Sprintf("%d:%d %s", e.Pos.Line, e.Pos.Column, e.Message()))
+	}
+	assert.Equal(t, []string{
+		`1:1 invalid token "T:"`,
+		`4:1 invalid token "Tx:y"`,
+		`7:1 unexpected token ACCOUNT "Assets:Cash"`,
+	}, got)
+}

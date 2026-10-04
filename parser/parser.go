@@ -169,7 +169,11 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 		default:
 			tok := p.peek()
-			p.recover(p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source)))
+			if tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)) {
+				p.recover(p.errorAtToken(tok, "invalid token %q", tok.String(p.source)))
+			} else {
+				p.recover(p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source)))
+			}
 			continuationLine = 0
 		}
 	}
