@@ -144,21 +144,7 @@ func (a *amountValue) equal(b *amountValue) bool {
 // counting as cost 0 in no currency. Positions with equal keys are
 // neither smaller.
 func (a *positionValue) cmp(b *positionValue) int {
-	if ra, rb := ledger.CurrencyRank(a.Units.Currency), ledger.CurrencyRank(b.Units.Currency); ra != rb {
-		if ra < rb {
-			return -1
-		}
-		return 1
-	}
-	an, ac := a.sortCost()
-	bn, bc := b.sortCost()
-	if c := an.Cmp(bn); c != 0 {
-		return c
-	}
-	if c := strings.Compare(ac, bc); c != 0 {
-		return c
-	}
-	return a.Units.Number.Cmp(b.Units.Number)
+	return a.sortKey().Compare(b.sortKey())
 }
 
 // equal is Position's ==: equal units and equal costs.
@@ -227,13 +213,14 @@ func (s setValue) subsetOf(other setValue) bool {
 	return true
 }
 
-// sortCost is the cost number and currency Position.sortkey uses: 0 and
-// no currency for a position without cost.
-func (p *positionValue) sortCost() (decimal.Decimal, string) {
-	if p.Cost == nil {
-		return decimal.Zero, ""
+// sortKey is the position's Position.sortkey: cost 0 in no currency for a
+// position without cost.
+func (p *positionValue) sortKey() ledger.SortKey {
+	key := ledger.SortKey{Currency: p.Units.Currency, Number: p.Units.Number}
+	if p.Cost != nil {
+		key.CostNumber, key.CostCurrency = p.Cost.Number, p.Cost.Currency
 	}
-	return p.Cost.Number, p.Cost.Currency
+	return key
 }
 
 // pyGreater is Python's > on two non-NULL values. beancount's Amount and

@@ -8,7 +8,6 @@ import (
 
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
-	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
@@ -172,21 +171,11 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	errs = append(errs, v.validateAccountsOpen(txn)...)
 	errs = append(errs, v.validateMetadata(txn)...)
 	if len(booked.residuals) > 0 {
-		errs = append(errs, newNotBalancedError(txn, booked.residuals))
+		errs = append(errs, newTransactionNotBalancedError(txn, booked.residuals))
 	}
 	errs = append(errs, v.validateBookedCosts(txn)...)
 	errs = append(errs, v.validateConstraintCurrencies(txn)...)
 	return errs, booked
-}
-
-// newNotBalancedError reports the residuals of a transaction that does not
-// balance.
-func newNotBalancedError(txn *ast.Transaction, residuals map[string]decimal.Decimal) error {
-	residualStrings := make(map[string]string, len(residuals))
-	for currency, amount := range residuals {
-		residualStrings[currency] = pydecimal.String(amount)
-	}
-	return newTransactionNotBalancedError(txn, residualStrings)
 }
 
 // validateBalance checks that a balance directive's date is in range and

@@ -1,6 +1,7 @@
 package ledger
 
 import (
+	"cmp"
 	"errors"
 	"fmt"
 	"maps"
@@ -484,10 +485,34 @@ var currencyOrder = map[string]int{
 	"USD": 0, "EUR": 1, "JPY": 2, "CAD": 3, "GBP": 4, "AUD": 5, "NZD": 6, "CHF": 7,
 }
 
-// CurrencyRank is a currency's first sort key in beancount's
-// Position.sortkey: the major currencies first, any other ranked after them
-// by the length of its name.
-func CurrencyRank(currency string) int {
+// SortKey is beancount's Position.sortkey: a position's units currency and
+// number, and its cost number and currency (zero and none without a cost).
+type SortKey struct {
+	Currency     string
+	Number       decimal.Decimal
+	CostNumber   decimal.Decimal
+	CostCurrency string
+}
+
+// Compare orders two positions as Position.sortkey does: by the currency's
+// rank (the major currencies first, any other ranked after them by the
+// length of its name), then cost number, cost currency and units number.
+// Positions with equal keys compare equal, so a stable sort keeps them in
+// the order beancount's inventory holds them.
+func (k SortKey) Compare(o SortKey) int {
+	if c := cmp.Compare(currencyRank(k.Currency), currencyRank(o.Currency)); c != 0 {
+		return c
+	}
+	if c := k.CostNumber.Cmp(o.CostNumber); c != 0 {
+		return c
+	}
+	if c := strings.Compare(k.CostCurrency, o.CostCurrency); c != 0 {
+		return c
+	}
+	return k.Number.Cmp(o.Number)
+}
+
+func currencyRank(currency string) int {
 	if r, ok := currencyOrder[currency]; ok {
 		return r
 	}
@@ -509,25 +534,8 @@ func (inv *inventory) String() string {
 	for _, commodity := range commodities {
 		lots = append(lots, inv.lots[commodity]...)
 	}
-	costOf := func(l *lot) (decimal.Decimal, string) {
-		if l.spec == nil || l.spec.cost == nil {
-			return decimal.Zero, ""
-		}
-		return *l.spec.cost, l.spec.costCurrency
-	}
 	slices.SortStableFunc(lots, func(a, b *lot) int {
-		if c := CurrencyRank(a.commodity) - CurrencyRank(b.commodity); c != 0 {
-			return c
-		}
-		an, ac := costOf(a)
-		bn, bc := costOf(b)
-		if c := an.Cmp(bn); c != 0 {
-			return c
-		}
-		if c := strings.Compare(ac, bc); c != 0 {
-			return c
-		}
-		return a.amount.Cmp(b.amount)
+		return a.sortKey().Compare(b.sortKey())
 	})
 
 	var buf strings.Builder

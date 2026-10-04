@@ -19,9 +19,10 @@ import (
 type interpolatedGroup struct {
 	// postings are the group's postings, in the group's order.
 	postings []interpolatedPosting
-	// residuals holds, per currency, what the group's weights leave beyond
-	// the booked tolerances; it is empty when the group balances.
-	residuals map[string]decimal.Decimal
+	// residuals holds what the group's weights leave beyond the booked
+	// tolerances, in the order their currencies first appear; it is empty
+	// when the group balances.
+	residuals []residual
 	// errs are what interpolation reports on a group it still books, as
 	// beancount's interpolate_group keeps a group it cannot complete.
 	errs []error
@@ -253,7 +254,11 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 
 		if len(balance) > 1 {
 			// Multiple currencies - ambiguous
-			return nil, []error{newNotBalancedError(txn, balance)}
+			var residuals []residual
+			for _, currency := range residualCurrencies(allWeights, balance) {
+				residuals = append(residuals, residual{currency, balance[currency]})
+			}
+			return nil, []error{newTransactionNotBalancedError(txn, residuals)}
 		}
 		// The group's residual, zero when nothing else in the group
 		// weighs, as for {USD} next to postings in other currencies.
@@ -296,10 +301,10 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// booked postings: interpolated amounts count, and costs count per
 	// unit, with inferred cost numbers resolved.
 	bookedTolerances := specTolerances.tolerances.booked(txn.Postings, amounts, costs, reducedPositions)
-	residuals := make(map[string]decimal.Decimal)
-	for currency, residual := range balance {
-		if residual.Abs().GreaterThan(bookedTolerances.of(currency)) {
-			residuals[currency] = residual
+	var residuals []residual
+	for _, currency := range residualCurrencies(allWeights, balance) {
+		if number := balance[currency]; number.Abs().GreaterThan(bookedTolerances.of(currency)) {
+			residuals = append(residuals, residual{currency, number})
 		}
 	}
 

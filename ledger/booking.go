@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -32,7 +33,9 @@ type booker struct {
 
 // bookedTransaction is Booking's result for one transaction.
 type bookedTransaction struct {
-	residuals map[string]decimal.Decimal // Non-empty when it does not balance
+	// residuals is non-empty when it does not balance, in the order
+	// beancount's residual inventory holds them: the Currency groups'.
+	residuals []residual
 	postings  []bookedPosting
 }
 
@@ -231,7 +234,7 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	// commitBooking writes onto txn once every group is booked.
 	postings := make([]*ast.Posting, 0, len(txn.Postings))
 	var completed []interpolatedPosting
-	residuals := make(map[string]decimal.Decimal)
+	var residuals []residual
 	autoBooked := false
 	// Like beancount, a transaction changes the inventories only through
 	// the groups it books: each group reduces lots in scratch copies, which
@@ -281,8 +284,13 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 				postings = append(postings, &copied)
 			}
 		}
-		for currency, residual := range interpolated.residuals {
-			residuals[currency] = pydecimal.Add(residuals[currency], residual)
+		for _, r := range interpolated.residuals {
+			i := slices.IndexFunc(residuals, func(held residual) bool { return held.currency == r.currency })
+			if i < 0 {
+				residuals = append(residuals, r)
+				continue
+			}
+			residuals[i].number = pydecimal.Add(residuals[i].number, r.number)
 		}
 	}
 	if len(errs) > 0 {

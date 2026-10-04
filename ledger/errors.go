@@ -255,28 +255,20 @@ func newUnbookedTransactionError(txn *ast.Transaction) *Diagnostic {
 		"Transaction was not booked: it was added after Booking")
 }
 
-// newTransactionNotBalancedError creates an error for a transaction that does
-// not balance, listing its residuals by currency.
-func newTransactionNotBalancedError(txn *ast.Transaction, residuals map[string]string) *Diagnostic {
-	var buf strings.Builder
-	if len(residuals) > 0 {
-		currencies := make([]string, 0, len(residuals))
-		for currency := range residuals {
-			currencies = append(currencies, currency)
-		}
-		slices.Sort(currencies)
-		buf.WriteByte('(')
-		for i, currency := range currencies {
-			if i > 0 {
-				buf.WriteString(", ")
-			}
-			buf.WriteString(residuals[currency])
-			buf.WriteByte(' ')
-			buf.WriteString(currency)
-		}
-		buf.WriteByte(')')
+// newTransactionNotBalancedError creates an error for a transaction that
+// does not balance, listing its residuals as beancount prints its residual
+// inventory: sorted by Position.sortkey, ties in the order it holds them,
+// each number as Python's str() writes it.
+func newTransactionNotBalancedError(txn *ast.Transaction, residuals []residual) *Diagnostic {
+	sorted := slices.Clone(residuals)
+	slices.SortStableFunc(sorted, func(a, b residual) int {
+		return SortKey{Currency: a.currency, Number: a.number}.Compare(SortKey{Currency: b.currency, Number: b.number})
+	})
+	parts := make([]string, len(sorted))
+	for i, r := range sorted {
+		parts[i] = pydecimal.String(r.number) + " " + r.currency
 	}
-	return newError("TransactionNotBalancedError", txn, "", "Transaction does not balance: %s", buf.String())
+	return newError("TransactionNotBalancedError", txn, "", "Transaction does not balance: (%s)", strings.Join(parts, ", "))
 }
 
 // newInvalidAmountError creates an error for an amount that cannot be parsed.

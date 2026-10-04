@@ -412,7 +412,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 				assert.Equal(t, 1, len(errs))
 				assert.Equal(t, "TransactionNotBalancedError", kindOf(errs[0]))
 				// Should have residuals for both currencies
-				assert.Contains(t, errs[0].Error(), "(50.00 EUR, -100.00 USD)")
+				assert.Contains(t, errs[0].Error(), "(-100.00 USD, 50.00 EUR)")
 			},
 		},
 	}
@@ -1736,4 +1736,44 @@ func TestBalanceMismatchKeepsTrailingZeros(t *testing.T) {
 	var mismatch *BalanceMismatchError
 	assert.True(t, errors.As(errs[0], &mismatch))
 	assert.Equal(t, "Balance mismatch for Assets:Cash:\n  Expected: 1.000 USD\n  Actual:   -5.00 USD", mismatch.message)
+}
+
+// TestNotBalancedResidualOrder pins the residuals in "Transaction does not
+// balance" in the order bean-check lists them, beancount's Position.sortkey:
+// the major currencies first, any other by the length of its name, then by
+// number, and ties in the order the transaction's postings bring them in.
+func TestNotBalancedResidualOrder(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), `
+2020-01-01 open Assets:A
+
+2020-01-15 *
+  Assets:A  1 EUR
+  Assets:A  2 USD
+  Assets:A  3 CAD
+
+2020-01-16 *
+  Assets:A  1 EUR
+  Assets:A  1 ZZ
+  Assets:A  5 BBBB
+  Assets:A  1 AAAA
+  Assets:A  7 XAU
+  Assets:A  -2 ABC
+
+2020-01-17 *
+  Assets:A  1 BBBB
+  Assets:A  1 AAAA
+`)
+	l := New()
+	_, err := l.Process(context.Background(), tree)
+	assert.NoError(t, err)
+
+	var messages []string
+	for _, err := range l.Errors() {
+		messages = append(messages, err.(*Diagnostic).message)
+	}
+	assert.Equal(t, []string{
+		"Transaction does not balance: (2 USD, 1 EUR, 3 CAD)",
+		"Transaction does not balance: (1 EUR, 1 ZZ, -2 ABC, 7 XAU, 1 AAAA, 5 BBBB)",
+		"Transaction does not balance: (1 BBBB, 1 AAAA)",
+	}, messages)
 }

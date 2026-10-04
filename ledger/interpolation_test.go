@@ -59,8 +59,8 @@ func interpolateLast(t *testing.T, source string) (lines, errs []string) {
 			assert.False(t, posting.posting.Inferred || posting.posting.Automatic, "interpolation must not write to the postings")
 			lines = append(lines, group.currency+": "+renderInterpolated(posting))
 		}
-		for _, currency := range residualCurrencies(nil, interpolated.residuals) {
-			lines = append(lines, fmt.Sprintf("%s: residual %s %s", group.currency, interpolated.residuals[currency], currency))
+		for _, r := range interpolated.residuals {
+			lines = append(lines, fmt.Sprintf("%s: residual %s %s", group.currency, r.number, r.currency))
 		}
 	}
 	return lines, errs

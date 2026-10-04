@@ -83,6 +83,13 @@ func unitsWeightTerms(posting *ast.Posting) (currency string, perUnit, total dec
 	return posting.Amount.Currency, decimal.Zero, decimal.Zero, true
 }
 
+// residual is what a transaction's weights leave in one currency beyond
+// its tolerance.
+type residual struct {
+	currency string
+	number   decimal.Decimal
+}
+
 // residualCurrencies returns the currencies with a non-zero residual, in the
 // order their weights first appear in the transaction (beancount orders its
 // currency groups by first posting), then any others sorted.

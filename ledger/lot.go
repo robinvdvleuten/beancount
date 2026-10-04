@@ -142,6 +142,15 @@ func (l *lot) String() string {
 	return fmt.Sprintf("%s %s %s", formatInferredNumber(l.amount), l.commodity, l.spec.String())
 }
 
+// sortKey is the lot's Position.sortkey.
+func (l *lot) sortKey() SortKey {
+	key := SortKey{Currency: l.commodity, Number: l.amount}
+	if l.spec != nil && l.spec.cost != nil {
+		key.CostNumber, key.CostCurrency = *l.spec.cost, l.spec.costCurrency
+	}
+	return key
+}
+
 // parseLotSpec creates a lotSpec from ast.Cost
 func parseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 	if cost == nil {
