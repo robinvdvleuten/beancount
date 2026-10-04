@@ -114,7 +114,6 @@ var knownDivergences = []struct {
 	{"check-lines", "KNOWN_GAPS.md, deliberate: a tag or link after a posting is a syntax error on its own line", bodyTagAfterPosting.MatchString},
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
-	{"query", "#694: a tag or link after a posting drops the transaction", bodyTagAfterPosting.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
 }
 

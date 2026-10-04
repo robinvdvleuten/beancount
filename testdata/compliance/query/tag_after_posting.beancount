@@ -1,0 +1,11 @@
+; Tags and links after the first posting are ignored, and the transaction
+; kept with the tags and links before it.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "tags after a posting" #head
+  #before
+  Assets:A   1 USD
+  ^link #after
+  Assets:B  -1 USD
+  #last

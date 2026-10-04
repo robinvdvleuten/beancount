@@ -159,6 +159,9 @@ func (s *sourceView) markStarts(tree *ast.AST) {
 			if item.Comment != nil {
 				s.markStart(item.Comment.Position())
 			}
+			if item.TagsLinks != nil {
+				s.markStart(item.TagsLinks.Position())
+			}
 		}
 	}
 }

@@ -408,7 +408,8 @@ compare the lines errors are on:
   reported on, and we keep our line where beancount's is less precise
   (`lineGaps` in `cli/compliance_test.go`). A tag or link after the first
   posting is blamed on its own line and column, where beancount blames the
-  transaction (`body_tags_after_posting`). An unbalanced `pushtag` or
+  transaction (`body_tags_after_posting`, `applied_tag_after_posting`); like
+  beancount, it is ignored and the transaction kept. An unbalanced `pushtag` or
   `pushmeta`, a missing documents root, a duplicate include, an include
   glob with no match, a missing included file and a Built-in Plugin given
   a configuration are blamed on the directive that caused them, where

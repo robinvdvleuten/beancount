@@ -1,0 +1,7 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "link after a posting"
+  Assets:A   1 USD
+   ^link #tag
+  Assets:B     -1 USD

@@ -112,6 +112,9 @@ func (t *Transaction) SetDate(date *Date) { t.date = date }
 type TransactionBodyItem struct {
 	Posting *Posting
 	Comment *Comment
+	// TagsLinks is a line of tags and links after the first posting, which
+	// beancount reports and ignores: it is kept for formatting only.
+	TagsLinks *TagsLinks
 }
 
 // Posting represents a single leg of a transaction, specifying an account and optional

@@ -197,6 +197,7 @@ func TestOfficialBeancountDifferential(t *testing.T) {
 var lineGaps = map[string]string{
 	// Deliberate: our line is more precise (KNOWN_GAPS.md).
 	"body_tags_after_posting":       "we blame the tag's line, beancount the transaction's",
+	"applied_tag_after_posting":     "we blame the link's line, beancount the transaction's",
 	"documents_missing_root":        "we blame the option's line, beancount line 0",
 	"duplicate_include":             "we blame the include's line, beancount <load>:0",
 	"include_glob_no_match":         "we blame the include's line, beancount <load>:0",

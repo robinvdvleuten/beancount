@@ -202,12 +202,18 @@ func (p *Parser) parsePostingBlock(txn *ast.Transaction) error {
 		}
 
 		if tok.Type == TAG || tok.Type == LINK {
-			if len(txn.Postings) > 0 {
-				return p.errorAtToken(tok, "tags or links not allowed after first posting")
-			}
 			line, err := p.parseTagsLinksLine()
 			if err != nil {
 				return err
+			}
+			if len(txn.Postings) > 0 {
+				// Like beancount, a tag or link line after the first
+				// posting is reported and ignored, and the transaction
+				// kept.
+				pos := tokenPosition(tok, p.filename)
+				p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "tags or links not allowed after first posting").kept())
+				txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{TagsLinks: line})
+				continue
 			}
 			txn.BodyTagsLinks = append(txn.BodyTagsLinks, line)
 			continue
