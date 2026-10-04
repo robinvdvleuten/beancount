@@ -1,0 +1,7 @@
+; An account is checked against the names the options above its line set:
+; an option written further down does not apply to the lines above it.
+2020-01-01 open Equity:Opening
+2020-01-01 open Capital:Later
+option "name_equity" "Capital"
+2020-01-02 open Equity:After
+2020-01-02 open Capital:After

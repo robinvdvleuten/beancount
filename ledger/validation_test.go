@@ -3,7 +3,6 @@ package ledger
 import (
 	"context"
 	"fmt"
-	"strings"
 	"testing"
 	"time"
 
@@ -1087,36 +1086,6 @@ func TestValidateOpen(t *testing.T) {
 }
 
 // TestValidateOpenWithCustomAccountTypes tests account type validation with custom names
-func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
-	date2024, _ := ast.NewDate("2024-01-15")
-	// Create account directly without using NewAccount (which validates against hardcoded types)
-	customAccount := ast.Account("Vermoegen:Checking")
-
-	t.Run("valid custom account type", func(t *testing.T) {
-		cfg := sharedconfig.New()
-		cfg.AccountNames.Assets = "Vermoegen"
-
-		v := newValidator(map[string]*Account{}, openIndex{}, cfg)
-		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
-
-		assert.Equal(t, 0, len(errs))
-		assert.True(t, delta != nil)
-		assert.Equal(t, customAccount, delta.account)
-	})
-
-	t.Run("invalid custom account type", func(t *testing.T) {
-		cfg := sharedconfig.New()
-		// Don't set custom Vermoegen - should reject it
-
-		v := newValidator(map[string]*Account{}, openIndex{}, cfg)
-		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
-
-		assert.Equal(t, 1, len(errs))
-		assert.True(t, delta == nil)
-		assert.True(t, strings.Contains(errs[0].Error(), "invalid type"))
-	})
-}
-
 // TestValidateClose tests the validateClose() function
 func TestValidateClose(t *testing.T) {
 	date2024, _ := ast.NewDate("2024-01-15")

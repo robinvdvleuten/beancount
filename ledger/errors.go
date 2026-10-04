@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/internal/pyrepr"
@@ -146,25 +145,6 @@ func newInactiveAccountError(d ast.Directive, account ast.Account) *Diagnostic {
 func newAccountAlreadyOpenError(open *ast.Open, openedDate *ast.Date) *Diagnostic {
 	return newError("AccountAlreadyOpenError", open, open.Account,
 		"Account %s is already open (opened on %s)", open.Account, openedDate.String())
-}
-
-// newInvalidAccountNameError creates an error for an account whose type is
-// not one of the configured account types.
-func newInvalidAccountNameError(open *ast.Open, cfg *sharedconfig.Config) *Diagnostic {
-	validAccountTypes := []string{
-		cfg.AccountNames.Assets,
-		cfg.AccountNames.Liabilities,
-		cfg.AccountNames.Equity,
-		cfg.AccountNames.Income,
-		cfg.AccountNames.Expenses,
-	}
-	accountType, _, found := strings.Cut(string(open.Account), ":")
-	if !found {
-		accountType = "?"
-	}
-	return newError("InvalidAccountNameError", open, open.Account,
-		"Account %q uses invalid type %q, expected one of: %s",
-		open.Account, accountType, strings.Join(validAccountTypes, ", "))
 }
 
 // newAccountAlreadyClosedError creates an error for closing an account that

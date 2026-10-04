@@ -147,8 +147,8 @@ func (a *Account) Capture(values []string) error {
 	}
 
 	// Validate first segment (account type) - must be a valid identifier
-	// Actual type validation (checking against configured names) happens in ledger validation,
-	// allowing for custom account types via name_* options
+	// The parser checks the type against the account names its name_*
+	// options put in effect on the account's line.
 	if !isValidAccountType(parts[0]) {
 		return fmt.Errorf("invalid account type at position 0: %s", parts[0])
 	}

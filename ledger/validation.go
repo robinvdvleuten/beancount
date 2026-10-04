@@ -399,7 +399,6 @@ func (v *validator) isAccountActiveAllowingClose(account ast.Account, date *ast.
 //
 // It validates that:
 //   - Account does not already exist (duplicate open directives are errors)
-//   - Account name is valid
 //   - Copies metadata and constraint currencies to avoid shared AST references
 //
 // Beancount compliance: Reopening a closed account is NOT allowed.
@@ -422,12 +421,6 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	// 0. Validate open date is in valid range
 	if err := validateDateRange(open.Date()); err != nil {
 		errs = append(errs, err)
-		return errs, nil
-	}
-
-	// 1. Validate account root name is configured
-	if !v.config.IsValidAccountName(open.Account) {
-		errs = append(errs, newInvalidAccountNameError(open, v.config))
 		return errs, nil
 	}
 

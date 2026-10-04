@@ -1,0 +1,11 @@
+; Like beancount's grammar, an account whose root is none of the account
+; types in effect is reported on every line that writes it: an open, a
+; metadata value, a posting and a balance assertion. The directives stay.
+option "name_assets" "Activa"
+2020-01-01 open Assets:A
+  ref: Assets:A
+2020-01-01 open Activa:B
+2020-01-02 * "x"
+  Assets:A   1 USD
+  Activa:B  -1 USD
+2020-01-03 balance Assets:A 1 USD

@@ -329,3 +329,31 @@ func TestRejectedWordAtLineStartIsInvalidToken(t *testing.T) {
 		`7:1 unexpected token ACCOUNT "Assets:Cash"`,
 	}, got)
 }
+
+// TestAccountRootsCheckedWhereWritten pins beancount's grammar, which checks
+// an account's root on every line that writes it, against the five account
+// names the options read so far set: the error keeps its directive.
+func TestAccountRootsCheckedWhereWritten(t *testing.T) {
+	source := `2020-01-01 open Equity:Opening
+2020-01-01 open Capital:Later
+option "name_equity" "Capital"
+2020-01-02 open Equity:After
+2020-01-02 open Capital:After
+2020-01-03 * "uses"
+  ref: Equity:Opening
+  Capital:After   1 USD
+  Equity:Opening -1 USD
+2020-01-04 custom "budget" Equity:Opening
+`
+	tree, err := ParseString(context.Background(), source)
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	var lines []int
+	for _, e := range syntaxErrs {
+		assert.True(t, e.Kept, "%v", e)
+		lines = append(lines, e.Pos.Line)
+	}
+	assert.Equal(t, []int{2, 4, 7, 9, 10}, lines)
+	assert.Equal(t, 6, len(tree.Directives))
+}

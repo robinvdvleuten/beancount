@@ -8,7 +8,6 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
-	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
@@ -57,7 +56,6 @@ func TestErrorKinds(t *testing.T) {
 	}{
 		{newAccountNotOpenError(txn, account), "AccountNotOpenError", 10, txn},
 		{newAccountAlreadyOpenError(open, date), "AccountAlreadyOpenError", 10, open},
-		{newInvalidAccountNameError(open, sharedconfig.New()), "InvalidAccountNameError", 10, open},
 		{newAccountAlreadyClosedError(closeDirective, date), "AccountAlreadyClosedError", 10, closeDirective},
 		{newAccountNotClosedError(closeDirective), "AccountNotClosedError", 10, closeDirective},
 		{newDuplicateCommodityError(commodity), "DuplicateCommodityError", 10, commodity},

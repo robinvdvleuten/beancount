@@ -51,6 +51,10 @@ type Config struct {
 	// Title names the ledger, "Beancount" unless the title option says otherwise.
 	Title string
 
+	// AllowPipeSeparator silences the error on a deprecated pipe between a
+	// transaction's strings, which the parser reports.
+	AllowPipeSeparator bool
+
 	// OperatingCurrencies accumulates every operating_currency option in
 	// declaration order, matching beancount's list semantics (the option
 	// may be declared multiple times; duplicates are preserved).
@@ -146,7 +150,7 @@ func ParseOptions(tree *ast.AST) (*Config, []error) {
 	cfg := New()
 	var errs []error
 	for _, option := range tree.Options {
-		errs = append(errs, cfg.applyOption(option)...)
+		errs = append(errs, cfg.ApplyOption(option)...)
 	}
 	return cfg, errs
 }
@@ -159,7 +163,7 @@ func OptionsAt(options []*ast.Option, pos ast.Position) *Config {
 	for _, option := range options {
 		at := option.Position()
 		if at.Filename == pos.Filename && at.Offset < pos.Offset {
-			cfg.applyOption(option)
+			cfg.ApplyOption(option)
 		}
 	}
 	return cfg
@@ -169,13 +173,14 @@ func OptionsAt(options []*ast.Option, pos ast.Position) *Config {
 // without applying it anywhere, as for an option in an included file, which
 // beancount checks and then ignores.
 func CheckOption(option *ast.Option) []error {
-	return New().applyOption(option)
+	return New().ApplyOption(option)
 }
 
-// applyOption applies one option directive and returns its errors, in
+// ApplyOption applies one option directive and returns its errors, in
 // beancount's order: an unknown or reserved name, a deprecation (a rename
-// included), then an invalid value.
-func (c *Config) applyOption(option *ast.Option) []error {
+// included), then an invalid value. The parser applies each option as it
+// reads it, as beancount's does, to hold the options in effect on a line.
+func (c *Config) ApplyOption(option *ast.Option) []error {
 	if err := validateOptionName(option); err != nil {
 		return []error{err}
 	}
@@ -430,15 +435,21 @@ func (c *Config) apply(name, value string) error {
 		lower := strings.ToLower(value)
 		c.Tolerance.InferFromCost = lower == "true" || lower == "on" || value == "1"
 	case "use_precise_interpolation":
-		// Like beancount's options_validate_boolean, which takes any value.
-		switch strings.ToLower(value) {
-		case "1", "true", "yes":
-			c.Tolerance.PreciseInterpolation = true
-		default:
-			c.Tolerance.PreciseInterpolation = false
-		}
+		c.Tolerance.PreciseInterpolation = validateBoolean(value)
+	case "allow_pipe_separator":
+		c.AllowPipeSeparator = validateBoolean(value)
 	}
 	return nil
+}
+
+// validateBoolean reads a boolean option like beancount's
+// options_validate_boolean, which takes any value.
+func validateBoolean(value string) bool {
+	switch strings.ToLower(value) {
+	case "1", "true", "yes":
+		return true
+	}
+	return false
 }
 
 // rootAccountOption returns the field a root account name option sets.
@@ -528,7 +539,9 @@ func isValidLeafAccount(value string) bool {
 	return true
 }
 
-// IsValidAccountName reports whether an account starts with a configured root.
+// IsValidAccountName reports whether an account starts with a configured
+// root, as beancount's parser checks every account it reads against the
+// names in effect.
 func (c *Config) IsValidAccountName(account ast.Account) bool {
 	root := account.Root()
 	return root == c.AccountNames.Assets || root == c.AccountNames.Liabilities ||

@@ -3,6 +3,7 @@ package loader
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -1039,4 +1040,34 @@ func TestLoadStdin(t *testing.T) {
 		assert.Equal(t, filepath.Join(filepath.Dir(result.Root), "docs"), rootErr.Dir)
 		assert.Equal(t, "/dev/stdin", rootErr.GetPosition().Filename)
 	})
+}
+
+// TestIncludedFileChecksAccountRootsAgainstItsOwnOptions pins beancount's
+// per-file parsing: an included file starts from the default account names,
+// whatever the including file set, and its own name options apply to the
+// lines below them, though the ledger ignores them.
+func TestIncludedFileChecksAccountRootsAgainstItsOwnOptions(t *testing.T) {
+	tmpDir := t.TempDir()
+	assert.NoError(t, os.WriteFile(filepath.Join(tmpDir, "sub.beancount"), []byte(`2020-01-01 open Activa:Sub
+2020-01-01 open Assets:Sub
+option "name_assets" "Vermoegen"
+2020-01-01 open Vermoegen:Sub
+`), 0644))
+	mainFile := filepath.Join(tmpDir, "main.beancount")
+	assert.NoError(t, os.WriteFile(mainFile, []byte(`option "name_assets" "Activa"
+include "sub.beancount"
+2020-01-01 open Activa:Main
+`), 0644))
+
+	result, err := New(WithFollowIncludes(), WithSyntaxRecovery()).Load(context.Background(), Source{Path: mainFile})
+	assert.NoError(t, err)
+	var invalid []string
+	for _, diagnostic := range result.Diagnostics {
+		var syntaxErr *parser.ParseError
+		if errors.As(diagnostic, &syntaxErr) {
+			invalid = append(invalid, fmt.Sprintf("%s:%d", filepath.Base(syntaxErr.Pos.Filename), syntaxErr.Pos.Line))
+		}
+	}
+	assert.Equal(t, []string{"sub.beancount:1"}, invalid)
+	assert.Equal(t, 4, len(result.AST.Directives))
 }

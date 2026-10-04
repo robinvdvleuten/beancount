@@ -10,6 +10,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
 
@@ -42,9 +43,10 @@ type Parser struct {
 
 	lineStarts []int // Byte offset of each line's start, built on the first error
 
-	// allowPipe is the allow_pipe_separator option in effect, which, as in
-	// beancount's parser, only the file's own options above set.
-	allowPipe bool
+	// options are the options in effect, which, as in beancount's parser,
+	// only the file's own options read so far set: the account names every
+	// account is checked against and allow_pipe_separator.
+	options *config.Config
 
 	// read holds the amounts read since the current declaration started,
 	// and dropped those of the declarations a syntax error dropped, which
@@ -61,6 +63,7 @@ func NewParser(source []byte, tokens []Token, filename string, interner *Interne
 		filename:  filename,
 		interner:  interner,
 		resumedAt: -1,
+		options:   config.New(),
 	}
 }
 
@@ -129,15 +132,8 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				continue
 			}
 			tree.Options = append(tree.Options, opt)
-			if opt.Name.Value == "allow_pipe_separator" {
-				// Like beancount's options_validate_boolean.
-				switch strings.ToLower(opt.Value.Value) {
-				case "1", "true", "yes":
-					p.allowPipe = true
-				default:
-					p.allowPipe = false
-				}
-			}
+			// Its errors are the ledger's and the loader's to report.
+			p.options.ApplyOption(opt)
 
 		case INCLUDE:
 			inc, err := p.parseInclude()
@@ -666,7 +662,8 @@ func ParseString(ctx context.Context, str string) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", []byte(str))
 }
 
-// MustParseString parses AST from a string, panicking on error.
+// MustParseString parses AST from a string, panicking on an error that
+// drops part of it (an error that keeps its directive does not).
 // Intended for use in tests and examples where error handling is not needed.
 //
 // Example:
@@ -674,7 +671,7 @@ func ParseString(ctx context.Context, str string) (*ast.AST, error) {
 //	ast := parser.MustParseString(context.Background(), "2024-01-01 open Assets:Checking")
 func MustParseString(ctx context.Context, str string) *ast.AST {
 	result, err := ParseString(ctx, str)
-	if err != nil {
+	if err := dropping(err); err != nil {
 		panic(err)
 	}
 	return result
@@ -686,7 +683,8 @@ func ParseBytes(ctx context.Context, data []byte) (*ast.AST, error) {
 	return ParseBytesWithFilename(ctx, "", data)
 }
 
-// MustParseBytes parses AST from bytes, panicking on error.
+// MustParseBytes parses AST from bytes, panicking on an error that drops
+// part of it.
 // Intended for use in tests and examples where error handling is not needed.
 //
 // Example:
@@ -694,7 +692,7 @@ func ParseBytes(ctx context.Context, data []byte) (*ast.AST, error) {
 //	ast := parser.MustParseBytes(context.Background(), []byte("2024-01-01 open Assets:Checking"))
 func MustParseBytes(ctx context.Context, data []byte) *ast.AST {
 	result, err := ParseBytes(ctx, data)
-	if err != nil {
+	if err := dropping(err); err != nil {
 		panic(err)
 	}
 	return result
@@ -735,7 +733,8 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 	return tree, err
 }
 
-// MustParseBytesWithFilename parses AST from bytes with a filename, panicking on error.
+// MustParseBytesWithFilename parses AST from bytes with a filename,
+// panicking on an error that drops part of it.
 // Intended for use in tests and examples where error handling is not needed.
 //
 // Example:
@@ -743,8 +742,23 @@ func ParseBytesWithFilename(ctx context.Context, filename string, data []byte) (
 //	ast := parser.MustParseBytesWithFilename(context.Background(), "main.beancount", data)
 func MustParseBytesWithFilename(ctx context.Context, filename string, data []byte) *ast.AST {
 	result, err := ParseBytesWithFilename(ctx, filename, data)
-	if err != nil {
+	if err := dropping(err); err != nil {
 		panic(err)
 	}
 	return result
+}
+
+// dropping returns err unless it lists only errors that keep their
+// directive, which leave the AST whole.
+func dropping(err error) error {
+	var syntaxErrs ParseErrors
+	if !errors.As(err, &syntaxErrs) {
+		return err
+	}
+	for _, syntaxErr := range syntaxErrs {
+		if !syntaxErr.Kept {
+			return err
+		}
+	}
+	return nil
 }

@@ -149,7 +149,7 @@ func stableFormatterSeeds() []string {
 
 		// Blank lines between directives (regression test for idempotency bug)
 		"2020-01-01 open Assets:Test\n\n2020-01-02 close Assets:Test",
-		"0001-01-01 open A:Test\n\n0001-01-01 balance A:Test 0 USD",
+		"0001-01-01 open Assets:Test\n\n0001-01-01 balance Assets:Test 0 USD",
 		"2014-01-01 open Assets:Checking USD\r\n2014-01-02 close Assets:Checking\r\n",
 	}
 }

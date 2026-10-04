@@ -46,16 +46,27 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 	accountStr := p.internIdent(tok)
 
 	// Like beancount, an account its lexer reads but its account pattern
-	// rejects (a non-ASCII character it does not admit) is reported and
-	// still read, so the directive stays.
-	var account ast.Account
+	// rejects is reported on the line it is written on and still read, so
+	// the directive stays: one with a character the pattern does not admit,
+	// or with a type that is none of the five account types the options in
+	// effect name.
+	account := ast.Account(accountStr)
 	if err := account.Capture([]string{accountStr}); err != nil {
-		pos := tokenPosition(tok, p.filename)
-		p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "invalid account name %s: %v", accountStr, err).kept())
-		account = ast.Account(accountStr)
+		p.errs = append(p.errs, p.invalidAccountName(tok, err.Error()))
+	} else if !p.options.IsValidAccountName(account) {
+		names := p.options.AccountNames
+		p.errs = append(p.errs, p.invalidAccountName(tok, fmt.Sprintf("type %q is none of %s, %s, %s, %s, %s",
+			account.Root(), names.Assets, names.Liabilities, names.Equity, names.Income, names.Expenses)))
 	}
 
 	return account, nil
+}
+
+// invalidAccountName is the error for an account its lexer reads but its
+// account pattern rejects, which keeps its directive.
+func (p *Parser) invalidAccountName(tok Token, reason string) *ParseError {
+	pos := tokenPosition(tok, p.filename)
+	return newErrorfWithSource(pos, p.calculateSourceRange(pos), "invalid account name %s: %s", tok.String(p.source), reason).kept()
 }
 
 // parseAmount parses an amount: NUMBER CURRENCY or (EXPRESSION) CURRENCY
@@ -727,9 +738,12 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 		return nil, p.errorAtToken(tok, "unexpected %s in custom values", tok.String(p.source))
 
 	case ACCOUNT:
-		account := p.internIdent(tok)
-		p.advance()
-		return &ast.CustomValue{String: &account}, nil
+		account, err := p.parseAccount()
+		if err != nil {
+			return nil, err
+		}
+		value := string(account)
+		return &ast.CustomValue{String: &value}, nil
 
 	case NUMBER, EXPRESSION:
 		valueTok, isExpression, value, err := p.parseAmountValueToken()

@@ -53,7 +53,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	for (p.check(STRING) || p.check(PIPE)) && p.continuesPreviousLine() {
 		if p.check(PIPE) {
 			p.advance()
-			if !p.allowPipe {
+			if !p.options.AllowPipeSeparator {
 				pos := tokenPosition(stringsStart, p.filename)
 				p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "Pipe symbol is deprecated.").kept())
 			}

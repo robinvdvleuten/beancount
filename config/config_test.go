@@ -1,4 +1,4 @@
-package config
+package config_test
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
 )
@@ -59,7 +60,7 @@ func TestFromASTOptionValidation(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			tree := parser.MustParseString(context.Background(), tt.source)
-			cfg, err := FromAST(tree)
+			cfg, err := config.FromAST(tree)
 
 			if tt.wantErr == "" {
 				assert.NoError(t, err)
@@ -76,23 +77,23 @@ func TestFromASTOptionValidation(t *testing.T) {
 func TestOperatingCurrenciesAccumulate(t *testing.T) {
 	tree := parser.MustParseString(context.Background(),
 		"option \"operating_currency\" \"USD\"\noption \"operating_currency\" \"EUR\"\noption \"operating_currency\" \"USD\"")
-	cfg, err := FromAST(tree)
+	cfg, err := config.FromAST(tree)
 	assert.NoError(t, err)
 	// Declaration order, duplicates preserved, matching beancount's
 	// list-typed option semantics.
 	assert.Equal(t, []string{"USD", "EUR", "USD"}, cfg.OperatingCurrencies)
 
-	cfg, err = FromAST(parser.MustParseString(context.Background(), `option "title" "No currencies"`))
+	cfg, err = config.FromAST(parser.MustParseString(context.Background(), `option "title" "No currencies"`))
 	assert.NoError(t, err)
 	assert.Equal(t, 0, len(cfg.OperatingCurrencies))
 }
 
 func TestTitle(t *testing.T) {
-	cfg, err := FromAST(parser.MustParseString(context.Background(), ""))
+	cfg, err := config.FromAST(parser.MustParseString(context.Background(), ""))
 	assert.NoError(t, err)
 	assert.Equal(t, "Beancount", cfg.Title)
 
-	cfg, err = FromAST(parser.MustParseString(context.Background(),
+	cfg, err = config.FromAST(parser.MustParseString(context.Background(),
 		"option \"title\" \"First\"\noption \"title\" \"Joe's Ledger\""))
 	assert.NoError(t, err)
 	assert.Equal(t, "Joe's Ledger", cfg.Title)
@@ -106,7 +107,7 @@ option "inferred_tolerance_default" "USD:0.5"
 option "tolerance_multiplier" "abc"
 option "bogus_name" "x"
 `)
-	cfg, errs := ParseOptions(tree)
+	cfg, errs := config.ParseOptions(tree)
 
 	// Like beancount: the last valid scalar value wins, and each invalid
 	// option is reported at its line without affecting the others.
@@ -135,7 +136,7 @@ option "display_precision" "EUR:٠.٠١"
 option "inferred_tolerance_default" "EUR:٣"
 `))
 	assert.NoError(t, err)
-	cfg, errs := ParseOptions(tree)
+	cfg, errs := config.ParseOptions(tree)
 
 	// Like beancount's options_validate_tolerance_map, a value matches
 	// from its start, splits at its last colon and ignores trailing text.
@@ -163,7 +164,7 @@ func decimalStrings(m map[string]decimal.Decimal) map[string]string {
 }
 
 func TestAccountUnrealizedGains(t *testing.T) {
-	cfg, errs := ParseOptions(parser.MustParseString(context.Background(), ""))
+	cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(), ""))
 	assert.Zero(t, errs)
 	assert.Equal(t, "Earnings:Unrealized", cfg.AccountUnrealizedGains)
 
@@ -173,7 +174,7 @@ option "account_unrealized_gains" "It's"
 option "account_unrealized_gains" "中文"
 `))
 	assert.NoError(t, err)
-	cfg, errs = ParseOptions(tree)
+	cfg, errs = config.ParseOptions(tree)
 
 	// Like beancount's options_validate_leaf_account, which quotes the
 	// value with repr().
@@ -199,11 +200,11 @@ option "name_expenses" "1Expenses"
 option "name_expenses" "Ünïcode-2"
 `))
 	assert.NoError(t, err)
-	cfg, errs := ParseOptions(tree)
+	cfg, errs := config.ParseOptions(tree)
 
 	// Like beancount's options_validate_root_account: an invalid name is
 	// reported, quoted with repr(), and the previous one stays.
-	assert.Equal(t, &AccountNames{Assets: "Vermögen", Liabilities: "Liabilities", Equity: "Equity", Income: "Income", Expenses: "Ünïcode-2"}, cfg.AccountNames)
+	assert.Equal(t, &config.AccountNames{Assets: "Vermögen", Liabilities: "Liabilities", Equity: "Equity", Income: "Income", Expenses: "Ünïcode-2"}, cfg.AccountNames)
 	var got []string
 	for _, err := range errs {
 		got = append(got, err.Error())
@@ -218,7 +219,7 @@ option "name_expenses" "Ünïcode-2"
 }
 
 func TestSummaryAccounts(t *testing.T) {
-	cfg, errs := ParseOptions(parser.MustParseString(context.Background(), ""))
+	cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(), ""))
 	assert.Zero(t, errs)
 	earnings, balances, conversions := cfg.PreviousAccounts()
 	assert.Equal(t, []string{"Equity:Earnings:Previous", "Equity:Opening-Balances", "Equity:Conversions:Previous"},
@@ -236,7 +237,7 @@ option "account_current_conversions" "conv"
 option "name_equity" "Capital"
 `))
 	assert.NoError(t, err)
-	cfg, errs = ParseOptions(tree)
+	cfg, errs = config.ParseOptions(tree)
 	earnings, balances, conversions = cfg.PreviousAccounts()
 	assert.Equal(t, []string{"Capital:Retained:Before", "Capital:Opening", "Capital:Conv:Before"},
 		[]string{earnings, balances, conversions})
@@ -311,7 +312,7 @@ option "inferred_tolerance_multiplier" "abc"`,
 		t.Run(tt.name, func(t *testing.T) {
 			tree, err := parser.ParseBytesWithFilename(context.Background(), "ledger.beancount", []byte(tt.source))
 			assert.NoError(t, err)
-			cfg, errs := ParseOptions(tree)
+			cfg, errs := config.ParseOptions(tree)
 
 			assert.Equal(t, tt.want, cfg.Tolerance.Multiplier.String())
 			var got []string
@@ -330,7 +331,7 @@ func TestOptionNumbersReadLikeBeancountsD(t *testing.T) {
 	for value, want := range map[string]string{
 		"": "0", "1,000": "1000", " 10 ": "10", "1_0": "10", "٣": "3", "\t0.6\n": "0.6",
 	} {
-		cfg, errs := ParseOptions(parser.MustParseString(context.Background(), `option "tolerance_multiplier" "`+value+`"`))
+		cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(), `option "tolerance_multiplier" "`+value+`"`))
 		assert.Zero(t, errs, value)
 		assert.Equal(t, want, cfg.Tolerance.Multiplier.String(), value)
 	}
@@ -338,7 +339,7 @@ func TestOptionNumbersReadLikeBeancountsD(t *testing.T) {
 	// beancount takes an infinity or a NaN, then fails on its first
 	// tolerance; they are rejected here.
 	for _, value := range []string{"NaN", "Infinity", "-inf"} {
-		cfg, errs := ParseOptions(parser.MustParseString(context.Background(), `option "tolerance_multiplier" "`+value+`"`))
+		cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(), `option "tolerance_multiplier" "`+value+`"`))
 		assert.Equal(t, 1, len(errs), value)
 		assert.Contains(t, errs[0].Error(), "Impossible to create Decimal instance from "+value+": [<class 'decimal.ConversionSyntax'>]")
 		assert.Equal(t, "0.5", cfg.Tolerance.Multiplier.String(), value)
@@ -351,7 +352,7 @@ func TestDeprecatedOptions(t *testing.T) {
 option "allow_deprecated_none_for_tags_and_links" ""
 `))
 	assert.NoError(t, err)
-	_, errs := ParseOptions(tree)
+	_, errs := config.ParseOptions(tree)
 	var got []string
 	for _, err := range errs {
 		got = append(got, err.Error())
@@ -366,15 +367,15 @@ func TestCheckOptionAppliesNothing(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), `option "booking_method" "FIFO"
 option "booking_method" "XX"
 `)
-	assert.Zero(t, CheckOption(tree.Options[0]))
-	errs := CheckOption(tree.Options[1])
+	assert.Zero(t, config.CheckOption(tree.Options[0]))
+	errs := config.CheckOption(tree.Options[1])
 	assert.Equal(t, 1, len(errs))
 	assert.Contains(t, errs[0].Error(), "Error for option 'booking_method': 'XX'")
 }
 
 func TestFromOptionsToleranceMultiplier(t *testing.T) {
 	for _, name := range []string{"tolerance_multiplier", "inferred_tolerance_multiplier"} {
-		cfg, err := FromOptions(map[string][]string{name: {"0.6"}})
+		cfg, err := config.FromOptions(map[string][]string{name: {"0.6"}})
 		assert.NoError(t, err)
 		assert.Equal(t, "0.6", cfg.Tolerance.Multiplier.String())
 	}
@@ -387,7 +388,7 @@ func TestInferToleranceFromCost(t *testing.T) {
 		"TRUE": true, "true": true, "On": true, "1": true,
 		"FALSE": false, "yes": false, "0": false, "": false, "bogus": false,
 	} {
-		cfg, errs := ParseOptions(parser.MustParseString(context.Background(), `option "infer_tolerance_from_cost" "`+value+`"`))
+		cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(), `option "infer_tolerance_from_cost" "`+value+`"`))
 		assert.Zero(t, errs, value)
 		assert.Equal(t, want, cfg.Tolerance.InferFromCost, value)
 	}
@@ -400,15 +401,15 @@ func TestUsePreciseInterpolation(t *testing.T) {
 		"TRUE": true, "true": true, "True": true, "1": true, "yes": true, "YES": true,
 		"FALSE": false, "0": false, "on": false, "": false, "bogus": false,
 	} {
-		cfg, errs := ParseOptions(parser.MustParseString(context.Background(),
+		cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(),
 			`option "use_precise_interpolation" "`+value+`"`))
 		assert.Equal(t, 0, len(errs), value)
 		assert.Equal(t, want, cfg.Tolerance.PreciseInterpolation, value)
 	}
 
-	assert.False(t, New().Tolerance.PreciseInterpolation)
+	assert.False(t, config.New().Tolerance.PreciseInterpolation)
 
-	cfg, errs := ParseOptions(parser.MustParseString(context.Background(),
+	cfg, errs := config.ParseOptions(parser.MustParseString(context.Background(),
 		"option \"use_precise_interpolation\" \"TRUE\"\noption \"use_precise_interpolation\" \"FALSE\""))
 	assert.Equal(t, 0, len(errs))
 	assert.False(t, cfg.Tolerance.PreciseInterpolation, "the last value wins")
@@ -419,13 +420,13 @@ func TestFromOptions(t *testing.T) {
 		name        string
 		options     map[string][]string
 		wantErr     bool
-		checkConfig func(t *testing.T, config *Config)
+		checkConfig func(t *testing.T, config *config.Config)
 	}{
 		{
 			name:    "empty options - use defaults",
 			options: map[string][]string{},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.5), config.Tolerance.Multiplier)
 				assert.Equal(t, 0, len(config.Tolerance.Defaults))
 				assert.False(t, config.Tolerance.InferFromCost)
@@ -438,7 +439,7 @@ func TestFromOptions(t *testing.T) {
 				"tolerance_multiplier": {"0.6"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.6), config.Tolerance.Multiplier)
 			},
 		},
@@ -448,7 +449,7 @@ func TestFromOptions(t *testing.T) {
 				"inferred_tolerance_default": {"*:0.001"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.001), config.Tolerance.Defaults["*"])
 			},
 		},
@@ -458,7 +459,7 @@ func TestFromOptions(t *testing.T) {
 				"inferred_tolerance_default": {"USD:0.003"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.003), config.Tolerance.Defaults["USD"])
 				_, ok := config.Tolerance.Defaults["*"]
 				assert.False(t, ok)
@@ -470,7 +471,7 @@ func TestFromOptions(t *testing.T) {
 				"infer_tolerance_from_cost": {"TRUE"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.True(t, config.Tolerance.InferFromCost)
 			},
 		},
@@ -480,7 +481,7 @@ func TestFromOptions(t *testing.T) {
 				"infer_tolerance_from_cost": {"false"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.False(t, config.Tolerance.InferFromCost)
 			},
 		},
@@ -493,7 +494,7 @@ func TestFromOptions(t *testing.T) {
 				"booking_method":             {"AVERAGE"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.75), config.Tolerance.Multiplier)
 				assert.Equal(t, decimal.NewFromFloat(0.002), config.Tolerance.Defaults["EUR"])
 				assert.True(t, config.Tolerance.InferFromCost)
@@ -506,7 +507,7 @@ func TestFromOptions(t *testing.T) {
 				"booking_method": {"NONE"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, "NONE", config.BookingMethod)
 			},
 		},
@@ -551,7 +552,7 @@ func TestFromOptions(t *testing.T) {
 				"inferred_tolerance_default": {"USD:0.01", "EUR:0.01", "BTC:0.0001"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.Defaults["USD"])
 				assert.Equal(t, decimal.NewFromFloat(0.01), config.Tolerance.Defaults["EUR"])
 				assert.Equal(t, decimal.NewFromFloat(0.0001), config.Tolerance.Defaults["BTC"])
@@ -569,7 +570,7 @@ func TestFromOptions(t *testing.T) {
 				"name_expenses":    {"Ausgaben"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, "Vermoegen", config.AccountNames.Assets)
 				assert.Equal(t, "Verbindlichkeiten", config.AccountNames.Liabilities)
 				assert.Equal(t, "Eigenkapital", config.AccountNames.Equity)
@@ -583,7 +584,7 @@ func TestFromOptions(t *testing.T) {
 				"name_assets": {"Actifs"},
 			},
 			wantErr: false,
-			checkConfig: func(t *testing.T, config *Config) {
+			checkConfig: func(t *testing.T, config *config.Config) {
 				assert.Equal(t, "Actifs", config.AccountNames.Assets)
 				// Others should have defaults
 				assert.Equal(t, "Liabilities", config.AccountNames.Liabilities)
@@ -596,7 +597,7 @@ func TestFromOptions(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			config, err := FromOptions(tt.options)
+			config, err := config.FromOptions(tt.options)
 
 			if tt.wantErr {
 				assert.Error(t, err, "expected error")
@@ -614,7 +615,7 @@ func TestFromOptions(t *testing.T) {
 }
 
 func TestNew(t *testing.T) {
-	cfg := New()
+	cfg := config.New()
 	assert.True(t, cfg != nil)
 	assert.True(t, cfg.Tolerance != nil)
 	assert.Equal(t, "STRICT", cfg.BookingMethod)
