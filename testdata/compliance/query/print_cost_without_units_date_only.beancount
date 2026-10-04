@@ -1,0 +1,7 @@
+; A cost holding only a date is no auto-posting either.
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Salary
+
+2020-01-02 * "only a cost date"
+  Assets:Cash     10 USD
+  Income:Salary  {2020-01-01}

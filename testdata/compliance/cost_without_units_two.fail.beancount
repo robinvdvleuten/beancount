@@ -1,0 +1,7 @@
+; Like beancount, each posting whose units currency is unresolved is reported.
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+
+2020-01-02 * "two unresolved"
+  Assets:C  @ 10 USD
+  Assets:B  {}

@@ -1,0 +1,7 @@
+; A cost with a date leaves the units currency unresolved too.
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "units and currency missing beside a dated cost"
+  Expenses:Food  -10.00 EUR
+  Assets:Cash    {1.5 USD, 2020-01-01}

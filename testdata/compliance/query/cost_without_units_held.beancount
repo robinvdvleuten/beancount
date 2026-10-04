@@ -1,0 +1,13 @@
+; A posting with a cost and no units takes its units currency from its
+; account's inventory when that holds one, and its units number is
+; interpolated, as in beancount.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "buy"
+  Assets:Stock  10 HOOL {5 USD}
+  Assets:Cash
+
+2020-01-03 * "sell with missing units"
+  Assets:Stock  {5 USD}
+  Assets:Cash  20 USD

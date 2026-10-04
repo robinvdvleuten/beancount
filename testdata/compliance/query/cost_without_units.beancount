@@ -1,0 +1,9 @@
+; A posting with a cost and neither units nor a units currency cannot be
+; booked: like beancount, its units currency is not resolved from the other
+; posting, and the transaction is dropped.
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "units and currency missing beside a cost"
+  Expenses:Food  -10.00 EUR
+  Assets:Cash    {1.5 USD}

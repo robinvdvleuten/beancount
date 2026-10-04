@@ -78,11 +78,10 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 	var autos, unknown []currencyRefs
 	for i, posting := range txn.Postings {
 		r := currencyRefs{index: i}
+		auto := isAutoPosting(posting)
 		if posting.Amount != nil {
 			r.units = statedCurrency(true, posting.Amount.Currency)
-		} else if posting.Price != nil {
-			// A price without units is no auto-posting: as in beancount's
-			// parser, its units leave out their currency too.
+		} else if !auto {
 			r.units = missingCurrency
 		}
 		if posting.Cost != nil {
@@ -99,7 +98,7 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 			r.price = r.cost
 		}
 
-		if posting.Amount == nil && r.price == "" {
+		if auto {
 			autos = append(autos, r)
 		} else if currency := r.bucket(); currency != "" {
 			add(currency, r)
@@ -199,6 +198,13 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 		result = append(result, group)
 	}
 	return result, nil
+}
+
+// isAutoPosting reports whether a posting is an account alone, the only
+// posting beancount's parser leaves its units out of: one with a cost or a
+// price but without units has units that leave out their currency.
+func isAutoPosting(posting *ast.Posting) bool {
+	return posting.Amount == nil && posting.Cost == nil && posting.Price == nil
 }
 
 // heldCurrencies returns the currencies an account's inventory holds, and

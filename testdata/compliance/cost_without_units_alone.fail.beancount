@@ -1,0 +1,5 @@
+; A lone posting with a cost and no units is reported, not booked.
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "units and currency missing"
+  Assets:Cash  {1.5 USD}
