@@ -18,17 +18,15 @@ import (
 // This is a separate type from Ledger to ensure validation cannot mutate state.
 type validator struct {
 	accounts map[string]*Account
-	// Every account an open directive names anywhere in the ledger, with
-	// that open, which tells an inactive account from an unknown one
-	opened map[string]*ast.Open
-	config *sharedconfig.Config
+	opens    openIndex
+	config   *sharedconfig.Config
 }
 
 // newValidator creates a validator with a read-only view of the current ledger state
-func newValidator(accounts map[string]*Account, opened map[string]*ast.Open, config *sharedconfig.Config) *validator {
+func newValidator(accounts map[string]*Account, opens openIndex, config *sharedconfig.Config) *validator {
 	return &validator{
 		accounts: accounts,
-		opened:   opened,
+		opens:    opens,
 		config:   config,
 	}
 }
@@ -38,7 +36,7 @@ func newValidator(accounts map[string]*Account, opened map[string]*ast.Open, con
 // the ledger opens it anywhere, before or after the directive, and unknown
 // otherwise.
 func (v *validator) accountNotOpenError(d ast.Directive, account ast.Account) error {
-	if v.opened[string(account)] != nil {
+	if v.opens.first[string(account)] != nil {
 		return newInactiveAccountError(d, account)
 	}
 	return newAccountNotOpenError(d, account)
@@ -149,7 +147,7 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 // against the postings made before the open too (assertions are allowed
 // after close).
 func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.Decimal) []error {
-	if v.opened[string(balance.Account)] == nil {
+	if v.opens.first[string(balance.Account)] == nil {
 		return []error{newAccountNotOpenError(balance, balance.Account)}
 	}
 
@@ -171,7 +169,7 @@ func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.D
 // account's open does not allow. Like beancount, the constraints are the
 // open's wherever it is dated, and the assertion is still checked.
 func (v *validator) validateBalanceCurrency(balance *ast.Balance) error {
-	open := v.opened[string(balance.Account)]
+	open := v.opens.first[string(balance.Account)]
 	if open == nil || len(open.ConstraintCurrencies) == 0 || slices.Contains(open.ConstraintCurrencies, balance.Amount.Currency) {
 		return nil
 	}
@@ -189,21 +187,35 @@ func balanceKeyOf(balance *ast.Balance) balanceKey {
 	return balanceKey{balance.Account, balance.Amount.Currency, balance.Date().String()}
 }
 
-// openedAccounts returns every account an open directive names, with its
-// open: like beancount's get_account_open_close, the earliest one when an
-// account is opened more than once.
-func openedAccounts(directives []ast.Directive) map[string]*ast.Open {
-	opened := make(map[string]*ast.Open)
+// openIndex holds, for every account an open directive names, the opens
+// beancount's validations look up wherever the ledger dates them.
+type openIndex struct {
+	// first is the account's earliest open, as beancount's
+	// get_account_open_close takes it, which tells an inactive account from
+	// an unknown one.
+	first map[string]*ast.Open
+	// currencies are the constraint currencies of the account's last open
+	// naming any, in directive order, which like beancount's
+	// validate_currency_constraints constrain every posting to the account,
+	// before or after it opens.
+	currencies map[string][]string
+}
+
+func newOpenIndex(directives []ast.Directive) openIndex {
+	opens := openIndex{first: make(map[string]*ast.Open), currencies: make(map[string][]string)}
 	for _, directive := range directives {
 		open, ok := directive.(*ast.Open)
 		if !ok {
 			continue
 		}
-		if first := opened[string(open.Account)]; first == nil || open.Date().Before(first.Date().Time) {
-			opened[string(open.Account)] = open
+		if first := opens.first[string(open.Account)]; first == nil || open.Date().Before(first.Date().Time) {
+			opens.first[string(open.Account)] = open
+		}
+		if len(open.ConstraintCurrencies) > 0 {
+			opens.currencies[string(open.Account)] = open.ConstraintCurrencies
 		}
 	}
-	return opened
+	return opens
 }
 
 // balancesByKey groups the balance assertions by account, currency and
@@ -425,19 +437,15 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 		return errs, nil
 	}
 
-	// Copy metadata and constraint currencies to avoid shared references with AST
+	// Copy metadata to avoid shared references with AST
 	metadataCopy := make([]*ast.Metadata, len(open.Metadata))
 	copy(metadataCopy, open.Metadata)
 
-	constraintCurrenciesCopy := make([]string, len(open.ConstraintCurrencies))
-	copy(constraintCurrenciesCopy, open.ConstraintCurrencies)
-
 	// Build delta with account properties (avoid allocating Inventory during validation)
 	delta := &openDelta{
-		account:              open.Account,
-		openDate:             open.Date(),
-		constraintCurrencies: constraintCurrenciesCopy,
-		metadata:             metadataCopy,
+		account:  open.Account,
+		openDate: open.Date(),
+		metadata: metadataCopy,
 	}
 
 	return errs, delta
@@ -511,44 +519,19 @@ func (v *validator) validateBookedCosts(txn *ast.Transaction) []error {
 }
 
 // validateConstraintCurrencies reports postings in a currency their
-// account's constraint list does not allow. It checks the booked postings,
-// so inferred amounts are checked too.
+// account's constraint does not allow, as beancount's
+// validate_currency_constraints does: the currencies of the account's last
+// open naming any, wherever it is dated. It checks the booked postings, so
+// inferred amounts are checked too.
 func (v *validator) validateConstraintCurrencies(txn *ast.Transaction) []error {
-
 	var errs []error
-
 	for _, posting := range txn.Postings {
-		accountName := string(posting.Account)
-		account, ok := v.accounts[accountName]
-		if !ok {
-			continue // Will be caught by validateAccountsOpen
-		}
-
-		// Only check if account has constraint currencies
-		if len(account.constraintCurrencies) == 0 {
+		allowed := v.opens.currencies[string(posting.Account)]
+		if len(allowed) == 0 || posting.Amount == nil || slices.Contains(allowed, posting.Amount.Currency) {
 			continue
 		}
-
-		// Booking has written inferred amounts onto the postings.
-		amount := posting.Amount
-		if amount == nil {
-			continue
-		}
-		currency := amount.Currency
-
-		// Check if currency is allowed
-		allowed := false
-		for _, c := range account.constraintCurrencies {
-			if c == currency {
-				allowed = true
-				break
-			}
-		}
-		if !allowed {
-			errs = append(errs, newCurrencyConstraintError(txn, posting.Account, currency))
-		}
+		errs = append(errs, newCurrencyConstraintError(txn, posting.Account, posting.Amount.Currency))
 	}
-
 	return errs
 }
 

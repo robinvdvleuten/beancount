@@ -1,0 +1,13 @@
+; Like beancount, a duplicate open is reported and its currencies replace the
+; first open's for every posting to the account.
+2019-01-01 open Assets:Bank
+2019-01-01 open Income:Salary CAD
+2019-01-01 open Income:Salary USD
+
+2019-02-01 * "posting in the second open's currency"
+  Assets:Bank     1000.00 USD
+  Income:Salary  -1000.00 USD
+
+2019-02-02 * "posting in the first open's currency"
+  Assets:Bank     1000.00 CAD
+  Income:Salary  -1000.00 CAD

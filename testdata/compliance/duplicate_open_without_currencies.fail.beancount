@@ -1,0 +1,15 @@
+; Like beancount's validate_currency_constraints, the constraint is the last
+; open's that names currencies: a later open naming none leaves it, and it
+; applies to a posting made before the account opens.
+2019-01-01 open Assets:Bank
+
+2019-02-01 * "before the open"
+  Assets:Bank     1000.00 CAD
+  Income:Salary  -1000.00 CAD
+
+2019-03-01 open Income:Salary USD
+2019-03-02 open Income:Salary
+
+2019-04-01 * "after both opens"
+  Assets:Bank     1000.00 CAD
+  Income:Salary  -1000.00 CAD

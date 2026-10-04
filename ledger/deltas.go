@@ -13,10 +13,9 @@ import (
 // openDelta describes changes from opening an account.
 // Stores account properties directly to avoid unnecessary allocations.
 type openDelta struct {
-	account              ast.Account
-	openDate             *ast.Date
-	constraintCurrencies []string
-	metadata             []*ast.Metadata
+	account  ast.Account
+	openDate *ast.Date
+	metadata []*ast.Metadata
 }
 
 // closeDelta describes changes from closing an account

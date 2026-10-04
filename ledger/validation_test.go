@@ -16,7 +16,7 @@ import (
 
 // newTestValidator is a helper for tests that need a validator with default config.
 func newTestValidator(accounts map[string]*Account) *validator {
-	return newValidator(accounts, nil, sharedconfig.New())
+	return newValidator(accounts, openIndex{}, sharedconfig.New())
 }
 
 // bookAndValidate books txn against empty inventories and validates the
@@ -901,7 +901,7 @@ func TestBalanceTolerance(t *testing.T) {
 				balance.Tolerance = ast.NewAmount(tt.tolerance, "USD")
 			}
 
-			v := newValidator(map[string]*Account{string(account.name): account}, map[string]*ast.Open{string(account.name): ast.NewOpen(date, account.name, nil, "")}, sharedconfig.New())
+			v := newValidator(map[string]*Account{string(account.name): account}, openIndex{first: map[string]*ast.Open{string(account.name): ast.NewOpen(date, account.name, nil, "")}}, sharedconfig.New())
 			tolerance, err := newTolerances(nil).balance(balance)
 			assert.NoError(t, err)
 			errs := v.checkBalance(balance, account.inventory.get("USD"), tolerance)
@@ -1008,12 +1008,11 @@ func TestValidateOpen(t *testing.T) {
 	checking, _ := ast.NewAccount("Assets:Checking")
 
 	tests := []struct {
-		name              string
-		accounts          map[string]*Account
-		open              *ast.Open
-		wantErrCount      int
-		wantMetadataCopy  bool
-		wantConstraintLen int
+		name             string
+		accounts         map[string]*Account
+		open             *ast.Open
+		wantErrCount     int
+		wantMetadataCopy bool
 	}{
 		{
 			name:         "valid open directive",
@@ -1060,13 +1059,6 @@ func TestValidateOpen(t *testing.T) {
 			wantErrCount:     0,
 			wantMetadataCopy: true,
 		},
-		{
-			name:              "constraint currencies copying",
-			accounts:          map[string]*Account{},
-			open:              ast.NewOpen(date2024, checking, []string{"USD", "EUR"}, ""),
-			wantErrCount:      0,
-			wantConstraintLen: 2,
-		},
 	}
 
 	for _, tt := range tests {
@@ -1081,10 +1073,6 @@ func TestValidateOpen(t *testing.T) {
 					assert.True(t, len(delta.metadata) > 0, "expected metadata on delta")
 				}
 
-				if tt.wantConstraintLen > 0 {
-					assert.Equal(t, tt.wantConstraintLen, len(delta.constraintCurrencies))
-				}
-
 				// Verify no shared references
 				if tt.open.HasMetadata() && len(delta.metadata) > 0 {
 					// Check that the slices don't point to the same backing array by checking addresses
@@ -1092,13 +1080,6 @@ func TestValidateOpen(t *testing.T) {
 					openPtr := fmt.Sprintf("%p", &tt.open.Metadata[0])
 					deltaPtr := fmt.Sprintf("%p", &delta.metadata[0])
 					assert.NotEqual(t, openPtr, deltaPtr)
-				}
-
-				if len(tt.open.ConstraintCurrencies) > 0 && len(delta.constraintCurrencies) > 0 {
-					// Modify delta's copy to verify independence
-					originalFirst := tt.open.ConstraintCurrencies[0]
-					delta.constraintCurrencies[0] = "TEST"
-					assert.Equal(t, originalFirst, tt.open.ConstraintCurrencies[0])
 				}
 			}
 		})
@@ -1115,7 +1096,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 		cfg := sharedconfig.New()
 		cfg.AccountNames.Assets = "Vermoegen"
 
-		v := newValidator(map[string]*Account{}, nil, cfg)
+		v := newValidator(map[string]*Account{}, openIndex{}, cfg)
 		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
 
 		assert.Equal(t, 0, len(errs))
@@ -1127,7 +1108,7 @@ func TestValidateOpenWithCustomAccountTypes(t *testing.T) {
 		cfg := sharedconfig.New()
 		// Don't set custom Vermoegen - should reject it
 
-		v := newValidator(map[string]*Account{}, nil, cfg)
+		v := newValidator(map[string]*Account{}, openIndex{}, cfg)
 		errs, delta := v.validateOpen(context.Background(), ast.NewOpen(date2024, customAccount, nil, ""))
 
 		assert.Equal(t, 1, len(errs))
@@ -1458,19 +1439,6 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			accounts := map[string]*Account{
-				"Assets:Checking": {
-					name:                 checking,
-					OpenDate:             date,
-					inventory:            newInventory(),
-					constraintCurrencies: tt.constraints,
-				},
-				"Expenses:Groceries": {
-					name:      expenses,
-					OpenDate:  date,
-					inventory: newInventory(),
-				},
-			}
 
 			// Setup inferred amounts directly on postings
 			if tt.setupInferred {
@@ -1482,7 +1450,8 @@ func TestValidateConstraintCurrencies(t *testing.T) {
 				}
 			}
 
-			v := newTestValidator(accounts)
+			v := newTestValidator(nil)
+			v.opens.currencies = map[string][]string{"Assets:Checking": tt.constraints}
 			errs := v.validateConstraintCurrencies(tt.txn)
 
 			assert.Equal(t, tt.wantErrCount, len(errs))

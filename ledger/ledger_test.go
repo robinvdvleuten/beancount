@@ -76,9 +76,9 @@ option "booking_method" "LIFO"
 `,
 			wantErr: false,
 			checkFunc: func(t *testing.T, l *Ledger) {
-				acc, ok := l.GetAccount("Assets:Checking")
+				_, ok := l.GetAccount("Assets:Checking")
 				assert.True(t, ok)
-				assert.Equal(t, []string{"USD", "EUR"}, acc.constraintCurrencies)
+				assert.Equal(t, []string{"USD", "EUR"}, l.opens.currencies["Assets:Checking"])
 			},
 		},
 		{

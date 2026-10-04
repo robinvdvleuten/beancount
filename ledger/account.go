@@ -23,14 +23,13 @@ type accountPosting struct {
 
 // Account represents an account in the ledger
 type Account struct {
-	name                 ast.Account
-	Type                 string // Account type root name (e.g., "Assets", "Vermoegen")
-	OpenDate             *ast.Date
-	CloseDate            *ast.Date
-	constraintCurrencies []string
-	metadata             []*ast.Metadata
-	inventory            *inventory        // Lots held, with their cost basis
-	postings             []*accountPosting // Transaction history in chronological order
+	name      ast.Account
+	Type      string // Account type root name (e.g., "Assets", "Vermoegen")
+	OpenDate  *ast.Date
+	CloseDate *ast.Date
+	metadata  []*ast.Metadata
+	inventory *inventory        // Lots held, with their cost basis
+	postings  []*accountPosting // Transaction history in chronological order
 }
 
 // isOpen returns true if the account is open at the given date

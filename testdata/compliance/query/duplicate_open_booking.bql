@@ -1,0 +1,1 @@
+SELECT date, position, open_date(account) AS o WHERE account = 'Assets:Stock'

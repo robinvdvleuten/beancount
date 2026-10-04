@@ -1,0 +1,1 @@
+SELECT account, open.date, open.booking, open.meta FROM #accounts

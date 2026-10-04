@@ -76,8 +76,8 @@ type Ledger struct {
 	bookedPositions map[*ast.Posting][]BookedPosition
 	booker          *booker
 	booked          map[*ast.Transaction]*bookedTransaction
-	unopened        map[string]*Account  // Accounts posted to before any open
-	opened          map[string]*ast.Open // Accounts an open directive names, at any date, with that open
+	unopened        map[string]*Account // Accounts posted to before any open
+	opens           openIndex           // The opens of every account an open directive names, at any date
 	display         *DisplayContext
 	// The number of postings applied, which orders them across accounts
 	appliedPostings int
@@ -166,7 +166,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 		return nil, err
 	}
 	l.runPlugins(ctx, tree)
-	l.opened = openedAccounts(tree.Directives)
+	l.opens = newOpenIndex(tree.Directives)
 	l.balances = balancesByKey(tree.Directives)
 	l.duplicateBalances = duplicateBalances(l.balances)
 
@@ -362,12 +362,11 @@ func (l *Ledger) applyOpen(open *ast.Open, delta *openDelta, cfg *sharedconfig.C
 	accountName := string(delta.account)
 
 	account := &Account{
-		name:                 delta.account,
-		Type:                 accountTypeRoot(delta.account),
-		OpenDate:             delta.openDate,
-		constraintCurrencies: delta.constraintCurrencies,
-		metadata:             delta.metadata,
-		inventory:            newInventory(),
+		name:      delta.account,
+		Type:      accountTypeRoot(delta.account),
+		OpenDate:  delta.openDate,
+		metadata:  delta.metadata,
+		inventory: newInventory(),
 	}
 	// Postings made before the open keep counting, as in beancount.
 	if early, ok := l.unopened[accountName]; ok {

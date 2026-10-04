@@ -150,7 +150,7 @@ func TestBalanceHandler(t *testing.T) {
 
 	// Also need to open equity account for padding
 	tree2 := parser.MustParseString(ctx, "2020-01-01 open Equity:Opening-Balances")
-	ledger.opened = openedAccounts(append(tree.Directives, tree2.Directives...))
+	ledger.opens = newOpenIndex(append(tree.Directives, tree2.Directives...))
 	_, delta = openHandler.validate(ctx, ledger, tree2.Directives[0])
 	openHandler.apply(ctx, ledger, tree2.Directives[0], delta)
 

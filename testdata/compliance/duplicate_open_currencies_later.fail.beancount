@@ -1,0 +1,13 @@
+; A duplicate open's currencies constrain the postings dated before it too.
+2019-01-01 open Assets:Bank
+2019-01-01 open Income:Salary CAD
+
+2019-02-01 * "before the second open"
+  Assets:Bank     1000.00 CAD
+  Income:Salary  -1000.00 CAD
+
+2019-03-01 open Income:Salary USD
+
+2019-04-01 * "after the second open"
+  Assets:Bank     1000.00 CAD
+  Income:Salary  -1000.00 CAD

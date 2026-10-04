@@ -1,0 +1,21 @@
+; Like beancount's booking, the last open naming a booking method sets the
+; account's, so the sale books FIFO, while the accounts table and
+; open_date() read the first open.
+2019-01-01 open Assets:Bank
+2019-01-01 open Assets:Stock "STRICT"
+  mm: "one"
+
+2019-01-02 * "buy"
+  Assets:Stock  1 HOOL {10 USD}
+  Assets:Bank
+
+2019-01-03 * "buy"
+  Assets:Stock  1 HOOL {20 USD}
+  Assets:Bank
+
+2019-01-04 * "sell"
+  Assets:Stock  -1 HOOL {}
+  Assets:Bank
+
+2019-03-01 open Assets:Stock "FIFO"
+  mm: "two"
