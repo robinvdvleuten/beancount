@@ -78,9 +78,12 @@ func (s *sourceView) itemLine(line, column int) (text string, owned bool) {
 }
 
 // directiveLine is itemLine for a dated directive, which starts at its
-// date: the parser requires the date in column 1, on its keyword's line.
+// date: the parser requires the date to start its keyword's line, in
+// column 1 or after leading whitespace holding a lone \r, which is no
+// indent to beancount.
 func (s *sourceView) directiveLine(d ast.Directive) (text string, owned bool) {
-	return s.itemLine(d.Position().Line, 1)
+	line := d.Position().Line
+	return s.itemLine(line, firstColumn(s.line(line)))
 }
 
 // firstColumn is the 1-indexed column of a line's first non-blank byte,

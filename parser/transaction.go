@@ -139,7 +139,7 @@ func (p *Parser) parseTagsLinks() ([]ast.Tag, []ast.Link, error) {
 
 func (p *Parser) startsIndentedTagsLinksLine() bool {
 	tok := p.peek()
-	return (tok.Type == TAG || tok.Type == LINK) && tok.Column > 1 && !p.continuesPreviousLine()
+	return (tok.Type == TAG || tok.Type == LINK) && p.indented(tok) && !p.continuesPreviousLine()
 }
 
 // parseTagsLinksLine parses an indented line of tags and links, with an
@@ -179,7 +179,7 @@ func (p *Parser) parsePostingBlock(txn *ast.Transaction) error {
 
 		// Like beancount's, a blank or whitespace-only line ends the body:
 		// an indented line after it is a syntax error at top level.
-		if tok.Type == NEWLINE || tok.Column <= 1 {
+		if tok.Type == NEWLINE || !p.indented(tok) {
 			return nil
 		}
 
@@ -224,7 +224,7 @@ func (p *Parser) startsIndentedMetadataLine() bool {
 	// Indented comment lines may lead the metadata line.
 	n := p.indentedCommentsBeforeMetadata()
 	tok := p.peekAhead(n)
-	return tok.Type != NEWLINE && tok.Column > 1 && p.isMetadataKeyAt(n)
+	return tok.Type != NEWLINE && p.indented(tok) && p.isMetadataKeyAt(n)
 }
 
 func (p *Parser) isPostingStartToken(tok Token) bool {

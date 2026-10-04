@@ -76,6 +76,29 @@ func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool
 	return ast.NewAmountWithRaw(raw, value, currency)
 }
 
+// indented reports whether tok is indented, as beancount's lexer decides
+// INDENT: a line's leading whitespace is an indent only when it is spaces
+// and tabs alone, so a lone \r in it makes the line read as if it started
+// in column 1. A token after another on its line is past column 1.
+func (p *Parser) indented(tok Token) bool {
+	if tok.Column <= 1 {
+		return false
+	}
+	carriageReturn := false
+	for i := tok.Start - 1; i >= 0; i-- {
+		switch p.source[i] {
+		case ' ', '\t':
+		case '\r':
+			carriageReturn = true
+		case '\n':
+			return !carriageReturn
+		default:
+			return true
+		}
+	}
+	return !carriageReturn
+}
+
 // continuesPreviousLine reports whether the next token continues the previous
 // token's line, i.e. there is no line break between them. Used to keep
 // line-scoped elements (tags and links) from absorbing tokens of following
@@ -517,12 +540,12 @@ func (p *Parser) indentedCommentsBeforeMetadata() int {
 	n := 0
 	for {
 		tok := p.peekAhead(n)
-		if tok.Type != COMMENT || tok.Column <= 1 || (n == 0 && p.continuesPreviousLine()) {
+		if tok.Type != COMMENT || !p.indented(tok) || (n == 0 && p.continuesPreviousLine()) {
 			break
 		}
 		n++
 	}
-	if n == 0 || p.peekAhead(n).Column <= 1 || !p.isMetadataKeyAt(n) {
+	if n == 0 || !p.indented(p.peekAhead(n)) || !p.isMetadataKeyAt(n) {
 		return 0
 	}
 	return n

@@ -63,8 +63,8 @@ func (p *Parser) Parse() (*ast.AST, error) {
 	for !p.isAtEnd() {
 		tok := p.peek()
 		tokType := tok.Type
-		continuesDirective := tokType == COMMENT && tok.Column > 1 && tok.Line == continuationLine
-		if tok.Column > 1 && tokType != NEWLINE && tokType != EOF && !continuesDirective {
+		continuesDirective := tokType == COMMENT && p.indented(tok) && tok.Line == continuationLine
+		if p.indented(tok) && tokType != NEWLINE && tokType != EOF && !continuesDirective {
 			// A line continuing a dated directive that is none of its
 			// lines is a syntax error inside it: like beancount, drop it.
 			if tok.Line == continuationLine && len(tree.Directives) > 0 {
@@ -206,7 +206,7 @@ func (p *Parser) recover(err error) {
 	p.recoveredEnd = max(p.recoveredEnd, parseErr.Pos.Offset)
 	for !p.isAtEnd() {
 		tok := p.peek()
-		if tok.Line > parseErr.Pos.Line && tok.Column == 1 {
+		if tok.Line > parseErr.Pos.Line && !p.indented(tok) {
 			return
 		}
 		if tok.Start > parseErr.Pos.Offset {
@@ -266,7 +266,7 @@ func (p *Parser) shiftedSince(start, end int) int {
 		}
 		if tok.Line != line {
 			line = tok.Line
-			if tok.Column > 1 {
+			if p.indented(tok) {
 				n++ // INDENT
 			}
 		}
