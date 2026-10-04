@@ -128,6 +128,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 	// Unbalanced pushes and pops are reported like validation errors; the
 	// ledger is still processed.
 	l.errors = append(l.errors, ast.ApplyPushPopDirectives(tree)...)
+	l.errors = append(l.errors, resolveMetadataKeys(tree)...)
 	if err := ast.SortDirectives(tree); err != nil {
 		prepareTimer.End()
 		return nil, err

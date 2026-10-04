@@ -95,57 +95,6 @@ func (v *validator) validateAccountsOpen(txn *ast.Transaction) []error {
 	return errs
 }
 
-// validateMetadata checks metadata entries are valid.
-//
-// It validates that:
-//   - Metadata keys are not duplicated within a directive
-//   - Metadata keys are not duplicated within a posting
-//
-// Like bean-check, any value is accepted, including an empty string.
-//
-// Checks both transaction-level and posting-level metadata.
-//
-// Returns a slice of InvalidMetadataError for any invalid metadata entries.
-//
-// Example:
-//
-//	v := newValidator(ledger.accounts)
-//	errs := v.validateMetadata(txn)
-//	if len(errs) > 0 {
-//	    // Found duplicate metadata
-//	    for _, err := range errs {
-//	        fmt.Printf("Metadata error: %v\n", err)
-//	        // Example: "2024-01-15: Invalid metadata: key="invoice", value="xyz": duplicate key"
-//	        // Example: "2024-01-15: Invalid metadata (account Assets:Checking): key="note", value="xyz": duplicate key"
-//	    }
-//	}
-func (v *validator) validateMetadata(txn *ast.Transaction) []error {
-	errs := validateMetadataEntries(txn, txn.Metadata, "")
-	for _, posting := range txn.Postings {
-		errs = append(errs, validateMetadataEntries(txn, posting.Metadata, posting.Account)...)
-	}
-	return errs
-}
-
-func validateMetadataEntries(
-	txn *ast.Transaction,
-	metadata []*ast.Metadata,
-	account ast.Account,
-) []error {
-	var errs []error
-	seen := make(map[string]bool, len(metadata))
-	for _, meta := range metadata {
-		if seen[meta.Key] {
-			errs = append(errs, newInvalidMetadataError(
-				txn, account, meta.Key, meta.Value, "duplicate key",
-			))
-			continue
-		}
-		seen[meta.Key] = true
-	}
-	return errs
-}
-
 // validateTransaction checks a transaction that Booking kept, with only the
 // Currency groups it booked. Booking has already reported the transactions
 // and groups it dropped (a date out of range, a malformed number, cost or
@@ -158,8 +107,7 @@ func validateMetadataEntries(
 //
 // Like beancount, which books every transaction before it checks it, the
 // booked transaction is returned for Apply even when it is reported for
-// posting to an unopened or inactive account, invalid metadata, not
-// balancing, zero units or a negative cost at cost, or a currency its account
+// posting to an unopened or inactive account, not balancing, zero units or a negative cost at cost, or a currency its account
 // does not allow; later directives then see its effects instead of reporting
 // follow-on errors.
 func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transaction, booked *bookedTransaction) ([]error, *bookedTransaction) {
@@ -169,7 +117,6 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 
 	var errs []error
 	errs = append(errs, v.validateAccountsOpen(txn)...)
-	errs = append(errs, v.validateMetadata(txn)...)
 	if len(booked.residuals) > 0 {
 		errs = append(errs, newTransactionNotBalancedError(txn, booked.residuals))
 	}

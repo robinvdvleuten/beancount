@@ -1,0 +1,22 @@
+; A key written twice keeps one value: a transaction's and a posting's first
+; (beancount reports the others), any other directive's last, in the key's
+; first place.
+2020-01-01 open Assets:A
+  who: "first"
+  other: 1
+  who: "second"
+2020-01-01 open Assets:B
+
+2020-01-02 * "x"
+  who: "t1"
+  kk: "a"
+  who: "t2"
+  Assets:A  1 USD
+    who: "p1"
+    kk: "b"
+    who: "p2"
+  Assets:B
+
+2020-01-03 event "location" "Paris"
+  who: "e1"
+  who: "e2"

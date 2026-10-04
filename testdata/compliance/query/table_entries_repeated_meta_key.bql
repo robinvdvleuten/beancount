@@ -1,0 +1,1 @@
+SELECT type, meta FROM #entries WHERE type != 'transaction'
