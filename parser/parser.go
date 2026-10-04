@@ -752,13 +752,8 @@ func MustParseBytesWithFilename(ctx context.Context, filename string, data []byt
 // directive, which leave the AST whole.
 func dropping(err error) error {
 	var syntaxErrs ParseErrors
-	if !errors.As(err, &syntaxErrs) {
-		return err
+	if errors.As(err, &syntaxErrs) && syntaxErrs.FirstDropping() == nil {
+		return nil
 	}
-	for _, syntaxErr := range syntaxErrs {
-		if !syntaxErr.Kept {
-			return err
-		}
-	}
-	return nil
+	return err
 }

@@ -442,10 +442,8 @@ func parseFile(ctx context.Context, filename string, data []byte, recovery bool)
 	var syntaxErrs parser.ParseErrors
 	if errors.As(err, &syntaxErrs) {
 		if !recovery {
-			for _, syntaxErr := range syntaxErrs {
-				if !syntaxErr.Kept {
-					return nil, nil, syntaxErr
-				}
+			if first := syntaxErrs.FirstDropping(); first != nil {
+				return nil, nil, first
 			}
 			return tree, nil, nil
 		}

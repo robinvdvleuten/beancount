@@ -364,9 +364,7 @@ func assertParsesWhole(t *testing.T, err error) {
 	t.Helper()
 	var syntaxErrs parser.ParseErrors
 	if errors.As(err, &syntaxErrs) {
-		for _, syntaxErr := range syntaxErrs {
-			assert.True(t, syntaxErr.Kept, "%v", syntaxErr)
-		}
+		assert.Zero(t, syntaxErrs.FirstDropping())
 		return
 	}
 	assert.NoError(t, err)

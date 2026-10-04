@@ -33,6 +33,17 @@ func (e ParseErrors) Error() string {
 	return b.String()
 }
 
+// FirstDropping returns the first error that drops its directive, nil when
+// every one keeps it and the AST holds the whole source.
+func (e ParseErrors) FirstDropping() *ParseError {
+	for _, err := range e {
+		if !err.Kept {
+			return err
+		}
+	}
+	return nil
+}
+
 // Unwrap lets errors.As find each *ParseError.
 func (e ParseErrors) Unwrap() []error {
 	errs := make([]error, len(e))
