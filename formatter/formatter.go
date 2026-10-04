@@ -30,8 +30,8 @@ import (
 	"io"
 	"slices"
 	"strings"
+	"unicode/utf8"
 
-	"github.com/mattn/go-runewidth"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/telemetry"
 )
@@ -44,8 +44,8 @@ const minimumSpacing = 2
 // are aligned to, bean-format's --prefix-width, --num-width and
 // --currency-column.
 //
-// It measures by display width (via go-runewidth) rather than byte length,
-// so lines with Unicode characters align. Comments and blank lines are
+// It measures in code points, as bean-format's len() and str.format do, so
+// a wide character counts as one. Comments and blank lines are
 // copied from the source lines the AST positions them on.
 //
 // Example:
@@ -454,7 +454,7 @@ func (f *run) writeLine(pos ast.Position, line lineLayout, buf *strings.Builder)
 		buf.WriteString(line.text)
 	case alignLine:
 		buf.WriteString(line.prefix)
-		buf.WriteString(strings.Repeat(" ", f.columns.padding(runewidth.StringWidth(line.prefix), line.numberWidth)))
+		buf.WriteString(strings.Repeat(" ", f.columns.padding(utf8.RuneCountInString(line.prefix), line.numberWidth)))
 		buf.WriteString(line.number)
 		buf.WriteByte(' ')
 		buf.WriteString(line.rest)

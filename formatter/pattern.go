@@ -3,8 +3,7 @@ package formatter
 import (
 	"regexp"
 	"strings"
-
-	"github.com/mattn/go-runewidth"
+	"unicode/utf8"
 )
 
 // bean-format's line pattern: which lines it aligns, which it leaves as
@@ -119,9 +118,9 @@ func layout(text string, owned bool, indent int) lineLayout {
 	prefix := strings.TrimRight(m[1], " \t")
 	// bean-format measures the prefix as the source indents it, even
 	// though it writes it at the normalized indent.
-	prefixWidth := runewidth.StringWidth(prefix)
+	prefixWidth := utf8.RuneCountInString(prefix)
 	if width, ok := postingIndent(prefix); ok {
-		prefixWidth = width + runewidth.StringWidth(prefix[width:])
+		prefixWidth = width + utf8.RuneCountInString(prefix[width:])
 		prefix = strings.Repeat(" ", indent) + prefix[width:]
 	}
 	return lineLayout{
@@ -130,6 +129,6 @@ func layout(text string, owned bool, indent int) lineLayout {
 		number:      m[2],
 		rest:        m[3] + tail,
 		prefixWidth: prefixWidth,
-		numberWidth: runewidth.StringWidth(m[2]),
+		numberWidth: utf8.RuneCountInString(m[2]),
 	}
 }

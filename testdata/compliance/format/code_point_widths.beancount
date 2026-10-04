@@ -1,0 +1,21 @@
+; bean-format measures prefixes and numbers with Python's len() and pads
+; with str.format, which count code points, not display columns: a wide
+; character counts as one.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:C日本
+2020-01-01 open Assets:ＡＢ
+2020-01-01 open Assets:𝐀x
+
+2020-01-02 balance Assets:C日本 0 JPY
+
+2020-01-03 *
+  Assets:C日本 100 JPY
+  Assets:Cash -100 JPY
+
+2020-01-04 *
+  Assets:ＡＢ 5 EUR
+  Assets:Cash -5 EUR
+
+2020-01-05 *
+  Assets:𝐀x 7 USD
+  Assets:Cash -7 USD
