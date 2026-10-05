@@ -227,6 +227,18 @@ func (p *Parser) parsePostingBlock(txn *ast.Transaction) error {
 			continue
 		}
 
+		// A metadata line a tag or link line separates from its posting
+		// is still the posting's, as in beancount's grammar, where each
+		// line of the body is a posting, a key-value or a tags line.
+		if len(txn.Postings) > 0 && p.startsIndentedMetadataLine() {
+			metadata, err := p.parseMetadata()
+			if err != nil {
+				return err
+			}
+			txn.Postings[len(txn.Postings)-1].AddMetadata(metadata...)
+			continue
+		}
+
 		if !p.isPostingStartToken(tok) {
 			return nil
 		}

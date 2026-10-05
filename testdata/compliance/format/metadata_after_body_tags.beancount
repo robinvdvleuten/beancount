@@ -1,0 +1,14 @@
+; A metadata line that a tag or link line separates from its posting is
+; still the posting's: beancount reads each line of the body as a posting,
+; a key-value or a tags line. The tag and link are reported and ignored.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:E
+2020-01-02 * "a tag line, then metadata"
+  Assets:Cash  1 USD
+    first: "direct"
+  #tag
+  third: "after the tag line"
+  ^link
+    fourth: "deeper"
+  Equity:E
+    own: "e"

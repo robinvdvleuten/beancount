@@ -470,9 +470,28 @@ func (f *run) formatTransactionBody(t *ast.Transaction, buf *strings.Builder) {
 	f.formatLeadingTransactionBody(t, buf)
 
 	if len(t.BodyItems) > 0 {
+		// A posting's metadata is held back until the item it comes
+		// before in the source: a tag or link line may stand between a
+		// posting and a metadata line of it.
+		var held []*ast.Metadata
+		flush := func(before int) {
+			n := 0
+			for n < len(held) && (before == 0 || held[n].Position().Line < before) {
+				n++
+			}
+			f.formatMetadata(held[:n], buf)
+			held = held[n:]
+		}
 		for _, item := range t.BodyItems {
+			flush(bodyItemLine(item))
+			if item.Posting != nil {
+				f.formatPostingLine(item.Posting, buf)
+				held = item.Posting.Metadata
+				continue
+			}
 			f.formatTransactionBodyItem(item, buf)
 		}
+		flush(0)
 		return
 	}
 
@@ -508,6 +527,18 @@ func (f *run) formatTagsLinks(line *ast.TagsLinks, buf *strings.Builder) {
 	f.verbatimLines[line.Position().Line] = true
 }
 
+// bodyItemLine returns the source line a body item starts on.
+func bodyItemLine(item ast.TransactionBodyItem) int {
+	switch {
+	case item.Posting != nil:
+		return item.Posting.Position().Line
+	case item.Comment != nil:
+		return item.Comment.Position().Line
+	default:
+		return item.TagsLinks.Position().Line
+	}
+}
+
 func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strings.Builder) {
 	switch {
 	case item.Posting != nil:
@@ -524,12 +555,20 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 // formatPosting writes a posting's line, aligned or copied, and the
 // metadata lines below it.
 func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
+	if f.formatPostingLine(p, buf) {
+		f.formatMetadata(p.Metadata, buf)
+	}
+}
+
+// formatPostingLine writes a posting's own line and reports whether it
+// could.
+func (f *run) formatPostingLine(p *ast.Posting, buf *strings.Builder) bool {
 	f.writeLine(p.Position(), f.postingLayout(p), buf)
 	if f.err != nil {
-		return
+		return false
 	}
 	f.verbatimLines[p.Position().Line] = true
-	f.formatMetadata(p.Metadata, buf)
+	return true
 }
 
 // postingLayout reads a posting's line, which must hold the posting: its
