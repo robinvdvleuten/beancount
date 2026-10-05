@@ -106,8 +106,7 @@ func TestDiffFuzz(t *testing.T) {
 // decided it. A panic is never known. Two deliberate deviations no input
 // pattern tells are not among them, and are read out of the official
 // output: divergences takes a zero's sign out of a query's output (#408),
-// and officialCheck moves a syntax error at a line's end to the line we
-// blame it on.
+// and sameErrorLines takes a syntax error at a line's end on either line.
 var knownDivergences = []struct {
 	kind    string
 	reason  string
@@ -151,6 +150,9 @@ type verdict struct {
 	// ledger (line 0, or <load>), where we blame the line that causes it
 	// (lineGaps).
 	unblamed bool
+	// endOfLine holds the lines bean-check reports a syntax error at the
+	// end of the line before on.
+	endOfLine []int
 	// checkOutput lists the errors, a line and a message each.
 	checkOutput string
 	format      *string
@@ -187,7 +189,7 @@ func divergences(ours, official verdict) []string {
 		switch {
 		case ours.checkFailed != official.checkFailed:
 			kinds = append(kinds, "check-exit")
-		case !official.unblamed && !slices.Equal(ours.checkLines, official.checkLines):
+		case !official.unblamed && !sameErrorLines(ours.checkLines, official):
 			kinds = append(kinds, "check-lines")
 		}
 	}
@@ -475,18 +477,29 @@ func (f *fuzzer) officialCheck(v *verdict, output []byte) {
 			continue
 		}
 		v.checkOutput += fmt.Sprintf("%d: %s\n", *e.Lineno, message)
-		// A deliberate deviation (KNOWN_GAPS.md): beancount blames a
-		// syntax error at a line's end on the next line, and we blame the
-		// line it ends. Its message says when that is so.
-		line := *e.Lineno
 		if strings.HasPrefix(message, endOfLineError) {
-			line--
-		}
-		if !slices.Contains(v.checkLines, line) {
-			v.checkLines = append(v.checkLines, line)
+			v.endOfLine = append(v.endOfLine, *e.Lineno)
 		}
 	}
-	slices.Sort(v.checkLines)
+	v.checkLines = jsonErrorLines(f.t, f.path, output)
+}
+
+// sameErrorLines reports whether our error lines are the official ones,
+// but for a deliberate deviation (KNOWN_GAPS.md): beancount blames a
+// syntax error at a line's end on the next line, and we blame the line it
+// ends, unless something of the directive follows on that next line.
+func sameErrorLines(ours []int, official verdict) bool {
+	for _, line := range ours {
+		if !slices.Contains(official.checkLines, line) && !slices.Contains(official.endOfLine, line+1) {
+			return false
+		}
+	}
+	for _, line := range official.checkLines {
+		if !slices.Contains(ours, line) && (!slices.Contains(official.endOfLine, line) || !slices.Contains(ours, line-1)) {
+			return false
+		}
+	}
+	return true
 }
 
 // endOfLineError starts bean-check's message for a syntax error at the end
@@ -902,9 +915,22 @@ func TestOfficialCheckEndOfLine(t *testing.T) {
 		{"message": "syntax error, unexpected NUMBER", "filename": "/ledger.beancount", "lineno": 5},
 		{"message": "Invalid token: 'x'", "filename": "/ledger.beancount", "lineno": 2}
 	]}`))
-	assert.Equal(t, []int{2, 5}, v.checkLines)
+	assert.Equal(t, []int{2, 3, 5}, v.checkLines)
+	assert.Equal(t, []int{3}, v.endOfLine)
 	assert.True(t, v.checkFailed)
 	assert.False(t, v.unblamed)
+
+	// We blame the line the error ends, or the same line as bean-check
+	// when the directive goes on there; any other line is a divergence.
+	assert.True(t, sameErrorLines([]int{2, 5}, v))
+	assert.True(t, sameErrorLines([]int{2, 3, 5}, v))
+	assert.False(t, sameErrorLines([]int{2, 4, 5}, v))
+	assert.False(t, sameErrorLines([]int{2, 3}, v))
+
+	// The line the error ends may carry an error of its own.
+	both := verdict{checkLines: []int{2}, endOfLine: []int{2}}
+	assert.True(t, sameErrorLines([]int{1, 2}, both))
+	assert.False(t, sameErrorLines([]int{1, 3}, both))
 }
 
 func TestSignature(t *testing.T) {
