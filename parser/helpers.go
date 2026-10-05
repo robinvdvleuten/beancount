@@ -1003,6 +1003,17 @@ func (p *Parser) isExpressionStartToken(tok Token) bool {
 
 func (p *Parser) errorAtToken(tok Token, format string, args ...any) error {
 	pos := tokenPosition(tok, p.filename)
+	// Like beancount's lexer, which returns a string once it has read it,
+	// an error on a string spanning lines is on the line the string ends
+	// on.
+	if tok.Type == STRING {
+		text := strings.TrimRight(tok.String(p.source), "\r\n")
+		if last := strings.LastIndexAny(text, "\r\n"); last >= 0 {
+			pos.Line = p.endLine(tok)
+			pos.Column = len(text) - last
+			pos.Offset = tok.Start + last + 1
+		}
+	}
 	sourceRange := p.calculateSourceRange(pos)
 	if tok.Type == ILLEGAL {
 		return newErrorfWithSource(pos, sourceRange, "%s", p.illegalTokenMessage(tok))

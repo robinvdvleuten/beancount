@@ -65,8 +65,10 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 			continue
 		}
 		if len(strs) == 2 && tooManyStrings == nil {
+			// The rejection is the transaction's, on its line, wherever
+			// the string too many ends.
 			tok := p.peek()
-			tooManyStrings = p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+			tooManyStrings = newErrorfWithSource(pos, p.calculateSourceRange(pos), "unexpected token %s %q", tok.Type, tok.String(p.source))
 		}
 		str, err := p.parseString()
 		if err != nil {

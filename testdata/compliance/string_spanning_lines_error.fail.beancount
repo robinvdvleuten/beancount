@@ -1,0 +1,14 @@
+; An error on a string that spans lines is on the line the string ends on,
+; as beancount's lexer returns a string once it has read it: line 6 for the
+; string alone, line 10 for the second value of a metadata line. A
+; transaction with too many strings is reported on its own line, 12.
+"a string
+over two lines"
+
+2020-01-01 open Assets:A
+  kk: "v" "a second value
+on the next line"
+
+2020-01-02 * "x" "y" "three
+lines
+long"
