@@ -1,6 +1,9 @@
 package parser
 
-import "github.com/robinvdvleuten/beancount/ast"
+import (
+	"github.com/robinvdvleuten/beancount/ast"
+	"github.com/robinvdvleuten/beancount/config"
+)
 
 // Directive parsers for all non-transaction directives.
 // These are relatively simple parsers with deterministic structure.
@@ -118,7 +121,21 @@ func (p *Parser) parseOpen(pos ast.Position, date *ast.Date) (*ast.Open, error) 
 	if err := p.finishDirective(open); err != nil {
 		return nil, err
 	}
+	p.fallBackBookingMethod(open)
 	return open, nil
+}
+
+// fallBackBookingMethod gives an open whose booking method beancount does
+// not know the booking_method option in effect on its line, in its own file,
+// and reports it, keeping the open, as beancount's parser does once it has
+// read the open.
+func (p *Parser) fallBackBookingMethod(open *ast.Open) {
+	if open.BookingMethod == "" || config.IsBookingMethod(open.BookingMethod) {
+		return
+	}
+	pos := open.Position()
+	p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "Invalid booking method: %s", open.BookingMethod).kept())
+	open.BookingMethod = p.options.BookingMethod
 }
 
 // parseClose parses: DATE close ACCOUNT

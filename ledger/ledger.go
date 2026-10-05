@@ -139,7 +139,6 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 	// and keeps its default while the others apply.
 	cfg, optionErrs := configFromAST(tree)
 	l.errors = append(l.errors, optionErrs...)
-	l.errors = append(l.errors, fallBackBookingMethods(tree)...)
 	l.config = cfg
 	l.tolerances = newTolerances(cfg.Tolerance)
 	l.display.fixPrecisions(cfg.DisplayPrecision)

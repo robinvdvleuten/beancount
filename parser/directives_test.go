@@ -3,6 +3,7 @@ package parser
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -564,4 +565,33 @@ func TestParseNoteMissingString(t *testing.T) {
 	_, err := ParseString(context.Background(), input)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "expected string")
+}
+
+// TestInvalidBookingMethodFallsBack pins beancount's open rule: an open with
+// a booking method beancount does not know is reported and kept, with the
+// booking_method option in effect on its line in its own file.
+func TestInvalidBookingMethodFallsBack(t *testing.T) {
+	source := `2020-01-01 open Assets:Before "BOGUS"
+option "booking_method" "FIFO"
+2020-01-01 open Assets:After "fifo"
+2020-01-01 open Assets:Known "LIFO"
+`
+	tree, err := ParseString(context.Background(), source)
+
+	var errs ParseErrors
+	assert.True(t, errors.As(err, &errs), "got %v", err)
+	var got []string
+	for _, e := range errs {
+		got = append(got, fmt.Sprintf("%d %t %s", e.Pos.Line, e.Kept, e.Msg))
+	}
+	assert.Equal(t, []string{
+		"1 true Invalid booking method: BOGUS",
+		"3 true Invalid booking method: fifo",
+	}, got)
+
+	var methods []string
+	for _, d := range tree.Directives {
+		methods = append(methods, d.(*ast.Open).BookingMethod)
+	}
+	assert.Equal(t, []string{"STRICT", "FIFO", "LIFO"}, methods)
 }

@@ -1,0 +1,17 @@
+; An open with an invalid booking method in an included file takes the
+; booking_method option in effect on its line in that file, as beancount
+; parses each file on its own; the option has no other effect.
+include "include/booking_method.beancount"
+
+2020-01-02 * "Buy"
+  Assets:Sub  1 HOOL {10 USD}
+  Assets:Sub  1 HOOL {20 USD}
+  Equity:Opening
+
+2020-01-03 * "Sell, booked FIFO"
+  Assets:Sub  -1 HOOL {}
+  Equity:Opening
+
+2020-01-04 * "Sell from the main file's account, booked STRICT"
+  Assets:Main  -1 HOOL {}
+  Equity:Opening

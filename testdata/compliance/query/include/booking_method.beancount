@@ -1,0 +1,10 @@
+2020-01-01 open Assets:Before "BOGUS"
+option "booking_method" "FIFO"
+2020-01-01 open Assets:Sub "bogus"
+2020-01-01 open Assets:Main
+2020-01-01 open Equity:Opening
+
+2020-01-01 * "Lots in the main file's account"
+  Assets:Main  1 HOOL {10 USD}
+  Assets:Main  1 HOOL {20 USD}
+  Equity:Opening

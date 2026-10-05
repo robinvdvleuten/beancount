@@ -683,10 +683,10 @@ plugin "test.add_transaction"
 }
 
 func TestInvalidBookingMethodFallsBackToTheOptionInEffect(t *testing.T) {
-	// Like beancount's parser, an open with an unknown booking method takes
-	// the booking_method option in effect on its line: STRICT above the
-	// option, which cannot choose between the two lots, and FIFO below it,
-	// which books the oldest.
+	// Like beancount's parser, the parser gives an open with an unknown
+	// booking method the booking_method option in effect on its line, and
+	// Booking books by it: STRICT above the option, which cannot choose
+	// between the two lots, and FIFO below it, which books the oldest.
 	source := `
 2020-01-01 open Assets:Before "BOGUS"
 option "booking_method" "FIFO"
@@ -713,10 +713,8 @@ option "booking_method" "FIFO"
 	tree, _ = l.Process(context.Background(), tree)
 
 	errs := l.Errors()
-	assert.Equal(t, 3, len(errs), "errors: %v", errs)
-	assert.Equal(t, "Invalid booking method: BOGUS", errs[0].(*Diagnostic).Message())
-	assert.Equal(t, "Invalid booking method: fifo", errs[1].(*Diagnostic).Message())
-	assert.Equal(t, "AmbiguousBookingError", kindOf(errs[2]), "got %v", errs[2])
+	assert.Equal(t, 1, len(errs), "errors: %v", errs)
+	assert.Equal(t, "AmbiguousBookingError", kindOf(errs[0]), "got %v", errs[0])
 
 	methods := map[ast.Account]string{}
 	var sold *ast.Posting
