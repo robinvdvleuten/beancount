@@ -244,6 +244,16 @@ compare the lines errors are on:
   units held at cost` on the posting, as beancount does for a reduction,
   and book the group with the price left without a number.
 
+- **Zero units in total braces** (#708): beancount accepts
+  `Assets:Stock  0 HOOL {{USD}}` as it parses it, then fails with a Python
+  `decimal.InvalidOperation` (`DivisionUndefined`) when booking divides the
+  total cost by the units to find the cost per unit; with a number,
+  `{{10 USD}}`, it fails the same way with `DivisionByZero`. bean-check and
+  bean-query both raise, so no beancount tool can use the posting. We
+  report `Invalid total cost specification: cannot use total cost with zero
+  quantity` on the transaction in both cases. A ledger the official tools
+  raise on has no fixture; `TestDiffFuzz` skips it.
+
 - **A one-letter currency before a carriage return** (#704): beancount v3
   reads a one-letter currency (#565), except where a `\r` follows it
   directly, as at the end of a line of a ledger with CRLF line endings:
