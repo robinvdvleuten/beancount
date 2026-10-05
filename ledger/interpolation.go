@@ -354,7 +354,8 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 // number when the group has more than one, which beancount cannot
 // interpolate: a missing units number (or no amount at all), a missing cost
 // number (a compound's two count twice) other than on a reduction booked
-// against lots, or a missing price number.
+// against lots, or a missing price number, once per lot for such a
+// reduction.
 func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]BookedPosition) *ast.Posting {
 	var first *ast.Posting
 	missing := 0
@@ -367,7 +368,9 @@ func tooManyMissing(group currencyGroup, reducedPositions map[*ast.Posting][]Boo
 			n += missingCostNumbers(posting.Cost)
 		}
 		if posting.Price != nil && posting.Price.Value == "" {
-			n++
+			// A reduction is one posting per lot it is booked against,
+			// each with the price left out.
+			n += max(1, len(reducedPositions[posting]))
 		}
 		if n > 0 && first == nil {
 			first = posting

@@ -1,0 +1,21 @@
+; A reduction is booked as one posting per lot, each with the price its
+; posting leaves out. Against two lots that is two missing numbers, which
+; beancount cannot interpolate; against one lot it is one, and a price is
+; never inferred for units held at cost. Both are reported on the posting.
+option "booking_method" "HIFO"
+
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "two lots"
+  Assets:Stock  10 HOOL {10 USD}
+  Assets:Stock   1 HOOL {20 USD}
+  Assets:Cash  -120 USD
+
+2020-02-01 * "a reduction over both lots, its price left out"
+  Assets:Stock  -3 HOOL {} @ USD
+  Assets:Cash   40 USD
+
+2020-02-02 * "a reduction of one lot, its price left out"
+  Assets:Stock  -1 HOOL {} @ USD
+  Assets:Cash   10 USD
