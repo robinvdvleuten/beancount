@@ -103,8 +103,11 @@ func TestDiffFuzz(t *testing.T) {
 // knownDivergences are the divergences TestDiffFuzz counts instead of
 // writing: a minimized ledger of the kind (a prefix of the divergence's)
 // that matches. Each names the issue or the KNOWN_GAPS.md entry that
-// decided it. A panic is never known. Signed zero (#408) is not among them: divergences reads a
-// zero's sign out of a query's output.
+// decided it. A panic is never known. Two deliberate deviations no input
+// pattern tells are not among them, and are read out of the official
+// output: divergences takes a zero's sign out of a query's output (#408),
+// and officialCheck moves a syntax error at a line's end to the line we
+// blame it on.
 var knownDivergences = []struct {
 	kind    string
 	reason  string
@@ -114,6 +117,7 @@ var knownDivergences = []struct {
 	{"check-lines", "KNOWN_GAPS.md, deliberate: a tag or link after a posting is a syntax error on its own line", bodyTagAfterPosting.MatchString},
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
+	{"query", "KNOWN_GAPS.md, deliberate: units missing at a zero per-unit cost are left out, where beancount keeps a posting without units", zeroPerUnitCompound.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
 	{"", "#704, deliberate: a one-letter currency before a \\r is read, where beancount's lexer rejects it", oneLetterBeforeCR.MatchString},
 }
@@ -123,6 +127,7 @@ var (
 	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
 	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
+	zeroPerUnitCompound = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{\{?0(?:\.0*)?[ \t]*#`)
 	customAccount       = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
 )
 
@@ -470,9 +475,23 @@ func (f *fuzzer) officialCheck(v *verdict, output []byte) {
 			continue
 		}
 		v.checkOutput += fmt.Sprintf("%d: %s\n", *e.Lineno, message)
+		// A deliberate deviation (KNOWN_GAPS.md): beancount blames a
+		// syntax error at a line's end on the next line, and we blame the
+		// line it ends. Its message says when that is so.
+		line := *e.Lineno
+		if strings.HasPrefix(message, endOfLineError) {
+			line--
+		}
+		if !slices.Contains(v.checkLines, line) {
+			v.checkLines = append(v.checkLines, line)
+		}
 	}
-	v.checkLines = jsonErrorLines(f.t, f.path, output)
+	slices.Sort(v.checkLines)
 }
+
+// endOfLineError starts bean-check's message for a syntax error at the end
+// of a line.
+const endOfLineError = "syntax error, unexpected EOL"
 
 // askOracle returns the official verdict on the fuzzer's ledger as the
 // oracle process gives it, or an empty one when the oracle does not answer.
@@ -872,6 +891,22 @@ func TestDivergences(t *testing.T) {
 	assert.Equal(t, []string{"panic"}, divergences(verdict{panicked: "boom"}, verdict{}))
 }
 
+// TestOfficialCheckEndOfLine pins the deliberate deviation the fuzzer reads
+// out of bean-check's lines: a syntax error at a line's end, which it
+// blames on the next line.
+func TestOfficialCheckEndOfLine(t *testing.T) {
+	f := &fuzzer{t: t, path: "/ledger.beancount"}
+	var v verdict
+	f.officialCheck(&v, []byte(`{"errors": [
+		{"message": "syntax error, unexpected EOL, expecting ACCOUNT", "filename": "/ledger.beancount", "lineno": 3},
+		{"message": "syntax error, unexpected NUMBER", "filename": "/ledger.beancount", "lineno": 5},
+		{"message": "Invalid token: 'x'", "filename": "/ledger.beancount", "lineno": 2}
+	]}`))
+	assert.Equal(t, []int{2, 5}, v.checkLines)
+	assert.True(t, v.checkFailed)
+	assert.False(t, v.unblamed)
+}
+
 func TestSignature(t *testing.T) {
 	sign := func(ours, official string) string {
 		return signature("check-lines", verdict{checkOutput: ours}, verdict{checkOutput: official})
@@ -914,6 +949,10 @@ func TestKnownDivergences(t *testing.T) {
 	assert.False(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\n"))
 
 	assert.True(t, bodyTagAfterPosting.MatchString("2020-01-02 *\n  * Assets:A  -1.00 USD\n #tag\n"))
+
+	assert.True(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  HOOL {0 # 100 USD}\n"))
+	assert.False(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  HOOL {10 # 100 USD}\n"))
+	assert.False(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  2 HOOL {0 # 100 USD}\n"))
 
 	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
 	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))
