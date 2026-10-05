@@ -1,0 +1,11 @@
+; A plugin's line ends at its line break: a string on the next line is no
+; configuration of it but a syntax error of its own, and the plugin still
+; runs, so the price of the cost below is emitted.
+plugin "beancount.plugins.implicit_prices"
+"not a configuration"
+
+2020-01-01 open Assets:I
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD}
+  Assets:I  -100 USD

@@ -503,8 +503,9 @@ func (p *Parser) parsePlugin() (*ast.Plugin, error) {
 	}
 	plugin.SetPosition(pos)
 
-	// Optional config string
-	if p.check(STRING) {
+	// Optional config string, on the plugin's own line: a string on the
+	// next line is no part of it, and the plugin is read without one.
+	if p.check(STRING) && p.continuesPreviousLine() {
 		config, err := p.parseString()
 		if err != nil {
 			return nil, err

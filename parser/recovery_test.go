@@ -123,7 +123,6 @@ func TestUndatedLineEndsAtItsLine(t *testing.T) {
 		"option in column 1": "option \"title\"\n\"x\"",
 		"option name":        "option\n\"title\" \"x\"",
 		"plugin":             "plugin\n  \"beancount.plugins.auto_accounts\"",
-		"plugin config":      "plugin \"beancount.plugins.auto_accounts\"\n  \"cfg\"",
 		"include":            "include\n  \"x.beancount\"",
 		"pushtag":            "pushtag\n  #foo",
 		"poptag":             "poptag\n  #foo",
@@ -139,6 +138,28 @@ func TestUndatedLineEndsAtItsLine(t *testing.T) {
 			assert.Equal(t, 2, syntaxErrs[0].Pos.Line)
 			assert.Equal(t, 1, len(tree.Directives))
 			assert.Equal(t, 0, len(tree.Options)+len(tree.Plugins)+len(tree.Includes)+len(tree.Pushtags)+len(tree.Poptags)+len(tree.Pushmetas)+len(tree.Popmetas))
+		})
+	}
+}
+
+// TestPluginEndsAtItsLine pins that a plugin's line is complete without a
+// configuration: a string on the next line, indented or not, is a syntax
+// error of its own and the plugin is kept, as bean-check still runs it.
+func TestPluginEndsAtItsLine(t *testing.T) {
+	for name, source := range map[string]string{
+		"indented":    "plugin \"beancount.plugins.auto_accounts\"\n  \"cfg\"\n",
+		"in column 1": "plugin \"beancount.plugins.auto_accounts\"\n\"cfg\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			tree, err := ParseString(context.Background(), source+"2020-01-05 open Assets:Z\n")
+
+			var syntaxErrs ParseErrors
+			assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+			assert.Equal(t, 1, len(syntaxErrs), "got %v", syntaxErrs)
+			assert.Equal(t, 2, syntaxErrs[0].Pos.Line)
+			assert.Equal(t, 1, len(tree.Plugins))
+			assert.True(t, tree.Plugins[0].Config.IsEmpty())
+			assert.Equal(t, 1, len(tree.Directives))
 		})
 	}
 }
