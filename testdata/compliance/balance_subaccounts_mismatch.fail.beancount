@@ -1,0 +1,12 @@
+; The subtree of Assets:Cash holds 13 USD, so asserting the 1 USD the
+; account holds itself fails.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Cash:Sub
+2020-01-01 open Equity:O
+
+2020-01-06 * "to the account and a subaccount"
+  Assets:Cash        1 USD
+  Assets:Cash:Sub   12 USD
+  Equity:O
+
+2020-01-07 balance Assets:Cash 1 USD

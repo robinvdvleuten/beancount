@@ -96,7 +96,8 @@ func (h *balanceHandler) validate(ctx context.Context, l *Ledger, d ast.Directiv
 		if tolerance, err := l.tolerances.balance(balance); err != nil {
 			errs = append(errs, err)
 		} else {
-			padding, held, padErrs := l.pads.fill(balance, l.inventory(balance.Account), tolerance)
+			held, atCost := l.subtree(balance.Account, balance.Amount.Currency)
+			padding, held, padErrs := l.pads.fill(balance, l.inventory(balance.Account), held, atCost, tolerance)
 			delta = &balanceDelta{accountName: string(balance.Account), currency: balance.Amount.Currency, padding: padding}
 			errs = append(padErrs, v.checkBalance(balance, held, tolerance)...)
 		}

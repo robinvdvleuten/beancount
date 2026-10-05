@@ -41,6 +41,7 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 	sharedconfig "github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/diagnostic"
+	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/telemetry"
 	"github.com/shopspring/decimal"
 )
@@ -398,6 +399,29 @@ func (l *Ledger) inventory(account ast.Account) *inventory {
 		return acc.inventory
 	}
 	return newInventory()
+}
+
+// subtree returns what an account and the accounts under it hold in a
+// currency, and how many of those positions are at cost. Like beancount's,
+// a balance assertion and the padding that fills it see the whole subtree:
+// `balance Assets:Bank` counts Assets:Bank:Checking, opened or not.
+func (l *Ledger) subtree(account ast.Account, currency string) (held decimal.Decimal, atCost int) {
+	prefix := string(account) + ":"
+	var names []string
+	for _, accounts := range []map[string]*Account{l.accounts, l.unopened} {
+		for name := range accounts {
+			if name == string(account) || strings.HasPrefix(name, prefix) {
+				names = append(names, name)
+			}
+		}
+	}
+	slices.Sort(names)
+	for _, name := range slices.Compact(names) {
+		inv := l.inventory(ast.Account(name))
+		held = pydecimal.Add(held, inv.get(currency))
+		atCost += inv.countAtCost(currency)
+	}
+	return held, atCost
 }
 
 // applyClose applies the close delta to the ledger (mutation only)

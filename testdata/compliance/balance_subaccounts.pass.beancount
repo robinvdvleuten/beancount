@@ -1,0 +1,28 @@
+; A balance assertion counts the account and every account under it, as
+; beancount's does: Assets:Cash:Sub counts for Assets:Cash, Assets:CashOther
+; does not. A pad fills the difference the subtree leaves.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Cash:Sub
+2020-01-01 open Assets:CashOther
+2020-01-01 open Assets:Bank
+2020-01-01 open Assets:Bank:Checking
+2020-01-01 open Equity:O
+
+2020-01-06 * "to the account, a subaccount and a sibling named alike"
+  Assets:Cash        1 USD
+  Assets:Cash:Sub   12 USD
+  Assets:CashOther   5 USD
+  Equity:O
+
+2020-01-07 balance Assets:Cash      13 USD
+2020-01-07 balance Assets:Cash:Sub  12 USD
+2020-01-07 balance Assets:CashOther  5 USD
+
+2020-01-08 pad Assets:Bank Equity:O
+
+2020-01-09 * "to a subaccount of the padded account"
+  Assets:Bank:Checking  12 USD
+  Equity:O
+
+2020-01-10 balance Assets:Bank           20 USD
+2020-01-10 balance Assets:Bank:Checking  12 USD

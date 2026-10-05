@@ -424,7 +424,7 @@ func TestPadsFill(t *testing.T) {
 
 	t.Run("pads the difference", func(t *testing.T) {
 		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "250")
-		padding, held, errs := p.fill(balance, inventory, tolerance)
+		padding, held, errs := fillOwn(p, balance, inventory, tolerance)
 		assert.Zero(t, errs)
 		assert.True(t, held.Equal(decimal.RequireFromString("1000")), "held %s", held)
 		assert.Equal(t, "P", padding.Flag)
@@ -435,13 +435,13 @@ func TestPadsFill(t *testing.T) {
 
 	t.Run("keeps the difference's precision", func(t *testing.T) {
 		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "100", "99.995")
-		padding, _, _ := p.fill(balance, inventory, decimal.Zero)
+		padding, _, _ := fillOwn(p, balance, inventory, decimal.Zero)
 		assert.Equal(t, "0.005", padding.Postings[0].Amount.Value)
 	})
 
 	t.Run("pads nothing within tolerance", func(t *testing.T) {
 		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "1000.004")
-		padding, held, errs := p.fill(balance, inventory, tolerance)
+		padding, held, errs := fillOwn(p, balance, inventory, tolerance)
 		assert.Zero(t, padding)
 		assert.Zero(t, errs)
 		assert.Equal(t, "1000.004", held.String())
@@ -449,16 +449,16 @@ func TestPadsFill(t *testing.T) {
 
 	t.Run("a self-pad changes nothing", func(t *testing.T) {
 		p, balance, inventory := fillCase(t, "Assets:Checking", "1000.00", "0")
-		padding, held, _ := p.fill(balance, inventory, tolerance)
+		padding, held, _ := fillOwn(p, balance, inventory, tolerance)
 		assert.NotZero(t, padding)
 		assert.Equal(t, "0", held.String())
 	})
 
 	t.Run("fills only the first assertion after the pad", func(t *testing.T) {
 		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "0")
-		padding, _, _ := p.fill(balance, inventory, tolerance)
+		padding, _, _ := fillOwn(p, balance, inventory, tolerance)
 		p.consume("Assets:Checking", "USD", padding)
-		padding, held, _ := p.fill(balance, inventory, tolerance)
+		padding, held, _ := fillOwn(p, balance, inventory, tolerance)
 		assert.Zero(t, padding)
 		assert.Equal(t, "0", held.String())
 	})
@@ -468,16 +468,23 @@ func TestPadsFill(t *testing.T) {
 		first := p.latest["Assets:Checking"].pad
 		date, _ := ast.NewDate("2020-01-10")
 		p.add(ast.NewPad(date, "Assets:Checking", "Income:Other"))
-		padding, _, _ := p.fill(balance, inventory, tolerance)
+		padding, _, _ := fillOwn(p, balance, inventory, tolerance)
 		assert.Equal(t, ast.Account("Income:Other"), padding.Postings[1].Account)
 		assert.Equal(t, []*ast.Pad{first}, p.superseded)
 	})
 
 	t.Run("without a pad", func(t *testing.T) {
 		_, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "10")
-		padding, held, errs := newPads().fill(balance, inventory, tolerance)
+		padding, held, errs := fillOwn(newPads(), balance, inventory, tolerance)
 		assert.Zero(t, padding)
 		assert.Zero(t, errs)
 		assert.Equal(t, "10", held.String())
 	})
+}
+
+// fillOwn fills a balance assertion from what one inventory holds, as for
+// an account without subaccounts.
+func fillOwn(p *pads, balance *ast.Balance, inv *inventory, tolerance decimal.Decimal) (*ast.Transaction, decimal.Decimal, []error) {
+	currency := balance.Amount.Currency
+	return p.fill(balance, inv, inv.get(currency), inv.countAtCost(currency), tolerance)
 }
