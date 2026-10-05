@@ -252,7 +252,11 @@ func (p *Parser) recover(err error) {
 	if !errors.As(err, &parseErr) {
 		parseErr = NewParseError(p.filename, err)
 	}
-	if !p.recovered || p.lexerErrorAt(parseErr.Pos.Offset) || p.shiftedSince(parseErr.Pos.Offset) >= 3 {
+	raisedAt := parseErr.Pos.Offset
+	if parseErr.raisedAt != 0 {
+		raisedAt = parseErr.raisedAt
+	}
+	if !p.recovered || p.lexerErrorAt(parseErr.Pos.Offset) || p.shiftedSince(raisedAt) >= 3 {
 		p.errs = append(p.errs, parseErr)
 	}
 	p.recovered = true

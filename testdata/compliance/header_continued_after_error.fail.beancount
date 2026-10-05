@@ -1,0 +1,12 @@
+; A header that goes on on the next line fails at its own line's end. Right
+; after another syntax error that is fewer than three tokens on, so
+; beancount reports neither the plugin's nor the open's error below: only
+; the indented line that comes first. The last open is kept.
+  Assets:Wallet  1.00 USD
+plugin
+  "beancount.plugins.auto_accounts"
+
+    2020-01-01 open
+  Assets:Cash
+
+2020-01-05 open Assets:Kept

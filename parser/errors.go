@@ -15,6 +15,12 @@ type ParseError struct {
 	// Kept reports that the directive the error is in stays in the AST,
 	// as beancount's parser reports some errors and keeps the directive.
 	Kept bool
+
+	// raisedAt is the offset beancount's grammar raises the error at when
+	// that is before Pos: the end of a header's line, for a header that
+	// goes on on the next line. The tokens read since the last error are
+	// counted up to there. Zero means Pos.
+	raisedAt int
 }
 
 // ParseErrors lists a source's syntax errors in source order. The parser

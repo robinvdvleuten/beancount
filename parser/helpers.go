@@ -2,6 +2,7 @@ package parser
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"strings"
 	"unicode/utf8"
@@ -937,7 +938,13 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 // syntax error.
 func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
 	if tok, ok := p.headerContinuation(offset); ok {
-		return p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+		err := p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+		// beancount's grammar fails at the line break before the token.
+		var parseErr *ParseError
+		if i := p.tokenIndexAt(tok.Start); i > 0 && errors.As(err, &parseErr) {
+			parseErr.raisedAt = p.tokens[i-1].End
+		}
+		return err
 	}
 	line := p.lineAfterPrevious() - 1
 	p.attachInlineComment(target, line)
