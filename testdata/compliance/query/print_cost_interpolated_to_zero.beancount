@@ -1,0 +1,21 @@
+; A cost or a price interpolated from a residual of zero is the plain 0,
+; whatever exponent the sum of the other postings left: beancount's residual
+; inventory is empty then.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B
+
+2020-01-02 * "a per-unit cost interpolated to zero"
+  Expenses:B    1.00 ABC
+  Assets:Cash      8 USD {2020-01-01}
+  Assets:A     -1.00 ABC
+
+2020-01-03 * "a total cost interpolated to zero"
+  Expenses:B    1.00 ABC
+  Assets:Cash      8 USD {{ABC}}
+  Assets:A     -1.00 ABC
+
+2020-01-04 * "a price interpolated to zero"
+  Expenses:B    1.00 ABC
+  Assets:Cash      8 EUR @ ABC
+  Assets:A     -1.00 ABC

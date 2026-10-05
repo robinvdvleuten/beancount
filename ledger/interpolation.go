@@ -275,6 +275,11 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		// it, like beancount's COST_PER and COST_TOTAL; the weight is
 		// then the units at the lot's (rounded) per-unit cost.
 		needed := residual.Neg()
+		if needed.IsZero() {
+			// beancount's residual inventory is empty then, and its
+			// weight the plain ZERO, whatever exponent the sum left.
+			needed = decimal.Zero
+		}
 		cost := posting.Cost
 		completed := *cost
 		completed.Inferred = true
