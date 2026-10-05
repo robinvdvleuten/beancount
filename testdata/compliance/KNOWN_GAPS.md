@@ -23,6 +23,15 @@ so one of a non-zero amount also fails and `PRINT` shows its `; Diff:`.
 The lines agree. Like beancount v3, the balance is a use of its account
 for `doctor missing_open`.
 
+**A price interpolated to zero**: when nothing else weighs in a posting's
+price currency (`-10.5 EUR @ USD` alone), the price is the zero residual
+over the units. Python gives that quotient the exponent of the division,
+`0E+1`, so the posting's weight, its units times the price, is a zero
+without digits and with the units' sign: bean-query's `weight` column
+shows `-0 USD`. Our quotient is a plain zero, and the weight keeps the
+units' digits: `0.0 USD`. `PRINT` shows `@ 0 USD` in both, and `check`
+reports the same.
+
 **Merge cost on an augmentation**: both implementations report a merge
 cost `{*}` ("Cost merging is not supported yet"), and beancount then books
 it like `{}`: an augmentation at `{*}` gets the cost the transaction's
