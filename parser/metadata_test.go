@@ -47,12 +47,6 @@ func TestParseMetadataValueTypes(t *testing.T) {
 			wantString: "vacation",
 		},
 		{
-			name:       "Link",
-			source:     "2024-01-01 * \"Test\"\n  ref: ^invoice123\n  Assets:Cash  100 USD",
-			wantType:   "link",
-			wantString: "invoice123",
-		},
-		{
 			name:       "Number",
 			source:     "2024-01-01 * \"Test\"\n  quantity: 42\n  Assets:Cash  100 USD",
 			wantType:   "number",
@@ -108,6 +102,15 @@ func TestParseMetadataValueTypes(t *testing.T) {
 	}
 }
 
+// TestParseMetadataLinkIsNoValue pins that, unlike a tag, a link is no
+// metadata value in beancount's grammar: it is a syntax error.
+func TestParseMetadataLinkIsNoValue(t *testing.T) {
+	_, err := ParseString(context.Background(), "2024-01-01 * \"Test\"\n  ref: ^invoice123\n  Assets:Cash  100 USD\n")
+	var errs ParseErrors
+	assert.True(t, errors.As(err, &errs), "got %v", err)
+	assert.Equal(t, 2, errs[0].Pos.Line)
+}
+
 func TestParseMetadataMultipleTypes(t *testing.T) {
 	source := `
 2024-01-01 * "Test transaction with various metadata"
@@ -116,7 +119,6 @@ func TestParseMetadataMultipleTypes(t *testing.T) {
   linked-account: Assets:Checking
   target-currency: USD
   category: #vacation
-  ref: ^invoice123
   quantity: 42
   budget: 1000.00 EUR
   active: TRUE
@@ -131,10 +133,10 @@ func TestParseMetadataMultipleTypes(t *testing.T) {
 	txn, ok := parsed.Directives[0].(*ast.Transaction)
 	assert.True(t, ok)
 
-	assert.Equal(t, 9, len(txn.Metadata))
+	assert.Equal(t, 8, len(txn.Metadata))
 
 	// Check each metadata type
-	expectedTypes := []string{"string", "date", "account", "currency", "tag", "link", "number", "amount", "boolean"}
+	expectedTypes := []string{"string", "date", "account", "currency", "tag", "number", "amount", "boolean"}
 	for i, expected := range expectedTypes {
 		if i < len(txn.Metadata) {
 			assert.Equal(t, expected, txn.Metadata[i].Value.Type(), "metadata at index %d", i)

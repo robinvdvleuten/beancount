@@ -1,0 +1,19 @@
+; A tag is a metadata value and a link is none: a link after a key is a
+; syntax error, on a directive, a transaction, a posting and a pushmeta
+; alike. The pushmeta is dropped, so its popmeta pops an absent key.
+2020-01-01 open Assets:A
+  ktag: #tag
+
+2020-01-02 open Assets:B
+  klink: ^link
+
+2020-01-03 * "on a posting"
+  Assets:A  1 USD
+    klink: ^link
+  Assets:A  -1 USD
+
+pushmeta ktag: #tag
+popmeta ktag:
+
+pushmeta klink: ^link
+popmeta klink:

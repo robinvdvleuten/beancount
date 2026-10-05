@@ -656,12 +656,8 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 		return &ast.MetadataValue{Tag: &tag}, nil
 
 	case LINK:
-		// Link (with ^ prefix)
-		link, err := p.parseLink()
-		if err != nil {
-			return nil, err
-		}
-		return &ast.MetadataValue{Link: &link}, nil
+		// Unlike a tag, a link is no metadata value in beancount's grammar.
+		return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 
 	case ACCOUNT:
 		// Account (colon-separated)

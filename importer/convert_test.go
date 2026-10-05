@@ -20,7 +20,6 @@ const roundTripLedger = `2024-01-15 * "Coffee Shop" "Latte" #food ^receipt-1
   source: Assets:Checking
   currency: EUR
   label: #tagged
-  ref: ^linked
   count: 3
   fee: 1.25 USD
   verified: TRUE
