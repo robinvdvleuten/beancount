@@ -412,7 +412,7 @@ func TestLedger_ProcessTransaction(t *testing.T) {
 				assert.Equal(t, 1, len(errs))
 				assert.Equal(t, "TransactionNotBalancedError", kindOf(errs[0]))
 				// Should have residuals for both currencies
-				assert.Contains(t, errs[0].Error(), "(-100.00 USD, 50.00 EUR)")
+				assert.Contains(t, errs[0].Error(), "(-100 USD, 50 EUR)")
 			},
 		},
 	}
@@ -510,8 +510,8 @@ func TestLedger_ProcessBalance(t *testing.T) {
 				balErr, ok := errs[0].(*BalanceMismatchError)
 				assert.True(t, ok, "should be BalanceMismatchError")
 				assert.Equal(t, "500", balErr.Difference.String())
-				assert.Contains(t, balErr.Error(), "Expected: 500.00 USD")
-				assert.Contains(t, balErr.Error(), "Actual:   1000.00 USD")
+				assert.Contains(t, balErr.Error(), "Expected: 500 USD")
+				assert.Contains(t, balErr.Error(), "Actual:   1000 USD")
 			},
 		},
 		{
@@ -1535,7 +1535,7 @@ func TestLedger_CompoundCostMissingNumber(t *testing.T) {
 	}
 	assert.Equal(t, []string{
 		"Per-unit cost may not be specified using total cost syntax: " +
-			"'CompoundAmount(number_per=Decimal('5'), number_total=Decimal('3'), currency='USD')'; ignoring per-unit cost",
+			"'5 # 3 USD'; ignoring per-unit cost",
 		"Transaction does not balance: (-10 USD)",
 	}, messages)
 }
@@ -1652,10 +1652,11 @@ func TestLedger_InterpolatedCostKeepsItsExponent(t *testing.T) {
 	assert.Equal(t, []string{"5.00", "7.50"}, costs)
 }
 
-// TestNotBalancedResidualKeepsTrailingZeros pins the residuals in "Transaction
-// does not balance" as bean-check prints them, Python's str() of the Decimal
-// the residual arithmetic leaves, trailing zeros included.
-func TestNotBalancedResidualKeepsTrailingZeros(t *testing.T) {
+// TestNotBalancedResidualIsPlain pins the residuals in "Transaction does not
+// balance" without trailing zeros: bean-check prints Python's str() of the
+// Decimal its arithmetic leaves (-10.0000000000000000000000000 USD), which
+// is no wording to copy.
+func TestNotBalancedResidualIsPlain(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), `
 2020-01-01 open Assets:Euros
 2020-01-01 open Assets:Stock
@@ -1685,15 +1686,15 @@ func TestNotBalancedResidualKeepsTrailingZeros(t *testing.T) {
 		}
 	}
 	assert.Equal(t, []string{
-		"Transaction does not balance: (66.66600 EUR)",
-		"Transaction does not balance: (-10.0000000000000000000000000 USD)",
-		"Transaction does not balance: (205.0 USD)",
+		"Transaction does not balance: (66.666 EUR)",
+		"Transaction does not balance: (-10 USD)",
+		"Transaction does not balance: (205 USD)",
 	}, messages)
 }
 
-// TestNegativeCostKeepsTrailingZeros pins the cost in "Cost is negative" as
-// Python's str() of its Decimal, trailing zeros included.
-func TestNegativeCostKeepsTrailingZeros(t *testing.T) {
+// TestNegativeCostIsPlain pins the cost in "Cost is negative" without
+// trailing zeros, like the other numbers in ledger messages.
+func TestNegativeCostIsPlain(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), `
 2020-01-01 open Assets:S
 2020-01-01 open Assets:C
@@ -1712,12 +1713,12 @@ func TestNegativeCostKeepsTrailingZeros(t *testing.T) {
 			messages = append(messages, err.(*Diagnostic).message)
 		}
 	}
-	assert.Equal(t, []string{"Cost is negative: -5.00 USD (account Assets:S)"}, messages)
+	assert.Equal(t, []string{"Cost is negative: -5 USD (account Assets:S)"}, messages)
 }
 
-// TestBalanceMismatchKeepsTrailingZeros pins the amounts in a balance
-// mismatch as Python's str() of their Decimals, trailing zeros included.
-func TestBalanceMismatchKeepsTrailingZeros(t *testing.T) {
+// TestBalanceMismatchIsPlain pins the amounts in a balance mismatch without
+// trailing zeros.
+func TestBalanceMismatchIsPlain(t *testing.T) {
 	tree := parser.MustParseString(context.Background(), `
 2020-01-01 open Assets:Cash
 2020-01-01 open Equity:Open
@@ -1736,7 +1737,7 @@ func TestBalanceMismatchKeepsTrailingZeros(t *testing.T) {
 	assert.Equal(t, 1, len(errs), "errors: %v", errs)
 	var mismatch *BalanceMismatchError
 	assert.True(t, errors.As(errs[0], &mismatch))
-	assert.Equal(t, "Balance mismatch for Assets:Cash:\n  Expected: 1.000 USD\n  Actual:   -5.00 USD", mismatch.message)
+	assert.Equal(t, "Balance mismatch for Assets:Cash:\n  Expected: 1 USD\n  Actual:   -5 USD", mismatch.message)
 }
 
 // TestNotBalancedResidualOrder pins the residuals in "Transaction does not

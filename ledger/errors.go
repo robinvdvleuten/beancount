@@ -9,7 +9,6 @@ import (
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/diagnostic"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
-	"github.com/robinvdvleuten/beancount/internal/pyrepr"
 	"github.com/shopspring/decimal"
 )
 
@@ -122,7 +121,7 @@ func newBalanceMismatchError(balance *ast.Balance, expected, actual decimal.Deci
 	return &BalanceMismatchError{
 		Diagnostic: *newError("BalanceMismatchError", balance, balance.Account,
 			"Balance mismatch for %s:\n  Expected: %s %s\n  Actual:   %s %s",
-			balance.Account, pydecimal.String(expected), currency, pydecimal.String(actual), currency),
+			balance.Account, expected.String(), currency, actual.String(), currency),
 		Difference: pydecimal.Sub(actual, expected),
 	}
 }
@@ -186,7 +185,7 @@ func newDuplicateBalanceError(balance *ast.Balance) *Diagnostic {
 // cost. Like beancount, it blames the posting's line, with no entry.
 func newNegativeCostError(txn *ast.Transaction, posting *ast.Posting, cost decimal.Decimal, currency string) *Diagnostic {
 	return newError("NegativeCostError", txn, posting.Account,
-		"Cost is negative: %s %s (account %s)", pydecimal.String(cost), currency, posting.Account).atPosting(posting).entryless()
+		"Cost is negative: %s %s (account %s)", cost.String(), currency, posting.Account).atPosting(posting).entryless()
 }
 
 // newZeroAmountError creates an error for a posting booked at cost with zero
@@ -252,14 +251,15 @@ func newUnbookedTransactionError(txn *ast.Transaction) *Diagnostic {
 
 // newTransactionNotBalancedError creates an error for a transaction that
 // does not balance, listing its residuals as beancount prints its residual
-// inventory: sorted by Position.sortkey, ties in the order it holds them,
-// each number as Python's str() writes it.
+// inventory: sorted by Position.sortkey, ties in the order it holds them.
+// Each number is written without trailing zeros, not with the exponent
+// Python's arithmetic leaves it (-10.0000000000000000000000000).
 func newTransactionNotBalancedError(txn *ast.Transaction, residuals []residual) *Diagnostic {
 	sorted := slices.Clone(residuals)
 	slices.SortStableFunc(sorted, func(a, b residual) int { return a.sortKey().Compare(b.sortKey()) })
 	parts := make([]string, len(sorted))
 	for i, r := range sorted {
-		parts[i] = pydecimal.String(r.number) + " " + r.currency
+		parts[i] = r.number.String() + " " + r.currency
 	}
 	return newError("TransactionNotBalancedError", txn, "", "Transaction does not balance: (%s)", strings.Join(parts, ", "))
 }
@@ -283,12 +283,11 @@ func newTotalCostError(txn *ast.Transaction, posting *ast.Posting, message strin
 
 // newTotalCompoundCostError creates an error for a compound cost inside
 // total braces ({{5 # 3 USD}}), whose per-unit number beancount ignores. Like
-// beancount, it blames the posting's line and quotes the compound amount's
-// Python repr.
+// beancount, it blames the posting's line; it quotes the amount as written.
 func newTotalCompoundCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
 	return newError("TotalCostError", txn, posting.Account,
 		"Per-unit cost may not be specified using total cost syntax: '%s'; ignoring per-unit cost",
-		compoundAmountRepr(posting.Cost)).atPosting(posting)
+		compoundAmountText(posting.Cost)).atPosting(posting)
 }
 
 // newDuplicateCostComponentError creates an error for a component a cost
@@ -299,7 +298,7 @@ func newDuplicateCostComponentError(txn *ast.Transaction, posting *ast.Posting, 
 	var message string
 	switch {
 	case duplicate.Amount != nil:
-		message = "Duplicate cost: '" + compoundAmountRepr(duplicate) + "'."
+		message = "Duplicate cost: '" + compoundAmountText(duplicate) + "'."
 	case duplicate.Date != nil:
 		message = "Duplicate date: '" + duplicate.Date.Format("2006-01-02") + "'."
 	case duplicate.IsMerge:
@@ -310,27 +309,20 @@ func newDuplicateCostComponentError(txn *ast.Transaction, posting *ast.Posting, 
 	return newError("DuplicateCostComponentError", txn, posting.Account, "%s", message).atPosting(posting)
 }
 
-// compoundAmountRepr is the Python repr of a cost's amount as beancount's
-// CompoundAmount holds it: a number left out is MISSING, and a total None
-// unless the amount is a compound.
-func compoundAmountRepr(cost *ast.Cost) string {
-	const missing = "<class 'beancount.core.number.MISSING'>"
-	number := func(amount *ast.Amount) string {
-		if amount == nil {
-			return "None"
-		}
-		n, err := ParseAmount(amount)
-		if amount.Value == "" || err != nil {
-			return missing
-		}
-		return "Decimal(" + pyrepr.String(pydecimal.String(n)) + ")"
+// compoundAmountText is a cost's amount as it is written: its per-unit
+// number, its total after a #, and its currency, each when present.
+func compoundAmountText(cost *ast.Cost) string {
+	var parts []string
+	if cost.Amount.Value != "" {
+		parts = append(parts, cost.Amount.Value)
 	}
-	currency := missing
+	if cost.Total != nil {
+		parts = append(parts, "#", cost.Total.Value)
+	}
 	if cost.Amount.Currency != "" {
-		currency = pyrepr.String(cost.Amount.Currency)
+		parts = append(parts, cost.Amount.Currency)
 	}
-	return fmt.Sprintf("CompoundAmount(number_per=%s, number_total=%s, currency=%s)",
-		number(cost.Amount), number(cost.Total), currency)
+	return strings.Join(parts, " ")
 }
 
 // newInvalidPriceError creates an error for an invalid price specification.

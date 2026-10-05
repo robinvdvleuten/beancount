@@ -51,7 +51,7 @@ func validateDateRange(date *ast.Date) error {
 
 	year := date.Year()
 	if year < 1 || year > 9999 {
-		return fmt.Errorf("ValueError: year %d is out of range", year)
+		return fmt.Errorf("year %d is out of range", year)
 	}
 
 	return nil
