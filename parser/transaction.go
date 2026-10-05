@@ -48,7 +48,12 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	// them: each is reported, unless allow_pipe_separator is set, and the
 	// transaction is kept. Like Bison's location of the rule that reports
 	// it, a pipe is reported where the header's strings start.
+	//
+	// beancount's txn_strings takes any number of strings, and its
+	// transaction rule rejects more than two once it has read the whole
+	// transaction: the transaction is dropped then, with its amounts read.
 	var strs []ast.RawString
+	var tooManyStrings error
 	stringsStart := p.peek()
 	for (p.check(STRING) || p.check(PIPE)) && p.continuesPreviousLine() {
 		if p.check(PIPE) {
@@ -59,9 +64,9 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 			}
 			continue
 		}
-		if len(strs) == 2 {
+		if len(strs) == 2 && tooManyStrings == nil {
 			tok := p.peek()
-			return nil, p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+			tooManyStrings = p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 		}
 		str, err := p.parseString()
 		if err != nil {
@@ -89,6 +94,9 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 
 	if err := p.parseTransactionBody(txn); err != nil {
 		return nil, err
+	}
+	if tooManyStrings != nil {
+		return nil, tooManyStrings
 	}
 
 	return txn, nil
