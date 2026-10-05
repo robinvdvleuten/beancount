@@ -151,7 +151,10 @@ func (l *Ledger) publishBooking(txn *ast.Transaction, booked *bookedTransaction)
 
 // fixPrice reports and fixes up a posting's price like beancount's parser: a
 // negative price is made positive, and a total price (@@) on a posting
-// without units is dropped.
+// without units is dropped. Such a posting keeps an amount without a number
+// or a currency, beancount's Amount(MISSING, MISSING), so that it is not
+// taken for an auto-posting: categorize then sorts it into one Currency
+// group, or reports it.
 func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
 	price := posting.Price
 	if price == nil {
@@ -168,6 +171,9 @@ func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
 		errs = append(errs, newTotalPriceWithoutUnitsError(txn, posting))
 		posting.Price = nil
 		posting.PriceTotal = false
+		if posting.Amount == nil {
+			posting.Amount = &ast.Amount{}
+		}
 	}
 	return errs
 }

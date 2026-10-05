@@ -1,0 +1,21 @@
+2020-01-01 open Assets:Wallet
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Euro
+
+2020-01-02 * "a total price without units beside two currencies"
+  Assets:Wallet  1.00 USD
+  Assets:Wallet  2.00 EUR
+  Assets:Cash @@ 20 USD
+
+2020-01-03 * "beside one currency"
+  Assets:Wallet  1.00 USD
+  Assets:Cash @@ 20 USD
+
+2020-01-04 * "fund an account in one currency"
+  Assets:Euro  5.00 EUR
+  Assets:Wallet
+
+2020-01-05 * "beside two currencies, from an account holding one"
+  Assets:Wallet  1.00 USD
+  Assets:Wallet  2.00 EUR
+  Assets:Euro @@ 20 USD
