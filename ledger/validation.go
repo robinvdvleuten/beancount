@@ -401,9 +401,8 @@ func (v *validator) isAccountActiveAllowingClose(account ast.Account, date *ast.
 //   - Account does not already exist (duplicate open directives are errors)
 //   - Copies metadata to avoid shared AST references
 //
-// Beancount compliance: Reopening a closed account is NOT allowed.
-// Any duplicate open directive is an error, regardless of whether the account
-// was previously closed.
+// Beancount compliance: any duplicate open directive is an error. One of a
+// closed account still makes the account active again.
 //
 // Returns validation errors and openDelta for the mutations to apply.
 //
@@ -427,6 +426,12 @@ func (v *validator) validateOpen(ctx context.Context, open *ast.Open) ([]error, 
 	// Check if account already exists - duplicate open is always an error
 	if existing, ok := v.accounts[accountName]; ok {
 		errs = append(errs, newAccountAlreadyOpenError(open, existing.OpenDate))
+		// Like beancount's validate_active_accounts, which adds the
+		// account of every open to its active set, a duplicate open
+		// after a close makes the account active again.
+		if existing.isClosed() {
+			return errs, &openDelta{account: open.Account, reopen: true}
+		}
 		return errs, nil
 	}
 
@@ -480,6 +485,12 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 	if account.isClosed() {
 		errs = append(errs, newAccountAlreadyClosedError(close, account.CloseDate))
 		return errs, nil
+	}
+
+	// A close after a duplicate open undid the first one is a duplicate
+	// close, reported and still applied, as in beancount.
+	if account.closedBefore != nil {
+		errs = append(errs, newAccountAlreadyClosedError(close, account.closedBefore))
 	}
 
 	delta := &closeDelta{

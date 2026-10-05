@@ -16,6 +16,9 @@ type openDelta struct {
 	account  ast.Account
 	openDate *ast.Date
 	metadata []*ast.Metadata
+	// reopen marks a duplicate open of a closed account: it is reported,
+	// and the account is active again, as beancount's active set has it.
+	reopen bool
 }
 
 // closeDelta describes changes from closing an account

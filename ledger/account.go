@@ -27,9 +27,12 @@ type Account struct {
 	Type      string // Account type root name (e.g., "Assets", "Vermoegen")
 	OpenDate  *ast.Date
 	CloseDate *ast.Date
-	metadata  []*ast.Metadata
-	inventory *inventory        // Lots held, with their cost basis
-	postings  []*accountPosting // Transaction history in chronological order
+	// closedBefore is the close a duplicate open undid, which makes the
+	// next close a duplicate too.
+	closedBefore *ast.Date
+	metadata     []*ast.Metadata
+	inventory    *inventory        // Lots held, with their cost basis
+	postings     []*accountPosting // Transaction history in chronological order
 }
 
 // isOpen returns true if the account is open at the given date

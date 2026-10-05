@@ -364,6 +364,11 @@ func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) 
 // applyOpen applies the open delta to the ledger (mutation only)
 func (l *Ledger) applyOpen(open *ast.Open, delta *openDelta, cfg *sharedconfig.Config) {
 	accountName := string(delta.account)
+	if delta.reopen {
+		account := l.accounts[accountName]
+		account.closedBefore, account.CloseDate = account.CloseDate, nil
+		return
+	}
 
 	account := &Account{
 		name:      delta.account,

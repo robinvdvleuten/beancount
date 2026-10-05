@@ -1,0 +1,24 @@
+; A duplicate open is an error, and one after a close makes the account
+; active again: beancount adds the account of every open to its active set.
+; The posting between the close and the second open is to an inactive
+; account; the one after it is not. A close after that is a duplicate too,
+; and still closes the account.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:E
+2020-01-05 close Assets:Cash
+
+2022-01-01 * "between the close and the second open"
+  Assets:Cash  1 USD
+  Equity:E
+
+2024-01-01 open Assets:Cash
+
+2024-01-02 * "after the second open"
+  Assets:Cash  1 USD
+  Equity:E
+
+2024-01-03 close Assets:Cash
+
+2024-01-04 * "after the second close"
+  Assets:Cash  1 USD
+  Equity:E
