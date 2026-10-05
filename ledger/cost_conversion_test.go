@@ -108,6 +108,8 @@ func TestValidateTotalCost(t *testing.T) {
 			expectedValue: "",
 		},
 		{
+			// Without units, the posting is categorization's to report
+			// (Could not resolve units currency).
 			name: "TotalCostMissingAmount",
 			posting: &ast.Posting{
 				Account: "Assets:Stock",
@@ -117,7 +119,8 @@ func TestValidateTotalCost(t *testing.T) {
 					Amount:  &ast.Amount{Value: "1000.00", Currency: "USD"},
 				},
 			},
-			expectError: true,
+			expectError:   false,
+			expectedValue: "1000.00",
 		},
 		{
 			// Like beancount, {{}} is an empty cost, as {} is.

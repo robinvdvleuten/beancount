@@ -348,14 +348,10 @@ func validateCosts(txn *ast.Transaction) []error {
 
 		// Validate total cost {{}} requirements; total braces without an
 		// amount ({{}}, {{*}}) are no total, and fixTotalCost makes them a
-		// per-unit cost. Missing units are interpolation's to report.
-		missingUnits := posting.Amount != nil && posting.Amount.Value == ""
+		// per-unit cost. Missing units are interpolation's to report, and
+		// units left out altogether categorization's.
+		missingUnits := posting.Amount == nil || posting.Amount.Value == ""
 		if posting.Cost.IsTotal && posting.Cost.Amount != nil && !missingUnits {
-			if posting.Amount == nil {
-				errs = append(errs, newTotalCostError(txn, posting, "total cost requires a quantity"))
-				continue
-			}
-
 			quantity, err := decimal.NewFromString(posting.Amount.Value)
 			if err != nil {
 				errs = append(errs, newTotalCostError(txn, posting, fmt.Sprintf("invalid quantity %q: %v", posting.Amount.Value, err)))

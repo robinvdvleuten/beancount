@@ -1,0 +1,11 @@
+; A total cost on a posting without units or a units currency: the units
+; currency cannot be resolved, alone or beside another posting.
+2020-01-01 open Assets:C
+2020-01-01 open Assets:D
+
+2020-01-04 * "total braces, no units, alone"
+  Assets:C  {{10 USD}}
+
+2020-01-05 * "total braces, no units, beside a posting"
+  Assets:C  {{10 USD}}
+  Assets:D  -10 USD
