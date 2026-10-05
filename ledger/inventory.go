@@ -588,9 +588,19 @@ func planStrictReduction(commodity string, matches []*lot, units decimal.Decimal
 		if matches[0].amount.Abs().LessThan(units.Abs()) {
 			return nil, errNotEnoughLots
 		}
+		// Like beancount's min(), which returns the lot's number when the
+		// two are equal: a reduction that takes all a lot holds is booked
+		// with the lot's exponent (-1.00 for -1 of the 1.00 left).
+		amount := units
+		if held := matches[0].amount.Abs(); held.Equal(units.Abs()) {
+			amount = held
+			if units.IsNegative() {
+				amount = held.Neg()
+			}
+		}
 		return &reductionPlan{
 			commodity:  commodity,
-			reductions: []lotReduction{{lot: matches[0], amount: units}},
+			reductions: []lotReduction{{lot: matches[0], amount: amount}},
 		}, nil
 	}
 
