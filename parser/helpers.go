@@ -97,8 +97,14 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 // as beancount's grammar feeds its display context with each one.
 func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool, value string) *ast.Amount {
 	amount := p.unrecordedAmount(valueTok, currTok, value)
-	p.read = append(p.read, amount)
+	p.recordRead(amount)
 	return amount
+}
+
+// recordRead records an amount as read, with where the parser stands.
+func (p *Parser) recordRead(amount *ast.Amount) {
+	p.read = append(p.read, amount)
+	p.readAt = append(p.readAt, p.peek().Start)
 }
 
 // unrecordedAmount builds an amount beancount's grammar does not feed its
@@ -359,7 +365,7 @@ func (p *Parser) parseCostAmount(cost *ast.Cost) error {
 func (p *Parser) recordCostNumbers(amounts ...*ast.Amount) {
 	for _, amount := range amounts {
 		if amount.Value != "" && amount.Currency != "" {
-			p.read = append(p.read, amount)
+			p.recordRead(amount)
 		}
 	}
 }
@@ -941,7 +947,11 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
 	if tok, ok := p.headerContinuation(offset); ok {
 		err := p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
-		// beancount's grammar fails at the line break before the token.
+		// beancount's grammar fails at the line break before the token,
+		// so it never reads an amount written from there on.
+		for len(p.read) > 0 && p.readAt[len(p.read)-1] > tok.Start {
+			p.read, p.readAt = p.read[:len(p.read)-1], p.readAt[:len(p.readAt)-1]
+		}
 		var parseErr *ParseError
 		if i := p.tokenIndexAt(tok.Start); i > 0 && errors.As(err, &parseErr) {
 			parseErr.raisedAt = p.tokens[i-1].End

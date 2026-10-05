@@ -1,0 +1,13 @@
+; An amount on the line after its directive's header is never read as one:
+; the header fails at its own line's end. So the 0 USD under the balance
+; below does not count towards display precision: USD is written once
+; without digits and once with one, and shows one.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "a tie between no digits and one"
+  Assets:A   1 USD
+  Assets:B  -1.4 USD
+
+2020-01-03 balance Assets:A
+  0 USD

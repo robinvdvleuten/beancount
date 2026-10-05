@@ -54,6 +54,10 @@ type Parser struct {
 	// like beancount's parser, which feeds its display context as it reads
 	// each amount, still count towards display precision.
 	read, dropped []*ast.Amount
+	// readAt holds, for each amount in read, the offset of the token after
+	// it, so that finishHeader can take back the amounts read past a
+	// header's line.
+	readAt []int
 
 	// reduceErr is the error the last directive's rule raised as it
 	// reduced (an open's invalid booking method), or nil.
@@ -98,7 +102,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				tree.Directives = tree.Directives[:len(tree.Directives)-1]
 				p.dropRead()
 			}
-			p.read, p.reduceErr = nil, nil
+			p.read, p.readAt, p.reduceErr = nil, nil, nil
 			p.recover(p.errorAtToken(tok, "unexpected indentation"))
 			continuationLine = 0
 			continue
@@ -111,7 +115,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			tree.Directives = tree.Directives[:len(tree.Directives)-1]
 			p.dropRead()
 		}
-		p.read, p.reduceErr = nil, nil
+		p.read, p.readAt, p.reduceErr = nil, nil, nil
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0
 		}
@@ -316,7 +320,7 @@ func (p *Parser) contentEnd(tok Token) int {
 // reduces a directive whose body holds a syntax error.
 func (p *Parser) dropRead() {
 	p.dropped = append(p.dropped, p.read...)
-	p.read = nil
+	p.read, p.readAt = nil, nil
 	if p.reduceErr != nil {
 		p.errs = slices.DeleteFunc(p.errs, func(e *ParseError) bool { return e == p.reduceErr })
 		p.reduceErr = nil
