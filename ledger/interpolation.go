@@ -180,8 +180,11 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		if weight.IsZero() {
 			leftOut = append(leftOut, posting)
 		}
+		// Without a cost or a per-unit price, perUnit is zero and the units
+		// weigh as themselves, even where the cost or price is in the
+		// units' own currency.
 		needed := weight
-		if weightCurrency != currency {
+		if !perUnit.IsZero() {
 			needed = pydecimal.Quo(pydecimal.Sub(weight, total), perUnit)
 		}
 		needed = specTolerances.round(currency, needed)
@@ -190,7 +193,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			Currency: currency,
 		}
 		switch {
-		case weightCurrency == currency:
+		case perUnit.IsZero():
 			balance[currency] = pydecimal.Add(balance[currency], needed)
 		case posting.Cost != nil && posting.Cost.Total != nil && !needed.IsZero():
 			// Like beancount's, the units weigh at the compound's per-unit

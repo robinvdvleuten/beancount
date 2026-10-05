@@ -1,0 +1,19 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Expenses:B
+
+2020-01-03 * "units missing, price in the units currency"
+  Expenses:B  2.50 USD
+  Assets:A         USD @ 2 USD
+
+2020-01-04 * "units missing, price in another currency"
+  Expenses:B  2.50 USD
+  Assets:A         EUR @ 2 USD
+
+2020-01-05 * "units missing, total price in the units currency"
+  Expenses:B  2.50 USD
+  Assets:B         USD @@ 2 USD
+
+2020-01-06 * "units missing at a cost in the units currency"
+  Expenses:B  2.50 USD
+  Assets:B         USD {2 USD}
