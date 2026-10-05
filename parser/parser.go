@@ -285,7 +285,13 @@ func (p *Parser) recover(err error) {
 			}
 		}
 		if tok.Type != NEWLINE {
-			p.recoveredEnd = max(p.recoveredEnd, tok.End)
+			// A comment owns its line break, which shiftedSince counts
+			// from: the recovery ends before it.
+			end := tok.End
+			for end > tok.Start && (p.source[end-1] == '\n' || p.source[end-1] == '\r') {
+				end--
+			}
+			p.recoveredEnd = max(p.recoveredEnd, end)
 		}
 		p.advance()
 	}

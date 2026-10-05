@@ -1,0 +1,14 @@
+; beancount's parser reports no syntax error until three tokens have been
+; read since the last one. A comment that ends the erroring line is no
+; token and its line break is one: the error on the line after each
+; erroring line below is far enough from it, and reported.
+  Expenses:Food 50 USD ; an indented line at top level, ending in a comment
+2014-05-05 * "Transaction" Assets:Checking 100 USD
+
+  ; an indented comment at top level
+2020-01-01 open Assets:Cash ; a comment after the open
+	2020-01-01 open Equity:O
+
+y" ; an invalid token, then a comment
+2020-01-04 open Assets:B
+  Assets:A   -1.00 USD
