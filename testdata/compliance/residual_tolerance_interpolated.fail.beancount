@@ -1,0 +1,26 @@
+; A posting with a number left to interpolation adds nothing to the
+; tolerance its transaction's residual is checked against. The 0.00 USD
+; with a cost to interpolate does not widen USD to 0.005, so 0.004 USD is
+; a residual; the -10.5 EUR with a price to interpolate does not widen EUR
+; to 0.05, so 0.04 EUR is one; and with only whole numbers written there is
+; no tolerance at all for what the interpolated price leaves.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Expenses:B
+
+2020-01-02 * "a cost to interpolate on zero units"
+  Expenses:B  0.00 USD {2020-01-01}
+  Assets:A   -0.004 USD
+
+2020-01-03 * "a price to interpolate"
+  Assets:A  -10.5 EUR @ USD
+  Assets:B   1.04 EUR
+  Assets:B  -1 EUR
+
+2020-01-04 * "whole numbers only"
+  Assets:A  -3 EUR @ USD
+  Assets:B   10 USD
+
+2020-01-05 * "stated numbers still widen it"
+  Assets:A   10.00 USD
+  Assets:B  -10.004 USD

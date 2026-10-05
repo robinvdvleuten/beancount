@@ -61,9 +61,10 @@ func (t tolerances) spec(postings []*ast.Posting) transactionTolerances {
 }
 
 // booked returns a transaction's tolerances as beancount sees its postings
-// once booked, when it checks the residual: from every units number,
-// interpolated ones included, and, under infer_tolerance_from_cost, costs
-// per unit with inferred costs resolved and a reduction split per lot.
+// once booked, when it checks the residual: from the units numbers of the
+// postings given, which are those that leave no number to interpolation,
+// and, under infer_tolerance_from_cost, costs per unit with a reduction
+// split per lot.
 // amounts and costs hold the ones interpolation completed, by posting.
 func (t tolerances) booked(postings []*ast.Posting, amounts map[*ast.Posting]*ast.Amount, costs map[*ast.Posting]*ast.Cost, reducedPositions map[*ast.Posting][]BookedPosition) transactionTolerances {
 	return transactionTolerances{

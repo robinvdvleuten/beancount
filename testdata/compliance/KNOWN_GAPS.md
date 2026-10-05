@@ -44,17 +44,6 @@ the same date, we return 20 and bean-query 21. The same holds across
 directions: with `price AUD 0.6 USD` and then `price USD 1.5 AUD` on one
 date, we convert AUD to USD at 0.6 and bean-query at 1/1.5.
 
-**Tolerances of the residual check**: bean-check's balance check
-(`ops/validation.py`) infers tolerances without the postings Booking
-interpolated (`AUTOMATIC_META`), and we count them. So a posting with an
-interpolated price or cost still widens its units currency for us:
-`-10.5 EUR @ USD` beside `1.04 EUR` and `-1 EUR` leaves 0.04 EUR, which
-bean-check reports (tolerance 0.005) and we accept (0.05). One more
-difference is in `ledger/tolerance.go`: with only integers written,
-beancount has no tolerance at all, so it reports the 1E-27 USD an
-interpolated price such as `-3 EUR @ USD` against `10 USD` leaves behind.
-We report nothing.
-
 The printer (BQL `PRINT`, `import`, `doctor missing_open`, error context)
 follows beancount 3.2.3's `printer.py`, with these known differences from
 `bean-query`'s `PRINT`:

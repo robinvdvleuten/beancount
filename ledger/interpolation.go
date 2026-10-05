@@ -316,9 +316,18 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	}
 
 	// Check if balanced after inference, within the tolerances of the
-	// booked postings: interpolated amounts count, and costs count per
-	// unit, with inferred cost numbers resolved.
-	bookedTolerances := specTolerances.tolerances.booked(txn.Postings, amounts, costs, reducedPositions)
+	// booked postings.
+	// Like beancount's infer_tolerances, which skips the postings marked
+	// __automatic__, a posting with a number left to interpolation adds
+	// nothing to the tolerances the residual is checked against, in any
+	// Currency group of its transaction.
+	stated := make([]*ast.Posting, 0, len(txn.Postings))
+	for _, posting := range txn.Postings {
+		if _, reduced := reducedPositions[posting]; reduced || !leavesNumberOut(posting) {
+			stated = append(stated, posting)
+		}
+	}
+	bookedTolerances := specTolerances.tolerances.booked(stated, amounts, costs, reducedPositions)
 	residuals := residualsBeyond(allWeights, balance, bookedTolerances.of)
 
 	interpolated := &interpolatedGroup{
@@ -399,4 +408,26 @@ func missingCostNumbers(cost *ast.Cost) int {
 		n++
 	}
 	return n
+}
+
+// leavesNumberOut reports whether a posting leaves a number to
+// interpolation: its units, its price, or the number of its cost. A
+// reduction's cost comes from its lots, which the caller tells apart.
+func leavesNumberOut(posting *ast.Posting) bool {
+	if posting.Amount == nil || posting.Amount.Value == "" {
+		return true
+	}
+	if posting.Price != nil && posting.Price.Value == "" {
+		return true
+	}
+	cost := posting.Cost
+	if cost == nil {
+		return false
+	}
+	if cost.Amount == nil || cost.Amount.Value == "" {
+		// {}, {USD}, {2020-01-01} and {# 5 USD} leave the per-unit number
+		// out; {{}} and its kind are per-unit costs without one too.
+		return true
+	}
+	return cost.Total != nil && cost.Total.Value == ""
 }
