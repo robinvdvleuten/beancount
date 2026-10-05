@@ -232,6 +232,10 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 
 		currency := posting.Price.Currency
 		weight := balance[currency].Neg()
+		if weight.IsZero() {
+			// beancount's plain ZERO, as for a cost below.
+			weight = decimal.Zero
+		}
 		priceNumber := weight.Abs()
 		if !units.IsZero() {
 			perUnit := pydecimal.Quo(weight, units).Abs()
@@ -240,7 +244,9 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			}
 			weight = pydecimal.Mul(units, perUnit)
 		}
-		prices[posting] = &ast.Amount{Value: priceNumber.String(), Currency: currency}
+		// The price keeps the exponent the division leaves, as Python's
+		// does: 110.00 over 2 is 55.00.
+		prices[posting] = &ast.Amount{Value: formatInferredNumber(priceNumber), Currency: currency}
 		balance[currency] = pydecimal.Add(balance[currency], weight)
 	}
 

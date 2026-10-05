@@ -318,7 +318,7 @@ func TestInterpolate(t *testing.T) {
   Assets:Cash   -120.00 USD
 `,
 			want: []string{
-				"USD: Assets:Euros price 120 USD",
+				"USD: Assets:Euros price 120.00 USD",
 				"USD: Assets:Cash",
 			},
 		},

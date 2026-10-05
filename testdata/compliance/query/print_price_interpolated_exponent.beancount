@@ -1,0 +1,13 @@
+; An interpolated price keeps the exponent its division leaves: 110.00 over
+; 2 is 55.00.
+2020-01-01 open Assets:EUR
+2020-01-01 open Assets:A
+2020-01-02 * "price interpolated"
+  Assets:EUR  1 EUR @
+  Assets:A   -110.00 USD
+2020-01-03 * "price interpolated, total"
+  Assets:EUR  2 EUR @@
+  Assets:A   -110.00 USD
+2020-01-04 * "price interpolated, currency given"
+  Assets:EUR  3 EUR @ USD
+  Assets:A   -110.00 USD
