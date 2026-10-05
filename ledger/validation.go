@@ -118,7 +118,7 @@ func (v *validator) validateTransaction(ctx context.Context, txn *ast.Transactio
 	if len(booked.residuals) > 0 {
 		errs = append(errs, newTransactionNotBalancedError(txn, booked.residuals))
 	}
-	errs = append(errs, v.validateBookedCosts(txn)...)
+	errs = append(errs, v.validateBookedCosts(txn, booked)...)
 	errs = append(errs, v.validateConstraintCurrencies(txn)...)
 	return errs, booked
 }
@@ -494,9 +494,22 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 // negative cost, like beancount's interpolate_group. A booked cost may be
 // zero but never negative; the check applies per unit, after a total or
 // compound cost is spread over the units. Beancount books such a posting
-// anyway, so this does not stop Apply.
-func (v *validator) validateBookedCosts(txn *ast.Transaction) []error {
+// anyway, so this does not stop Apply. A reduction is checked at the cost
+// of each lot it was booked against, which its own cost spec may leave out.
+func (v *validator) validateBookedCosts(txn *ast.Transaction, booked *bookedTransaction) []error {
 	var errs []error
+	reduced := map[*ast.Posting]bool{}
+	for _, bp := range booked.postings {
+		for _, position := range bp.positions {
+			if !position.Reduced || position.Cost == nil {
+				continue
+			}
+			reduced[bp.posting] = true
+			if position.Cost.Number.IsNegative() {
+				errs = append(errs, newNegativeCostError(txn, bp.posting, position.Cost.Number, position.Cost.Currency))
+			}
+		}
+	}
 	for _, posting := range txn.Postings {
 		if posting.Amount == nil || posting.Cost == nil {
 			continue
@@ -504,7 +517,7 @@ func (v *validator) validateBookedCosts(txn *ast.Transaction) []error {
 		if units, err := ParseAmount(posting.Amount); err == nil && units.IsZero() {
 			errs = append(errs, newZeroAmountError(txn, posting))
 		}
-		if perUnit, costCurrency, ok := perUnitCost(posting); ok && perUnit.IsNegative() {
+		if perUnit, costCurrency, ok := perUnitCost(posting); ok && perUnit.IsNegative() && !reduced[posting] {
 			errs = append(errs, newNegativeCostError(txn, posting, perUnit, costCurrency))
 		}
 	}

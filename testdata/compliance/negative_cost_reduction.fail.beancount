@@ -1,0 +1,18 @@
+; A cost may not be negative. Like beancount, a reduction is checked at the
+; cost of each lot it is booked against, which its own cost spec may leave
+; out: by label, by the cost itself, and against both lots at once.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+2020-01-04 * "two lots at a negative cost"
+  Assets:A     4 HOOL {-6 USD, "lot3"}
+  Assets:A     4 HOOL {-7 USD, "lot4"}
+  Assets:Cash  52 USD
+2020-02-02 * "reduce one by its label"
+  Assets:A    -1 HOOL {"lot3"}
+  Assets:Cash  -6 USD
+2020-02-03 * "reduce one by its negative cost"
+  Assets:A    -1 HOOL {-7 USD}
+  Assets:Cash  -7 USD
+2020-02-04 * "reduce both"
+  Assets:A    -6 HOOL {}
+  Assets:Cash  -39 USD
