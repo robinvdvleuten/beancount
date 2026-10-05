@@ -82,19 +82,27 @@ func autoAccounts(ctx context.Context, l *Ledger, tree *ast.AST) []error {
 		}
 	}
 
-	uses := firstUses(tree.Directives, opened)
-	if len(uses) == 0 {
-		return nil
-	}
-
-	// Like beancount, the inserted opens are numbered in account order.
+	// Like beancount, an inserted open takes as its line the place of its
+	// account among every account used, opened or not, in account order:
+	// that is where it sorts among the opens of its date.
+	uses := firstUses(tree.Directives, nil)
 	slices.SortFunc(uses, func(a, b accountUse) int { return cmp.Compare(a.account, b.account) })
+	var inserted []ast.Directive
 	for i, use := range uses {
+		if opened[use.account] {
+			continue
+		}
 		open := ast.NewOpen(use.date, use.account, nil, "")
 		open.SetPosition(ast.Position{Filename: "<auto_accounts>", Line: i})
-		tree.Directives = append(tree.Directives, open)
+		inserted = append(inserted, open)
 	}
-	_ = ast.SortDirectives(tree)
+	if len(inserted) > 0 {
+		// beancount sorts the inserted opens ahead of the entries, and its
+		// sort is stable: one whose line equals a written open's comes
+		// first.
+		tree.Directives = append(inserted, tree.Directives...)
+		_ = ast.SortDirectives(tree)
+	}
 	return nil
 }
 

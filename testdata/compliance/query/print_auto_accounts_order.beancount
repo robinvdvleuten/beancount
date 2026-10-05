@@ -1,0 +1,15 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Cash
+plugin "beancount.plugins.auto_accounts"
+
+2020-01-01 * "uses two accounts never opened"
+  Equity:Opening  -9 USD
+  Assets:B         9 USD
+
+; auto_accounts gives an open it inserts the place of its account among
+; every account used, in account order, as its line: Assets:B is the second
+; of four, so line 1, and Equity:Opening the fourth, so line 3. Among the
+; opens of one date that puts Equity:Opening after the opens written on
+; lines 1 and 2, and Assets:B, which shares line 1 with a written open,
+; ahead of it: the inserted opens are sorted in first. (The comment is last
+; to keep those line numbers.)
