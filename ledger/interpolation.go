@@ -193,6 +193,9 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			Currency: currency,
 		}
 		switch {
+		case weight.IsZero():
+			// Left out, the posting weighs nothing, though at a compound
+			// cost its units are not zero.
 		case perUnit.IsZero():
 			balance[currency] = pydecimal.Add(balance[currency], needed)
 		case posting.Cost != nil && posting.Cost.Total != nil && !needed.IsZero():

@@ -1,0 +1,15 @@
+2020-01-01 open Assets:Stock
+
+2020-02-03 * "units missing at a compound cost, alone"
+  Assets:Stock  HOOL {10 # 5 USD}
+
+2020-02-04 * "units missing at a per-unit cost, alone"
+  Assets:Stock  HOOL {10 USD}
+
+2020-02-05 * "units missing at a price, alone"
+  Assets:Stock  HOOL @ 2 USD
+
+2020-02-06 * "units missing at a cost and a price, alone"
+  Assets:Stock  HOOL {10 USD} @ 12 USD
+
+2020-02-07 balance Assets:Stock 0 HOOL

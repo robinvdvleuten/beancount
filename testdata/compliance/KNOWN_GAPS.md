@@ -32,7 +32,11 @@ rest of its group, whose residual both report on the transaction. beancount
 keeps the posting with its units missing, reports `Transaction has
 incomplete elements` on the transaction's line too, and fails with a
 `TypeError` when a later posting to the account is weighed against it; we
-leave the posting out of the booked transaction. The lines agree.
+leave the posting out of the booked transaction. The lines agree. Where
+the posting is its transaction's only one, or the group's residual is
+weighed against it (`HOOL {{15 USD}}` alone, or beside `-15 USD`),
+beancount fails with that `TypeError` at once, checking the residual; we
+report the posting as above, and the residual when there is one (#707).
 
 **Merge cost on an augmentation**: both implementations report a merge
 cost `{*}` ("Cost merging is not supported yet"), and beancount then books
