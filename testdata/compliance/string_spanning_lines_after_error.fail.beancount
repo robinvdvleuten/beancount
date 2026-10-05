@@ -1,0 +1,10 @@
+; A string that spans lines is one token, met where it starts: right after
+; the invalid token on line 4 it is fewer than three tokens on, and
+; beancount does not report it. After a directive in between it is.
+lines
+"a string
+over two lines"
+
+2020-01-01 open Assets:A
+"another string
+over two lines"

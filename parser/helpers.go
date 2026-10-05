@@ -1018,7 +1018,13 @@ func (p *Parser) errorAtToken(tok Token, format string, args ...any) error {
 	if tok.Type == ILLEGAL {
 		return newErrorfWithSource(pos, sourceRange, "%s", p.illegalTokenMessage(tok))
 	}
-	return newErrorfWithSource(pos, sourceRange, format, args...)
+	parseErr := newErrorfWithSource(pos, sourceRange, format, args...)
+	if pos.Offset != tok.Start {
+		// The grammar meets the string where it starts: the tokens read
+		// since the last error are counted up to there.
+		parseErr.raisedAt = tok.Start
+	}
+	return parseErr
 }
 
 func (p *Parser) illegalTokenMessage(tok Token) string {
