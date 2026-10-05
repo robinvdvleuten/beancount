@@ -995,7 +995,7 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 	text := tok.String(p.source)
 	bytes := tok.Bytes(p.source)
 	switch {
-	case ast.IsDateLiteralShape(bytes):
+	case len(bytes) > 0 && ast.DateLiteralLen(bytes) == len(bytes):
 		return fmt.Sprintf("invalid date %q", text)
 	case p.isExpressionStartToken(tok):
 		return "unmatched parentheses in expression"

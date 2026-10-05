@@ -294,30 +294,19 @@ func (l *Lexer) scanToken() Token {
 	return tok
 }
 
-// isDatePattern checks if the position starts a date pattern YYYY-MM-DD or YYYY/MM/DD.
+// isDatePattern checks if the position starts a date as beancount's lexer
+// reads one (ast.DateLiteralLen).
 func (l *Lexer) isDatePattern(start int) bool {
-	// Need at least 10 characters: YYYY-MM-DD or YYYY/MM/DD
-	if start+10 > len(l.source) {
-		return false
-	}
-
-	// Check pattern: digit{4}[-/]digit{2}[-/]digit{2}
-	src := l.source[start:]
-	sep := src[4]
-	return isDigit(src[0]) && isDigit(src[1]) && isDigit(src[2]) && isDigit(src[3]) &&
-		(sep == '-' || sep == '/') &&
-		isDigit(src[5]) && isDigit(src[6]) &&
-		src[7] == sep &&
-		isDigit(src[8]) && isDigit(src[9])
+	return ast.DateLiteralLen(l.source[start:]) > 0
 }
 
-// scanDate scans a date: YYYY-MM-DD or YYYY/MM/DD
-// Returns ILLEGAL token if the date is invalid (year 0, invalid month/day).
-// This matches Beancount's lexer behavior which validates dates at lex time.
+// scanDate scans a date: four or more digits, then twice a '-' or a '/'
+// and digits, like beancount's lexer. It returns an ILLEGAL token if the
+// date is invalid (year 0, invalid month/day): beancount's lexer validates
+// dates at lex time.
 func (l *Lexer) scanDate(start, line, col int) Token {
-	// Date pattern is exactly 10 characters.
-	// First digit already consumed, consume remaining 9.
-	for i := 0; i < 9; i++ {
+	// The first digit is already consumed.
+	for range ast.DateLiteralLen(l.source[start:]) - 1 {
 		l.advance()
 	}
 

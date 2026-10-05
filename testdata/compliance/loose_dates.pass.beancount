@@ -1,0 +1,15 @@
+; beancount's lexer reads a date as four or more digits, then twice a dash
+; or a slash and digits, and takes each part as a number: every open below
+; is dated like 2020-01-02, and the cost date and the metadata date are
+; dates, not subtractions.
+2020-1-2 open Assets:A
+2020-01-002 open Assets:B
+02020-01-02 open Assets:C
+2020/01-02 open Assets:D
+  when: 2020-010-2
+
+2020-2-1 * "a cost dated loosely"
+  Assets:A  1 HOOL {5 USD, 2020-1-5}
+  Assets:B  -5 USD
+
+2020-02-02 balance Assets:B  -5 USD

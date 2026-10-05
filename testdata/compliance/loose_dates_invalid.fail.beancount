@@ -1,0 +1,7 @@
+; A date beancount's lexer reads whose parts name no day is an invalid
+; token: the month 13, the day 32, and the day 012020 of two dates written
+; without a space between them. Each drops its line.
+2020-13-01 open Assets:A
+2020-01-32 open Assets:B
+2014-01-012020-01-01 open Assets:C
+2020-01-02 open Assets:D

@@ -277,8 +277,8 @@ type Date struct {
 	time.Time
 }
 
-// IsValidDateLiteral reports whether value is a valid Beancount date literal.
-// Accepted forms are YYYY-MM-DD and YYYY/MM/DD with years in 0001..9999.
+// IsValidDateLiteral reports whether value is a valid Beancount date literal:
+// one DateLiteralLen reads in full, naming a day of the years 0001..9999.
 func IsValidDateLiteral(value []byte) bool {
 	_, ok := parseDateLiteral(value)
 	return ok
@@ -297,15 +297,55 @@ func IsDateLiteralShape(value []byte) bool {
 		asciiDigits(value[8:10])
 }
 
+// DateLiteralLen returns the length of the date literal value starts with,
+// as beancount's lexer reads one: four or more digits, then twice a '-' or
+// a '/' and one or more digits. So 2020-1-2, 2020/01-02 and 2020-010-02
+// are dates like 2020-01-02. It returns 0 when value starts with none.
+func DateLiteralLen(value []byte) int {
+	digits := func(from int) int {
+		end := from
+		for end < len(value) && value[end] >= '0' && value[end] <= '9' {
+			end++
+		}
+		return end
+	}
+	end := digits(0)
+	if end < 4 {
+		return 0
+	}
+	for range 2 {
+		if end >= len(value) || (value[end] != '-' && value[end] != '/') {
+			return 0
+		}
+		next := digits(end + 1)
+		if next == end+1 {
+			return 0
+		}
+		end = next
+	}
+	return end
+}
+
 func parseDateLiteral(value []byte) (time.Time, bool) {
-	if !IsDateLiteralShape(value) {
+	if len(value) == 0 || DateLiteralLen(value) != len(value) {
 		return time.Time{}, false
 	}
-	year := int(value[0]-'0')*1000 + int(value[1]-'0')*100 + int(value[2]-'0')*10 + int(value[3]-'0')
-	month := int(value[5]-'0')*10 + int(value[6]-'0')
-	day := int(value[8]-'0')*10 + int(value[9]-'0')
+	// Each part is a number, read as Python's int() reads it.
+	var parts [3]int
+	part := 0
+	for _, b := range value {
+		if b == '-' || b == '/' {
+			part++
+			continue
+		}
+		if parts[part] > 99999 {
+			return time.Time{}, false
+		}
+		parts[part] = parts[part]*10 + int(b-'0')
+	}
+	year, month, day := parts[0], parts[1], parts[2]
 
-	if year == 0 || month < 1 || month > 12 || day < 1 {
+	if year < 1 || year > 9999 || month < 1 || month > 12 || day < 1 || day > 31 {
 		return time.Time{}, false
 	}
 
