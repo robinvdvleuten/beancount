@@ -1,0 +1,12 @@
+; A parenthesis that opens no number expression is a token of its own to
+; beancount's lexer, and what follows it is lexed as usual. The string in
+; parentheses on line 6 ends on its line, so the open on line 7 is read,
+; and the open on line 11 is its duplicate. The same holds for the note on
+; line 9 and the option after it.
+2020-01-01 open Assets:A
+2020-01-02 * "a string in parentheses" ("a")
+2020-01-03 open Assets:B
+
+2020-01-04 note Assets:A (")"A
+option "title" "kept"
+2020-01-05 open Assets:B

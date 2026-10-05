@@ -9,6 +9,7 @@ package parser
 // - Pre-allocated token buffer
 
 import (
+	"strings"
 	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -427,18 +428,31 @@ func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
 		}
 
 		ch := l.advance()
-		switch ch {
-		case '(':
+		switch {
+		case ch == '(':
 			depth++
-		case ')':
+		case ch == ')':
 			depth--
 			if depth == 0 {
 				return Token{EXPRESSION, start, l.pos, line, col}
 			}
+		case !isExpressionByte(ch):
+			// No number expression: to beancount's lexer the parenthesis
+			// is a token of its own and what follows is lexed as usual,
+			// a string included. Only the first byte is the bad token.
+			l.pos, l.column = start+1, col+1
+			return Token{ILLEGAL, start, l.pos, line, col}
 		}
 	}
 
 	return Token{ILLEGAL, start, l.pos, line, col}
+}
+
+// isExpressionByte reports whether b may stand inside a parenthesized
+// number expression: a digit, a number's punctuation, an operator or a
+// blank.
+func isExpressionByte(b byte) bool {
+	return isDigit(b) || strings.IndexByte(".,+-*/ \t", b) >= 0
 }
 
 // scanString scans a quoted string: "..."
