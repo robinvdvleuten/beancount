@@ -134,7 +134,8 @@ func (p *Parser) fallBackBookingMethod(open *ast.Open) {
 		return
 	}
 	pos := open.Position()
-	p.errs = append(p.errs, newErrorfWithSource(pos, p.calculateSourceRange(pos), "Invalid booking method: %s", open.BookingMethod).kept())
+	p.reduceErr = newErrorfWithSource(pos, p.calculateSourceRange(pos), "Invalid booking method: %s", open.BookingMethod).kept()
+	p.errs = append(p.errs, p.reduceErr)
 	open.BookingMethod = p.options.BookingMethod
 }
 

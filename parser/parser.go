@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"slices"
 	"sort"
 	"strings"
 	"unicode/utf8"
@@ -53,6 +54,10 @@ type Parser struct {
 	// like beancount's parser, which feeds its display context as it reads
 	// each amount, still count towards display precision.
 	read, dropped []*ast.Amount
+
+	// reduceErr is the error the last directive's rule raised as it
+	// reduced (an open's invalid booking method), or nil.
+	reduceErr *ParseError
 }
 
 // NewParser creates a new parser with the given source and tokens.
@@ -93,7 +98,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				tree.Directives = tree.Directives[:len(tree.Directives)-1]
 				p.dropRead()
 			}
-			p.read = nil
+			p.read, p.reduceErr = nil, nil
 			p.recover(p.errorAtToken(tok, "unexpected indentation"))
 			continuationLine = 0
 			continue
@@ -106,7 +111,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 			tree.Directives = tree.Directives[:len(tree.Directives)-1]
 			p.dropRead()
 		}
-		p.read = nil
+		p.read, p.reduceErr = nil, nil
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0
 		}
@@ -277,10 +282,16 @@ func (p *Parser) recover(err error) {
 	}
 }
 
-// dropRead records the amounts read in a declaration being dropped.
+// dropRead records the amounts read in a declaration being dropped, and
+// withdraws the error its rule raised on reducing: beancount's grammar never
+// reduces a directive whose body holds a syntax error.
 func (p *Parser) dropRead() {
 	p.dropped = append(p.dropped, p.read...)
 	p.read = nil
+	if p.reduceErr != nil {
+		p.errs = slices.DeleteFunc(p.errs, func(e *ParseError) bool { return e == p.reduceErr })
+		p.reduceErr = nil
+	}
 }
 
 // lexerErrorAt reports whether the token at offset is one beancount's lexer
