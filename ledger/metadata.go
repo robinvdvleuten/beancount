@@ -1,6 +1,10 @@
 package ledger
 
-import "github.com/robinvdvleuten/beancount/ast"
+import (
+	"slices"
+
+	"github.com/robinvdvleuten/beancount/ast"
+)
 
 // resolveMetadataKeys leaves each metadata key once on every directive and
 // posting of the tree, as beancount's parser builds its meta dicts. A
@@ -12,16 +16,29 @@ import "github.com/robinvdvleuten/beancount/ast"
 // shares it with the parsed one.
 func resolveMetadataKeys(tree *ast.AST) []error {
 	var errs []error
+	// An amount whose key is dropped was still read: like the amounts of a
+	// dropped directive, it counts towards display precision.
+	drop := func(written, kept []*ast.Metadata) []*ast.Metadata {
+		for _, md := range written {
+			if md.Value != nil && md.Value.Amount != nil && !slices.Contains(kept, md) {
+				tree.DroppedAmounts = append(tree.DroppedAmounts, md.Value.Amount)
+			}
+		}
+		return kept
+	}
 	for i, directive := range tree.Directives {
 		if txn, ok := directive.(*ast.Transaction); ok {
-			txn.Metadata, errs = keepFirstMetadata(txn, "", txn.Metadata, errs)
+			var kept []*ast.Metadata
+			kept, errs = keepFirstMetadata(txn, "", txn.Metadata, errs)
+			txn.Metadata = drop(txn.Metadata, kept)
 			for _, posting := range txn.Postings {
-				posting.Metadata, errs = keepFirstMetadata(txn, posting.Account, posting.Metadata, errs)
+				kept, errs = keepFirstMetadata(txn, posting.Account, posting.Metadata, errs)
+				posting.Metadata = drop(posting.Metadata, kept)
 			}
 			continue
 		}
 		if metadata := directive.GetMetadata(); repeatsKey(metadata) {
-			tree.Directives[i] = withMetadata(directive, keepLastMetadata(metadata))
+			tree.Directives[i] = withMetadata(directive, drop(metadata, keepLastMetadata(metadata)))
 		}
 	}
 	return errs
