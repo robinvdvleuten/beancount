@@ -56,7 +56,8 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 // unitsWeightTerms returns how a posting whose units number is missing
 // weighs: in its cost currency at a per-unit cost (plus a compound total),
 // in its price currency at a price, or in its own currency. ok is false
-// when the units cannot be solved for, as with a total-only or empty cost.
+// when the units cannot be solved for, as with a total-only or empty cost,
+// or a zero price in another currency than the units.
 func unitsWeightTerms(posting *ast.Posting) (currency string, perUnit, total decimal.Decimal, ok bool) {
 	if cost := posting.Cost; cost != nil {
 		if cost.IsTotal || cost.Amount == nil || cost.Amount.Value == "" {
@@ -75,8 +76,15 @@ func unitsWeightTerms(posting *ast.Posting) (currency string, perUnit, total dec
 	}
 	if price := posting.Price; price != nil && price.Value != "" && price.Currency != "" && !posting.PriceTotal {
 		perUnit, err := ParseAmount(price)
-		if err != nil || perUnit.IsZero() {
+		if err != nil {
 			return "", decimal.Zero, decimal.Zero, false
+		}
+		if perUnit.IsZero() {
+			// A zero price is no price to beancount's interpolate_group
+			// (a zero Amount is false in Python): the units are the whole
+			// residual when they are in the price's currency, and
+			// otherwise it fails an assertion (#653).
+			return price.Currency, decimal.Zero, decimal.Zero, posting.Amount.Currency == price.Currency
 		}
 		return price.Currency, perUnit, decimal.Zero, true
 	}

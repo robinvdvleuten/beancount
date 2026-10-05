@@ -233,9 +233,14 @@ compare the lines errors are on:
   lot before every dated one.
 
 - **Missing units at a zero price** (#653): bean-check fails with a
-  Python `AssertionError` on `Assets:Stock  HOOL @ 0 USD`, the units it
-  would divide the residual by the price to find. We report `Cannot infer
-  units at a zero price` on the posting and drop its Currency group.
+  Python `AssertionError` on `Assets:Stock  HOOL @ 0 USD`, units in another
+  currency than the zero price: its interpolation reads a zero price as no
+  price and then finds the units outside the residual's currency. We report
+  `Cannot infer units at a zero price` on the posting and drop its Currency
+  group. Units in the price's own currency (`USD @ 0 USD`) do not fail
+  there: they are the whole residual, which the posting, weighing nothing
+  at that price, leaves unbalanced. We book and report the same
+  (`applied_units_missing_at_zero_price`).
 
 - **A missing price on an augmentation at an explicit cost** (#656):
   bean-check fails with a Python `AttributeError` on

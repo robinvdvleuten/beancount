@@ -1,0 +1,12 @@
+; Units left out at a zero price in their own currency are the whole
+; residual: beancount's interpolation reads a zero price as no price. The
+; posting then weighs nothing at that price, so the transaction is reported
+; as not balancing, and is still applied: the balance assertion passes.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-06 * "units missing at a zero price"
+  Assets:Stock  12 USD
+  Assets:Cash      USD @ 0 USD
+
+2020-01-07 balance Assets:Cash -12 USD

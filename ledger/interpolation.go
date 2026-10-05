@@ -172,7 +172,8 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		weightCurrency, perUnit, total, ok := unitsWeightTerms(posting)
 		if !ok {
 			// Past tooManyMissing and zeroPerUnitCost, only a zero price
-			// is left, at which beancount fails dividing by zero.
+			// in another currency than the units is left, at which
+			// beancount fails an assertion.
 			return nil, []error{newInterpolationError(txn, posting, "Cannot infer units at a zero price")}
 		}
 
@@ -196,6 +197,9 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		case weight.IsZero():
 			// Left out, the posting weighs nothing, though at a compound
 			// cost its units are not zero.
+		case perUnit.IsZero() && posting.Cost == nil && posting.Price != nil && posting.Price.Value != "" && !posting.PriceTotal:
+			// At a zero price in their own currency the units are the
+			// residual and weigh nothing, so the residual stays.
 		case perUnit.IsZero():
 			balance[currency] = pydecimal.Add(balance[currency], needed)
 		case posting.Cost != nil && posting.Cost.Total != nil && !needed.IsZero():
