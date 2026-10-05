@@ -115,9 +115,11 @@ var knownDivergences = []struct {
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
+	{"", "#704, deliberate: a one-letter currency before a \\r is read, where beancount's lexer rejects it", oneLetterBeforeCR.MatchString},
 }
 
 var (
+	oneLetterBeforeCR   = regexp.MustCompile(`\s[A-Z]\r`)
 	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
 	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+[A-Z].*\n[ \t]+[#^]`)

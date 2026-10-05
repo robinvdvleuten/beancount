@@ -244,6 +244,16 @@ compare the lines errors are on:
   units held at cost` on the posting, as beancount does for a reduction,
   and book the group with the price left without a number.
 
+- **A one-letter currency before a carriage return** (#704): beancount v3
+  reads a one-letter currency (#565), except where a `\r` follows it
+  directly, as at the end of a line of a ledger with CRLF line endings:
+  `Assets:A  1 V\r\n` and `2020-01-05 commodity V\r\n` are `Invalid token:
+  'V'` in bean-check, which drops the directive and fails. We read the
+  currency, as beancount does before `\n`, a space or a comment. Matching
+  the quirk would fail a CRLF ledger that passes with LF line endings.
+  `crlf_one_letter_currency.fail` pins it in `lineGaps`, and
+  `TestDiffFuzz` counts it among its known divergences.
+
 - **BQL `sum()` of booleans**: bean-query accepts `sum(bool)` because
   Python's `bool` subclasses `int`, sums the values as integers and still
   types the column as boolean, so `sum(1 = 1)` over four rows renders

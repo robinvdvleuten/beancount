@@ -1,0 +1,8 @@
+; A one-letter currency before a carriage return is an invalid token in
+; beancount and a currency here (#704); the balance fails in both.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 * "one letter"
+  Assets:A  1 V
+  Assets:B  -1 V
+2020-01-03 balance Assets:A 2 USD

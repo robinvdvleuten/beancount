@@ -195,6 +195,8 @@ func TestOfficialBeancountDifferential(t *testing.T) {
 // fails the differential suite; one naming a .pass or gap_ fixture is not
 // checked.
 var lineGaps = map[string]string{
+	// Deliberate: we read what beancount's lexer rejects (KNOWN_GAPS.md).
+	"crlf_one_letter_currency": "#704: a one-letter currency before \\r is an invalid token in beancount only",
 	// Deliberate: our line is more precise (KNOWN_GAPS.md).
 	"body_tags_after_posting":       "we blame the tag's line, beancount the transaction's",
 	"applied_tag_after_posting":     "we blame the link's line, beancount the transaction's",
