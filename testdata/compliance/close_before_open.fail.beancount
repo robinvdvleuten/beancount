@@ -1,0 +1,17 @@
+; Every close of an account after its first is a duplicate, also when the
+; first closed an account never opened: the close on line 6 is the
+; first and an error of its own, the one on line 13 its duplicate, which
+; still closes the account the open on line 8 made active.
+2020-01-01 open Equity:E
+2020-01-05 close Assets:Cash
+
+2024-01-01 open Assets:Cash
+
+2024-01-02 * "the account is active"
+  Assets:Cash  1 USD
+  Equity:E
+2024-01-03 close Assets:Cash
+
+2024-01-04 * "and closed again"
+  Assets:Cash  1 USD
+  Equity:E

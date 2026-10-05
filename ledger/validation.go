@@ -199,11 +199,18 @@ type openIndex struct {
 	// validate_currency_constraints constrain every posting to the account,
 	// before or after it opens.
 	currencies map[string][]string
+	// firstClose is the account's first close in directive order, opened
+	// or not: like beancount's validate_open_close, every close after it
+	// is a duplicate.
+	firstClose map[string]*ast.Close
 }
 
 func newOpenIndex(directives []ast.Directive) openIndex {
-	opens := openIndex{first: make(map[string]*ast.Open), currencies: make(map[string][]string)}
+	opens := openIndex{first: make(map[string]*ast.Open), currencies: make(map[string][]string), firstClose: make(map[string]*ast.Close)}
 	for _, directive := range directives {
+		if closed, ok := directive.(*ast.Close); ok && opens.firstClose[string(closed.Account)] == nil {
+			opens.firstClose[string(closed.Account)] = closed
+		}
 		open, ok := directive.(*ast.Open)
 		if !ok {
 			continue
@@ -474,23 +481,22 @@ func (v *validator) validateClose(ctx context.Context, close *ast.Close) ([]erro
 		return errs, nil
 	}
 
-	// Check if account exists
+	// Like beancount, every close of an account after its first is a
+	// duplicate, whether or not the account was open for the first; and the
+	// first is an error on an account never opened before it.
 	account, ok := v.accounts[accountName]
-	if !ok {
-		errs = append(errs, newAccountNotClosedError(close))
-		return errs, nil
-	}
-
-	// Check if already closed
-	if account.isClosed() {
+	switch first := v.opens.firstClose[accountName]; {
+	case first != nil && first != close:
+		errs = append(errs, newAccountAlreadyClosedError(close, first.Date()))
+	case ok && account.isClosed():
 		errs = append(errs, newAccountAlreadyClosedError(close, account.CloseDate))
-		return errs, nil
+	case !ok:
+		errs = append(errs, newAccountNotClosedError(close))
 	}
-
-	// A close after a duplicate open undid the first one is a duplicate
-	// close, reported and still applied, as in beancount.
-	if account.closedBefore != nil {
-		errs = append(errs, newAccountAlreadyClosedError(close, account.closedBefore))
+	// A duplicate close still closes an account a duplicate open made
+	// active again.
+	if !ok || account.isClosed() {
+		return errs, nil
 	}
 
 	delta := &closeDelta{
