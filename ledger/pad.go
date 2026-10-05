@@ -169,7 +169,13 @@ func createPaddingTransaction(pad *ast.Pad, balance *ast.Balance, difference str
 	currency := balance.Amount.Currency
 	var narration strings.Builder
 	narration.WriteString("(Padding inserted for Balance of ")
-	narration.WriteString(balance.Amount.Value)
+	// The asserted number as beancount prints its Decimal, not as it is
+	// written: 01 is 1, and +5.00 is 5.00.
+	asserted := balance.Amount.Value
+	if number, err := ParseAmount(balance.Amount); err == nil {
+		asserted = formatInferredNumber(number)
+	}
+	narration.WriteString(asserted)
 	narration.WriteString(" ")
 	narration.WriteString(currency)
 	narration.WriteString(" for difference ")

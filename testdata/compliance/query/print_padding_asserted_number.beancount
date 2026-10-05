@@ -1,0 +1,10 @@
+; A padding names the asserted amount as beancount prints its number, not
+; as the assertion writes it: 01 is 1, +5.00 is 5.00, and an expression is
+; its value.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:O
+2020-01-02 pad Assets:Cash Equity:O
+2020-01-03 balance Assets:Cash 01 EUR
+2020-01-03 balance Assets:Cash 1,000.50 USD
+2020-01-03 balance Assets:Cash 2 * 3.10 GBP
+2020-01-03 balance Assets:Cash +5.00 CHF
