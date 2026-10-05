@@ -1,0 +1,19 @@
+; A plugin whose strings follow on two indented lines fails at its own
+; line's end, and each indented line is an error of its own to beancount,
+; unreported so close to the first. The indented open one blank line on is
+; fewer than three tokens from the last of them, and is not reported
+; either; after two blank lines it is.
+plugin
+  "beancount.plugins.auto_accounts"
+  "{}"
+
+  2020-01-01 open Assets:A
+
+2020-01-02 open Assets:Kept
+
+plugin
+  "beancount.plugins.auto_accounts"
+  "{}"
+
+
+  2020-01-03 open Assets:B

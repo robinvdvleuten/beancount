@@ -261,6 +261,12 @@ func (p *Parser) recover(err error) {
 	}
 	p.recovered = true
 	p.recoveredEnd = max(p.recoveredEnd, parseErr.Pos.Offset)
+	// A header that goes on over several lines was read past its error:
+	// to beancount each of those lines is an error of its own, so the
+	// recovery reaches to the last of them.
+	if p.pos > 0 && p.tokens[p.pos-1].Start > parseErr.Pos.Offset {
+		p.recoveredEnd = max(p.recoveredEnd, p.contentEnd(p.tokens[p.pos-1]))
+	}
 	p.dropRead()
 	for !p.isAtEnd() {
 		tok := p.peek()
@@ -289,16 +295,20 @@ func (p *Parser) recover(err error) {
 			}
 		}
 		if tok.Type != NEWLINE {
-			// A comment owns its line break, which shiftedSince counts
-			// from: the recovery ends before it.
-			end := tok.End
-			for end > tok.Start && (p.source[end-1] == '\n' || p.source[end-1] == '\r') {
-				end--
-			}
-			p.recoveredEnd = max(p.recoveredEnd, end)
+			p.recoveredEnd = max(p.recoveredEnd, p.contentEnd(tok))
 		}
 		p.advance()
 	}
+}
+
+// contentEnd returns where a token's text ends, before the line break a
+// comment owns: shiftedSince counts from that line break.
+func (p *Parser) contentEnd(tok Token) int {
+	end := tok.End
+	for end > tok.Start && (p.source[end-1] == '\n' || p.source[end-1] == '\r') {
+		end--
+	}
+	return end
 }
 
 // dropRead records the amounts read in a declaration being dropped, and
