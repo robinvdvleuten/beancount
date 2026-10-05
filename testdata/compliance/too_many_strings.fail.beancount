@@ -1,0 +1,13 @@
+; A transaction with more than two strings is read to its end and then
+; rejected. That is no syntax error, so a syntax error right after it is
+; still reported: the comment in column 1 ends the transaction's body, and
+; the posting under it is an indented line at top level.
+2020-01-01 open Expenses:B
+
+2020-01-02 * "one" "two" "three"
+; a comment in column 1
+  Expenses:B  1.00 USD
+
+2020-01-03 * "one" "two" "three"
+  Expenses:B  1.00 USD
+  Expenses:B  -1.00 USD

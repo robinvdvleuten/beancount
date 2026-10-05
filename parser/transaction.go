@@ -96,7 +96,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 		return nil, err
 	}
 	if tooManyStrings != nil {
-		return nil, tooManyStrings
+		return nil, rejected{tooManyStrings}
 	}
 
 	return txn, nil

@@ -196,6 +196,15 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 		case DATE:
 			directive, err := p.parseDirective()
+			var turnedDown rejected
+			if errors.As(err, &turnedDown) {
+				var parseErr *ParseError
+				errors.As(turnedDown.error, &parseErr)
+				p.errs = append(p.errs, parseErr)
+				p.dropRead()
+				continuationLine = 0
+				continue
+			}
 			if err != nil {
 				p.recover(err)
 				continuationLine = 0

@@ -133,3 +133,11 @@ func NewParseErrorWithSource(filename string, err error, source []byte) *ParseEr
 		},
 	}
 }
+
+// rejected is the error of a directive beancount's grammar reads to its end
+// and then turns down in its rule, such as a transaction with more than two
+// strings. It is no syntax error: the directive is dropped, and what follows
+// is read as after any other directive.
+type rejected struct{ error }
+
+func (r rejected) Unwrap() error { return r.error }
