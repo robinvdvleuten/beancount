@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -356,4 +357,38 @@ option "name_equity" "Capital"
 	}
 	assert.Equal(t, []int{2, 4, 7, 9, 10}, lines)
 	assert.Equal(t, 6, len(tree.Directives))
+}
+
+// TestMetadataInColumnOneIsASyntaxError pins beancount's grammar, which reads
+// a metadata line only after an INDENT: a key in column 1 ends the directive
+// before it, which is kept without it, and is a syntax error of its own.
+func TestMetadataInColumnOneIsASyntaxError(t *testing.T) {
+	for name, source := range map[string]string{
+		"after a header":              "2020-01-02 note Assets:A \"x\"\nwho: \"me\"\n",
+		"after indented metadata":     "2020-01-02 note Assets:A \"x\"\n  first: \"a\"\nwho: \"me\"\n",
+		"after a posting":             "2020-01-02 *\n  Assets:A  1 USD\nwho: \"me\"\n",
+		"after a posting's metadata":  "2020-01-02 *\n  Assets:A  1 USD\n    first: \"a\"\nwho: \"me\"\n",
+		"after a transaction's lines": "2020-01-02 *\n  first: \"a\"\nwho: \"me\"\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			tree, err := ParseString(context.Background(), source)
+
+			var syntaxErrs ParseErrors
+			assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+			assert.Equal(t, 1, len(syntaxErrs))
+			assert.Equal(t, strings.Count(source, "\n"), syntaxErrs[0].Pos.Line)
+
+			assert.Equal(t, 1, len(tree.Directives))
+			for _, md := range tree.Directives[0].GetMetadata() {
+				assert.NotEqual(t, "who", md.Key)
+			}
+			if txn, ok := tree.Directives[0].(*ast.Transaction); ok {
+				for _, posting := range txn.Postings {
+					for _, md := range posting.Metadata {
+						assert.NotEqual(t, "who", md.Key)
+					}
+				}
+			}
+		})
+	}
 }

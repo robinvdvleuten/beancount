@@ -504,7 +504,9 @@ func (p *Parser) parseLink() (ast.Link, error) {
 }
 
 // parseMetadata parses the metadata lines below a directive or posting,
-// one key: value entry per line.
+// one key: value entry per line. Like beancount's grammar, which reads a
+// metadata line only after an INDENT, a key in column 1 ends the
+// directive, and is then a syntax error of its own.
 func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 	var metadata []*ast.Metadata
 
@@ -513,7 +515,7 @@ func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 		// Like beancount's lexer, which skips them, indented comment lines
 		// may come before a metadata line; they lead it.
 		leading := p.indentedCommentsBeforeMetadata()
-		if !p.isMetadataKeyAt(leading) {
+		if !p.isMetadataKeyAt(leading) || !p.indented(p.peekAhead(leading)) {
 			break
 		}
 		var comments []*ast.Comment
