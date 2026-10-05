@@ -350,7 +350,13 @@ func describe(kind string, ours, official verdict) string {
 		title += ": " + fuzzQueries[statement(kind)]
 	}
 	got, want := outputs(kind, ours, official)
-	return fmt.Sprintf("%s\n\n== ours\n%s\n== official\n%s", title, got, want)
+	note := "What the command prints is held byte for byte, unless the official side is an accident of its\n" +
+		"implementation (AGENTS.md, \"Parity is of intent\")."
+	if command(kind) == "check" {
+		note = "The two differ in what they decide: whether there is an error, and on which line.\n" +
+			"bean-check's wording is evidence, not the message to produce (AGENTS.md, \"Parity is of intent\")."
+	}
+	return fmt.Sprintf("%s\n%s\n\n== ours\n%s\n== official\n%s", title, note, got, want)
 }
 
 // varying is what differs between two ledgers that diverge for one reason:
