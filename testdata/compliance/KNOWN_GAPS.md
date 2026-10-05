@@ -234,6 +234,15 @@ compare the lines errors are on:
   printer would reproduce what makes beancount fail, for one more line in
   `PRINT`, so we do not.
 
+- **A zero price without a currency**: for a price that is a number alone,
+  both implementations take the currency from the posting's Currency
+  group (`2 HOOL @ 5` beside `-10 USD` is `@ 5 USD`). When the number is
+  zero, beancount's interpolation reads the price as no price (a zero
+  amount is false in Python) and leaves its currency unset, so `PRINT`
+  shows Python's placeholder: `2 HOOL @ 0 <class
+  'beancount.core.number.MISSING'>`. We give it the group's currency like
+  any other number, `@ 0 USD`. `check` reports the same in both.
+
 - **Missing units at a zero price** (#653): bean-check fails with a
   Python `AssertionError` on `Assets:Stock  HOOL @ 0 USD`, units in another
   currency than the zero price: its interpolation reads a zero price as no
