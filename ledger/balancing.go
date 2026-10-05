@@ -136,13 +136,3 @@ func residualCurrencies(allWeights []weightSet, balance map[string]decimal.Decim
 	}
 	return currencies
 }
-
-func costCurrency(cost *ast.Cost) string {
-	if cost.Amount != nil && cost.Amount.Currency != "" {
-		return cost.Amount.Currency
-	}
-	if cost.Total != nil {
-		return cost.Total.Currency
-	}
-	return ""
-}

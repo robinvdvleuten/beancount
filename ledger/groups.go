@@ -85,7 +85,7 @@ func (b *booker) categorize(txn *ast.Transaction) ([]currencyGroup, []error) {
 			r.units = missingCurrency
 		}
 		if posting.Cost != nil {
-			r.cost = statedCurrency(true, costCurrency(posting.Cost))
+			r.cost = statedCurrency(true, posting.Cost.Currency())
 		}
 		if posting.Price != nil {
 			r.price = statedCurrency(true, posting.Price.Currency)

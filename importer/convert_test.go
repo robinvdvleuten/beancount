@@ -52,8 +52,8 @@ const roundTripLedger = `2024-01-15 * "Coffee Shop" "Latte" #food ^receipt-1
 
 func TestRoundTripFormatsIdentically(t *testing.T) {
 	ctx := context.Background()
-	tree, err := parser.ParseString(ctx, roundTripLedger)
-	assert.NoError(t, err)
+	// The merge cost is reported and kept.
+	tree := parser.MustParseString(ctx, roundTripLedger)
 
 	msgs, err := encodeDirectives(tree.Directives)
 	assert.NoError(t, err)
@@ -65,8 +65,7 @@ func TestRoundTripFormatsIdentically(t *testing.T) {
 }
 
 func TestImportIDTravelsAsItsOwnField(t *testing.T) {
-	tree, err := parser.ParseString(context.Background(), roundTripLedger)
-	assert.NoError(t, err)
+	tree := parser.MustParseString(context.Background(), roundTripLedger)
 
 	msgs, err := encodeDirectives(tree.Directives[:1])
 	assert.NoError(t, err)

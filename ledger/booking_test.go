@@ -113,9 +113,9 @@ func TestBookingDropsGroupsThatFailBooking(t *testing.T) {
 }
 
 func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
-	// A negative price is reported on its posting and made positive; a total
-	// price without units is reported and dropped, and the posting, whose
-	// units interpolate to a zero weight, leaves the transaction.
+	// The parser reports them; Booking makes a negative price positive, and
+	// drops a total price without units, and the posting, whose units
+	// interpolate to a zero weight, leaves the transaction.
 	source := `
 2020-01-01 open Assets:A
 2020-01-01 open Assets:Cash
@@ -137,8 +137,6 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 		kinds = append(kinds, fmt.Sprintf("%s@%d", kindOf(err), err.(interface{ GetPosition() ast.Position }).GetPosition().Line))
 	}
 	assert.Equal(t, []string{
-		"TotalPriceWithoutUnitsError@6",
-		"NegativePriceError@10",
 		"TransactionNotBalancedError@5",
 		"TransactionNotBalancedError@9",
 	}, kinds)

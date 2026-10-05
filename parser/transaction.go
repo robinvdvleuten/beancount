@@ -299,6 +299,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 			return nil, err
 		}
 		posting.Cost = cost
+		p.reportCost(posting)
 	}
 
 	// Optional price (@ or @@). The annotation may be empty or partial
@@ -319,6 +320,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 	if err := p.finishHeader(posting, postingTok.Start); err != nil {
 		return nil, err
 	}
+	p.reportPrice(posting)
 	metadata, err := p.parseMetadata()
 	if err != nil {
 		return nil, err

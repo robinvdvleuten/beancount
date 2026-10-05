@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -383,6 +384,12 @@ func TestParseCost(t *testing.T) {
 				return
 			}
 
+			// A merge marker, a repeated component or a compound inside
+			// total braces is reported and kept (TestPostingGrammarErrors).
+			var errs ParseErrors
+			if errors.As(err, &errs) && errs.FirstDropping() == nil {
+				err = nil
+			}
 			assert.NoError(t, err, "Expected parsing to succeed for input: %s", test.input)
 			assert.Equal(t, 1, len(tree.Directives), "Expected exactly one directive")
 

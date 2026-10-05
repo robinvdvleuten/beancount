@@ -108,28 +108,12 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 
 // bookTransaction books txn and reports whether it stays in the ledger.
 func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
-	// Beancount reports these while parsing, so they are reported
-	// whether or not the transaction books: a merge cost {*}, a component a
-	// cost spec repeats (ignored, as the parser keeps the first), a compound
-	// cost inside total braces, a price that is negative or a total on a
-	// posting without units, the last three of which it fixes up before
-	// booking, and a price in another currency than the cost.
+	// beancount's parser fixes these up as it reports them; here the
+	// parser reports them and Booking fixes them up: a compound cost inside
+	// total braces, a negative price and a total price without units.
 	for _, posting := range txn.Postings {
-		if posting.Cost.IsMergeCost() {
-			l.errors = append(l.errors, newMergeCostError(txn, posting))
-		}
-		if posting.Cost != nil {
-			for _, duplicate := range posting.Cost.Duplicates {
-				l.errors = append(l.errors, newDuplicateCostComponentError(txn, posting, duplicate))
-			}
-		}
-		l.errors = append(l.errors, fixTotalCost(txn, posting)...)
-		l.errors = append(l.errors, fixPrice(txn, posting)...)
-		if posting.Cost != nil && posting.Price != nil {
-			if cost := costCurrency(posting.Cost); cost != "" && posting.Price.Currency != "" && cost != posting.Price.Currency {
-				l.errors = append(l.errors, newCostPriceCurrencyError(txn, posting, cost))
-			}
-		}
+		fixTotalCost(posting)
+		fixPrice(posting)
 	}
 	booked, errs := l.booker.book(txn)
 	l.errors = append(l.errors, errs...)
@@ -149,60 +133,53 @@ func (l *Ledger) publishBooking(txn *ast.Transaction, booked *bookedTransaction)
 	}
 }
 
-// fixPrice reports and fixes up a posting's price like beancount's parser: a
-// negative price is made positive, and a total price (@@) on a posting
-// without units is dropped. Such a posting keeps an amount without a number
-// or a currency, beancount's Amount(MISSING, MISSING), so that it is not
-// taken for an auto-posting: categorize then sorts it into one Currency
-// group, or reports it.
-func fixPrice(txn *ast.Transaction, posting *ast.Posting) []error {
+// fixPrice fixes up a posting's price like beancount's parser: a negative
+// price is made positive, and a total price (@@) on a posting without units
+// is dropped. Such a posting keeps an amount without a number or a
+// currency, beancount's Amount(MISSING, MISSING), so that it is not taken
+// for an auto-posting: categorize then sorts it into one Currency group, or
+// reports it.
+func fixPrice(posting *ast.Posting) {
 	price := posting.Price
 	if price == nil {
-		return nil
+		return
 	}
-	var errs []error
 	if price.Value != "" {
 		if number, err := ParseAmount(price); err == nil && number.IsNegative() {
-			errs = append(errs, newNegativePriceError(txn, posting))
 			posting.Price = &ast.Amount{Value: formatInferredNumber(number.Abs()), Currency: price.Currency}
 		}
 	}
 	if posting.PriceTotal && (posting.Amount == nil || posting.Amount.Value == "") {
-		errs = append(errs, newTotalPriceWithoutUnitsError(txn, posting))
 		posting.Price = nil
 		posting.PriceTotal = false
 		if posting.Amount == nil {
 			posting.Amount = &ast.Amount{}
 		}
 	}
-	return errs
 }
 
-// fixTotalCost reports a compound cost inside total braces and, like
-// beancount's parser, ignores its per-unit number: {{5 # 3 USD}} and
-// {{# 3 USD}} book as {0 # 3 USD}. Total braces without an amount are no
-// total at all, as in beancount: {{}} and {{2020-01-01}} book as {} and
-// {2020-01-01}.
-func fixTotalCost(txn *ast.Transaction, posting *ast.Posting) []error {
+// fixTotalCost fixes up a cost in total braces like beancount's parser: a
+// compound's per-unit number is ignored, so {{5 # 3 USD}} and {{# 3 USD}}
+// book as {0 # 3 USD}. Total braces without an amount are no total at all,
+// as in beancount: {{}} and {{2020-01-01}} book as {} and {2020-01-01}.
+func fixTotalCost(posting *ast.Posting) {
 	cost := posting.Cost
 	if cost == nil || !cost.IsTotal {
-		return nil
+		return
 	}
 	if cost.Amount == nil {
 		fixed := *cost
 		fixed.IsTotal = false
 		posting.Cost = &fixed
-		return nil
+		return
 	}
 	if cost.Total == nil {
-		return nil
+		return
 	}
-	err := newTotalCompoundCostError(txn, posting)
 	fixed := *cost
 	fixed.IsTotal = false
 	fixed.Amount = &ast.Amount{Value: "0", Currency: cost.Total.Currency}
 	posting.Cost = &fixed
-	return []error{err}
 }
 
 // book books txn one Currency group at a time. A nil result with errors is a
@@ -611,7 +588,7 @@ func resolveCurrencies(txn *ast.Transaction, groups []currencyGroup) *ast.Transa
 			// A cost spec without a number takes its currency too, so a
 			// reduction matches only the lots held in it: {} and {"label"}
 			// read as {USD} and {USD, "label"}.
-			if cost := posting.Cost; cost != nil && costCurrency(cost) == "" {
+			if cost := posting.Cost; cost != nil && cost.Currency() == "" {
 				replace()
 				var amount ast.Amount
 				if cost.Amount != nil {

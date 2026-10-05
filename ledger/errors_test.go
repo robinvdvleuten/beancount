@@ -63,13 +63,8 @@ func TestErrorKinds(t *testing.T) {
 		{newDuplicateBalanceError(balance), "DuplicateBalanceError", 10, balance},
 		{newNegativeCostError(txn, posting, decimal.NewFromInt(-1), "USD"), "NegativeCostError", 11, nil},
 		{newZeroAmountError(txn, posting), "ZeroAmountError", 11, nil},
-		{newMergeCostError(txn, posting), "MergeCostError", 11, nil},
-		{newDuplicateCostComponentError(txn, posting, &ast.Cost{Label: "b"}), "DuplicateCostComponentError", 11, txn},
 		{newCurrencyGroupError(txn, posting, "Failed to categorize posting 1"), "CurrencyGroupError", 11, txn},
 		{newInterpolationError(txn, posting, "Too many missing numbers"), "InterpolationError", 11, nil},
-		{newNegativePriceError(txn, pricedPosting), "NegativePriceError", 11, txn},
-		{newTotalPriceWithoutUnitsError(txn, pricedPosting), "TotalPriceWithoutUnitsError", 11, txn},
-		{newCostPriceCurrencyError(txn, pricedPosting, "EUR"), "CostPriceCurrencyError", 11, nil},
 		{newInvalidBookingMethodError(open, "BOGUS"), "InvalidBookingMethodError", 10, open},
 		{newUnbookedTransactionError(txn), "UnbookedTransactionError", 10, txn},
 		{newTransactionNotBalancedError(txn, []residual{{"USD", decimal.NewFromInt(1)}}), "TransactionNotBalancedError", 10, txn},
@@ -117,26 +112,6 @@ func TestErrorWithoutFilenameUsesTheDate(t *testing.T) {
 	txn := ast.NewTransaction(date, "x")
 	err := newInsufficientInventoryError(txn, "Assets:Checking", errors.New("details"))
 	assert.Equal(t, "2024-01-15: details", err.Error())
-}
-
-func TestMergeCostErrorReadsAsBeancounts(t *testing.T) {
-	// A merge cost is reported in bean-check's words, then booked like {}.
-	tree := parser.MustParseString(context.Background(), `
-2020-01-01 open Assets:I
-2020-01-01 open Assets:C
-2020-01-01 open Income:G
-2020-01-01 * "buy"
-  Assets:I  5 HOOL {10.00 EUR}
-  Assets:C
-2020-02-07 * "merge"
-  Assets:I  -5 HOOL {*}
-  Income:G
-`)
-	l := New()
-	_, validationErrors := processDiagnostics(t, l, tree)
-	assert.Equal(t, 1, len(validationErrors))
-	assert.Equal(t, "MergeCostError", kindOf(validationErrors[0]))
-	assert.Equal(t, "Cost merging is not supported yet", validationErrors[0].(*Diagnostic).message)
 }
 
 func TestCurrencyConstraintErrorReadsAsBeancounts(t *testing.T) {

@@ -229,7 +229,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 	// Parse comma-separated components (amount, date, label, merge marker)
 	// in any order, matching the official beancount grammar. Like
 	// beancount, the first of each kind counts; a repeated one goes to
-	// Duplicates for Booking to report, and the transaction is kept.
+	// Duplicates, reported by reportCost, and the transaction is kept.
 	hasLabel := false
 	for {
 		// target is where the next component goes: the cost itself, or a
@@ -273,7 +273,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 
 		case p.check(ASTERISK):
 			// A merge marker, among the other components as beancount's
-			// grammar takes it, in either braces; Booking reports it.
+			// grammar takes it, in either braces; reportCost reports it.
 			duplicate(cost.IsMerge)
 			p.advance()
 			target.IsMerge = true
@@ -305,7 +305,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 // a number with an optional currency, or a compound of a per-unit number
 // and a total around '#', either of which may be left out, before a
 // currency. Booking fills in what is left out; a compound inside total
-// braces is Booking's to report too.
+// braces is reported by reportCost.
 func (p *Parser) parseCostAmount(cost *ast.Cost) error {
 	number := func() (*ast.Amount, error) {
 		if !p.check(NUMBER) && !p.check(EXPRESSION) {

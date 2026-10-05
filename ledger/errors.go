@@ -195,38 +195,6 @@ func newZeroAmountError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic 
 		"Amount is zero: \"%s %s\"", posting.Amount.Value, posting.Amount.Currency).atPosting(posting).entryless()
 }
 
-// newMergeCostError creates an error for a posting with a merge cost {*},
-// which beancount v2 rejects and then books like an empty cost {}. Like
-// beancount, it blames the posting's line and uses its words.
-func newMergeCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
-	return newError("MergeCostError", txn, posting.Account,
-		"Cost merging is not supported yet").atPosting(posting).entryless()
-}
-
-// newNegativePriceError creates an error for a posting with a negative
-// price, which beancount books at its absolute value. Like beancount, it
-// blames the posting's line.
-func newNegativePriceError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
-	return newError("NegativePriceError", txn, posting.Account,
-		"Negative prices are not allowed: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
-}
-
-// newTotalPriceWithoutUnitsError creates an error for a total price (@@) on
-// a posting without units, which beancount drops. Like beancount, it blames
-// the posting's line.
-func newTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
-	return newError("TotalPriceWithoutUnitsError", txn, posting.Account,
-		"Total price on a posting without units: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
-}
-
-// newCostPriceCurrencyError creates an error for a posting whose price is
-// in another currency than its cost, which beancount reports and books as
-// written. Like beancount, it blames the posting's line, with no entry.
-func newCostPriceCurrencyError(txn *ast.Transaction, posting *ast.Posting, costCurrency string) *Diagnostic {
-	return newError("CostPriceCurrencyError", txn, posting.Account,
-		"Cost and price currencies must match: %s != %s", costCurrency, posting.Price.Currency).atPosting(posting).entryless()
-}
-
 // newCurrencyGroupError creates an error for a posting that Booking cannot
 // sort into a Currency group. Like beancount's CategorizationError, it
 // blames the posting's line and carries the transaction.
@@ -287,50 +255,6 @@ func newInvalidCostError(txn *ast.Transaction, account ast.Account, postingIndex
 // one on zero units.
 func newTotalCostError(txn *ast.Transaction, posting *ast.Posting, message string) *Diagnostic {
 	return newError("TotalCostError", txn, posting.Account, "Invalid total cost specification: %s", message)
-}
-
-// newTotalCompoundCostError creates an error for a compound cost inside
-// total braces ({{5 # 3 USD}}), whose per-unit number beancount ignores. Like
-// beancount, it blames the posting's line; it quotes the amount as written.
-func newTotalCompoundCostError(txn *ast.Transaction, posting *ast.Posting) *Diagnostic {
-	return newError("TotalCostError", txn, posting.Account,
-		"Per-unit cost may not be specified using total cost syntax: '%s'; ignoring per-unit cost",
-		compoundAmountText(posting.Cost)).atPosting(posting)
-}
-
-// newDuplicateCostComponentError creates an error for a component a cost
-// spec repeats (a Cost of ast.Cost.Duplicates), which beancount reports and
-// ignores, keeping the first. Like beancount, it blames the posting's line
-// and uses its words.
-func newDuplicateCostComponentError(txn *ast.Transaction, posting *ast.Posting, duplicate *ast.Cost) *Diagnostic {
-	var message string
-	switch {
-	case duplicate.Amount != nil:
-		message = "Duplicate cost: '" + compoundAmountText(duplicate) + "'."
-	case duplicate.Date != nil:
-		message = "Duplicate date: '" + duplicate.Date.Format("2006-01-02") + "'."
-	case duplicate.IsMerge:
-		message = "Duplicate merge-cost spec"
-	default:
-		message = "Duplicate label: '" + duplicate.Label + "'."
-	}
-	return newError("DuplicateCostComponentError", txn, posting.Account, "%s", message).atPosting(posting)
-}
-
-// compoundAmountText is a cost's amount as it is written: its per-unit
-// number, its total after a #, and its currency, each when present.
-func compoundAmountText(cost *ast.Cost) string {
-	var parts []string
-	if cost.Amount.Value != "" {
-		parts = append(parts, cost.Amount.Value)
-	}
-	if cost.Total != nil {
-		parts = append(parts, "#", cost.Total.Value)
-	}
-	if cost.Amount.Currency != "" {
-		parts = append(parts, cost.Amount.Currency)
-	}
-	return strings.Join(parts, " ")
 }
 
 // newInvalidPriceError creates an error for an invalid price specification.

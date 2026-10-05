@@ -101,8 +101,22 @@ type Cost struct {
 	// Duplicates holds each component the spec repeats, in source order,
 	// as a Cost of that one component: an Amount (with its Total), a Date,
 	// IsMerge, or else a Label. Like beancount, the first of each kind
-	// counts and Booking reports the rest.
+	// counts and the parser reports the rest.
 	Duplicates []*Cost
+}
+
+// Currency returns the currency the cost names, its per-unit amount's or
+// else its total's; "" when it names none, or for no cost.
+func (c *Cost) Currency() string {
+	switch {
+	case c == nil:
+		return ""
+	case c.Amount != nil && c.Amount.Currency != "":
+		return c.Amount.Currency
+	case c.Total != nil:
+		return c.Total.Currency
+	}
+	return ""
 }
 
 // IsEmpty returns true if this is an empty cost specification {}.

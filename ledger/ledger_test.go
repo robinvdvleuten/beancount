@@ -1533,11 +1533,8 @@ func TestLedger_CompoundCostMissingNumber(t *testing.T) {
 	for _, err := range l.Errors() {
 		messages = append(messages, err.(*Diagnostic).message)
 	}
-	assert.Equal(t, []string{
-		"Per-unit cost may not be specified using total cost syntax: " +
-			"'5 # 3 USD'; ignoring per-unit cost",
-		"Transaction does not balance: (-10 USD)",
-	}, messages)
+	// The parser reports the compound inside total braces.
+	assert.Equal(t, []string{"Transaction does not balance: (-10 USD)"}, messages)
 }
 
 func TestLedger_PreciseInterpolation(t *testing.T) {

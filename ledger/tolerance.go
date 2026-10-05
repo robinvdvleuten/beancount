@@ -117,7 +117,7 @@ func (t tolerances) defaultsNamedBy(postings []*ast.Posting) map[string]decimal.
 			name(posting.Amount.Currency)
 		}
 		if posting.Cost != nil {
-			name(costCurrency(posting.Cost))
+			name(posting.Cost.Currency())
 		}
 		if posting.Price != nil {
 			name(posting.Price.Currency)
@@ -288,7 +288,7 @@ func specToleranceShares(postings []*ast.Posting) []toleranceShare {
 		share := toleranceShare{units: units, price: perUnitPrice(posting)}
 		if posting.Cost != nil {
 			share.hasCost = true
-			share.costCurrency = costCurrency(posting.Cost)
+			share.costCurrency = posting.Cost.Currency()
 			for _, amount := range []*ast.Amount{posting.Cost.Amount, posting.Cost.Total} {
 				if amount == nil || amount.Value == "" {
 					continue
