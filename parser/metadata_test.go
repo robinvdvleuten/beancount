@@ -2,6 +2,7 @@ package parser
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
@@ -483,15 +484,15 @@ func TestParseMetadataAllowsOmittedValueBeforeInlineComment(t *testing.T) {
 }
 
 func TestParseRestOfLineOptimization(t *testing.T) {
-	// pushmeta uses parseRestOfLine; verify it still works with builder
-	source := `pushmeta key: some value here
+	// pushmeta keeps its value's source text with parseRestOfLine.
+	source := `pushmeta key: 1.50 USD
 2024-01-01 open Assets:Checking
 popmeta key:
 `
 	result, err := ParseString(context.Background(), source)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result.Pushmetas))
-	assert.Equal(t, "some value here", result.Pushmetas[0].Value)
+	assert.Equal(t, "1.50 USD", result.Pushmetas[0].Value)
 }
 
 func BenchmarkParseRestOfLine(b *testing.B) {
@@ -531,18 +532,22 @@ func TestParseMetadataWithPrecision(t *testing.T) {
 func TestParsePushmetaTypedValue(t *testing.T) {
 	source := `pushmeta source: "bank"
 pushmeta count: 42
-pushmeta words: some value here
+pushmeta two: "a" "b"
 `
+	// Like beancount, a pushmeta takes one value: more is a syntax error
+	// that drops it.
 	result, err := ParseString(context.Background(), source)
-	assert.NoError(t, err)
-	assert.Equal(t, 3, len(result.Pushmetas))
+	var errs ParseErrors
+	assert.True(t, errors.As(err, &errs), "got %v", err)
+	assert.Equal(t, 1, len(errs))
+	assert.Equal(t, 3, errs[0].Pos.Line)
+	assert.Equal(t, 2, len(result.Pushmetas))
 
 	// The source text is kept for the formatter; the parsed value is what
 	// transactions receive.
 	assert.Equal(t, `"bank"`, result.Pushmetas[0].Value)
 	assert.Equal(t, "bank", result.Pushmetas[0].MetaValue.StringValue.Value)
 	assert.Equal(t, "42", *result.Pushmetas[1].MetaValue.Number)
-	assert.Zero(t, result.Pushmetas[2].MetaValue, "more than one value is kept as text only")
 }
 
 func TestParseMetadataNullIsNil(t *testing.T) {
@@ -557,16 +562,15 @@ func TestParseMetadataNullIsNil(t *testing.T) {
 }
 
 func TestParsePushmetaNull(t *testing.T) {
-	source := "pushmeta ka: NULL\npushmeta kb: \"NULL\"\npushmeta kc: NULL NULL\n"
+	source := "pushmeta ka: NULL\npushmeta kb: \"NULL\"\n"
 
 	result, err := ParseString(context.Background(), source)
 	assert.NoError(t, err)
-	assert.Equal(t, 3, len(result.Pushmetas))
+	assert.Equal(t, 2, len(result.Pushmetas))
 
 	assert.Equal(t, "NULL", result.Pushmetas[0].Value)
 	assert.True(t, result.Pushmetas[0].Null)
 	assert.False(t, result.Pushmetas[1].Null)
-	assert.False(t, result.Pushmetas[2].Null, "more than one value is kept as text only")
 }
 
 func TestParseCustomRejectsNull(t *testing.T) {

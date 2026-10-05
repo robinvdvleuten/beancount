@@ -1,0 +1,15 @@
+; A pushmeta takes one metadata value, and its line ends after it. Anything
+; more is a syntax error that drops the pushmeta, so the popmeta that would
+; close it pops an absent key. A date after the value starts a directive of
+; its own, which is kept: the second open of Assets:A is a duplicate.
+pushmeta one: "a" ^link
+popmeta one:
+
+pushmeta two: 1 USD 2
+popmeta two:
+
+pushmeta three: "a"2020-01-02 open Assets:A
+2020-01-03 open Assets:A
+
+pushmeta sum: 2 + 3
+popmeta sum:
