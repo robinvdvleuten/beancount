@@ -113,6 +113,7 @@ var knownDivergences = []struct {
 	matches func(src string) bool
 }{
 	{"format", "#663, deliberate: bean-format turns a lone \\r into a line break; we keep it", loneCR.MatchString},
+	{"format", "#664: bean-format realigns a line inside a string spanning lines; we copy the string", hasStringSpanningLines},
 	{"check-lines", "KNOWN_GAPS.md, deliberate: a tag or link after a posting is a syntax error on its own line", bodyTagAfterPosting.MatchString},
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
@@ -127,10 +128,21 @@ var (
 	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
 	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
-	zeroPerUnitCompound = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{\{?0(?:\.0*)?[ \t]*#`)
+	zeroPerUnitCompound = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{(?:\{|0(?:\.0*)?[ \t]*#)`)
 	zeroPriceNoCurrency = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
 	customAccount       = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
 )
+
+// hasStringSpanningLines reports whether a line of src opens a string it
+// does not close: one with an odd number of quotes, escaped ones aside.
+func hasStringSpanningLines(src string) bool {
+	for line := range strings.Lines(src) {
+		if strings.Count(strings.ReplaceAll(line, `\"`, ""), `"`)%2 == 1 {
+			return true
+		}
+	}
+	return false
+}
 
 func hasIgnoredPlugin(src string) bool {
 	for _, plugin := range pluginLine.FindAllStringSubmatch(src, -1) {
@@ -995,12 +1007,16 @@ func TestKnownDivergences(t *testing.T) {
 	assert.True(t, bodyTagAfterPosting.MatchString("2020-01-02 *\n  * Assets:A  -1.00 USD\n #tag\n"))
 
 	assert.True(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  HOOL {0 # 100 USD}\n"))
+	assert.True(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Written  HOOL {{100 USD}}\n"))
 	assert.False(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  HOOL {10 # 100 USD}\n"))
 	assert.False(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  2 HOOL {0 # 100 USD}\n"))
 
 	assert.True(t, zeroPriceNoCurrency.MatchString("2020-02-02 *\n  Assets:Stock  2 HOOL @ 0\n"))
 	assert.False(t, zeroPriceNoCurrency.MatchString("2020-02-02 *\n  Assets:Stock  2 HOOL @ 0 USD\n"))
 	assert.False(t, zeroPriceNoCurrency.MatchString("2020-02-02 *\n  Assets:Stock  2 HOOL @ 10\n"))
+
+	assert.True(t, hasStringSpanningLines("2020-01-02 * \"a narration\n  Expenses:B  1.00 USD\nthat spans two lines\"\n"))
+	assert.False(t, hasStringSpanningLines("2020-01-02 * \"a \\\" quote\" \"y\"\n  Expenses:B  1.00 USD\n"))
 
 	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
 	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))
