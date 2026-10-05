@@ -1,0 +1,21 @@
+; beancount rejects a transaction with more than two strings once it has
+; read it to its end. A line that breaks the transaction off before that,
+; an invalid token right under it or a line of its body that is none,
+; leaves only its own error: the transactions on lines 7, 10 and 14 are
+; not reported, and the one on line 18, which ends at a blank line, is.
+2020-01-01 open Assets:A
+2020-01-02 * "one" "two" "three"
+2020-13-01 open Assets:A
+
+2020-01-03 * "one" "two" "three"
+  Assets:A  1 USD
+2020-13-01 open Assets:A
+
+2020-01-04 * "one" "two" "three"
+  Assets:A  1 USD
+  garbage here
+
+2020-01-05 * "one" "two" "three"
+  Assets:A  1 USD
+
+2020-13-01 open Assets:A

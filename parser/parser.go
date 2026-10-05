@@ -87,6 +87,13 @@ func (p *Parser) Parse() (*ast.AST, error) {
 	// top level it is a syntax error. continuationLine is the line such a
 	// comment would have to be on, or 0 when none may follow.
 	continuationLine := 0
+	// turnedDown is the error of the transaction right above, which
+	// beancount's grammar read to its end and then rejected. A line that
+	// breaks the transaction off before that end takes the error back.
+	var turnedDown *ParseError
+	withdraw := func() {
+		p.errs = slices.DeleteFunc(p.errs, func(e *ParseError) bool { return e == turnedDown })
+	}
 
 	for !p.isAtEnd() {
 		tok := p.peek()
@@ -98,11 +105,15 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		if p.indented(tok) && tokType != NEWLINE && tokType != EOF && !continuesDirective && !resumed {
 			// A line continuing a dated directive that is none of its
 			// lines is a syntax error inside it: like beancount, drop it.
-			if tok.Line == continuationLine && len(tree.Directives) > 0 {
+			switch {
+			case tok.Line != continuationLine:
+			case turnedDown != nil:
+				withdraw()
+			case len(tree.Directives) > 0:
 				tree.Directives = tree.Directives[:len(tree.Directives)-1]
 				p.dropRead()
 			}
-			p.read, p.readAt, p.reduceErr = nil, nil, nil
+			p.read, p.readAt, p.reduceErr, turnedDown = nil, nil, nil, nil
 			p.recover(p.errorAtToken(tok, "unexpected indentation"))
 			continuationLine = 0
 			continue
@@ -111,11 +122,18 @@ func (p *Parser) Parse() (*ast.AST, error) {
 		// dated directive drops it: beancount's lexer returns its error
 		// while the grammar still waits to see whether the directive goes
 		// on, and Bison's recovery discards the directive.
-		if tok.Line == continuationLine && p.lexerErrorAt(tok.Start) && len(tree.Directives) > 0 {
-			tree.Directives = tree.Directives[:len(tree.Directives)-1]
-			p.dropRead()
+		if tok.Line == continuationLine && p.lexerErrorAt(tok.Start) {
+			if turnedDown != nil {
+				withdraw()
+			} else if len(tree.Directives) > 0 {
+				tree.Directives = tree.Directives[:len(tree.Directives)-1]
+				p.dropRead()
+			}
 		}
 		p.read, p.readAt, p.reduceErr = nil, nil, nil
+		if !continuesDirective {
+			turnedDown = nil
+		}
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0
 		}
@@ -200,13 +218,12 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 		case DATE:
 			directive, err := p.parseDirective()
-			var turnedDown rejected
-			if errors.As(err, &turnedDown) {
-				var parseErr *ParseError
-				errors.As(turnedDown.error, &parseErr)
-				p.errs = append(p.errs, parseErr)
+			var rejection rejected
+			if errors.As(err, &rejection) {
+				errors.As(rejection.error, &turnedDown)
+				p.errs = append(p.errs, turnedDown)
 				p.dropRead()
-				continuationLine = 0
+				continuationLine = p.lineAfterPrevious()
 				continue
 			}
 			if err != nil {
