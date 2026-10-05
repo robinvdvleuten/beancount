@@ -2,6 +2,7 @@ package ledger
 
 import (
 	"context"
+	"slices"
 
 	"github.com/robinvdvleuten/beancount/ast"
 )
@@ -90,31 +91,25 @@ func (h *balanceHandler) validate(ctx context.Context, l *Ledger, d ast.Directiv
 	balance := d.(*ast.Balance)
 	v := newValidator(l.accounts, l.opens, l.config)
 
-	var delta *balanceDelta
 	errs := v.validateBalance(balance)
 	if len(errs) == 0 {
 		if tolerance, err := l.tolerances.balance(balance); err != nil {
 			errs = append(errs, err)
 		} else {
-			held, atCost := l.subtree(balance.Account, balance.Amount.Currency)
-			padding, held, padErrs := l.pads.fill(balance, l.inventory(balance.Account), held, atCost, tolerance)
-			delta = &balanceDelta{accountName: string(balance.Account), currency: balance.Amount.Currency, padding: padding}
-			errs = append(padErrs, v.checkBalance(balance, held, tolerance)...)
+			// The paddings are applied at their pads, so the subtree
+			// holds them by now.
+			held := l.subtree(balance.Account, balance.Amount.Currency)
+			errs = append(slices.Clone(l.pads.costErrs[balance]), v.checkBalance(balance, held, tolerance)...)
 		}
 	}
 	if l.duplicateBalances[balance] {
 		errs = append(errs, newDuplicateBalanceError(balance))
 	}
-	return errs, deltaOf(delta)
+	return errs, nil
 }
 
-func (h *balanceHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	planned := delta.(*balanceDelta)
-	l.pads.consume(planned.accountName, planned.currency, planned.padding)
-	if planned.padding != nil {
-		l.applyPadding(ctx, planned.padding)
-	}
-}
+// apply does nothing: an assertion changes no state.
+func (h *balanceHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {}
 
 // padHandler processes Pad directives.
 type padHandler struct{}
@@ -128,8 +123,13 @@ func (h *padHandler) validate(ctx context.Context, l *Ledger, d ast.Directive) (
 	return v.validatePad(pad), pad
 }
 
+// apply applies the paddings planPads planned for the pad, which take
+// effect at the pad.
 func (h *padHandler) apply(ctx context.Context, l *Ledger, d ast.Directive, delta any) {
-	l.pads.add(delta.(*ast.Pad))
+	for _, padding := range l.pads.planned[delta.(*ast.Pad)] {
+		l.pads.padding = append(l.pads.padding, padding)
+		l.applyPadding(ctx, padding)
+	}
 }
 
 // noteHandler processes Note directives.

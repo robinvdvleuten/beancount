@@ -9,7 +9,6 @@ import (
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/parser"
-	"github.com/shopspring/decimal"
 )
 
 func TestPadGeneratesSyntheticTransaction(t *testing.T) {
@@ -280,7 +279,7 @@ func TestPadFromItselfDoesNotSatisfyBalance(t *testing.T) {
 	assert.True(t, slices.ContainsFunc(validationErrors, func(err error) bool { return errors.As(err, &mismatch) }))
 }
 
-func TestPaddingAppliesAtItsBalanceAssertion(t *testing.T) {
+func TestPaddingFillsItsBalanceAssertion(t *testing.T) {
 	// Like bean-check, the spending after the padded opening balance sees
 	// the padding, so the later assertion passes.
 	source := `
@@ -405,86 +404,73 @@ func TestPadOnACurrencyHeldWithoutCostReportsNothing(t *testing.T) {
 	assert.Equal(t, 0, len(l.Errors()), "errors: %v", l.Errors())
 }
 
-// fillCase builds a pad on Assets:Checking from source, a balance
-// assertion of amount on Assets:Checking, and an inventory holding held
-// USD.
-func fillCase(t *testing.T, source ast.Account, amount, held string) (*pads, *ast.Balance, *inventory) {
+// paddingsOf processes source and returns its padding transactions as
+// "date account amount currency" of the padded posting, and its errors'
+// lines.
+func paddingsOf(t *testing.T, source string) (paddings []string, errorLines []int) {
 	t.Helper()
-	date, err := ast.NewDate("2020-01-15")
+	l := New()
+	tree, err := l.Process(context.Background(), parser.MustParseString(context.Background(), source))
 	assert.NoError(t, err)
-	p := newPads()
-	p.add(ast.NewPad(date, "Assets:Checking", source))
-	inventory := newInventory()
-	inventory.addLot("USD", decimal.RequireFromString(held), nil)
-	return p, ast.NewBalance(date, "Assets:Checking", ast.NewAmount(amount, "USD")), inventory
+	for _, txn := range findPaddingTransactions(tree) {
+		padded := txn.Postings[0]
+		paddings = append(paddings, txn.Date().String()+" "+string(padded.Account)+" "+padded.Amount.Value+" "+padded.Amount.Currency)
+	}
+	for _, err := range l.Errors() {
+		errorLines = append(errorLines, err.(interface{ GetPosition() ast.Position }).GetPosition().Line)
+	}
+	return paddings, errorLines
 }
 
-func TestPadsFill(t *testing.T) {
-	tolerance := decimal.RequireFromString("0.005")
-
-	t.Run("pads the difference", func(t *testing.T) {
-		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "250")
-		padding, held, errs := fillOwn(p, balance, inventory, tolerance)
-		assert.Zero(t, errs)
-		assert.True(t, held.Equal(decimal.RequireFromString("1000")), "held %s", held)
-		assert.Equal(t, "P", padding.Flag)
-		assert.Equal(t, "750.00", padding.Postings[0].Amount.Value)
-		assert.Equal(t, "-750.00", padding.Postings[1].Amount.Value)
-		assert.Equal(t, ast.Account("Equity:Opening-Balances"), padding.Postings[1].Account)
-	})
-
-	t.Run("keeps the difference's precision", func(t *testing.T) {
-		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "100", "99.995")
-		padding, _, _ := fillOwn(p, balance, inventory, decimal.Zero)
-		assert.Equal(t, "0.005", padding.Postings[0].Amount.Value)
-	})
-
-	t.Run("pads nothing within tolerance", func(t *testing.T) {
-		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "1000.004")
-		padding, held, errs := fillOwn(p, balance, inventory, tolerance)
-		assert.Zero(t, padding)
-		assert.Zero(t, errs)
-		assert.Equal(t, "1000.004", held.String())
-	})
-
-	t.Run("a self-pad changes nothing", func(t *testing.T) {
-		p, balance, inventory := fillCase(t, "Assets:Checking", "1000.00", "0")
-		padding, held, _ := fillOwn(p, balance, inventory, tolerance)
-		assert.NotZero(t, padding)
-		assert.Equal(t, "0", held.String())
-	})
-
-	t.Run("fills only the first assertion after the pad", func(t *testing.T) {
-		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "0")
-		padding, _, _ := fillOwn(p, balance, inventory, tolerance)
-		p.consume("Assets:Checking", "USD", padding)
-		padding, held, _ := fillOwn(p, balance, inventory, tolerance)
-		assert.Zero(t, padding)
-		assert.Equal(t, "0", held.String())
-	})
-
-	t.Run("a later pad replaces the first", func(t *testing.T) {
-		p, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "0")
-		first := p.latest["Assets:Checking"].pad
-		date, _ := ast.NewDate("2020-01-10")
-		p.add(ast.NewPad(date, "Assets:Checking", "Income:Other"))
-		padding, _, _ := fillOwn(p, balance, inventory, tolerance)
-		assert.Equal(t, ast.Account("Income:Other"), padding.Postings[1].Account)
-		assert.Equal(t, []*ast.Pad{first}, p.superseded)
-	})
-
-	t.Run("without a pad", func(t *testing.T) {
-		_, balance, inventory := fillCase(t, "Equity:Opening-Balances", "1000.00", "10")
-		padding, held, errs := fillOwn(newPads(), balance, inventory, tolerance)
-		assert.Zero(t, padding)
-		assert.Zero(t, errs)
-		assert.Equal(t, "10", held.String())
-	})
+// TestPaddingTakesEffectAtItsPad pins that paddings are decided before any
+// assertion is checked, as beancount's pad plugin decides them: an
+// assertion dated between a pad and the assertion it fills sees the
+// padding.
+func TestPaddingTakesEffectAtItsPad(t *testing.T) {
+	paddings, errorLines := paddingsOf(t, `
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+2020-01-02 pad Assets:Cash Equity:Opening
+2020-01-03 balance Equity:Opening -7 USD
+2020-01-04 balance Assets:Cash 7 USD
+`)
+	assert.Equal(t, []string{"2020-01-02 Assets:Cash 7 USD"}, paddings)
+	assert.Equal(t, nil, errorLines)
 }
 
-// fillOwn fills a balance assertion from what one inventory holds, as for
-// an account without subaccounts.
-func fillOwn(p *pads, balance *ast.Balance, inv *inventory, tolerance decimal.Decimal) (*ast.Transaction, decimal.Decimal, []error) {
-	currency := balance.Amount.Currency
-	return p.fill(balance, inv, inv.get(currency), inv.countAtCost(currency), tolerance)
+// TestPadFilledByASubaccountsAssertion pins that the first assertion in a
+// currency on any account under a pad's account fills the pad, measured
+// against the whole subtree and posted to the pad's account. The
+// subaccount's own assertion then fails, and the account's passes.
+func TestPadFilledByASubaccountsAssertion(t *testing.T) {
+	paddings, errorLines := paddingsOf(t, `
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Cash:Sub
+2020-01-01 open Equity:Opening
+2020-01-02 pad Assets:Cash Equity:Opening
+2020-01-04 balance Assets:Cash:Sub 100 USD
+2020-01-05 balance Assets:Cash 100 USD
+`)
+	assert.Equal(t, []string{"2020-01-02 Assets:Cash 100 USD"}, paddings)
+	assert.Equal(t, []int{6}, errorLines)
+}
+
+// TestPadsOfAnAccountAndItsSubaccount pins that each account with a pad is
+// worked out on its own: the subaccount's assertion fills both pads, each
+// from what its own subtree holds, as in beancount.
+func TestPadsOfAnAccountAndItsSubaccount(t *testing.T) {
+	paddings, errorLines := paddingsOf(t, `
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Cash:Sub
+2020-01-01 open Equity:Opening
+2020-01-02 pad Assets:Cash Equity:Opening
+2020-01-02 pad Assets:Cash:Sub Equity:Opening
+2020-01-03 * "x"
+  Assets:Cash:Sub  10 USD
+  Equity:Opening
+2020-01-04 balance Assets:Cash:Sub 100 USD
+2020-01-05 balance Assets:Cash 250 USD
+`)
+	assert.Equal(t, []string{"2020-01-02 Assets:Cash 90 USD", "2020-01-02 Assets:Cash:Sub 90 USD"}, paddings)
+	assert.Equal(t, []int{11}, errorLines)
 }

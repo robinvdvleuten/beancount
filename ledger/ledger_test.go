@@ -1393,9 +1393,10 @@ func TestLedger_PadAndBalanceOnAccountsNotOpen(t *testing.T) {
 
 	t.Run("pad of an account never opened", func(t *testing.T) {
 		assert.Equal(t, []string{
+			// The pad, then its padding, which takes effect at the pad.
+			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
 			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
 			"2020-01-08: Invalid reference to unknown account 'Assets:Never'",
-			"2020-01-07: Invalid reference to unknown account 'Assets:Never'",
 		}, messages(`
 2020-01-01 open Equity:E
 2020-01-07 pad Assets:Never Equity:E

@@ -1,0 +1,9 @@
+; A padding is dated at its pad and takes effect there: the assertion on
+; the source account, dated before the assertion that fills the pad, sees
+; the padding.
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:Opening
+
+2020-01-02 pad Assets:Cash Equity:Opening
+2020-01-03 balance Equity:Opening -7 USD
+2020-01-04 balance Assets:Cash     7 USD

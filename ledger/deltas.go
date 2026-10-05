@@ -24,14 +24,6 @@ type closeDelta struct {
 	closeDate   *ast.Date
 }
 
-// balanceDelta describes changes from a balance assertion.
-// Does NOT include validation errors - those are returned separately.
-type balanceDelta struct {
-	accountName string
-	currency    string
-	padding     *ast.Transaction // Padding the assertion's pad inserts; nil when none
-}
-
 // commodityDelta describes changes from a commodity declaration.
 type commodityDelta struct {
 	commodityID string // Currency/commodity code

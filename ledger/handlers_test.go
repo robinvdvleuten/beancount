@@ -154,22 +154,19 @@ func TestBalanceHandler(t *testing.T) {
 	_, delta = openHandler.validate(ctx, ledger, tree2.Directives[0])
 	openHandler.apply(ctx, ledger, tree2.Directives[0], delta)
 
-	// Process pad
+	// Process pad: the padding planned for it is applied with it.
+	ledger.pads = planPads(tree.Directives, ledger.booked, ledger.tolerances.balance)
 	padHandler := &padHandler{}
 	_, delta = padHandler.validate(ctx, ledger, tree.Directives[1])
 	padHandler.apply(ctx, ledger, tree.Directives[1], delta)
-
-	// Process balance
-	balanceHandler := &balanceHandler{}
-	balanceDirective := tree.Directives[2]
-	errs, delta := balanceHandler.validate(ctx, ledger, balanceDirective)
-	assert.Equal(t, len(errs), 0, "should have no errors")
-	assert.NotZero(t, delta, "delta should not be nil")
-
-	// The padding is applied with the assertion.
-	balanceHandler.apply(ctx, ledger, balanceDirective, delta)
 	checking, _ := ledger.GetAccount("Assets:Checking")
 	assert.Equal(t, "1000", checking.inventory.get("USD").String())
+
+	// Process balance: the assertion holds, and changes nothing.
+	balanceHandler := &balanceHandler{}
+	errs, delta := balanceHandler.validate(ctx, ledger, tree.Directives[2])
+	assert.Equal(t, len(errs), 0, "should have no errors")
+	assert.Zero(t, delta)
 }
 
 func TestPadHandler(t *testing.T) {
@@ -195,11 +192,9 @@ func TestPadHandler(t *testing.T) {
 	errs, delta := padHandler.validate(ctx, ledger, padDirective)
 	assert.Equal(t, len(errs), 0, "should have no errors")
 
+	// Without a plan the pad has nothing to apply.
 	padHandler.apply(ctx, ledger, padDirective, delta)
-
-	// Verify pad was stored
-	accountName := string(padDirective.(*ast.Pad).Account)
-	assert.Equal(t, padDirective.(*ast.Pad), ledger.pads.active(accountName, "USD"))
+	assert.Equal(t, 0, len(ledger.pads.padding))
 }
 
 func TestNoteHandler(t *testing.T) {

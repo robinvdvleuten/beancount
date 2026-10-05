@@ -172,6 +172,7 @@ func (l *Ledger) Process(ctx context.Context, tree *ast.AST) (*ast.AST, error) {
 	l.opens = newOpenIndex(tree.Directives)
 	l.balances = balancesByKey(tree.Directives)
 	l.duplicateBalances = duplicateBalances(l.balances)
+	l.pads = planPads(tree.Directives, l.booked, l.tolerances.balance)
 
 	var validationTimer telemetry.Timer
 	if transactionCount > 0 {
@@ -402,10 +403,9 @@ func (l *Ledger) inventory(account ast.Account) *inventory {
 }
 
 // subtree returns what an account and the accounts under it hold in a
-// currency, and how many of those positions are at cost. Like beancount's,
-// a balance assertion and the padding that fills it see the whole subtree:
+// currency. Like beancount's, a balance assertion sees the whole subtree:
 // `balance Assets:Bank` counts Assets:Bank:Checking, opened or not.
-func (l *Ledger) subtree(account ast.Account, currency string) (held decimal.Decimal, atCost int) {
+func (l *Ledger) subtree(account ast.Account, currency string) decimal.Decimal {
 	prefix := string(account) + ":"
 	var names []string
 	for _, accounts := range []map[string]*Account{l.accounts, l.unopened} {
@@ -416,12 +416,11 @@ func (l *Ledger) subtree(account ast.Account, currency string) (held decimal.Dec
 		}
 	}
 	slices.Sort(names)
+	var held decimal.Decimal
 	for _, name := range slices.Compact(names) {
-		inv := l.inventory(ast.Account(name))
-		held = pydecimal.Add(held, inv.get(currency))
-		atCost += inv.countAtCost(currency)
+		held = pydecimal.Add(held, l.inventory(ast.Account(name)).get(currency))
 	}
-	return held, atCost
+	return held
 }
 
 // applyClose applies the close delta to the ledger (mutation only)
