@@ -1,0 +1,20 @@
+; implicit_prices emits a price from the cost of a posting that does not
+; reduce its lot. A posting booked against a lot of its own sign, which
+; STRICT matches by label here, makes that lot larger: it is no reduction,
+; and its price is emitted on its own date.
+plugin "beancount.plugins.implicit_prices"
+
+2020-01-01 open Assets:I
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "a short lot and a long one"
+  Assets:I  -1 HOOL {100 USD, "a"}
+  Assets:I   1 HOOL {100 USD, "b"}
+
+2020-01-03 * "more of the short lot"
+  Assets:I  -1 HOOL {"a"}
+  Assets:Cash  100 USD
+
+2020-01-04 * "less of the long lot"
+  Assets:I  -1 HOOL {"b"}
+  Assets:Cash  100 USD

@@ -517,8 +517,11 @@ func (v *validator) validateBookedCosts(txn *ast.Transaction, booked *bookedTran
 	var errs []error
 	reduced := map[*ast.Posting]bool{}
 	for _, bp := range booked.postings {
+		// A posting booked against lots carries their costs: more than
+		// one position, or one its own cost spec does not give in full.
+		_, _, own := perUnitCost(bp.posting)
 		for _, position := range bp.positions {
-			if !position.Reduced || position.Cost == nil {
+			if position.Cost == nil || (own && len(bp.positions) == 1 && !position.Reduced) {
 				continue
 			}
 			reduced[bp.posting] = true

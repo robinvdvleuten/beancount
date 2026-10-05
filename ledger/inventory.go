@@ -362,9 +362,11 @@ func (inv *inventory) book(posting *ast.Posting, method bookingMethod) (position
 		reduction := &plan.reductions[i]
 		s := reduction.lot.spec
 		booked = append(booked, BookedPosition{
-			Units:   reduction.amount,
-			Cost:    &BookedCost{Number: *s.cost, Currency: s.costCurrency, Date: s.date, Label: s.label},
-			Reduced: true,
+			Units: reduction.amount,
+			Cost:  &BookedCost{Number: *s.cost, Currency: s.costCurrency, Date: s.date, Label: s.label},
+			// A lot of the posting's own sign, which STRICT may match,
+			// grows: that is no reduction to beancount's inventory.
+			Reduced: signIndex(reduction.lot.amount) != signIndex(reduction.amount),
 		})
 	}
 	inv.applyReduction(plan)
