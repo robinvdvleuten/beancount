@@ -122,7 +122,7 @@ var (
 	oneLetterBeforeCR   = regexp.MustCompile(`\s[A-Z]\r`)
 	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
-	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+[A-Z].*\n[ \t]+[#^]`)
+	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
 	customAccount       = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
 )
 
@@ -912,6 +912,8 @@ func TestKnownDivergences(t *testing.T) {
 
 	assert.True(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\nplugin \"beancount.plugins.leafonly\"\n"))
 	assert.False(t, hasIgnoredPlugin("plugin \"beancount.plugins.auto_accounts\"\n"))
+
+	assert.True(t, bodyTagAfterPosting.MatchString("2020-01-02 *\n  * Assets:A  -1.00 USD\n #tag\n"))
 
 	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
 	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))
