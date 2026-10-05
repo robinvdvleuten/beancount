@@ -219,6 +219,14 @@ func newTotalPriceWithoutUnitsError(txn *ast.Transaction, posting *ast.Posting) 
 		"Total price on a posting without units: %s %s", posting.Price.Value, posting.Price.Currency).atPosting(posting)
 }
 
+// newCostPriceCurrencyError creates an error for a posting whose price is
+// in another currency than its cost, which beancount reports and books as
+// written. Like beancount, it blames the posting's line, with no entry.
+func newCostPriceCurrencyError(txn *ast.Transaction, posting *ast.Posting, costCurrency string) *Diagnostic {
+	return newError("CostPriceCurrencyError", txn, posting.Account,
+		"Cost and price currencies must match: %s != %s", costCurrency, posting.Price.Currency).atPosting(posting).entryless()
+}
+
 // newCurrencyGroupError creates an error for a posting that Booking cannot
 // sort into a Currency group. Like beancount's CategorizationError, it
 // blames the posting's line and carries the transaction.

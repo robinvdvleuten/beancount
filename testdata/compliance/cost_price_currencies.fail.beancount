@@ -1,0 +1,45 @@
+; A price in another currency than the cost is reported on the posting,
+; whether the price is per unit or total, and on a reduction too. A cost
+; without a currency, or a total price dropped for want of units, is not.
+2020-01-01 open Assets:Bond
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "total price"
+  Assets:Bond  10 BOND {95 EUR} @@ 1100 USD
+  Assets:Cash  -950 EUR
+
+2020-01-03 * "per-unit price"
+  Assets:Bond  1 BOND {95 EUR} @ 110 USD
+  Assets:Cash  -95 EUR
+
+2020-01-04 * "same currency"
+  Assets:Bond  1 BOND {95 EUR} @ 110 EUR
+  Assets:Cash  -95 EUR
+
+2020-01-05 * "cost without a number"
+  Assets:Bond  1 BOND {EUR} @ 120 USD
+  Assets:Cash  -95 EUR
+
+2020-01-06 * "compound cost"
+  Assets:Bond  1 BOND {90 # 5 EUR} @ 110 USD
+  Assets:Cash  -95 EUR
+
+2020-01-07 * "total braces"
+  Assets:Bond  2 BOND {{190 EUR}} @ 120 USD
+  Assets:Cash  -190 EUR
+
+2020-01-08 * "total price without units"
+  Assets:Bond  BOND {95 EUR} @@ 120 USD
+  Assets:Cash  -95 EUR
+
+2020-01-09 * "buy"
+  Assets:Stock  10 HOOL {100 HOOL}
+  Assets:Cash  -1000 HOOL
+
+2020-01-10 * "reduction"
+  Assets:Stock  -5 HOOL {100 HOOL} @ 120 USD
+  Assets:Cash  500 HOOL
+
+2020-01-11 balance Assets:Bond 17 BOND
+2020-01-11 balance Assets:Stock 5 HOOL

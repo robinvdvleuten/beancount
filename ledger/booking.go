@@ -108,12 +108,12 @@ func (l *Ledger) book(ctx context.Context, tree *ast.AST) error {
 
 // bookTransaction books txn and reports whether it stays in the ledger.
 func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
-	// Beancount v2 reports these while parsing, so they are reported
+	// Beancount reports these while parsing, so they are reported
 	// whether or not the transaction books: a merge cost {*}, a component a
 	// cost spec repeats (ignored, as the parser keeps the first), a compound
-	// cost inside total braces, and a price that is negative or a total on
-	// a posting without units, the last three of which it fixes up before
-	// booking.
+	// cost inside total braces, a price that is negative or a total on a
+	// posting without units, the last three of which it fixes up before
+	// booking, and a price in another currency than the cost.
 	for _, posting := range txn.Postings {
 		if posting.Cost.IsMergeCost() {
 			l.errors = append(l.errors, newMergeCostError(txn, posting))
@@ -125,6 +125,11 @@ func (l *Ledger) bookTransaction(txn *ast.Transaction) bool {
 		}
 		l.errors = append(l.errors, fixTotalCost(txn, posting)...)
 		l.errors = append(l.errors, fixPrice(txn, posting)...)
+		if posting.Cost != nil && posting.Price != nil {
+			if cost := costCurrency(posting.Cost); cost != "" && posting.Price.Currency != "" && cost != posting.Price.Currency {
+				l.errors = append(l.errors, newCostPriceCurrencyError(txn, posting, cost))
+			}
+		}
 	}
 	booked, errs := l.booker.book(txn)
 	l.errors = append(l.errors, errs...)

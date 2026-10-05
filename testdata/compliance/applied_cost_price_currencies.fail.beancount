@@ -1,0 +1,11 @@
+; A price in another currency than the cost is reported on the posting, and
+; the transaction is still booked and applied.
+2020-01-01 open Assets:Bond
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy at a cost in EUR, priced in USD"
+  Assets:Bond  10 BOND {95 EUR} @@ 1100 USD
+  Assets:Cash  -950 EUR
+
+2020-01-03 balance Assets:Bond 10 BOND
+2020-01-03 balance Assets:Cash -950 EUR
