@@ -119,18 +119,20 @@ var knownDivergences = []struct {
 	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
 	{"query", "KNOWN_GAPS.md, deliberate: units missing at a zero per-unit cost are left out, where beancount keeps a posting without units", zeroPerUnitCompound.MatchString},
 	{"query", "KNOWN_GAPS.md, deliberate: a zero price without a currency takes its group's, where beancount leaves it unset", zeroPriceNoCurrency.MatchString},
+	{"", "#708, deliberate: zero units in total braces are rejected, where bean-check passes them and beanquery fails on them", zeroUnitsTotalBraces.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
 	{"", "#704, deliberate: a one-letter currency before a \\r is read, where beancount's lexer rejects it", oneLetterBeforeCR.MatchString},
 }
 
 var (
-	oneLetterBeforeCR   = regexp.MustCompile(`\s[A-Z]\r`)
-	loneCR              = regexp.MustCompile(`\r(?:[^\n]|$)`)
-	pluginLine          = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
-	bodyTagAfterPosting = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
-	zeroPerUnitCompound = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{(?:\{|0(?:\.0*)?[ \t]*#)`)
-	zeroPriceNoCurrency = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
-	customAccount       = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
+	oneLetterBeforeCR    = regexp.MustCompile(`\s[A-Z]\r`)
+	loneCR               = regexp.MustCompile(`\r(?:[^\n]|$)`)
+	pluginLine           = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
+	bodyTagAfterPosting  = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
+	zeroPerUnitCompound  = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{(?:\{|0(?:\.0*)?[ \t]*#)`)
+	zeroPriceNoCurrency  = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
+	zeroUnitsTotalBraces = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+0(?:\.0*)?[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{\{`)
+	customAccount        = regexp.MustCompile(`(?m)^\d{4}-\d{2}-\d{2}\s+custom\s.*\s[A-Z][A-Za-z0-9-]*:`)
 )
 
 // hasStringSpanningLines reports whether a line of src opens a string it
@@ -1017,6 +1019,9 @@ func TestKnownDivergences(t *testing.T) {
 
 	assert.True(t, hasStringSpanningLines("2020-01-02 * \"a narration\n  Expenses:B  1.00 USD\nthat spans two lines\"\n"))
 	assert.False(t, hasStringSpanningLines("2020-01-02 * \"a \\\" quote\" \"y\"\n  Expenses:B  1.00 USD\n"))
+
+	assert.True(t, zeroUnitsTotalBraces.MatchString("2020-01-01 P \"x\"\n  Assets:Stock  0 HOOL {{USD}}\n"))
+	assert.False(t, zeroUnitsTotalBraces.MatchString("2020-01-01 P \"x\"\n  Assets:Stock  10 HOOL {{USD}}\n"))
 
 	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
 	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))
