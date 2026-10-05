@@ -1,0 +1,14 @@
+; A sign before a date is a token of its own, which no directive starts
+; with, and the date after it is still a date: beancount reports the sign
+; and reads the directive from the date on. So the open on line 6 is kept
+; and the one on line 7 is its duplicate; a signed date is no metadata
+; value and no cost date either.
+-2020-01-01 open Assets:A
+2020-01-02 open Assets:A
+
+2020-01-03 open Assets:B
+  when: -2020-01-05
+
+2020-01-04 * "a signed cost date"
+  Assets:A  1 HOOL {5 USD, -2020-01-05}
+  Assets:A

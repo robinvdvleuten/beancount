@@ -172,6 +172,11 @@ func (l *Lexer) scanToken() Token {
 		}
 	case ch == '(':
 		tok = l.scanExpression(start, startLine, startCol, ch)
+	case (ch == '+' || ch == '-') && ast.DateLiteralLen(l.source[l.pos:]) > 0:
+		// A sign before a date is a token of its own, as every sign is to
+		// beancount's lexer: the date after it is still a date, where a
+		// directive may start.
+		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 	case ch == '+' && l.peekIsDigit():
 		tok = l.scanNumber(start, startLine, startCol)
 	case ch == '+' && l.peek() == '(':
