@@ -114,7 +114,16 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				p.dropRead()
 			}
 			p.read, p.readAt, p.reduceErr, turnedDown = nil, nil, nil, nil
-			p.recover(p.errorAtToken(tok, "unexpected indentation"))
+			if tok.Line == continuationLine {
+				// Inside a directive the token is what fails: a string
+				// spanning lines where it ends.
+				p.recover(p.errorAtToken(tok, "unexpected indentation"))
+			} else {
+				// At top level the indentation fails, where the line
+				// starts.
+				pos := tokenPosition(tok, p.filename)
+				p.recover(newErrorfWithSource(pos, p.calculateSourceRange(pos), "unexpected indentation"))
+			}
 			continuationLine = 0
 			continue
 		}

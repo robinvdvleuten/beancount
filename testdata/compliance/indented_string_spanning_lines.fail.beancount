@@ -1,0 +1,10 @@
+; An indented line at top level fails at its indentation, on the line it
+; starts on, also when a string on it ends on a later line (line 4). Under
+; a directive the string is what fails, on the line it ends on (line 9).
+  "a string
+over two lines"
+
+2020-01-01 open Assets:A
+  "a string
+over two lines"
+2020-01-02 open Assets:A
