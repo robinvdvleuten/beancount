@@ -18,11 +18,10 @@ differential suite enforces it.
 **Balance on an unknown account** (`balance_unknown_account.fail`):
 bean-check reports `Invalid reference to unknown account 'Assets:Nope'`
 twice on the balance's line, from validation and again from its balance
-check, which then checks the assertion too: one of a non-zero amount also
-fails (`Balance failed for 'Assets:Nope': expected 1 USD != accumulated 0
-USD (1 too little)`). We report the unknown account once and check nothing
-more. The lines agree. Like beancount v3, the balance is a use of its
-account for `doctor missing_open`.
+check. We report the unknown account once. Both then check the assertion,
+so one of a non-zero amount also fails and `PRINT` shows its `; Diff:`.
+The lines agree. Like beancount v3, the balance is a use of its account
+for `doctor missing_open`.
 
 **Units that cannot be interpolated at a zero per-unit cost**
 (`cost_total_units_missing.fail`): for missing units in total braces

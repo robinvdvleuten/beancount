@@ -142,17 +142,17 @@ func (v *validator) validateBalance(balance *ast.Balance) []error {
 
 // checkBalance checks a balance assertion against the amount its account
 // holds, padding included. An assertion on an account the ledger never
-// opens is reported as an unknown account, once, and not checked; on an
-// account outside its open interval it is reported and still checked,
-// against the postings made before the open too (assertions are allowed
-// after close).
+// opens is reported as an unknown account, once, and one on an account
+// outside its open interval as inactive; either is still checked, against
+// the postings made before the open too (assertions are allowed after
+// close).
 func (v *validator) checkBalance(balance *ast.Balance, held, tolerance decimal.Decimal) []error {
-	if v.opens.first[string(balance.Account)] == nil {
-		return []error{newAccountNotOpenError(balance, balance.Account)}
-	}
-
+	// Like beancount, an assertion on an account never opened is reported
+	// for the account and still checked.
 	var errs []error
-	if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
+	if v.opens.first[string(balance.Account)] == nil {
+		errs = append(errs, newAccountNotOpenError(balance, balance.Account))
+	} else if !v.isAccountActiveAllowingClose(balance.Account, balance.Date()) {
 		errs = append(errs, newInactiveAccountError(balance, balance.Account))
 	}
 	if err := v.validateBalanceCurrency(balance); err != nil {

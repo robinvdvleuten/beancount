@@ -1,0 +1,7 @@
+; A balance assertion on an account never opened is still checked, so one
+; that fails prints its difference.
+2020-01-01 open Assets:Known
+
+2020-01-03 balance Assets:Gone   1 USD
+2020-01-04 balance Assets:Gone   0 USD
+2020-01-05 balance Assets:Known  0 USD

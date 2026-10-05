@@ -541,10 +541,11 @@ func TestLedger_ProcessBalance(t *testing.T) {
 `,
 			wantErr: true,
 			checkFunc: func(t *testing.T, l *Ledger) {
+				// Like beancount, the assertion is still checked.
 				errs := l.Errors()
-				assert.Equal(t, 1, len(errs))
-				ok := kindOf(errs[0]) == "AccountNotOpenError"
-				assert.True(t, ok, "should be AccountNotOpenError")
+				assert.Equal(t, 2, len(errs))
+				assert.Equal(t, "AccountNotOpenError", kindOf(errs[0]))
+				assert.Equal(t, "BalanceMismatchError", kindOf(errs[1]))
 			},
 		},
 		{
