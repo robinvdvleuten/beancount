@@ -1,0 +1,20 @@
+; The numbers of a cost count towards display precision as beancount's
+; parser reads them, also when a syntax error then drops the transaction:
+; USD is written with eight digits twice below and with two digits once, EUR
+; with three digits twice in a compound cost and with one digit once.
+2020-01-01 open Assets:Other
+2020-01-01 open Equity:E
+
+2020-01-04 * "kept"
+  Assets:Other  1.50 USD
+  Assets:Other  2.5 EUR
+  Equity:E
+
+2020-01-05 * "dropped; its per-unit costs count"
+  Assets:Other  1 SAT {0.00000005 USD}
+  Assets:Other  1 SAT {0.00000007 USD}
+  Equity:E #tag
+
+2020-01-06 * "dropped; both numbers of its compound cost count"
+  Assets:Other  1 SAT {0.005 # 0.001 EUR}
+  Equity:E #tag

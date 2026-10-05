@@ -327,6 +327,7 @@ func (p *Parser) parseCostAmount(cost *ast.Cost) error {
 			perUnit.Currency = p.internCurrency(p.advance())
 		}
 		cost.Amount = perUnit
+		p.recordCostNumbers(perUnit)
 		return nil
 	}
 
@@ -341,7 +342,19 @@ func (p *Parser) parseCostAmount(cost *ast.Cost) error {
 	currency := p.internCurrency(p.advance())
 	perUnit.Currency, total.Currency = currency, currency
 	cost.Amount, cost.Total = perUnit, total
+	p.recordCostNumbers(perUnit, total)
 	return nil
+}
+
+// recordCostNumbers records a cost's numbers as read: like an amount's,
+// beancount's compound_amount feeds each one that has a currency to its
+// display context, so they count there when the transaction is dropped.
+func (p *Parser) recordCostNumbers(amounts ...*ast.Amount) {
+	for _, amount := range amounts {
+		if amount.Value != "" && amount.Currency != "" {
+			p.read = append(p.read, amount)
+		}
+	}
 }
 
 // checkHash reports whether the next token is the '#' of a compound cost,
