@@ -55,3 +55,41 @@ func TestRepeatedMetadataKeys(t *testing.T) {
 	// The parsed tree, which the formatter reads, keeps every line.
 	assert.Equal(t, 3, len(parsed.Directives[0].GetMetadata()))
 }
+
+func TestSameObject(t *testing.T) {
+	str := func(s string) *ast.MetadataValue { return &ast.MetadataValue{StringValue: &ast.RawString{Value: s}} }
+	currency := func(s string) *ast.MetadataValue { return &ast.MetadataValue{Currency: &s} }
+	tag := func(s string) *ast.MetadataValue { tag := ast.Tag(s); return &ast.MetadataValue{Tag: &tag} }
+	account := func(s string) *ast.MetadataValue { a := ast.Account(s); return &ast.MetadataValue{Account: &a} }
+	boolean := func(b bool) *ast.MetadataValue { return &ast.MetadataValue{Boolean: &b} }
+	number := func(s string) *ast.MetadataValue { return &ast.MetadataValue{Number: &s} }
+
+	for _, tt := range []struct {
+		name string
+		a, b *ast.MetadataValue
+		same bool
+	}{
+		{"none", nil, nil, true},
+		{"none and an empty string", nil, str(""), false},
+		{"empty strings", str(""), str(""), true},
+		{"one ASCII character", str("v"), str("v"), true},
+		{"one Latin-1 character", str("é"), str("é"), true},
+		{"one character outside Latin-1", str("€"), str("€"), false},
+		{"two characters", str("ab"), str("ab"), false},
+		{"different characters", str("v"), str("w"), false},
+		{"a string and a currency", str("V"), currency("V"), true},
+		{"a currency of three letters", currency("USD"), currency("USD"), false},
+		{"one-letter tags", tag("t"), tag("t"), true},
+		{"longer tags", tag("tt"), tag("tt"), false},
+		{"accounts", account("Assets:A"), account("Assets:A"), true},
+		{"an account and a string", account("Assets:A"), str("Assets:A"), false},
+		{"booleans", boolean(true), boolean(true), true},
+		{"different booleans", boolean(true), boolean(false), false},
+		{"numbers", number("1"), number("1"), false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.same, sameObject(tt.a, tt.b))
+			assert.Equal(t, tt.same, sameObject(tt.b, tt.a))
+		})
+	}
+}

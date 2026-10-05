@@ -1,0 +1,17 @@
+2020-01-01 open Assets:A
+
+2020-01-04 * "the same key and value twice"
+  key: "v"
+  key: "v"
+  Assets:A  1 USD
+    pk: "a"
+    pk: "a"
+  Assets:A  -1 USD
+
+2020-01-05 * "an equal string, then a boolean twice"
+  key: "first"
+  key: "first"
+  flag: TRUE
+  flag: TRUE
+  Assets:A  1 USD
+  Assets:A  -1 USD

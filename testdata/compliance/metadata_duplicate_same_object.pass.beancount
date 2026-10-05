@@ -1,0 +1,44 @@
+; beancount reports a metadata key written twice on a transaction or a
+; posting only when its second value is not the very Python object the
+; first one is: never for an empty value, a boolean, an account (interned),
+; or a string, currency or tag of no or one Latin-1 character (cached).
+2020-01-01 open Assets:A
+
+2020-01-04 * "the same key and value twice"
+  key: "v"
+  key: "v"
+  Assets:A  1 USD
+    pk: "a"
+    pk: "a"
+  Assets:A  -1 USD
+
+2020-01-05 * "no postings"
+  key: "v"
+  key: "v"
+
+2020-01-06 * "values of the same object"
+  empty:
+  empty:
+  flag: TRUE
+  flag: TRUE
+  off: FALSE
+  off: FALSE
+  account: Assets:Zzz
+  account: Assets:Zzz
+  blank: ""
+  blank: ""
+  latin: "é"
+  latin: "é"
+  quote: "\""
+  quote: "\""
+  currency: V
+  currency: V
+  tag: #t
+  tag: #t
+  mixed: "V"
+  mixed: V
+  thrice: "v"
+  thrice: "v"
+  thrice: "v"
+  Assets:A  1 USD
+  Assets:A  -1 USD

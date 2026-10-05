@@ -5,10 +5,11 @@ import "github.com/robinvdvleuten/beancount/ast"
 // resolveMetadataKeys leaves each metadata key once on every directive and
 // posting of the tree, as beancount's parser builds its meta dicts. A
 // transaction and each of its postings keep a key's first value, and every
-// later one is reported, as beancount's grammar checks them; any other
-// directive keeps a key's last value, in the key's first place, as a dict
-// update does, with no error. A directive other than a transaction is
-// replaced by a copy, since the tree shares it with the parsed one.
+// later one that is not the same Python object is reported, as beancount's
+// grammar checks them (sameObject); any other directive keeps a key's last
+// value, in the key's first place, as a dict update does, with no error. A
+// directive other than a transaction is replaced by a copy, since the tree
+// shares it with the parsed one.
 func resolveMetadataKeys(tree *ast.AST) []error {
 	var errs []error
 	for i, directive := range tree.Directives {
@@ -40,22 +41,64 @@ func repeatsKey(metadata []*ast.Metadata) bool {
 }
 
 // keepFirstMetadata drops every repeated key after its first, reporting
-// each on the transaction.
+// on the transaction each whose value is not the same object as the first.
 func keepFirstMetadata(txn *ast.Transaction, account ast.Account, metadata []*ast.Metadata, errs []error) ([]*ast.Metadata, []error) {
 	if !repeatsKey(metadata) {
 		return metadata, errs
 	}
 	kept := make([]*ast.Metadata, 0, len(metadata))
-	seen := make(map[string]bool, len(metadata))
+	first := make(map[string]*ast.MetadataValue, len(metadata))
 	for _, md := range metadata {
-		if seen[md.Key] {
-			errs = append(errs, newInvalidMetadataError(txn, account, md.Key, md.Value, "duplicate key"))
+		if value, ok := first[md.Key]; ok {
+			if !sameObject(value, md.Value) {
+				errs = append(errs, newInvalidMetadataError(txn, account, md.Key, md.Value, "duplicate key"))
+			}
 			continue
 		}
-		seen[md.Key] = true
+		first[md.Key] = md.Value
 		kept = append(kept, md)
 	}
 	return kept, errs
+}
+
+// sameObject reports whether beancount's parser holds two metadata values
+// as one Python object, which is how its grammar tells a repeated key from
+// a duplicate (value is not posting_or_kv.value): None and the booleans are
+// singletons, accounts are interned, and CPython caches the empty string
+// and every string of one Latin-1 character, whether written as a string,
+// a currency or a tag. Numbers, dates, amounts and longer strings are new
+// objects each time they are read.
+func sameObject(a, b *ast.MetadataValue) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	if a.Boolean != nil || b.Boolean != nil {
+		return a.Boolean != nil && b.Boolean != nil && *a.Boolean == *b.Boolean
+	}
+	if a.Account != nil || b.Account != nil {
+		return a.Account != nil && b.Account != nil && *a.Account == *b.Account
+	}
+	x, xCached := cachedString(a)
+	y, yCached := cachedString(b)
+	return xCached && yCached && x == y
+}
+
+// cachedString returns the text of a string, currency or tag value that
+// CPython caches: the empty string or one character below U+0100.
+func cachedString(value *ast.MetadataValue) (string, bool) {
+	var text string
+	switch {
+	case value.StringValue != nil:
+		text = value.StringValue.Value
+	case value.Currency != nil:
+		text = *value.Currency
+	case value.Tag != nil:
+		text = string(*value.Tag)
+	default:
+		return "", false
+	}
+	runes := []rune(text)
+	return text, len(runes) == 0 || len(runes) == 1 && runes[0] < 0x100
 }
 
 // keepLastMetadata gives each key its last value, in its first place.

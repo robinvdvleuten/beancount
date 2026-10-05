@@ -1,0 +1,58 @@
+; A metadata key written twice on a transaction or a posting is reported
+; whenever its second value is another Python object than the first, even
+; an equal one.
+2020-01-01 open Assets:A
+
+2020-01-02 * "equal strings"
+  key: "first"
+  key: "first"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+
+2020-01-03 * "equal numbers"
+  Assets:A  1 USD
+    key: 1.50
+    key: 1.50
+  Assets:A  -1 USD
+
+2020-01-04 * "equal dates, currencies and amounts"
+  day: 2020-01-01
+  day: 2020-01-01
+  currency: USD
+  currency: USD
+  amount: 1 USD
+  amount: 1 USD
+  Assets:A  1 USD
+  Assets:A  -1 USD
+
+2020-01-05 * "a character outside Latin-1, and a tag"
+  euro: "€"
+  euro: "€"
+  tag: #tt
+  tag: #tt
+  Assets:A  1 USD
+  Assets:A  -1 USD
+
+2020-01-06 * "an account and a string"
+  key: Assets:A
+  key: "Assets:A"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+
+2020-01-07 * "a number and a string"
+  key: 1
+  key: "1"
+  Assets:A  1 USD
+  Assets:A  -1 USD
+
+2020-01-08 * "an empty value and an empty string"
+  key:
+  key: ""
+  Assets:A  1 USD
+  Assets:A  -1 USD
+
+2020-01-09 * "different values"
+  key: "first"
+  key: "second"
+  Assets:A  1 USD
+  Assets:A  -1 USD
