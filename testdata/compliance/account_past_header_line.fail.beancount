@@ -1,0 +1,10 @@
+; A header that goes on on the next line fails at its own line's end, so
+; the account written there is never read and its name not checked: only
+; the line that continues the open is reported, not the account type that
+; the option renamed.
+option "name_assets" "Activa"
+
+2020-01-01 open
+  Assets:Cash
+
+2020-01-02 open Activa:Kept

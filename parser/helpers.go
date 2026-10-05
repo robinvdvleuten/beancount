@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"unicode/utf8"
 
@@ -955,7 +956,9 @@ func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
 	if tok, ok := p.headerContinuation(offset); ok {
 		err := p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
 		// beancount's grammar fails at the line break before the token,
-		// so it never reads an amount written from there on.
+		// so it never reads what is written from there on: no account,
+		// whose name it would check, and no amount.
+		p.errs = slices.DeleteFunc(p.errs, func(e *ParseError) bool { return e.Kept && e.Pos.Offset >= tok.Start })
 		for len(p.read) > 0 && p.readAt[len(p.read)-1] > tok.Start {
 			p.read, p.readAt = p.read[:len(p.read)-1], p.readAt[:len(p.readAt)-1]
 		}
