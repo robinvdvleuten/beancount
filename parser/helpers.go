@@ -43,6 +43,12 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 		return "", p.errorAtToken(tok, "invalid token %q", tok.String(p.source))
 	}
 
+	// A colon after the account is a token of its own to beancount's
+	// lexer, which no directive takes there: a syntax error.
+	if bytes.HasSuffix(tok.Bytes(p.source), []byte(":")) {
+		return "", p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+	}
+
 	// Intern account name for memory efficiency
 	accountStr := p.internIdent(tok)
 

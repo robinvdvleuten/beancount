@@ -1,0 +1,12 @@
+; A colon after an account is a token of its own, which no directive takes
+; there: the open and the transaction that write one are dropped.
+2020-01-01 open Expenses:B:PROPERTIES:
+2020-01-02 open Assets:Ok
+
+2020-01-03 * "a posting to it"
+  Expenses:B:  1 USD
+  Assets:Ok
+
+2020-01-04 * "kept"
+  Assets:Ok  1 USD
+  Assets:Ok
