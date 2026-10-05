@@ -169,6 +169,9 @@ type verdict struct {
 // gives none here (#408).
 var negativeZero = regexp.MustCompile(`-(0(?:\.0+)?(?:[^.\d]|$))`)
 
+// blanks matches a run of spaces.
+var blanks = regexp.MustCompile(` +`)
+
 // zeroCost matches the space unsigned leaves before a zero cost, which a
 // table pads and PRINT does not.
 var zeroCost = regexp.MustCompile(`\{ (0(?:\.0+)? )`)
@@ -203,7 +206,13 @@ func divergences(ours, official verdict) []string {
 			continue
 		}
 		got, want := *ours.queries[i], *official.queries[i]
+		signed := negativeZero.MatchString(want.stdout)
 		got.stdout, want.stdout = unsigned(got.stdout), unsigned(want.stdout)
+		// PRINT aligns its numbers, so a sign on a zero moves every
+		// posting of the transaction by a column.
+		if signed && got != want {
+			got.stdout, want.stdout = blanks.ReplaceAllString(got.stdout, " "), blanks.ReplaceAllString(want.stdout, " ")
+		}
 		if got != want {
 			kinds = append(kinds, fmt.Sprintf("query-%d", i))
 		}
@@ -900,6 +909,13 @@ func TestDivergences(t *testing.T) {
 	assert.Equal(t, "{0 EUR, 2020-01-03}   0 USD", unsigned("{-0 EUR, 2020-01-03}  -0 USD"))
 	assert.Equal(t, unsigned("-1 HOOL { 0.00 USD}  -0.001"), unsigned("-1 HOOL {-0.00 USD}  -0.001"))
 	assert.Equal(t, nil, divergences(ours, verdict{}))
+	// A signed zero widens PRINT's number column for its transaction.
+	aligned := verdict{queries: []*queryOutput{{stdout: "  Assets:Other  1 SAT {5 USD}\n  Equity:E      0 USD\n"}}}
+	widened := verdict{queries: []*queryOutput{{stdout: "  Assets:Other   1 SAT {5 USD}\n  Equity:E      -0 USD\n"}}}
+	assert.Equal(t, nil, divergences(aligned, widened))
+	unsignedButMoved := verdict{queries: []*queryOutput{{stdout: "  Assets:Other   1 SAT {5 USD}\n  Equity:E      0 USD\n"}}}
+	assert.Equal(t, []string{"query-0"}, divergences(aligned, unsignedButMoved))
+
 	failed := verdict{queries: []*queryOutput{{stderr: "error: boom\n", exitCode: 1}}}
 	assert.Equal(t, []string{"query-0"}, divergences(failed, verdict{queries: []*queryOutput{{}}}))
 
