@@ -475,10 +475,17 @@ func (p *Parser) processEscapeSequences(inner string) (string, error) {
 			case 'r':
 				buf.WriteByte('\r')
 				i += 2
+			case 'f':
+				buf.WriteByte('\f')
+				i += 2
+			case 'b':
+				buf.WriteByte('\b')
+				i += 2
 			default:
-				return "", &StringLiteralError{
-					Message: fmt.Sprintf("invalid escape sequence '\\%c'", inner[i+1]),
-				}
+				// Like beancount's lexer, a backslash before any other
+				// byte stands for that byte.
+				buf.WriteByte(inner[i+1])
+				i += 2
 			}
 		} else {
 			buf.WriteByte(inner[i])

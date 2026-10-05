@@ -1,0 +1,9 @@
+; A backslash in a string stands before any character. Beancount names
+; five of them (a line break, a tab, a carriage return, a form feed and a
+; backspace); before any other character it stands for that character,
+; and is no error.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A "a\qb"
+2020-01-03 note Assets:A "a\x41b"
+2020-01-04 note Assets:A "a\/b \'c\' \0"
+2020-01-05 note Assets:A "tab\there"

@@ -111,22 +111,26 @@ func TestUnquoteString(t *testing.T) {
 			errorMsg:    "string must be enclosed in double quotes",
 		},
 		{
-			name:        "invalid escape sequence",
-			input:       `"hello\x"`,
-			expectError: true,
-			errorMsg:    "invalid escape sequence '\\x'",
+			// Like beancount's lexer, a backslash before a character it
+			// names no escape for stands for that character.
+			name:     "escaped letter",
+			input:    `"hello\x"`,
+			expected: "hellox",
 		},
 		{
-			name:        "invalid escape sequence with number",
-			input:       `"hello\5"`,
-			expectError: true,
-			errorMsg:    "invalid escape sequence '\\5'",
+			name:     "escaped digit",
+			input:    `"hello\5"`,
+			expected: "hello5",
 		},
 		{
-			name:        "invalid escape sequence with space",
-			input:       `"hello\ "`,
-			expectError: true,
-			errorMsg:    "invalid escape sequence '\\ '",
+			name:     "escaped space",
+			input:    `"hello\ "`,
+			expected: "hello ",
+		},
+		{
+			name:     "form feed and backspace",
+			input:    `"a\fb\bc"`,
+			expected: "a\fb\bc",
 		},
 
 		// Unicode and special characters
@@ -246,10 +250,9 @@ func TestParseString(t *testing.T) {
 			expected: "line1\nline2",
 		},
 		{
-			name:        "invalid string literal",
-			input:       `"hello\world"`,
-			expectError: true,
-			errorMsg:    "invalid string literal: invalid escape sequence '\\w'",
+			name:     "escaped letter",
+			input:    `"hello\world"`,
+			expected: "helloworld",
 		},
 	}
 

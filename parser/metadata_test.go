@@ -417,12 +417,14 @@ func TestParseMetadataEdgeCases(t *testing.T) {
 	})
 }
 
-func TestParseMetadataInvalidStringReturnsError(t *testing.T) {
-	source := "2024-01-01 commodity USD\n  name: \"bad\\qescape\"\n"
+// TestParseMetadataStringTakesAnyEscape pins that, like beancount's lexer, a
+// string takes a backslash before any character.
+func TestParseMetadataStringTakesAnyEscape(t *testing.T) {
+	source := "2024-01-01 commodity USD\n  name: \"good\\qescape\"\n"
 
-	_, err := ParseString(context.Background(), source)
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid string literal")
+	parsed, err := ParseString(context.Background(), source)
+	assert.NoError(t, err)
+	assert.Equal(t, "goodqescape", parsed.Directives[0].(*ast.Commodity).Metadata[0].Value.StringValue.Value)
 }
 
 func TestParseMetadataRejectsUnsupportedUnquotedValues(t *testing.T) {
