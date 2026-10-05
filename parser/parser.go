@@ -667,7 +667,13 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 	}
 
 	if p.isAtEnd() {
-		return nil, p.errorAtToken(dateTok, "unexpected end of file after date")
+		err := p.errorAtToken(dateTok, "unexpected end of file after date")
+		// beancount's grammar reads the date and fails after it.
+		var parseErr *ParseError
+		if errors.As(err, &parseErr) {
+			parseErr.raisedAt = dateTok.End
+		}
+		return nil, err
 	}
 	if p.peek().Line != dateTok.Line {
 		return nil, p.errorAtEndOfPrevious("unexpected end of line after date")

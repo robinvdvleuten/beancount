@@ -142,6 +142,20 @@ func TestUndatedLineEndsAtItsLine(t *testing.T) {
 	}
 }
 
+// TestDateAloneAfterAnErrorIsReported pins that a date alone on the last
+// line fails after the date, which the grammar has read by then: with the
+// two line breaks before it that is three tokens since the error on line
+// 1, so beancount reports it.
+func TestDateAloneAfterAnErrorIsReported(t *testing.T) {
+	_, err := ParseString(context.Background(), "  Assets:Cash  1 USD\n\n2014-01-01\n")
+
+	var syntaxErrs ParseErrors
+	assert.True(t, errors.As(err, &syntaxErrs), "got %v", err)
+	assert.Equal(t, 2, len(syntaxErrs), "got %v", syntaxErrs)
+	assert.Equal(t, 1, syntaxErrs[0].Pos.Line)
+	assert.Equal(t, 3, syntaxErrs[1].Pos.Line)
+}
+
 // TestPluginEndsAtItsLine pins that a plugin's line is complete without a
 // configuration: a string on the next line, indented or not, is a syntax
 // error of its own and the plugin is kept, as bean-check still runs it.
