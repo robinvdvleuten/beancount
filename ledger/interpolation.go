@@ -244,9 +244,9 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			}
 			weight = pydecimal.Mul(units, perUnit)
 		}
-		// The price keeps the exponent the division leaves, as Python's
-		// does: 110.00 over 2 is 55.00.
-		prices[posting] = &ast.Amount{Value: formatInferredNumber(priceNumber), Currency: currency}
+		// The price is written as Python writes the quotient: 110.00
+		// over 2 is 55.00, and over 100.00 it is 1.1.
+		prices[posting] = &ast.Amount{Value: pydecimal.String(priceNumber), Currency: currency}
 		balance[currency] = pydecimal.Add(balance[currency], weight)
 	}
 

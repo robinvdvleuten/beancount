@@ -89,8 +89,14 @@ func balanceWeights(allWeights []weightSet) map[string]decimal.Decimal {
 
 	for _, weights := range allWeights {
 		for _, weight := range weights {
-			current := balance[weight.currency]
-			balance[weight.currency] = pydecimal.Add(current, weight.amount)
+			sum := pydecimal.Add(balance[weight.currency], weight.amount)
+			if sum.IsZero() {
+				// beancount's residual inventory drops a position that
+				// sums to zero, and with it the exponent the sum had:
+				// the next weight starts over.
+				sum = decimal.Zero
+			}
+			balance[weight.currency] = sum
 		}
 	}
 
