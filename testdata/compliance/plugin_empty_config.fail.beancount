@@ -1,0 +1,10 @@
+; A configuration is one the moment it is written: an empty string is
+; passed to the plugin like any other, and implicit_prices, which takes
+; none, fails to apply.
+plugin "beancount.plugins.implicit_prices" ""
+
+2020-01-01 open Assets:I
+
+2020-01-02 * "buy"
+  Assets:I  1 HOOL {100 USD}
+  Assets:I  -100 USD

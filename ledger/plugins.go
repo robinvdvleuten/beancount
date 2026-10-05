@@ -60,8 +60,8 @@ func (l *Ledger) runPlugins(ctx context.Context, tree *ast.AST) {
 			continue
 		}
 		// Neither Built-in Plugin takes a configuration; beancount fails
-		// to apply one that is given it.
-		if !directive.Config.IsEmpty() {
+		// to apply one that is given it, an empty string included.
+		if !directive.Config.IsEmpty() || directive.Config.Raw != "" {
 			l.errors = append(l.errors, newPluginConfigError(directive))
 			continue
 		}
