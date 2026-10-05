@@ -23,20 +23,6 @@ so one of a non-zero amount also fails and `PRINT` shows its `; Diff:`.
 The lines agree. Like beancount v3, the balance is a use of its account
 for `doctor missing_open`.
 
-**Units that cannot be interpolated at a zero per-unit cost**
-(`cost_total_units_missing.fail`): for missing units in total braces
-(`HOOL {{100 USD}}`) or at `{0 # 100 USD}`, both implementations report
-`Cannot infer per-unit cost only from total` on the posting and book the
-rest of its group, whose residual both report on the transaction. beancount
-keeps the posting with its units missing, reports `Transaction has
-incomplete elements` on the transaction's line too, and fails with a
-`TypeError` when a later posting to the account is weighed against it; we
-leave the posting out of the booked transaction. The lines agree. Where
-the posting is its transaction's only one, or the group's residual is
-weighed against it (`HOOL {{15 USD}}` alone, or beside `-15 USD`),
-beancount fails with that `TypeError` at once, checking the residual; we
-report the posting as above, and the residual when there is one (#707).
-
 **Merge cost on an augmentation**: both implementations report a merge
 cost `{*}` ("Cost merging is not supported yet"), and beancount then books
 it like `{}`: an augmentation at `{*}` gets the cost the transaction's
@@ -230,6 +216,23 @@ compare the lines errors are on:
   size, matches it and another lot, beancount sorts the matches by date and
   crashes comparing `None` with a date (`TypeError`); we sort an undated
   lot before every dated one.
+
+- **Units that cannot be interpolated at a zero per-unit cost**
+  (`cost_total_units_missing.fail`): for missing units in total braces
+  (`HOOL {{100 USD}}`) or at `{0 # 100 USD}`, both implementations report
+  `Cannot infer per-unit cost only from total` on the posting and book the
+  rest of its group, whose residual both report on the transaction. beancount
+  keeps the posting with its units missing, reports `Transaction has
+  incomplete elements` on the transaction's line too, and fails with a
+  `TypeError` when a later posting to the account is weighed against it; we
+  leave the posting out of the booked transaction. The lines agree. Where
+  the posting is its transaction's only one, or the group's residual is
+  weighed against it (`HOOL {{15 USD}}` alone, or beside `-15 USD`),
+  beancount fails with that `TypeError` at once, checking the residual; we
+  report the posting as above, and the residual when there is one (#707).
+  Carrying a posting without units through booking, the queries and the
+  printer would reproduce what makes beancount fail, for one more line in
+  `PRINT`, so we do not.
 
 - **Missing units at a zero price** (#653): bean-check fails with a
   Python `AssertionError` on `Assets:Stock  HOOL @ 0 USD`, units in another
