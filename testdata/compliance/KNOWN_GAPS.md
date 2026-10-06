@@ -506,9 +506,12 @@ compare the lines errors are on:
   Naming one of beancount's default plugins runs it a second time there:
   `beancount.ops.pad` reports every used pad as `Unused Pad entry`, and
   `beancount.ops.balance` reports each failing balance twice. We ignore both.
-- **BQL `id` column digests**: ids are unique and stable but hash the
-  source location, not the directive contents like `compare.hash_entry`,
-  so the hex digests differ from official output.
+- **BQL `id` column digests** (#626): ids are unique and stable but hash
+  the source location, not the directive like `compare.hash_entry`, so the
+  hex digests differ from official output. `hash_entry` hashes `str()` of
+  every field, the metadata included, each posting's too: a transaction's
+  printed metadata holds the `__tolerances__` we leave out (#626), so no
+  digest of one could match.
 - **BQL shell extras**: `EXPLAIN`, `RUN` of stored `query` directives,
   shell settings (`set format ...`) and dot-commands are not implemented;
   nor are beanquery's subqueries and `CREATE TABLE`.
