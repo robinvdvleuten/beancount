@@ -354,9 +354,11 @@ func TestParseCustomAccountValue(t *testing.T) {
 	// Should have 3 values: account, string, amount
 	assert.Equal(t, 3, len(custom.Values))
 
-	// First value: Expenses:Food (ACCOUNT token stored as String)
-	assert.NotEqual(t, (*string)(nil), custom.Values[0].String)
-	assert.Equal(t, "Expenses:Food", *custom.Values[0].String)
+	// First value: Expenses:Food (ACCOUNT token stored as Account, which
+	// the printer writes unquoted)
+	assert.Equal(t, (*string)(nil), custom.Values[0].String)
+	assert.NotEqual(t, (*ast.Account)(nil), custom.Values[0].Account)
+	assert.Equal(t, ast.Account("Expenses:Food"), *custom.Values[0].Account)
 
 	// Second value: "monthly" (STRING token)
 	assert.NotEqual(t, (*string)(nil), custom.Values[1].String)

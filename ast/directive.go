@@ -475,6 +475,7 @@ func (c *Custom) SetDate(date *Date) { c.date = date }
 // non-nil/non-zero for each value.
 type CustomValue struct {
 	String       *string
+	Account      *Account
 	BooleanValue *string
 	Amount       *Amount
 	Number       *string
@@ -486,6 +487,8 @@ func (cv *CustomValue) GetValue() any {
 	switch {
 	case cv.String != nil:
 		return *cv.String
+	case cv.Account != nil:
+		return *cv.Account
 	case cv.BooleanValue != nil:
 		return *cv.BooleanValue == "TRUE"
 	case cv.Amount != nil:

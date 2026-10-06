@@ -59,9 +59,6 @@ follows beancount 3.2.3's `printer.py`, with these known differences from
 
 - `PRINT` ignores `option "render_commas" "TRUE"`: bean-query prints
   `-1,000.50 USD`, we print `-1000.50 USD`.
-- A `custom` directive's account value prints quoted
-  (`custom "c" "Assets:Cash"`), because `ast.CustomValue` has no account
-  kind.
 - A number in metadata prints in fixed notation (`0.0000001`), where
   Python's `str` gives `1E-7`.
 - Like `printer.py`, the printer does not escape `note`, `event`, `query`,

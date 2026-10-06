@@ -1,0 +1,9 @@
+; A custom directive's account value prints as an account, unquoted, like
+; its other values and unlike a string: beancount's printer tells them apart.
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 custom "budget" Expenses:Food "monthly" 100.00 USD
+2020-01-03 custom "schedule" 2020-01-15Assets:Cash
+2020-01-04 custom "mixed" "Assets:Cash" Assets:Cash TRUE 3
+  account: Assets:Cash

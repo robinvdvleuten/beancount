@@ -774,8 +774,7 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 		if err != nil {
 			return nil, err
 		}
-		value := string(account)
-		return &ast.CustomValue{String: &value}, nil
+		return &ast.CustomValue{Account: &account}, nil
 
 	case NUMBER, EXPRESSION:
 		valueTok, isExpression, value, err := p.parseAmountValueToken()

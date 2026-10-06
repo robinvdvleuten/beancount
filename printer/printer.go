@@ -459,6 +459,8 @@ func (p *printer) custom(c *ast.Custom, buf *strings.Builder) {
 		switch {
 		case value.String != nil:
 			values = append(values, `"`+*value.String+`"`)
+		case value.Account != nil:
+			values = append(values, string(*value.Account))
 		case value.Date != nil:
 			values = append(values, value.Date.String())
 		case value.BooleanValue != nil:

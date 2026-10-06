@@ -116,7 +116,6 @@ var knownDivergences = []struct {
 	{"format", "#664: bean-format realigns a line inside a string spanning lines; we copy the string", hasStringSpanningLines},
 	{"check-lines", "KNOWN_GAPS.md, deliberate: a tag or link after a posting is a syntax error on its own line", bodyTagAfterPosting.MatchString},
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
-	{"query-4", "KNOWN_GAPS.md: PRINT quotes a custom directive's account value", customAccount.MatchString},
 	{"query", "KNOWN_GAPS.md, deliberate: units missing at a zero per-unit cost are left out, where beancount keeps a posting without units", zeroPerUnitCompound.MatchString},
 	{"query", "KNOWN_GAPS.md, deliberate: a zero price without a currency takes its group's, where beancount leaves it unset", zeroPriceNoCurrency.MatchString},
 	{"", "#708, deliberate: zero units in total braces are rejected, where bean-check passes them and beanquery fails on them", zeroUnitsTotalBraces.MatchString},
@@ -134,7 +133,6 @@ var (
 	zeroPriceNoCurrency  = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
 	zeroUnitsTotalBraces = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+0(?:\.0*)?[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{\{`)
 	valuelessPrice       = regexp.MustCompile(`(?m)@@?[ \t]*(?:[A-Z][A-Z0-9'._-]*)?[ \t\r]*$`)
-	customAccount        = regexp.MustCompile(`\d{4}-\d{2}-\d{2}[ \t]+custom[ \t].*[ \t][A-Z][A-Za-z0-9-]*:`)
 )
 
 // hasStringSpanningLines reports whether a line of src opens a string it
@@ -1028,8 +1026,4 @@ func TestKnownDivergences(t *testing.T) {
 	assert.True(t, valuelessPrice.MatchString("2020-01-03 !\n  Assets:A  -10.5 EUR @ USD\n"))
 	assert.True(t, valuelessPrice.MatchString("2020-01-03 !\n  Assets:A  -10.5 EUR @\n"))
 	assert.False(t, valuelessPrice.MatchString("2020-01-03 !\n  Assets:A  -10.5 EUR @ 2 USD\n"))
-	assert.True(t, customAccount.MatchString("  2014-07-09 custom \"schedule\" 2014-07-15  Assets:Cash  1 USD\n"))
-
-	assert.True(t, customAccount.MatchString("2020-01-01 custom \"budget\" Assets:A 1 USD\n"))
-	assert.False(t, customAccount.MatchString("2020-01-01 custom \"budget\" \"Assets:A\"\n  Assets:A 1 USD\n"))
 }
