@@ -1,0 +1,1 @@
+SELECT DISTINCT parent(root(account, 1)), leaf(root(account, 1)), open_date('Assets:Nowhere'), open_date(account) ORDER BY 1, 2, 4
