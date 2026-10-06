@@ -774,18 +774,12 @@ func accountSortKey(ctx *Context, account string) string {
 	return fmt.Sprintf("%d-%s", index, account)
 }
 
-// accountInvertsSign reports whether an account's usual balance is negative
-// (liabilities, equity, income), for the possign function.
+// accountInvertsSign reports whether an account's usual balance is negative,
+// for the possign function: like beancount's get_account_sign, that of every
+// account but an asset or an expense, one under no account type included.
 func accountInvertsSign(ctx *Context, account string) bool {
 	typ, ok := accountType(ctx, account)
-	if !ok {
-		return false
-	}
-	switch typ {
-	case ast.AccountTypeLiabilities, ast.AccountTypeEquity, ast.AccountTypeIncome:
-		return true
-	}
-	return false
+	return !ok || typ != ast.AccountTypeAssets && typ != ast.AccountTypeExpenses
 }
 
 func metaValue(v *ast.MetadataValue) any {

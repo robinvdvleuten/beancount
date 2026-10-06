@@ -1,0 +1,1 @@
+SELECT account, possign(balance, account), possign(number, 'Unknown') WHERE account ~ 'Income|Liabilities' ORDER BY account, date
