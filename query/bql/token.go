@@ -226,11 +226,3 @@ func (t Token) String(source []byte) string {
 	}
 	return string(source[t.Start:t.End])
 }
-
-// Bytes returns a zero-copy view of the token text.
-func (t Token) Bytes(source []byte) []byte {
-	if t.Start >= len(source) || t.End > len(source) || t.Start > t.End {
-		return nil
-	}
-	return source[t.Start:t.End]
-}
