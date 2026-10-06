@@ -11,10 +11,12 @@
 2020-01-01 open Assets:Written
 2020-01-01 open Assets:Reduced
 2020-01-01 open Assets:Compound
+2020-01-01 open Assets:Held
 2020-01-01 open Equity:Open
 
 2020-01-02 * "Lot"
   Assets:Reduced  10 HOOL {10 USD}
+  Assets:Held     -1 HOOL
   Equity:Open
 
 2020-02-01 * "Beside one auto-posting"
@@ -41,5 +43,9 @@
 2020-02-06 * "Compound with a zero per-unit number"
   Assets:Cash      -100 USD
   Assets:Compound  HOOL {0 # 100 USD}
+
+2020-02-07 * "No units currency, resolved from the account's balance"
+  Assets:Cash   -100 USD
+  Assets:Held   {{100 USD}}
 
 2020-03-01 balance Assets:Cash  -100 USD

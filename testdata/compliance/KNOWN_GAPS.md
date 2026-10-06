@@ -209,7 +209,8 @@ compare the lines errors are on:
 
 - **Units that cannot be interpolated at a zero per-unit cost**
   (`cost_total_units_missing.fail`): for missing units in total braces
-  (`HOOL {{100 USD}}`) or at `{0 # 100 USD}`, both implementations report
+  (`HOOL {{100 USD}}`, or `{{100 USD}}` alone, its currency resolved from
+  the account's balance) or at `{0 # 100 USD}`, both implementations report
   `Cannot infer per-unit cost only from total` on the posting and book the
   rest of its group, whose residual both report on the transaction. beancount
   keeps the posting with its units missing, reports `Transaction has

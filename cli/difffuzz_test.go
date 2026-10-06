@@ -128,7 +128,7 @@ var (
 	loneCR               = regexp.MustCompile(`\r(?:[^\n]|$)`)
 	pluginLine           = regexp.MustCompile(`(?m)^plugin\s+"([^"]*)"`)
 	bodyTagAfterPosting  = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
-	zeroPerUnitCompound  = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{(?:\{|0(?:\.0*)?[ \t]*#)`)
+	zeroPerUnitCompound  = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+(?:[A-Z][A-Z0-9'._-]*[ \t]+)?\{(?:\{|0(?:\.0*)?[ \t]*#)`)
 	zeroPriceNoCurrency  = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
 	zeroUnitsTotalBraces = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+0(?:\.0*)?[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{\{`)
 )
@@ -1008,6 +1008,7 @@ func TestKnownDivergences(t *testing.T) {
 
 	assert.True(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  HOOL {0 # 100 USD}\n"))
 	assert.True(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Written  HOOL {{100 USD}}\n"))
+	assert.True(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Written {{100 USD}}\n"))
 	assert.False(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  HOOL {10 # 100 USD}\n"))
 	assert.False(t, zeroPerUnitCompound.MatchString("2020-02-06 *\n  Assets:Compound  2 HOOL {0 # 100 USD}\n"))
 
