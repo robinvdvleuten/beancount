@@ -247,12 +247,6 @@ func AccountLexLen(word []byte) int {
 	return end
 }
 
-// LexesAccount reports whether beancount's lexer reads the whole of name as
-// an account (AccountLexLen).
-func LexesAccount(name string) bool {
-	return name != "" && AccountLexLen([]byte(name)) == len(name)
-}
-
 // accountComponentLen returns the length of the account component starting
 // word, or 0: a name may start with an ASCII digit, a type may not.
 func accountComponentLen(word []byte, name bool) int {

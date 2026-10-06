@@ -481,36 +481,3 @@ type CustomValue struct {
 	Number       *string
 	Date         *Date
 }
-
-// GetValue returns the actual value stored in this CustomValue.
-func (cv *CustomValue) GetValue() any {
-	switch {
-	case cv.String != nil:
-		return *cv.String
-	case cv.Account != nil:
-		return *cv.Account
-	case cv.BooleanValue != nil:
-		return *cv.BooleanValue == "TRUE"
-	case cv.Amount != nil:
-		return cv.Amount
-	case cv.Number != nil:
-		return *cv.Number
-	case cv.Date != nil:
-		return cv.Date
-	default:
-		return nil
-	}
-}
-
-// IsBoolean returns true if this value is a boolean.
-func (cv *CustomValue) IsBoolean() bool {
-	return cv.BooleanValue != nil
-}
-
-// Boolean returns the boolean value if this is a boolean value.
-func (cv *CustomValue) Boolean() bool {
-	if cv.BooleanValue != nil {
-		return *cv.BooleanValue == "TRUE"
-	}
-	return false
-}
