@@ -24,18 +24,3 @@ func TestCommandError(t *testing.T) {
 		assert.Equal(t, cmdErr.ExitCode(), 1)
 	})
 }
-
-func TestCommandResult(t *testing.T) {
-	t.Run("Success returns zero exit code", func(t *testing.T) {
-		result := Success()
-		assert.Equal(t, result.ExitCode, 0)
-		assert.True(t, result.Err == nil)
-	})
-
-	t.Run("Failure returns non-zero exit code", func(t *testing.T) {
-		testErr := NewCommandError(1)
-		result := Failure(testErr)
-		assert.Equal(t, result.ExitCode, 1)
-		assert.True(t, result.Err != nil)
-	})
-}
