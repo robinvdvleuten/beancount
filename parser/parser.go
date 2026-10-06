@@ -249,11 +249,7 @@ func (p *Parser) Parse() (*ast.AST, error) {
 
 		default:
 			tok := p.peek()
-			if tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)) {
-				p.recover(p.errorAtToken(tok, "invalid token %q", tok.String(p.source)))
-			} else {
-				p.recover(p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source)))
-			}
+			p.recover(p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source)))
 			continuationLine = 0
 		}
 	}
@@ -316,8 +312,6 @@ func (p *Parser) recover(err error) {
 			switch {
 			case tok.Type == ILLEGAL && p.lexerRejects(tok):
 				errors.As(p.errorAtToken(tok, ""), &skipped)
-			case tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)):
-				errors.As(p.errorAtToken(tok, "invalid token %q", tok.String(p.source)), &skipped)
 			case tok.Type == STRING && !utf8.Valid(tok.Bytes(p.source)):
 				errors.As(p.invalidStringError(tok), &skipped)
 			}
@@ -362,8 +356,7 @@ func (p *Parser) lexerErrorAt(offset int) bool {
 		return false
 	}
 	tok := p.tokens[i]
-	return (tok.Type == ILLEGAL && p.lexerRejects(tok)) ||
-		(tok.Type == ACCOUNT && lexerRejectsAccount(tok.Bytes(p.source)))
+	return tok.Type == ILLEGAL && p.lexerRejects(tok)
 }
 
 // shiftedSince counts the tokens beancount's grammar shifts after the last

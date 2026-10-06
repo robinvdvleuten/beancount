@@ -1,0 +1,38 @@
+; Like flex's longest match, beancount's lexer reads an account as far as
+; its pattern goes and the rest as the tokens they are: `Expenses:B:` is the
+; account and a colon, `USDnarration:` a currency, a key and a colon, each
+; a syntax error that drops the directive. A word no rule reads from its
+; start is an invalid token up to the next whitespace, a quote in it
+; included: a one-letter key after a currency (`USDa:`), a capital letter
+; before a colon (`A:`), and a word starting with a non-ASCII character
+; that is no account (`☕"y"`, `ÉUR`).
+2020-01-01 open Assets:A
+2020-01-01 open Expenses:B:
+
+2020-01-02 * "a currency, a key and a colon"
+  Assets:A  50 USDnarration: "x"
+
+2020-01-03 * "a one-letter key after a currency"
+  Assets:A  50 USDa:
+
+2020-01-04 * "a currency and a colon"
+  Assets:A  50 USD:x
+
+2020-01-05 * "a capital letter before a colon"
+  Assets:A  50 A:
+
+2020-01-06 * "x" ☕"y"
+
+2020-01-07 * "x" ÉUR
+
+2020-01-08 * "x" "y" É
+  Assets:A  1 USD
+
+2020-01-09 * "an account and a colon after a top-level indentation"
+
+  Assets:A   10 USD
+ 2020-01-10 open Expenses:C:
+
+2020-01-11 * "multi
+2020-01-12 * "Coffee ☕" "Breakfast 🥐"
+line narration"

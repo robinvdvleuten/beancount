@@ -272,7 +272,8 @@ func TestLexerByteColumnsWithUnicodeAndTabs(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, len(tokens) >= 2)
 
-	assert.Equal(t, IDENT, tokens[0].Type)
+	// A non-ASCII word that is no account is an invalid token.
+	assert.Equal(t, ILLEGAL, tokens[0].Type)
 	assert.Equal(t, 1, tokens[0].Column)
 	assert.Equal(t, 2, tokens[0].Len())
 

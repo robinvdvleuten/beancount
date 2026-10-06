@@ -168,7 +168,7 @@ func (a *Account) Capture(values []string) error {
 	}
 
 	for i := 1; i < len(parts); i++ {
-		if !lexesAccountComponent(parts[i]) {
+		if accountComponentLen([]byte(parts[i]), true) != len(parts[i]) {
 			return fmt.Errorf("invalid account segment at position %d: %s", i, parts[i])
 		}
 	}
@@ -222,42 +222,55 @@ func (a Account) Root() string {
 	return string(a)[:idx]
 }
 
-// LexesAccount reports whether beancount's lexer reads name as an account:
-// colon-separated components, the first a type starting with an ASCII
-// capital letter or a non-ASCII character, each other one starting with an
-// ASCII capital letter, an ASCII digit or a non-ASCII character. Only its
-// grammar's account pattern looks at the non-ASCII characters.
-func LexesAccount(name string) bool {
-	components := strings.Split(name, ":")
-	if len(components) < 2 {
-		return false
+// AccountLexLen returns the length of the longest prefix of word that
+// beancount's lexer reads as an account, {ACCOUNTTYPE}(:{ACCOUNTNAME})+: a
+// type starting with an ASCII capital letter or a non-ASCII character, then
+// one or more colon-separated names each starting with an ASCII capital
+// letter, an ASCII digit or a non-ASCII character, every component going on
+// with ASCII letters, digits and dashes or non-ASCII characters. It is 0
+// when no account starts word. Only the grammar's account pattern looks at
+// the non-ASCII characters.
+func AccountLexLen(word []byte) int {
+	n := accountComponentLen(word, false)
+	if n == 0 {
+		return 0
 	}
-	for i, component := range components {
-		if !lexesAccountComponent(component) || (i == 0 && '0' <= component[0] && component[0] <= '9') {
-			return false
+	end := 0
+	for n < len(word) && word[n] == ':' {
+		m := accountComponentLen(word[n+1:], true)
+		if m == 0 {
+			break
 		}
+		n += 1 + m
+		end = n
 	}
-	return true
+	return end
 }
 
-// lexesAccountComponent reports whether beancount's lexer reads component
-// as an account component: not empty, starting with an ASCII capital letter,
-// an ASCII digit or a non-ASCII character, and going on with ASCII letters,
-// digits and dashes or non-ASCII characters.
-func lexesAccountComponent(component string) bool {
-	if component == "" {
-		return false
+// LexesAccount reports whether beancount's lexer reads the whole of name as
+// an account (AccountLexLen).
+func LexesAccount(name string) bool {
+	return name != "" && AccountLexLen([]byte(name)) == len(name)
+}
+
+// accountComponentLen returns the length of the account component starting
+// word, or 0: a name may start with an ASCII digit, a type may not.
+func accountComponentLen(word []byte, name bool) int {
+	if len(word) == 0 {
+		return 0
 	}
-	if first := component[0]; first < utf8.RuneSelf && (first < 'A' || first > 'Z') && (first < '0' || first > '9') {
-		return false
+	if first := word[0]; first < utf8.RuneSelf && (first < 'A' || first > 'Z') && (!name || first < '0' || first > '9') {
+		return 0
 	}
-	for i := 1; i < len(component); i++ {
-		ch := component[i]
+	n := 1
+	for n < len(word) {
+		ch := word[n]
 		if ch < utf8.RuneSelf && (ch < 'A' || ch > 'Z') && (ch < 'a' || ch > 'z') && (ch < '0' || ch > '9') && ch != '-' {
-			return false
+			break
 		}
+		n++
 	}
-	return true
+	return n
 }
 
 // accountTypeRegex validates an account's type, its root, which the ledger

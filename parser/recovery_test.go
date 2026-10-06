@@ -268,9 +268,10 @@ func TestSkippedInvalidAccountNamesAreReported(t *testing.T) {
 		`3:19 invalid token "Assets:x"`,
 		`4:19 invalid token "Assets:-X"`,
 		`5:19 invalid token "Assets::X"`,
-		`6:19 invalid token "Assets:X_y"`,
-		`7:19 invalid token "Assets:X.y"`,
-		`8:19 invalid token "Assets:X'y"`,
+		// The account ends where its pattern does; the rest is invalid.
+		`6:27 invalid token "_y"`,
+		`7:27 invalid token ".y"`,
+		`8:27 invalid token "'y"`,
 	}, got)
 }
 

@@ -553,9 +553,14 @@ func (l *Lexer) scanLink(start, line, col int) Token {
 	return Token{LINK, start, l.pos, line, col}
 }
 
-// scanAccountOrIdent scans an account name or identifier starting with capital letter or Unicode character.
-// Accounts contain colons (Assets:Bank:Checking), identifiers don't (USD).
-// Supports Unicode letters (French, German, Chinese, Japanese, Korean, Arabic, etc.)
+// scanAccountOrIdent scans a word starting with a capital letter or a
+// non-ASCII character, and returns what beancount's lexer reads at its
+// start, the longest match of its rules: an account as far as its pattern
+// goes (ast.AccountLexLen), a capital letter before whitespace, a currency,
+// or nothing, an invalid token up to the next whitespace. What the token
+// leaves of the word is lexed after it: Expenses:B: is the account and a
+// colon, USDnarration: a currency, a key and a colon, USDa: a currency and
+// an invalid token.
 func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 	// First character (capital letter or Unicode) already consumed
 	hasColon := false
@@ -579,7 +584,10 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 	}
 
 	if hasColon {
-		return Token{ACCOUNT, start, l.pos, line, col}
+		if n := ast.AccountLexLen(value); n > 0 {
+			l.pos, l.column = start+n, col+n
+			return Token{ACCOUNT, start, l.pos, line, col}
+		}
 	}
 
 	if len(value) == 1 && isUppercaseLetter(value[0]) && l.whitespaceAhead() {
@@ -588,19 +596,14 @@ func (l *Lexer) scanAccountOrIdent(start, line, col int) Token {
 		// an IDENT, which the parser takes as a flag where one goes.
 		return Token{IDENT, start, l.pos, line, col}
 	}
-	if isASCII(value) && !isValidCurrencyLiteral(value) {
-		// Like flex's longest match, a currency starting the word is a
-		// token of its own (BA- is BA and a minus), and the rest is
-		// lexed after it.
-		if n := currencyPrefixLen(value); n > 0 {
-			l.pos = start + n
-			l.column = col + n
-			return Token{identType(value[:n]), start, l.pos, line, col}
-		}
-		return l.invalidToken(start, line, col)
+	// A currency starting the word is a token of its own (BA- is BA and a
+	// minus); a currency is ASCII, so a word starting with a non-ASCII
+	// character that is no account is an invalid token.
+	if n := currencyPrefixLen(value); n > 0 {
+		l.pos, l.column = start+n, col+n
+		return Token{identType(value[:n]), start, l.pos, line, col}
 	}
-
-	return Token{identType(value), start, l.pos, line, col}
+	return l.invalidToken(start, line, col)
 }
 
 // identType returns BOOL for TRUE and FALSE and NONE for NULL, which
@@ -811,37 +814,9 @@ func (l *Lexer) whitespaceAhead() bool {
 	return l.pos < len(l.source) && (l.source[l.pos] == ' ' || l.source[l.pos] == '\t' || l.lineBreakLenAt(l.pos) > 0)
 }
 
-func isASCII(value []byte) bool {
-	for _, ch := range value {
-		if ch >= 0x80 {
-			return false
-		}
-	}
-	return true
-}
-
 // isCurrencyChar reports whether ch may follow a currency's first character.
 func isCurrencyChar(ch byte) bool {
 	return isUppercaseLetter(ch) || isDigit(ch) || ch == '\'' || ch == '.' || ch == '_' || ch == '-'
-}
-
-// isValidCurrencyLiteral reports whether value is a currency starting with
-// a letter, as beancount v3's lexer matches one, of any length:
-// [A-Z][A-Z0-9'._-]*[A-Z0-9].
-func isValidCurrencyLiteral(value []byte) bool {
-	if len(value) < 2 || !isUppercaseLetter(value[0]) {
-		return false
-	}
-	last := value[len(value)-1]
-	if !isUppercaseLetter(last) && !isDigit(last) {
-		return false
-	}
-	for _, ch := range value[1 : len(value)-1] {
-		if !isCurrencyChar(ch) {
-			return false
-		}
-	}
-	return true
 }
 
 // currencyPrefixLen returns the length of the longest currency starting

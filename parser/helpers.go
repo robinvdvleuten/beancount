@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"bytes"
 	"errors"
 	"fmt"
 	"slices"
@@ -37,18 +36,6 @@ func (p *Parser) parseAccount() (ast.Account, error) {
 		return "", p.errorAtEndOfPrevious("expected account but got %s %q", actualTok.Type, actualTok.String(p.source))
 	}
 	tok := p.advance()
-
-	// Like any invalid token, an account word beancount's lexer rejects is a
-	// syntax error, which drops the directive it is in.
-	if lexerRejectsAccount(tok.Bytes(p.source)) {
-		return "", p.errorAtToken(tok, "invalid token %q", tok.String(p.source))
-	}
-
-	// A colon after the account is a token of its own to beancount's
-	// lexer, which no directive takes there: a syntax error.
-	if bytes.HasSuffix(tok.Bytes(p.source), []byte(":")) {
-		return "", p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
-	}
 
 	// Intern account name for memory efficiency
 	accountStr := p.internIdent(tok)
@@ -1058,39 +1045,6 @@ func (p *Parser) lexerRejects(tok Token) bool {
 	switch p.source[tok.Start] {
 	case '(', ')', '+', '-', '/':
 		return false
-	}
-	return true
-}
-
-// lexerRejectsAccount reports whether beancount's lexer rejects an ACCOUNT
-// token as an invalid token: one with an empty component, or one whose
-// component starts with an ASCII character other than a capital letter (or a
-// digit, past the first) or goes on with one other than a letter, a digit or
-// a dash. Non-ASCII characters pass its lexer, and only the account pattern
-// rejects them; a trailing colon is a token of its own. A word with no
-// colon but a trailing one is no account at all: unless it is a currency,
-// which its lexer reads before the colon, it is an invalid token (`T:`).
-func lexerRejectsAccount(name []byte) bool {
-	name = bytes.TrimSuffix(name, []byte(":"))
-	if !bytes.Contains(name, []byte(":")) {
-		return !isCurrencyWord(name)
-	}
-	return !ast.LexesAccount(string(name))
-}
-
-// isCurrencyWord reports whether name matches beancount's currency pattern
-// starting with a letter, [A-Z][A-Z0-9'._-]*[A-Z0-9].
-func isCurrencyWord(name []byte) bool {
-	if len(name) < 2 || !isUppercaseLetter(name[0]) {
-		return false
-	}
-	if last := name[len(name)-1]; !isUppercaseLetter(last) && !isDigit(last) {
-		return false
-	}
-	for _, ch := range name[1 : len(name)-1] {
-		if !isUppercaseLetter(ch) && !isDigit(ch) && !bytes.ContainsRune([]byte("'._-"), rune(ch)) {
-			return false
-		}
 	}
 	return true
 }
