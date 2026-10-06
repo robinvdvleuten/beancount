@@ -304,9 +304,12 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			completed.Amount = &ast.Amount{Value: formatInferredNumber(per), Currency: currency}
 			perUnit = compoundCostNumber(per, total, amount)
 		case cost.IsTotal:
-			// {{USD}} completes its total, beancount's number_total.
-			completed.Amount = &ast.Amount{Value: formatInferredNumber(needed), Currency: currency}
-			perUnit = pydecimal.Quo(needed, amount.Abs())
+			// {{USD}} completes its total, beancount's number_total,
+			// which is the weight less the per-unit part total braces
+			// have, ZERO: that is what sets the exponent.
+			total := pydecimal.Sub(needed, pydecimal.Mul(pydecimal.Zero, amount))
+			completed.Amount = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
+			perUnit = compoundCostNumber(pydecimal.Zero, total, amount)
 		default:
 			perUnit = pydecimal.Quo(needed, amount)
 			completed.Amount = &ast.Amount{Value: formatInferredNumber(perUnit), Currency: currency}

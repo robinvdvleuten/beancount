@@ -1,0 +1,31 @@
+; A total cost is spread over the units as beancount's compute_cost_number
+; does, the per-unit part it has none of counting as zero: {{10 USD}} over
+; 1.00 HOOL is (10 + 0 × 1.00) / 1.00, a per-unit cost of 10 with the
+; exponent of 10.00, so the posting weighs 10.00 USD, not 10.0 USD. A total
+; interpolated from the residual is spread the same way.
+2020-01-01 open Assets:Cash
+2020-01-01 open Expenses:Food
+
+2020-01-02 * "a written total over units with digits"
+  Expenses:Food  1.00 HOOL {{10 USD}}
+  Assets:Cash
+
+2020-01-03 * "a written total over integer units"
+  Expenses:Food  4 HOOL {{10.0 USD}}
+  Assets:Cash
+
+2020-01-04 * "a written total that does not divide"
+  Expenses:Food  3 HOOL {{10 USD}}
+  Assets:Cash
+
+2020-01-05 * "a compound cost"
+  Expenses:Food  1.00 HOOL {2 # 10 USD}
+  Assets:Cash
+
+2020-01-06 * "a total interpolated from the residual"
+  Expenses:Food  1.00 HOOL {{USD}}
+  Assets:Cash   -10 USD
+
+2020-01-07 * "a total interpolated from a residual with digits"
+  Expenses:Food  4 HOOL {{USD}}
+  Assets:Cash   -10.0 USD

@@ -212,8 +212,10 @@ func normalizeLotSpecForPosting(lotSpec *lotSpec, posting *ast.Posting) error {
 			return fmt.Errorf("cannot use total cost with zero quantity")
 		}
 
-		// Calculate per-unit cost: total ÷ quantity
-		perUnitCost := pydecimal.Quo(*lotSpec.cost, quantity.Abs())
+		// The per-unit cost is the total over the quantity, with the
+		// per-unit part beancount's grammar gives total braces, ZERO,
+		// counted: that is what sets the quotient's exponent.
+		perUnitCost := compoundCostNumber(pydecimal.Zero, *lotSpec.cost, quantity)
 		lotSpec.cost = &perUnitCost
 	} else if posting.Cost != nil && posting.Cost.Total != nil {
 		if posting.Amount == nil {

@@ -1,0 +1,1 @@
+SELECT date, account, position, weight, str(cost_number) AS cn, str(number(weight)) AS w
