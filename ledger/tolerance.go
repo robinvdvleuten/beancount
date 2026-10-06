@@ -101,7 +101,10 @@ func (t tolerances) balance(balance *ast.Balance) (decimal.Decimal, error) {
 // before booking, like beancount's infer_tolerances: "*", and those of the
 // currencies the postings name in their units, cost or price. A currency
 // Booking fills in, such as the cost currency of a reduction with {}, has
-// none.
+// none, and neither has a price that is zero per unit (@ 0 USD, or @@ 5 USD
+// over zero units, which beancount's parser reads as a zero per-unit
+// price), which infer_tolerances passes over as a false Amount; zero units
+// count.
 func (t tolerances) defaultsNamedBy(postings []*ast.Posting) map[string]decimal.Decimal {
 	if len(t.options.Defaults) == 0 {
 		return nil
@@ -121,7 +124,9 @@ func (t tolerances) defaultsNamedBy(postings []*ast.Posting) map[string]decimal.
 			name(posting.Cost.Currency())
 		}
 		if posting.Price != nil {
-			name(posting.Price.Currency)
+			if number, _, ok := PerUnitPrice(posting); !ok || !number.IsZero() {
+				name(posting.Price.Currency)
+			}
 		}
 	}
 	return named

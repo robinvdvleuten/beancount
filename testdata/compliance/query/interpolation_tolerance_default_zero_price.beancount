@@ -1,0 +1,47 @@
+; A price that is zero per unit does not name its currency for
+; inferred_tolerance_default, as beancount's infer_tolerances tests the
+; price amount's truth, which is whether its number is non-zero; a total
+; price over zero units is such a price, as the parser reads it. The
+; interpolated proceeds then keep their digits instead of rounding to the
+; 0.1 USD the default implies. Zero units still name their currency.
+option "inferred_tolerance_default" "USD:0.05"
+
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Lot
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Proceeds
+
+2020-01-02 * "Buy"
+  Assets:Stock   3 HOOL {33.333 USD}
+  Assets:Lot     1 HOOL {33.333 USD}
+  Assets:Cash  -133.332 USD
+
+2020-01-03 * "Sell at a zero per-unit price"
+  Assets:Stock  -1 HOOL {} @ 0 USD
+  Assets:Proceeds
+
+2020-01-04 * "Sell at a zero total price"
+  Assets:Stock  -1 HOOL {} @@ 0.00 USD
+  Assets:Proceeds
+
+2020-01-05 * "Sell at a price"
+  Assets:Stock  -1 HOOL {} @ 1 USD
+  Assets:Proceeds
+
+2020-01-06 * "Zero units name their currency"
+  Assets:Cash   0 USD
+  Assets:Stock  2 HOOL @ 1.111 USD
+  Assets:Cash   -1.111 USD
+  Assets:Proceeds
+
+2020-01-07 * "Zero units name their currency, at a zero price"
+  Assets:Cash   0 USD
+  Assets:Stock  2 HOOL @ 1.111 USD
+  Assets:Cash   -1.111 USD
+  Assets:Cash   0 HOOL @ 0 USD
+  Assets:Proceeds
+
+2020-01-08 * "A total price over zero units is a zero per-unit price"
+  Assets:Lot    -1 HOOL {}
+  Assets:Cash    0 HOOL @@ 5 USD
+  Assets:Proceeds
