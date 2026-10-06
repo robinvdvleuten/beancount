@@ -139,9 +139,10 @@ func (p *Parser) Parse() (*ast.AST, error) {
 				p.dropRead()
 			}
 		}
-		p.read, p.readAt, p.reduceErr = nil, nil, nil
+		// A comment continuing the directive leaves what was read of it
+		// in place: the directive may still be dropped after it.
 		if !continuesDirective {
-			turnedDown = nil
+			p.read, p.readAt, p.reduceErr, turnedDown = nil, nil, nil, nil
 		}
 		if tokType != DATE && !continuesDirective {
 			continuationLine = 0

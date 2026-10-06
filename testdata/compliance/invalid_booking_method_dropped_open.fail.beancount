@@ -1,10 +1,20 @@
 ; An open's invalid booking method is reported when its rule reduces. A
 ; syntax error on a line continuing the open drops it before that, so only
-; the syntax error is reported; the last open is kept and reported.
+; the syntax error is reported, after a body comment too; the last open is
+; kept and reported.
 2020-01-01 open Assets:Before "BOGUS"
   Equity:Opening
 
 2020-01-01 open Assets:Tagged "fifo"
   #tag
+
+2020-01-01 open Assets:Commented "fifo"
+  ; body comment
+  Equity:Opening
+
+2020-01-01 open Assets:Invalid "fifo"
+  ; one comment
+  ; another comment
+  foo
 
 2020-01-01 open Assets:Kept "BOGUS"
