@@ -243,7 +243,7 @@ func WithAmount(value, currency string) PostingOption {
 }
 
 // WithCost sets the cost specification for a posting.
-// Use NewCost, NewEmptyCost, or NewMergeCost to create the cost.
+// Use NewCost or NewEmptyCost to create the cost.
 func WithCost(cost *Cost) PostingOption {
 	return func(p *Posting) {
 		p.Cost = cost
@@ -273,13 +273,6 @@ func WithTotalPrice(price *Amount) PostingOption {
 func WithPostingFlag(flag string) PostingOption {
 	return func(p *Posting) {
 		p.Flag = flag
-	}
-}
-
-// WithPostingMetadata adds metadata entries to the posting.
-func WithPostingMetadata(metadata ...*Metadata) PostingOption {
-	return func(p *Posting) {
-		p.AddMetadata(metadata...)
 	}
 }
 
@@ -326,45 +319,6 @@ func NewCostWithLabel(amount *Amount, date *Date, label string) *Cost {
 // This allows automatic lot selection when reducing commodity positions.
 func NewEmptyCost() *Cost {
 	return &Cost{}
-}
-
-// NewMergeCost creates a merge cost specification {*}.
-func NewMergeCost() *Cost {
-	return &Cost{
-		IsMerge: true,
-	}
-}
-
-// NewClearedTransaction creates a Transaction with flag="*" (cleared).
-// This is a convenience helper for the most common transaction type.
-//
-// Example:
-//
-//	txn := ast.NewClearedTransaction(date, "Buy groceries",
-//	    ast.NewPosting(expensesAccount, ast.WithAmount("45.60", "USD")),
-//	    ast.NewPosting(checkingAccount),
-//	)
-func NewClearedTransaction(date *Date, narration string, postings ...*Posting) *Transaction {
-	return NewTransaction(date, narration,
-		WithFlag("*"),
-		WithPostings(postings...),
-	)
-}
-
-// NewPendingTransaction creates a Transaction with flag="!" (pending).
-// This is useful for transactions that haven't cleared yet.
-//
-// Example:
-//
-//	txn := ast.NewPendingTransaction(date, "Pending transfer",
-//	    ast.NewPosting(savingsAccount, ast.WithAmount("1000.00", "USD")),
-//	    ast.NewPosting(checkingAccount),
-//	)
-func NewPendingTransaction(date *Date, narration string, postings ...*Posting) *Transaction {
-	return NewTransaction(date, narration,
-		WithFlag("!"),
-		WithPostings(postings...),
-	)
 }
 
 // NewOpen creates an Open directive for an account.
@@ -427,21 +381,6 @@ func NewPad(date *Date, account, padAccount Account) *Pad {
 		date:       date,
 		Account:    account,
 		AccountPad: padAccount,
-	}
-}
-
-// NewNote creates a Note directive for an account.
-//
-// Example:
-//
-//	date, _ := ast.NewDate("2024-01-15")
-//	account, _ := ast.NewAccount("Assets:Checking")
-//	note := ast.NewNote(date, account, "Opened new checking account")
-func NewNote(date *Date, account Account, description string) *Note {
-	return &Note{
-		date:        date,
-		Account:     account,
-		Description: NewRawString(description),
 	}
 }
 

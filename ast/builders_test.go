@@ -303,14 +303,12 @@ func TestNewPosting(t *testing.T) {
 	t.Run("CompletePosting", func(t *testing.T) {
 		cost := NewCost(NewAmount("520.00", "USD"))
 		price := NewAmount("525.00", "USD")
-		meta := NewMetadata("note", "test")
 
 		posting := NewPosting(account,
 			WithAmount("10", "HOOL"),
 			WithCost(cost),
 			WithPrice(price),
 			WithPostingFlag("*"),
-			WithPostingMetadata(meta),
 		)
 
 		assert.Equal(t, "10", posting.Amount.Value)
@@ -318,7 +316,6 @@ func TestNewPosting(t *testing.T) {
 		assert.Equal(t, cost, posting.Cost)
 		assert.Equal(t, price, posting.Price)
 		assert.Equal(t, "*", posting.Flag)
-		assert.Equal(t, 1, len(posting.Metadata))
 	})
 }
 
@@ -356,41 +353,6 @@ func TestNewCost(t *testing.T) {
 		assert.False(t, cost.IsMergeCost())
 	})
 
-	t.Run("MergeCost", func(t *testing.T) {
-		cost := NewMergeCost()
-		assert.True(t, cost.IsMergeCost())
-		assert.False(t, cost.IsEmpty())
-	})
-}
-
-func TestNewClearedTransaction(t *testing.T) {
-	date, _ := NewDate("2024-01-15")
-	account1, _ := NewAccount("Expenses:Groceries")
-	account2, _ := NewAccount("Assets:Checking")
-
-	txn := NewClearedTransaction(date, "Buy groceries",
-		NewPosting(account1, WithAmount("45.60", "USD")),
-		NewPosting(account2),
-	)
-
-	assert.Equal(t, "*", txn.Flag)
-	assert.Equal(t, "Buy groceries", txn.Narration.Value)
-	assert.Equal(t, 2, len(txn.Postings))
-}
-
-func TestNewPendingTransaction(t *testing.T) {
-	date, _ := NewDate("2024-01-15")
-	account1, _ := NewAccount("Assets:Savings")
-	account2, _ := NewAccount("Assets:Checking")
-
-	txn := NewPendingTransaction(date, "Pending transfer",
-		NewPosting(account1, WithAmount("1000.00", "USD")),
-		NewPosting(account2),
-	)
-
-	assert.Equal(t, "!", txn.Flag)
-	assert.Equal(t, "Pending transfer", txn.Narration.Value)
-	assert.Equal(t, 2, len(txn.Postings))
 }
 
 func TestNewOpen(t *testing.T) {
@@ -440,16 +402,6 @@ func TestNewPad(t *testing.T) {
 	assert.Equal(t, date, pad.Date())
 	assert.Equal(t, account, pad.Account)
 	assert.Equal(t, padAccount, pad.AccountPad)
-}
-
-func TestNewNote(t *testing.T) {
-	date, _ := NewDate("2024-01-15")
-	account, _ := NewAccount("Assets:Checking")
-
-	note := NewNote(date, account, "Opened new checking account")
-	assert.Equal(t, date, note.Date())
-	assert.Equal(t, account, note.Account)
-	assert.Equal(t, "Opened new checking account", note.Description.Value)
 }
 
 func TestNewDocument(t *testing.T) {
