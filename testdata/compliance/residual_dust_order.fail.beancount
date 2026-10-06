@@ -1,0 +1,32 @@
+; The booked weights sum in posting order, rounded to 28 significant digits
+; at each step, as beancount's balance check sums them: the dust a total
+; cost interpolated to 4/3 per unit leaves (3 × 1.333… is 1E-27 short of
+; 4) is dropped by a larger weight after it, and kept when none follows.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:First
+2020-01-01 open Assets:Last
+2020-01-01 open Assets:PerUnit
+
+2020-01-03 * "Lots"
+  Assets:First    2 HOOL {2 USD}
+  Assets:Last     2 HOOL {2 USD}
+  Assets:PerUnit  2 HOOL {2 USD}
+  Assets:Cash   -12 USD
+
+2020-02-01 * "interpolated first: its dust is rounded away"
+  Assets:First   3 HOOL {{USD}}
+  Assets:Cash   -100 USD
+  Assets:First  -2 HOOL {}
+  Assets:Cash   100 USD
+
+2020-02-02 * "interpolated last: its dust stays"
+  Assets:Cash   -100 USD
+  Assets:Last   -2 HOOL {}
+  Assets:Cash   100 USD
+  Assets:Last    3 HOOL {{USD}}
+
+2020-02-03 * "a per-unit cost interpolated first"
+  Assets:PerUnit   3 HOOL {USD}
+  Assets:Cash   -100 USD
+  Assets:PerUnit  -2 HOOL {}
+  Assets:Cash   100 USD

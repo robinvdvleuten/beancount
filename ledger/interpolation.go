@@ -59,6 +59,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 
 	// Calculate weights for postings with amounts
 	var allWeights []weightSet
+	weightsOf := make(map[*ast.Posting]weightSet)
 	// Positions that reductions with an amount-less cost spec booked, one
 	// per lot. Every other amount-less cost spec is an augmentation's, whose
 	// cost is inferred from the residual.
@@ -93,10 +94,12 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 					})
 				}
 				allWeights = append(allWeights, weights)
+				weightsOf[posting] = weights
 				reducedPositions[posting] = positions
 			}
 		} else {
 			allWeights = append(allWeights, weights)
+			weightsOf[posting] = weights
 		}
 	}
 
@@ -114,6 +117,13 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 	// Balance the weights
 	balance := balanceWeights(allWeights)
 	defer putBalanceMap(balance)
+	// weigh adds the weight a completed posting takes, and keeps it, so
+	// that the booked residual can be summed in posting order below.
+	completed := make(map[*ast.Posting]weightSet)
+	weigh := func(posting *ast.Posting, amount decimal.Decimal, currency string) {
+		balance[currency] = pydecimal.Add(balance[currency], amount)
+		completed[posting] = append(completed[posting], weight{amount: amount, currency: currency})
+	}
 
 	amounts := make(map[*ast.Posting]*ast.Amount)
 	costs := make(map[*ast.Posting]*ast.Cost)
@@ -145,7 +155,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 				Value:    formatInferredNumber(needed),
 				Currency: currency,
 			})
-			balance[currency] = pydecimal.Add(balance[currency], needed)
+			weigh(autoPosting, needed, currency)
 		}
 
 		if len(autoAmounts) > 0 {
@@ -201,15 +211,15 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			// At a zero price in their own currency the units are the
 			// residual and weigh nothing, so the residual stays.
 		case perUnit.IsZero():
-			balance[currency] = pydecimal.Add(balance[currency], needed)
+			weigh(posting, needed, currency)
 		case posting.Cost != nil && posting.Cost.Total != nil && !needed.IsZero():
 			// Like beancount's, the units weigh at the compound's per-unit
 			// cost, which spreads its total over their absolute value: for
 			// negative units, that leaves twice the total as a residual.
 			perUnit = compoundCostNumber(perUnit, total, needed)
-			balance[weightCurrency] = pydecimal.Add(balance[weightCurrency], pydecimal.Mul(needed, perUnit))
+			weigh(posting, pydecimal.Mul(needed, perUnit), weightCurrency)
 		default:
-			balance[weightCurrency] = pydecimal.Add(balance[weightCurrency], pydecimal.Add(pydecimal.Mul(needed, perUnit), total))
+			weigh(posting, pydecimal.Add(pydecimal.Mul(needed, perUnit), total), weightCurrency)
 		}
 	}
 
@@ -247,7 +257,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		// The price is written as Python writes the quotient: 110.00
 		// over 2 is 55.00, and over 100.00 it is 1.1.
 		prices[posting] = &ast.Amount{Value: pydecimal.String(priceNumber), Currency: currency}
-		balance[currency] = pydecimal.Add(balance[currency], weight)
+		weigh(posting, weight, currency)
 	}
 
 	// Infer the cost an augmentation's cost spec leaves out; a reduction's
@@ -287,35 +297,35 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			needed = pydecimal.Zero
 		}
 		cost := posting.Cost
-		completed := *cost
-		completed.Inferred = true
+		inferred := *cost
+		inferred.Inferred = true
 		var perUnit decimal.Decimal
 		switch {
 		case cost.Total != nil && cost.Total.Value == "":
 			// {5 # USD}: the total is what the per-unit part leaves.
 			per, _ := ParseAmount(cost.Amount)
 			total := pydecimal.Sub(needed, pydecimal.Mul(per, amount))
-			completed.Total = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
+			inferred.Total = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
 			perUnit = compoundCostNumber(per, total, amount)
 		case cost.Total != nil:
 			// {# 5 USD}: the per-unit number is what the total leaves.
 			total, _ := ParseAmount(cost.Total)
 			per := pydecimal.Quo(pydecimal.Sub(needed, total), amount)
-			completed.Amount = &ast.Amount{Value: formatInferredNumber(per), Currency: currency}
+			inferred.Amount = &ast.Amount{Value: formatInferredNumber(per), Currency: currency}
 			perUnit = compoundCostNumber(per, total, amount)
 		case cost.IsTotal:
 			// {{USD}} completes its total, beancount's number_total,
 			// which is the weight less the per-unit part total braces
 			// have, ZERO: that is what sets the exponent.
 			total := pydecimal.Sub(needed, pydecimal.Mul(pydecimal.Zero, amount))
-			completed.Amount = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
+			inferred.Amount = &ast.Amount{Value: formatInferredNumber(total), Currency: currency}
 			perUnit = compoundCostNumber(pydecimal.Zero, total, amount)
 		default:
 			perUnit = pydecimal.Quo(needed, amount)
-			completed.Amount = &ast.Amount{Value: formatInferredNumber(perUnit), Currency: currency}
+			inferred.Amount = &ast.Amount{Value: formatInferredNumber(perUnit), Currency: currency}
 		}
-		costs[posting] = &completed
-		balance[currency] = pydecimal.Add(residual, pydecimal.Mul(amount, perUnit))
+		costs[posting] = &inferred
+		weigh(posting, pydecimal.Mul(amount, perUnit), currency)
 	}
 
 	// Check if balanced after inference, within the tolerances of the
@@ -331,7 +341,21 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		}
 	}
 	bookedTolerances := specTolerances.tolerances.booked(stated, amounts, costs, reducedPositions)
-	residuals := residualsBeyond(allWeights, balance, bookedTolerances.of)
+	// The booked weights sum in posting order, as beancount's balance check
+	// sums its booked postings: rounded to 28 digits at each step, so that
+	// the dust an interpolated posting leaves is dropped by a larger weight
+	// after it, and kept when none follows.
+	ordered := make([]weightSet, 0, len(group.postings))
+	for _, posting := range group.postings {
+		if weights, ok := weightsOf[posting]; ok {
+			ordered = append(ordered, weights)
+		} else if weights, ok := completed[posting]; ok {
+			ordered = append(ordered, weights)
+		}
+	}
+	bookedBalance := balanceWeights(ordered)
+	defer putBalanceMap(bookedBalance)
+	residuals := residualsBeyond(allWeights, bookedBalance, bookedTolerances.of)
 
 	interpolated := &interpolatedGroup{
 		postings:  make([]interpolatedPosting, len(group.postings)),
