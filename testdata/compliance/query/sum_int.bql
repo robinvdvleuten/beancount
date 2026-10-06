@@ -1,0 +1,1 @@
+SELECT sum(day), sum(lineno), sum(month) GROUP BY year ORDER BY year
