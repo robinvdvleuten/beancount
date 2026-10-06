@@ -1,0 +1,35 @@
+; A balance assertion sums the subtree's lots in one inventory, as beancount
+; does: lots of one key from different accounts merge and drop when they sum
+; to zero, so 60.00 USD here and -60.00 USD there leave 0 and the difference
+; from 1 USD is -1 USD, not -1.00 USD; lots of different keys keep their
+; digits.
+2020-01-01 open Assets:Bank
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Mixed
+2020-01-01 open Assets:Bank:Checking
+2020-01-01 open Assets:Bank:Savings
+2020-01-01 open Assets:Stock:Long
+2020-01-01 open Assets:Stock:Short
+2020-01-01 open Assets:Mixed:Long
+2020-01-01 open Assets:Mixed:Short
+2020-01-01 open Equity:O
+
+2020-01-02 * "cash across two accounts"
+  Assets:Bank:Checking   60.00 USD
+  Assets:Bank:Savings    40.00 USD
+  Assets:Bank:Checking  -100.00 USD
+
+2020-01-03 balance Assets:Bank  1 USD
+
+2020-01-02 * "one lot key across two accounts"
+  Assets:Stock:Long    10.00 HOOL {1 USD}
+  Assets:Stock:Short  -10.00 HOOL {1 USD}
+
+2020-01-03 balance Assets:Stock  1 HOOL
+
+2020-01-02 * "two lot keys across two accounts"
+  Assets:Mixed:Long    10.00 HOOL {1 USD}
+  Assets:Mixed:Short  -10.00 HOOL {2 USD}
+  Equity:O
+
+2020-01-03 balance Assets:Mixed  1 HOOL

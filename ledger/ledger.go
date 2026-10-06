@@ -408,7 +408,11 @@ func (l *Ledger) inventory(account ast.Account) *inventory {
 
 // subtree returns what an account and the accounts under it hold in a
 // currency. Like beancount's, a balance assertion sees the whole subtree:
-// `balance Assets:Bank` counts Assets:Bank:Checking, opened or not.
+// `balance Assets:Bank` counts Assets:Bank:Checking, opened or not. Like
+// beancount's, which adds every account's positions to one inventory, it
+// merges the subtree's lots by their key, dropping one that sums to zero,
+// and then sums their units: 60.00 USD in one account and -60.00 USD in
+// another leave 0, not 0.00.
 func (l *Ledger) subtree(account ast.Account, currency string) decimal.Decimal {
 	prefix := string(account) + ":"
 	var names []string
@@ -420,9 +424,26 @@ func (l *Ledger) subtree(account ast.Account, currency string) decimal.Decimal {
 		}
 	}
 	slices.Sort(names)
-	var held decimal.Decimal
+	merged := make(map[lotKey]decimal.Decimal)
+	var keys []lotKey
 	for _, name := range slices.Compact(names) {
-		held = pydecimal.Add(held, l.inventory(ast.Account(name)).get(currency))
+		for _, lot := range l.inventory(ast.Account(name)).lots[currency] {
+			sum, held := merged[lot.key]
+			if !held {
+				keys = append(keys, lot.key)
+			}
+			if sum = pydecimal.Add(sum, lot.amount); sum.IsZero() {
+				delete(merged, lot.key)
+			} else {
+				merged[lot.key] = sum
+			}
+		}
+	}
+	held := pydecimal.Zero
+	for _, key := range keys {
+		if sum, ok := merged[key]; ok {
+			held = pydecimal.Add(held, sum)
+		}
 	}
 	return held
 }
