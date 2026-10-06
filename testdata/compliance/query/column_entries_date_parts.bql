@@ -1,0 +1,1 @@
+SELECT date, day, type FROM #entries

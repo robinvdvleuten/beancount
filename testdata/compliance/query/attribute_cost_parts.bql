@@ -1,0 +1,1 @@
+SELECT cost(position).number, cost(position).currency WHERE currency = 'HOOL'

@@ -1,0 +1,1 @@
+SELECT date, month, day, type, posting_flag
