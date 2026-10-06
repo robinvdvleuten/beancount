@@ -1,0 +1,1 @@
+SELECT account, convert(sum(position), 'USD'), convert(sum(position), 'USD', 2023-04-01) GROUP BY account ORDER BY account

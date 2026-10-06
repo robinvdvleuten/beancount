@@ -1,0 +1,1 @@
+SELECT date, getprice('HOOL', 'USD', date), getprice('HOOL', 'USD', 2023-01-01) WHERE currency = 'HOOL'

@@ -1,0 +1,1 @@
+SELECT account, value(sum(position)), value(sum(position), 2023-04-01) GROUP BY account ORDER BY account

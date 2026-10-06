@@ -1,0 +1,1 @@
+SELECT value(position, 2023-07-01), value(position, 2023-04-01) WHERE currency = 'HOOL'
