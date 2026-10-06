@@ -2,15 +2,6 @@ package ast
 
 import "path/filepath"
 
-// Stateful indicates a directive affects graph nodes and can report which ones.
-// This enables semantic analysis without type switching or field inspection.
-type Stateful interface {
-	// AffectedNodes returns the node IDs (account names, currency codes) this directive touches.
-	// Used to build the graph skeleton and understand directive dependencies.
-	// Returns empty slice if directive affects no nodes.
-	AffectedNodes() []string
-}
-
 // DirectiveKind identifies the type of directive for dispatch without type switching.
 type DirectiveKind string
 
@@ -53,12 +44,6 @@ var _ Directive = &Commodity{}
 func (c *Commodity) Position() Position  { return c.pos }
 func (c *Commodity) Date() *Date         { return c.date }
 func (c *Commodity) Kind() DirectiveKind { return KindCommodity }
-func (c *Commodity) AffectedNodes() []string {
-	if c.Currency == "" {
-		return []string{}
-	}
-	return []string{c.Currency}
-}
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (c *Commodity) SetPosition(pos Position) { c.pos = pos }
@@ -91,11 +76,6 @@ var _ Directive = &Open{}
 func (o *Open) Position() Position  { return o.pos }
 func (o *Open) Date() *Date         { return o.date }
 func (o *Open) Kind() DirectiveKind { return KindOpen }
-func (o *Open) AffectedNodes() []string {
-	nodes := []string{string(o.Account)}
-	nodes = append(nodes, o.ConstraintCurrencies...)
-	return nodes
-}
 
 // Accounts returns the account the directive opens.
 func (o *Open) Accounts() []Account { return []Account{o.Account} }
@@ -128,9 +108,6 @@ var _ Directive = &Close{}
 func (c *Close) Position() Position  { return c.pos }
 func (c *Close) Date() *Date         { return c.date }
 func (c *Close) Kind() DirectiveKind { return KindClose }
-func (c *Close) AffectedNodes() []string {
-	return []string{string(c.Account)}
-}
 
 // Accounts returns the account the directive closes.
 func (c *Close) Accounts() []Account { return []Account{c.Account} }
@@ -169,16 +146,6 @@ var _ Directive = &Balance{}
 func (b *Balance) Position() Position  { return b.pos }
 func (b *Balance) Date() *Date         { return b.date }
 func (b *Balance) Kind() DirectiveKind { return KindBalance }
-func (b *Balance) AffectedNodes() []string {
-	nodes := []string{string(b.Account)}
-	if b.Amount != nil {
-		nodes = append(nodes, b.Amount.Currency)
-	}
-	if b.Tolerance != nil {
-		nodes = append(nodes, b.Tolerance.Currency)
-	}
-	return nodes
-}
 
 // Accounts returns the account whose balance is asserted.
 func (b *Balance) Accounts() []Account { return []Account{b.Account} }
@@ -213,9 +180,6 @@ var _ Directive = &Pad{}
 func (p *Pad) Position() Position  { return p.pos }
 func (p *Pad) Date() *Date         { return p.date }
 func (p *Pad) Kind() DirectiveKind { return KindPad }
-func (p *Pad) AffectedNodes() []string {
-	return []string{string(p.Account), string(p.AccountPad)}
-}
 
 // Accounts returns the padded account and the source account.
 func (p *Pad) Accounts() []Account { return []Account{p.Account, p.AccountPad} }
@@ -253,9 +217,6 @@ var _ Directive = &Note{}
 func (n *Note) Position() Position  { return n.pos }
 func (n *Note) Date() *Date         { return n.date }
 func (n *Note) Kind() DirectiveKind { return KindNote }
-func (n *Note) AffectedNodes() []string {
-	return []string{string(n.Account)}
-}
 
 // Accounts returns the account the note is attached to.
 func (n *Note) Accounts() []Account { return []Account{n.Account} }
@@ -298,9 +259,6 @@ var _ Directive = &Document{}
 func (d *Document) Position() Position  { return d.pos }
 func (d *Document) Date() *Date         { return d.date }
 func (d *Document) Kind() DirectiveKind { return KindDocument }
-func (d *Document) AffectedNodes() []string {
-	return []string{string(d.Account)}
-}
 
 // ResolvedPath returns the document's path as beancount holds it: an
 // absolute path as written, any other resolved against the directory of
@@ -358,13 +316,6 @@ var _ Directive = &Price{}
 func (p *Price) Position() Position  { return p.pos }
 func (p *Price) Date() *Date         { return p.date }
 func (p *Price) Kind() DirectiveKind { return KindPrice }
-func (p *Price) AffectedNodes() []string {
-	nodes := []string{p.Commodity}
-	if p.Amount != nil {
-		nodes = append(nodes, p.Amount.Currency)
-	}
-	return nodes
-}
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (p *Price) SetPosition(pos Position) { p.pos = pos }
@@ -396,9 +347,6 @@ var _ Directive = &Event{}
 func (e *Event) Position() Position  { return e.pos }
 func (e *Event) Date() *Date         { return e.date }
 func (e *Event) Kind() DirectiveKind { return KindEvent }
-func (e *Event) AffectedNodes() []string {
-	return []string{}
-}
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (e *Event) SetPosition(pos Position) { e.pos = pos }
@@ -427,9 +375,6 @@ var _ Directive = &Query{}
 func (q *Query) Position() Position  { return q.pos }
 func (q *Query) Date() *Date         { return q.date }
 func (q *Query) Kind() DirectiveKind { return KindQuery }
-func (q *Query) AffectedNodes() []string {
-	return []string{}
-}
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (q *Query) SetPosition(pos Position) { q.pos = pos }
@@ -461,9 +406,6 @@ var _ Directive = &Custom{}
 func (c *Custom) Position() Position  { return c.pos }
 func (c *Custom) Date() *Date         { return c.date }
 func (c *Custom) Kind() DirectiveKind { return KindCustom }
-func (c *Custom) AffectedNodes() []string {
-	return []string{}
-}
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (c *Custom) SetPosition(pos Position) { c.pos = pos }

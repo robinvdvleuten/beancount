@@ -359,7 +359,7 @@ func discoverDocuments(tree *ast.AST, rootFile string) []error {
 		}
 
 		if accounts == nil {
-			accounts = tree.Enrich().Accounts
+			accounts = mentionedAccounts(tree)
 		}
 
 		// Like os.walk, the walk follows a root that is a symlink (the
@@ -647,4 +647,17 @@ func mergeASTs(main *ast.AST, included ...*ast.AST) *ast.AST {
 func prepareLoadedAST(tree *ast.AST) ([]error, error) {
 	pushPopErrors := ast.ApplyPushPopDirectives(tree)
 	return pushPopErrors, ast.SortDirectives(tree)
+}
+
+// mentionedAccounts returns every account a directive of tree names.
+func mentionedAccounts(tree *ast.AST) map[string]bool {
+	accounts := make(map[string]bool)
+	for _, directive := range tree.Directives {
+		if d, ok := directive.(ast.WithAccounts); ok {
+			for _, account := range d.Accounts() {
+				accounts[string(account)] = true
+			}
+		}
+	}
+	return accounts
 }

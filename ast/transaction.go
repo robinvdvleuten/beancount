@@ -83,22 +83,6 @@ func (t *Transaction) Accounts() []Account {
 	}
 	return accounts
 }
-func (t *Transaction) AffectedNodes() []string {
-	nodes := make([]string, 0, len(t.Postings))
-	seenAccounts := make(map[string]bool)
-	for _, posting := range t.Postings {
-		accountStr := string(posting.Account)
-		if !seenAccounts[accountStr] {
-			nodes = append(nodes, accountStr)
-			seenAccounts[accountStr] = true
-		}
-		if posting.Amount != nil && !seenAccounts[posting.Amount.Currency] {
-			nodes = append(nodes, posting.Amount.Currency)
-			seenAccounts[posting.Amount.Currency] = true
-		}
-	}
-	return nodes
-}
 
 // SetPosition sets the position (for use by parser/builders in ast package)
 func (t *Transaction) SetPosition(pos Position) { t.pos = pos }
