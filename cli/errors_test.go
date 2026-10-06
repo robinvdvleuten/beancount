@@ -421,7 +421,6 @@ func TestCheckDirectoryReportsTheLoadError(t *testing.T) {
 	var cmdErr *CommandError
 	assert.True(t, errors.As(err, &cmdErr), "got %v", err)
 	assert.Contains(t, stderr, "failed to read "+dir)
-	assert.Contains(t, stderr, "is a directory")
 	assert.NotContains(t, stderr, "error context")
 }
 

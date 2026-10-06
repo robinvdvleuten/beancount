@@ -34,11 +34,17 @@ option "allow_pipe_separator" "TRUE"
 	result, err := ledgerload.Load(context.Background(), loader.Source{Path: path})
 	assert.NoError(t, err)
 
+	// The JSON escapes a Windows path's backslashes, so replace the
+	// directory as it is encoded.
+	encodedDir, err := json.Marshal(dir + string(filepath.Separator))
+	assert.NoError(t, err)
+	prefix := strings.Trim(string(encodedDir), `"`)
+
 	var got []string
 	for _, err := range diagnostic.Errors(result.Diagnostics()) {
 		data, err := json.Marshal(jsonSafeSourceError(err))
 		assert.NoError(t, err)
-		got = append(got, strings.ReplaceAll(string(data), dir, "DIR"))
+		got = append(got, strings.ReplaceAll(string(data), prefix, "DIR/"))
 	}
 	assert.Equal(t, []string{
 		`{"message":"DIR/main.beancount:6:12: invalid token \"garbage\"","position":{"filename":"DIR/main.beancount","offset":172,"line":6,"column":12},"type":"ParseError"}`,
