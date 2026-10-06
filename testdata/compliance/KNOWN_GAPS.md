@@ -82,12 +82,6 @@ limits:
 
 Probed against beanquery 0.2.0, BQL gaps with no fixture yet:
 
-- A transaction's meta lacks the `__tolerances__` beancount's booking
-  records in it (#626), so `entry.meta['__tolerances__']` is NULL, and
-  `str(entry.meta)` and the `entry` column's `Transaction(...)` repr leave
-  the key out. `SELECT entry.meta` matches, since beanquery's renderer
-  hides `__` keys. In that repr, tags and links print sorted, where
-  Python's frozenset prints them in hash order.
 - beanquery types the `accounts` columns `typing.Set[str]`, and any
   function or `IS NULL` on one fails there with a Python `AttributeError`
   (`length(accounts)`), as does GROUP BY one. Here they compile as on a
@@ -176,6 +170,14 @@ compare the lines errors are on:
   traceback instead).
 
 ## Deliberate deviations
+
+- **A transaction's `__tolerances__`** (#626): beancount's booking records
+  the tolerances it infers in every transaction's meta, as `{}` when it
+  infers none. We do not, so `entry.meta['__tolerances__']` is NULL, and
+  `str(entry.meta)` and the `entry` column's `Transaction(...)` repr leave
+  the key out; no `SELECT entry` matches. `SELECT entry.meta` matches, since
+  beanquery's renderer hides `__` keys. In that repr, tags and links print
+  sorted, where Python's frozenset prints them in hash order.
 
 - **Negative zero** (#408): an interpolated amount rounded to zero from a
   negative residual is `-0.00` in beancount (Python decimal keeps the sign);
