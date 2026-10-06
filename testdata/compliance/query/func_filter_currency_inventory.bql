@@ -1,0 +1,1 @@
+SELECT account, filter_currency(sum(position), 'USD') GROUP BY account ORDER BY account

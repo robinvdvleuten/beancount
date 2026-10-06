@@ -1,0 +1,1 @@
+SELECT DISTINCT currency(units(position)), commodity(units(position))

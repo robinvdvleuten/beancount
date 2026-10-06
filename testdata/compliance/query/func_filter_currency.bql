@@ -1,0 +1,1 @@
+SELECT filter_currency(position, 'HOOL'), filter_currency(position, 'USD') WHERE account ~ 'Invest'
