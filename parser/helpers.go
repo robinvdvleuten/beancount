@@ -1071,13 +1071,6 @@ func (p *Parser) tokenPositionFromPeek() ast.Position {
 	return tokenPosition(p.peek(), p.filename)
 }
 
-// tokenPositionFromPrevious extracts position from the previous token.
-// Used internally for position handling in error reporting.
-// nolint: unused
-func (p *Parser) tokenPositionFromPrevious() ast.Position {
-	return tokenPosition(p.previous(), p.filename)
-}
-
 // positionAtEndOfPrevious returns a position at the end of the previous token.
 // This is used to point at where a missing token was expected.
 func (p *Parser) positionAtEndOfPrevious() ast.Position {

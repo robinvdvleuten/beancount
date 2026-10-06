@@ -56,11 +56,3 @@ func (i *Interner) InternBytes(b []byte) string {
 func (i *Interner) Size() int {
 	return len(i.pool)
 }
-
-// Reset clears the intern pool.
-// This can be used between parse operations to free memory,
-// but typically you want to keep the pool across multiple files
-// to maximize interning efficiency.
-func (i *Interner) Reset() {
-	i.pool = make(map[string]string)
-}
