@@ -379,7 +379,7 @@ func TestBookedTolerances(t *testing.T) {
 
 	total := units("18.572", "VWELX", ast.WithCost(&ast.Cost{IsTotal: true, Amount: ast.NewAmount("575.00", "USD")}))
 	postings = []*ast.Posting{total, units("-575", "USD")}
-	assert.Equal(t, "0.2875", tolerances.spec(postings).of("USD").String(), "a total cost counts in full")
+	assert.Equal(t, "0", tolerances.spec(postings).of("USD").String(), "a total cost adds nothing: its per-unit part is zero")
 	assert.Equal(t, "0.01548", tolerances.booked(postings, nil, nil, nil).of("USD").Round(5).String(), "and per unit once booked")
 
 	empty := units("1.5", "HOOL", ast.WithCost(&ast.Cost{}))

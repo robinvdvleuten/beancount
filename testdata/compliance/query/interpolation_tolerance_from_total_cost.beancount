@@ -1,0 +1,25 @@
+; Under infer_tolerance_from_cost, a cost adds the units' tolerance times
+; its smallest number to its currency's tolerance, which rounds the units
+; interpolated in that currency. beancount's grammar gives total braces a
+; per-unit part of zero, so {{574.99 USD}} adds nothing and the gains round
+; to the 0.01 USD the cash implies; a per-unit cost adds its share, so they
+; keep their digits.
+option "infer_tolerance_from_cost" "TRUE"
+2020-01-01 open Assets:Invest
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Gains
+
+2020-01-02 * "total braces: the per-unit part is zero, so the cost adds nothing"
+  Assets:Invest  18.572 VWELX {{574.99 USD}}
+  Assets:Cash   -575.00 USD
+  Income:Gains
+
+2020-01-03 * "per-unit cost: the cost adds its share"
+  Assets:Invest  18.572 VWELX {30.96 USD}
+  Assets:Cash   -575.00 USD
+  Income:Gains
+
+2020-01-04 * "compound cost: the smaller number counts"
+  Assets:Invest  18.572 VWELX {0.01 # 574.80 USD}
+  Assets:Cash   -575.00 USD
+  Income:Gains

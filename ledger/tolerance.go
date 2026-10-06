@@ -283,7 +283,9 @@ func statedUnitsNumber(posting *ast.Posting) (decimal.Decimal, bool) {
 
 // specToleranceShares describes postings as beancount sees them before
 // booking, when it rounds interpolated amounts: a cost spec contributes the
-// numbers it states (per-unit, or total for {{...}}, and a compound total).
+// numbers it states (per-unit, or total for {{...}}, and a compound total),
+// and total braces with a number also the zero per-unit part beancount's
+// grammar gives them, so that such a cost adds nothing.
 func specToleranceShares(postings []*ast.Posting) []toleranceShare {
 	var shares []toleranceShare
 	for _, posting := range postings {
@@ -302,6 +304,9 @@ func specToleranceShares(postings []*ast.Posting) []toleranceShare {
 				if n, err := ParseAmount(amount); err == nil {
 					share.costNumbers = append(share.costNumbers, n)
 				}
+			}
+			if posting.Cost.IsTotal && posting.Cost.HasNumber() {
+				share.costNumbers = append(share.costNumbers, pydecimal.Zero)
 			}
 		}
 		shares = append(shares, share)
