@@ -439,64 +439,6 @@ func TestNewEvent(t *testing.T) {
 	assert.Equal(t, "New York, USA", event.Value.Value)
 }
 
-// Example_csvImporter demonstrates how to use the builders to create
-// transactions from CSV data, such as a bank statement import.
-func Example_csvImporter() {
-	// Example: Parse a CSV row from a bank statement
-	// CSV format: date,payee,amount
-	// Row: "2024-01-15,Whole Foods,-45.60"
-
-	// Parse the CSV data (simplified for example)
-	date, _ := NewDate("2024-01-15")
-	payee := "Whole Foods"
-	amount := "-45.60"
-
-	// Create accounts
-	expensesAccount, _ := NewAccount("Expenses:Groceries")
-	checkingAccount, _ := NewAccount("Assets:Checking")
-
-	// Build the transaction
-	txn := NewTransaction(date, "Groceries",
-		WithFlag("*"),
-		WithPayee(payee),
-		WithTags("food"),
-		WithPostings(
-			NewPosting(expensesAccount, WithAmount("45.60", "USD")), // Positive for expense
-			NewPosting(checkingAccount, WithAmount(amount, "USD")),  // Negative for withdrawal
-		),
-	)
-
-	// Now you can format and output the transaction
-	_ = txn // Use printer.Sprint(txn)
-}
-
-// Example_investmentTransaction demonstrates building a transaction
-// with cost basis for investment tracking.
-func Example_investmentTransaction() {
-	date, _ := NewDate("2024-01-15")
-
-	// Buy 10 shares of HOOL at $520 per share
-	brokerageAccount, _ := NewAccount("Assets:Investments:Brokerage")
-	cashAccount, _ := NewAccount("Assets:Investments:Cash")
-
-	cost := NewCost(NewAmount("520.00", "USD"))
-
-	txn := NewTransaction(date, "Buy HOOL shares",
-		WithFlag("*"),
-		WithPayee("Vanguard"),
-		WithTags("investment", "stocks"),
-		WithPostings(
-			NewPosting(brokerageAccount,
-				WithAmount("10", "HOOL"),
-				WithCost(cost)),
-			NewPosting(cashAccount,
-				WithAmount("-5200.00", "USD")),
-		),
-	)
-
-	_ = txn // Use printer.Sprint(txn)
-}
-
 func TestAccountTypeStringPanicsOnInvalid(t *testing.T) {
 	assert.Panics(t, func() {
 		_ = AccountType(0).String()

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"io"
 	"slices"
 	"sort"
 	"strings"
@@ -720,16 +719,6 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 }
 
 // Public API functions parse source syntax into raw ASTs.
-
-// Parse parses a raw source AST from an io.Reader.
-// This is a convenience wrapper around ParseBytesWithFilename.
-func Parse(ctx context.Context, r io.Reader) (*ast.AST, error) {
-	data, err := io.ReadAll(r)
-	if err != nil {
-		return nil, err
-	}
-	return ParseBytesWithFilename(ctx, "", data)
-}
 
 // ParseString parses a raw source AST from a string.
 // This is a convenience wrapper around ParseBytesWithFilename.
