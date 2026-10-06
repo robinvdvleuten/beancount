@@ -928,7 +928,7 @@ include "accounts.beancount"
 	})
 }
 
-func TestMustLoad(t *testing.T) {
+func TestLoadFileAndData(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a temporary beancount file
@@ -945,38 +945,36 @@ func TestMustLoad(t *testing.T) {
 
 	ldr := New()
 
-	// Should not panic on valid file
-	result := ldr.MustLoad(ctx, Source{Path: tmpFile})
-	assert.True(t, result != nil)
+	result, err := ldr.Load(ctx, Source{Path: tmpFile})
+	assert.NoError(t, err)
 	assert.Equal(t, len(result.AST.Directives), 3)
 
-	// Nor on the same text given as data, or on empty text
-	result = ldr.MustLoad(ctx, Source{Path: "test.beancount", Data: content})
+	// The same text given as data, and empty text
+	result, err = ldr.Load(ctx, Source{Path: "test.beancount", Data: content})
+	assert.NoError(t, err)
 	assert.Equal(t, len(result.AST.Directives), 3)
-	result = ldr.MustLoad(ctx, Source{Path: "empty.beancount", Data: []byte("")})
+	result, err = ldr.Load(ctx, Source{Path: "empty.beancount", Data: []byte("")})
+	assert.NoError(t, err)
 	assert.Equal(t, len(result.AST.Directives), 0)
 }
 
-func TestMustLoadInvalidPanics(t *testing.T) {
+func TestLoadInvalidFails(t *testing.T) {
 	ctx := context.Background()
 	ldr := New()
 
 	// Invalid syntax - unclosed string
 	data := []byte(`2024-01-01 open Assets:Checking "unclosed`)
 
-	assert.Panics(t, func() {
-		ldr.MustLoad(ctx, Source{Path: "invalid.beancount", Data: data})
-	})
+	_, err := ldr.Load(ctx, Source{Path: "invalid.beancount", Data: data})
+	assert.Error(t, err)
 }
 
-func TestMustLoadNonexistentFilePanics(t *testing.T) {
+func TestLoadNonexistentFileFails(t *testing.T) {
 	ctx := context.Background()
 	ldr := New()
 
-	// Nonexistent file should panic
-	assert.Panics(t, func() {
-		ldr.MustLoad(ctx, Source{Path: "/nonexistent/file.beancount"})
-	})
+	_, err := ldr.Load(ctx, Source{Path: "/nonexistent/file.beancount"})
+	assert.Error(t, err)
 }
 
 // TestLoadStdin pins how a ledger read from stdin loads, which is how

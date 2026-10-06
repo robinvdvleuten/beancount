@@ -406,21 +406,6 @@ func discoverDocuments(tree *ast.AST, rootFile string) []error {
 	return diagnostics
 }
 
-// MustLoad loads a source, panicking on error.
-// Intended for use in tests and examples where error handling is not needed.
-//
-// Example:
-//
-//	loader := loader.New(loader.WithFollowIncludes())
-//	result := loader.MustLoad(context.Background(), loader.Source{Path: "main.beancount"})
-func (l *Loader) MustLoad(ctx context.Context, src Source) *LoadResult {
-	result, err := l.Load(ctx, src)
-	if err != nil {
-		panic(err)
-	}
-	return result
-}
-
 // loaderState tracks state during recursive loading.
 type loaderState struct {
 	visited        map[string]bool     // Absolute paths of files already loaded
