@@ -37,12 +37,23 @@ func TestQuoInexact(t *testing.T) {
 		{"1", "7E-30", "1.428571428571428571428571429E+29"},
 		{"123456789012345678901234567890", "1", "1.234567890123456789012345679E+29"},
 		{"99999999999999999999999999995", "1", "1.000000000000000000000000000E+29"},
+		// A zero quotient keeps the ideal exponent, above zero too.
+		{"0", "-10.5", "0E+1"},
+		{"0", "8.00", "0E+2"},
+		{"0.00", "8.00", "0"},
 	} {
 		got := Quo(decimal.RequireFromString(tt[0]), decimal.RequireFromString(tt[1]))
 		want := decimal.RequireFromString(tt[2])
 		assert.Equal(t, want.Coefficient().String(), got.Coefficient().String(), tt[0]+" / "+tt[1])
 		assert.Equal(t, want.Exponent(), got.Exponent(), tt[0]+" / "+tt[1])
 	}
+}
+
+func TestZero(t *testing.T) {
+	// Python's Decimal() has exponent 0; shopspring's Zero has 1.
+	assert.Equal(t, int32(0), Zero.Exponent())
+	assert.Equal(t, int32(1), decimal.Zero.Exponent())
+	assert.Equal(t, "0", String(Mul(decimal.RequireFromString("8.00"), Quo(Zero, decimal.RequireFromString("8.00")))))
 }
 
 func TestNormalize(t *testing.T) {

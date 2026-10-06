@@ -234,7 +234,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		weight := balance[currency].Neg()
 		if weight.IsZero() {
 			// beancount's plain ZERO, as for a cost below.
-			weight = decimal.Zero
+			weight = pydecimal.Zero
 		}
 		priceNumber := weight.Abs()
 		if !units.IsZero() {
@@ -284,7 +284,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 		if needed.IsZero() {
 			// beancount's residual inventory is empty then, and its
 			// weight the plain ZERO, whatever exponent the sum left.
-			needed = decimal.Zero
+			needed = pydecimal.Zero
 		}
 		cost := posting.Cost
 		completed := *cost

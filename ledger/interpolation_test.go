@@ -323,6 +323,16 @@ func TestInterpolate(t *testing.T) {
 			},
 		},
 		{
+			name: "a price interpolated from a zero residual keeps Python's exponent",
+			source: `
+2024-01-15 * "Test"
+  Assets:Euros  -10.5 EUR @ USD
+`,
+			want: []string{
+				"USD: Assets:Euros price 0E+1 USD",
+			},
+		},
+		{
 			name: "missing units that interpolate to a zero weight are left out",
 			source: `
 2024-01-15 * "Test"

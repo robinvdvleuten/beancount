@@ -1,0 +1,11 @@
+; The weight of negative units at a price interpolated from a zero
+; residual is a zero with the units' sign in beanquery, -0 USD, and 0 USD
+; here (#408). The digits and the column width agree
+; (query/weight_price_interpolated_to_zero.bql).
+2020-01-01 open Assets:A
+
+2020-01-02 * "per-unit price, alone"
+  Assets:A  -10.5 EUR @ USD
+
+2020-01-03 * "total price, alone"
+  Assets:A  -10.5 EUR @@ USD

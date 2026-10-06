@@ -23,15 +23,6 @@ so one of a non-zero amount also fails and `PRINT` shows its `; Diff:`.
 The lines agree. Like beancount v3, the balance is a use of its account
 for `doctor missing_open`.
 
-**A price interpolated to zero**: when nothing else weighs in a posting's
-price currency (`-10.5 EUR @ USD` alone), the price is the zero residual
-over the units. Python gives that quotient the exponent of the division,
-`0E+1`, so the posting's weight, its units times the price, is a zero
-without digits and with the units' sign: bean-query's `weight` column
-shows `-0 USD`. Our quotient is a plain zero, and the weight keeps the
-units' digits: `0.0 USD`. `PRINT` shows `@ 0 USD` in both, and `check`
-reports the same.
-
 **Merge cost on an augmentation**: both implementations report a merge
 cost `{*}` ("Cost merging is not supported yet"), and beancount then books
 it like `{}`: an augmentation at `{*}` gets the cost the transaction's
@@ -193,7 +184,11 @@ compare the lines errors are on:
   that zero differs. `query/negative_zero.bql` shows it and is listed in
   `queryGaps`. Arithmetic differs the same way: beanquery keeps the sign of
   a negative number times zero (`number * 0` is `-0.00` for `-1.00`), and
-  we give `0.00`. A negative number that only rounds to zero when displayed
+  we give `0.00`; so does the weight of negative units at a price
+  interpolated from a zero residual (`-10.5 EUR @ USD` alone), the units
+  times a zero price: `-0 USD` there, `0 USD` here
+  (`query/weight_price_interpolated_to_zero_sign.bql`). A negative number
+  that only rounds to zero when displayed
   (`-0.001 USD` at USD's two digits) keeps its sign as in beanquery,
   `-0.00 USD`, numberified too (`query/negative_dust.bql`,
   `query/numberify_negative_dust.bql`).

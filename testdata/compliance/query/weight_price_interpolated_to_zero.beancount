@@ -1,0 +1,21 @@
+; A price interpolated from a zero residual is the zero over the units,
+; which keeps Python's ideal exponent (0E+1 over 10.5), so the weight, the
+; units times the price, is a zero without digits: `0 USD`, not `0.0 USD`.
+; With negative units beanquery shows that zero with the units' sign, -0
+; (#408, query/weight_price_interpolated_to_zero_sign.bql).
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "per-unit price, alone"
+  Assets:A  10.5 EUR @ USD
+
+2020-01-03 * "total price, alone"
+  Assets:A  10.5 EUR @@ USD
+
+2020-01-04 * "integer units"
+  Assets:A  3 EUR @ USD
+
+2020-01-05 * "a residual summed to zero"
+  Assets:A  1.00 USD
+  Assets:B  -1.000 USD
+  Assets:A  200 EUR @ USD

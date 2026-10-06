@@ -20,7 +20,7 @@ import (
 func Quo(a, b decimal.Decimal) decimal.Decimal {
 	ideal := a.Exponent() - b.Exponent()
 	if a.IsZero() {
-		return decimal.New(0, min(ideal, 0))
+		return decimal.New(0, ideal)
 	}
 	// Python's _divide: compute prec+1 digits, fold a remainder into a
 	// sticky last digit, then round the whole to prec digits.
@@ -94,6 +94,11 @@ func round(d decimal.Decimal) decimal.Decimal {
 
 // precision is Python's default decimal context precision.
 const precision = 28
+
+// Zero is Python's Decimal(): a zero with exponent 0, where shopspring's
+// decimal.Zero has exponent 1. The exponent of a zero shows in what it
+// gives: 0 over 8.00 is 0E+2, and 8.00 times that is 0.
+var Zero = decimal.New(0, 0)
 
 // roundHalfEven rounds a non-negative coefficient to precision digits.
 func roundHalfEven(coefficient *big.Int, exponent int32) (*big.Int, int32) {
