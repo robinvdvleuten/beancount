@@ -15,6 +15,7 @@ Before exploring or planning a feature, establish its value in this project's co
 
 - `gofmt -l .` prints nothing (fix with `gofmt -w <changed-files>`)
 - `golangci-lint run` passes
+- `deadcode -tags=dev,difffuzz -test ./... ./importer/testdata/fixture ./_examples/csv_importer` prints nothing: golangci-lint's `unused` skips exported names, so this catches an exported function nothing calls. `mise install` pins it and golangci-lint at CI's versions (`mise.toml`)
 - `go test ./...` and `go test -tags=dev ./...` pass. The former embeds the frontend, so build it first in a fresh clone (`npm ci --prefix assets && npm run --prefix assets build`), or `web`'s tests panic on the missing `web/dist/index.html`. CI runs only the latter, whose `web` serves no frontend; a test of the embedded frontend goes in a `//go:build !dev` file
 - A Beancount semantics or query change carries a compliance fixture (see [Beancount compliance](#beancount-compliance))
 - A frontend change passes `npm run --prefix assets lint` and `npm run --prefix assets test`

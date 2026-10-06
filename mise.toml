@@ -1,0 +1,4 @@
+# Tools CI installs too (jdx/mise-action), so local runs match it.
+[tools]
+golangci-lint = "2.14.0"
+"go:golang.org/x/tools/cmd/deadcode" = "0.51.0"

@@ -21,7 +21,17 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.mod
+      - uses: jdx/mise-action@2d8d4cafcbd33be2ea37d2b6f5ad595363d1f1ca # v5.1.1
       - uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          install-mode: none
+      # deadcode exits 0 on findings, so any output fails the step. The
+      # importer fixture and the example are named because ./... skips
+      # testdata and _ dirs.
+      - name: deadcode
+        run: |
+          out=$(deadcode -tags=dev,difffuzz -test ./... ./importer/testdata/fixture ./_examples/csv_importer)
+          [ -z "$out" ] || { echo "$out"; exit 1; }
 
   lint-js:
     runs-on: ubuntu-latest
