@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -100,22 +99,25 @@ var missingOpenGaps = map[string]string{}
 // testdata/compliance/missing_open. Runs whenever bean-doctor 3.x is
 // installed.
 func TestOfficialMissingOpenParity(t *testing.T) {
-	requireOfficialTool(t, "bean-doctor", 3)
+	o := requireOracle(t)
 
 	var names []string
 	for _, path := range missingOpenFixtures(t) {
 		name := strings.TrimSuffix(filepath.Base(path), ".beancount")
 		names = append(names, name)
 		t.Run(name, func(t *testing.T) {
-			official, err := exec.Command("bean-doctor", "missing_open", path).Output()
-			assert.NoError(t, err)
+			run := o.run(t, oracleCall{tool: "bean-doctor", args: []string{"missing_open", path}, inputs: []string{path}}, func() officialRun {
+				return execOfficial(t, "bean-doctor", "missing_open", path)
+			})
+			assert.Zero(t, run.Exit, "bean-doctor: %s", run.Stderr)
+			official := run.Stdout
 			ours := runOurMissingOpen(t, path)
 
 			if reason, ok := missingOpenGaps[name]; ok {
-				assert.NotEqual(t, string(official), ours, "the output agrees; remove the missingOpenGaps entry (%s)", reason)
+				assert.NotEqual(t, official, ours, "the output agrees; remove the missingOpenGaps entry (%s)", reason)
 				return
 			}
-			assert.Equal(t, string(official), ours)
+			assert.Equal(t, official, ours)
 		})
 	}
 	assertGapsNameFixtures(t, missingOpenGaps, names)

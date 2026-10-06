@@ -33,6 +33,7 @@ var (
 	fuzzTime = flag.Duration("difffuzz.time", 30*time.Second, "how long TestDiffFuzz mutates ledgers, once it has run every seed")
 	fuzzSeed = flag.Uint64("difffuzz.seed", 0, "seed of TestDiffFuzz's mutations (0 picks one)")
 	fuzzOut  = flag.String("difffuzz.out", "../.difffuzz", "directory TestDiffFuzz writes minimized divergences to")
+	fuzzN    = flag.Int("difffuzz.ledgers", 0, "how many mutations TestDiffFuzz runs instead of -difffuzz.time (0 runs for that long)")
 )
 
 // fuzzQueries are the statements TestDiffFuzz runs on every ledger. They
@@ -58,11 +59,15 @@ var fuzzQueries = []string{
 // ledger made from its seed. A ledger bean-check or bean-query raises on is
 // skipped, as is one matching knownDivergences.
 //
+// The official answers go through the frozen oracle. With -difffuzz.seed
+// and -difffuzz.ledgers, a run makes the same ledgers every time, so once
+// one with the official tools has recorded their answers, it replays
+// without them: a ledger it has no answer for is skipped, and a divergence
+// is reported unminimized, on the oracle's word.
+//
 //	go test -tags=difffuzz ./cli -run DiffFuzz -difffuzz.time=5m -timeout=0
 func TestDiffFuzz(t *testing.T) {
-	requireOfficialTool(t, "bean-check", 3)
-	requireOfficialTool(t, "bean-format", 3)
-	requireBeanquery(t)
+	o := requireOracle(t)
 
 	seed := *fuzzSeed
 	if seed == 0 {
@@ -70,10 +75,15 @@ func TestDiffFuzz(t *testing.T) {
 	}
 	dir, err := filepath.EvalSymlinks(t.TempDir())
 	assert.NoError(t, err)
+	script, err := os.ReadFile(filepath.Join("testdata", "difffuzz_oracle.py"))
+	assert.NoError(t, err)
 	f := &fuzzer{
-		t:      t,
-		path:   filepath.Join(dir, "fuzz.beancount"),
-		python: beanqueryPython(t),
+		t:    t,
+		path: filepath.Join(dir, "fuzz.beancount"),
+		// A ledger may name a document beside its directory, which is
+		// t.TempDir's numbered one in the test's own.
+		frozen: o.with(filepath.Dir(dir)),
+		script: string(script),
 		seen:   map[string]bool{},
 		known:  map[string]int{},
 	}
@@ -85,7 +95,8 @@ func TestDiffFuzz(t *testing.T) {
 		diverging[i] = f.run(src, nil)
 	}
 	rng := rand.New(rand.NewPCG(seed, 0))
-	for deadline := time.Now().Add(*fuzzTime); time.Now().Before(deadline); {
+	deadline := time.Now().Add(*fuzzTime)
+	for n := 0; *fuzzN > 0 && n < *fuzzN || *fuzzN == 0 && time.Now().Before(deadline); n++ {
 		i := rng.IntN(len(seeds))
 		f.run(mutate(rng, seeds[i], seeds), diverging[i])
 	}
@@ -261,7 +272,9 @@ func minimize(lines []string, diverges func([]string) bool) []string {
 type fuzzer struct {
 	t      *testing.T
 	path   string
-	python string
+	frozen *frozenOracle
+	// script is the oracle process's source, which its answers depend on.
+	script string
 	oracle *oracle
 	// silent counts the ledgers in a row the oracle did not answer for.
 	silent int
@@ -532,21 +545,29 @@ const endOfLineError = "syntax error, unexpected EOL"
 // askOracle returns the official verdict on the fuzzer's ledger as the
 // oracle process gives it, or an empty one when the oracle does not answer.
 func (f *fuzzer) askOracle() (v verdict) {
-	if f.oracle == nil {
-		f.oracle = startOracle(f.t, f.python)
-	}
-	answer, ok := f.oracle.ask(f.path)
-	if !ok {
-		// Python may die or hang on a ledger, which is then skipped, but
-		// not on one after the other.
-		stderr := f.oracle.stop()
-		f.oracle = nil
-		if f.silent++; f.silent == 3 {
-			f.t.Fatalf("the oracle does not answer:\n%s", stderr)
+	call := oracleCall{tool: "bean-query", args: append([]string{f.script}, fuzzQueries...), inputs: []string{f.path}}
+	run, ok := f.frozen.lookup(f.t, call, func() (officialRun, bool) {
+		if f.oracle == nil {
+			f.oracle = startOracle(f.t, f.frozen.python)
 		}
+		line, ok := f.oracle.ask(f.path)
+		if !ok {
+			// Python may die or hang on a ledger, which is then skipped,
+			// but not on one after the other.
+			stderr := f.oracle.stop()
+			f.oracle = nil
+			if f.silent++; f.silent == 3 {
+				f.t.Fatalf("the oracle does not answer:\n%s", stderr)
+			}
+			return officialRun{}, false
+		}
+		f.silent = 0
+		return officialRun{Stdout: string(line)}, true
+	})
+	var answer oracleAnswer
+	if !ok || json.Unmarshal([]byte(run.Stdout), &answer) != nil {
 		return v
 	}
-	f.silent = 0
 	if string(answer.Check) != "null" {
 		f.officialCheck(&v, answer.Check)
 	}
@@ -564,6 +585,10 @@ func (f *fuzzer) askOracle() (v verdict) {
 // runTool returns the official verdict on the fuzzer's ledger as the tool a
 // kind of divergence is of gives it.
 func (f *fuzzer) runTool(kind string) (v verdict) {
+	if !f.frozen.isLive("bean-check") || !f.frozen.isLive("bean-format") || !f.frozen.isLive("bean-query") {
+		// A replay without the tools has the oracle's word alone.
+		return f.askOracle()
+	}
 	switch command(kind) {
 	case "check":
 		// bean-check exits 1 on a ledger with errors and when it raises,
@@ -628,21 +653,21 @@ func startOracle(t *testing.T, python string) *oracle {
 	return o
 }
 
-// ask returns the oracle's answer for the ledger at path, or false when it
-// dies or takes too long over it.
-func (o *oracle) ask(path string) (answer oracleAnswer, ok bool) {
+// ask returns the oracle's answer for the ledger at path, a line of JSON,
+// or false when it dies or takes too long over it.
+func (o *oracle) ask(path string) ([]byte, bool) {
 	request, err := json.Marshal(map[string]any{"path": path, "queries": fuzzQueries})
 	if err != nil {
 		panic(err)
 	}
 	if _, err := o.stdin.Write(append(request, '\n')); err != nil {
-		return answer, false
+		return nil, false
 	}
 	select {
 	case line, open := <-o.answers:
-		return answer, open && json.Unmarshal(line, &answer) == nil
+		return line, open && json.Valid(line)
 	case <-time.After(30 * time.Second):
-		return answer, false
+		return nil, false
 	}
 }
 

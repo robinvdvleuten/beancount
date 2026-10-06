@@ -113,15 +113,6 @@ func hasOfficialTool(t *testing.T, tool string, major int) bool {
 	return true
 }
 
-// requireOfficialTool skips the test when tool is not on PATH.
-func requireOfficialTool(t *testing.T, tool string, major int) {
-	t.Helper()
-
-	if !hasOfficialTool(t, tool, major) {
-		t.Skipf("%s not found in PATH; install beancount %d.x to run this suite", tool, major)
-	}
-}
-
 // isBeancountMajor reports whether version, a tool's --version output, names
 // the given major version of beancount ("Beancount 3.2.3").
 func isBeancountMajor(version string, major int) bool {
@@ -153,7 +144,7 @@ func assertGapsNameFixtures(t *testing.T, gaps map[string]string, fixtures []str
 // --json is held to bean-check --json's filenames and lines, not its bytes.
 // Runs whenever bean-check 3.x is installed.
 func TestOfficialBeancountDifferential(t *testing.T) {
-	requireOfficialTool(t, "bean-check", 3)
+	o := requireOracle(t)
 
 	var names []string
 	for _, fixture := range loadComplianceFixtures(t) {
@@ -161,13 +152,11 @@ func TestOfficialBeancountDifferential(t *testing.T) {
 		t.Run(fixture.name, func(t *testing.T) {
 			abs, err := filepath.Abs(fixture.path)
 			assert.NoError(t, err)
-			out, err := exec.Command("bean-check", "--json", abs).Output()
-			officialOK := err == nil
-			var exitErr *exec.ExitError
-			if err != nil && !errors.As(err, &exitErr) {
-				t.Fatalf("run bean-check: %v", err)
-			}
-			assert.Equal(t, fixture.wantPass, officialOK)
+			official := o.run(t, oracleCall{tool: "bean-check", args: []string{"--json", abs}, inputs: []string{abs}}, func() officialRun {
+				return execOfficial(t, "bean-check", "--json", abs)
+			})
+			out := []byte(official.Stdout)
+			assert.Equal(t, fixture.wantPass, official.Exit == 0)
 
 			if fixture.knownGap {
 				return
@@ -296,7 +285,7 @@ var formatGaps = map[string]string{
 // with bean-format on the fixtures under testdata/compliance/format.
 // Runs whenever bean-format 3.x is installed.
 func TestOfficialFormatParity(t *testing.T) {
-	requireOfficialTool(t, "bean-format", 3)
+	o := requireOracle(t)
 
 	paths, err := filepath.Glob(filepath.Join(complianceDir, "format", "*.beancount"))
 	assert.NoError(t, err)
@@ -319,14 +308,17 @@ func TestOfficialFormatParity(t *testing.T) {
 			var ours bytes.Buffer
 			assert.NoError(t, formatter.New().Format(ctx, tree, source, &ours))
 
-			official, err := exec.Command("bean-format", path).Output()
-			assert.NoError(t, err)
+			run := o.run(t, oracleCall{tool: "bean-format", args: []string{path}, inputs: []string{path}}, func() officialRun {
+				return execOfficial(t, "bean-format", path)
+			})
+			assert.Zero(t, run.Exit, "bean-format: %s", run.Stderr)
+			official := run.Stdout
 
 			if reason, ok := formatGaps[name]; ok {
-				assert.NotEqual(t, string(official), ours.String(), "the output agrees; remove the formatGaps entry (%s)", reason)
+				assert.NotEqual(t, official, ours.String(), "the output agrees; remove the formatGaps entry (%s)", reason)
 				return
 			}
-			assert.Equal(t, string(official), ours.String())
+			assert.Equal(t, official, ours.String())
 		})
 	}
 	assertGapsNameFixtures(t, formatGaps, names)
@@ -383,7 +375,7 @@ func TestNoFollowOnErrors(t *testing.T) {
 	assert.NoError(t, err)
 	assert.True(t, len(paths) > 0, "no applied_ fixtures found in %s", complianceDir)
 
-	official := hasOfficialTool(t, "bean-check", 3)
+	o := findOracle(t)
 	for _, path := range paths {
 		t.Run(strings.TrimSuffix(filepath.Base(path), ".fail.beancount"), func(t *testing.T) {
 			result, err := ledgerload.Load(context.Background(), loader.Source{Path: path})
@@ -391,13 +383,16 @@ func TestNoFollowOnErrors(t *testing.T) {
 			loadErrors, validationErrors := diagnostic.Errors(result.LoadDiagnostics), result.Ledger.Diagnostics()
 			assert.Equal(t, 1, len(loadErrors)+len(validationErrors), "%v %v", loadErrors, validationErrors)
 
-			if !official {
+			if o == nil {
 				return
 			}
 			// bean-check prints each error as "<absolute path>:<line>: <message>".
 			abs, err := filepath.Abs(path)
 			assert.NoError(t, err)
-			out, _ := exec.Command("bean-check", abs).CombinedOutput()
+			run := o.run(t, oracleCall{tool: "bean-check", args: []string{abs}, inputs: []string{abs}}, func() officialRun {
+				return execOfficial(t, "bean-check", abs)
+			})
+			out := run.Stdout + run.Stderr
 			reported := 0
 			for line := range strings.Lines(string(out)) {
 				if strings.HasPrefix(line, abs+":") {

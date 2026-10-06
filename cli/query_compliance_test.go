@@ -129,8 +129,7 @@ var queryGaps = map[string]string{
 // statement beanquery fails, stderr with the text its interactive shell
 // prints (beanqueryShellError). Runs whenever beanquery 0.2 is installed.
 func TestOfficialQueryParity(t *testing.T) {
-	requireBeanquery(t)
-	python := beanqueryPython(t)
+	o := requireOracle(t)
 
 	fixtures := loadQueryFixtures(t)
 	names := make([]string, len(fixtures))
@@ -147,17 +146,15 @@ func TestOfficialQueryParity(t *testing.T) {
 				}
 				args = append(args, fixture.ledger, fixture.query)
 
-				var official queryOutput
-				stdout, err := exec.Command("bean-query", args...).Output()
-				official.stdout = string(stdout)
-				if err != nil {
-					var exitErr *exec.ExitError
-					assert.True(t, stdErrors.As(err, &exitErr), "bean-query: %v", err)
-					official.exitCode = exitErr.ExitCode()
+				run := o.run(t, oracleCall{tool: "bean-query", args: args, inputs: []string{fixture.ledger}}, func() officialRun {
+					return execOfficial(t, "bean-query", args...)
+				})
+				official := queryOutput{stdout: run.Stdout, exitCode: run.Exit}
+				if run.Exit != 0 {
 					// One-shot bean-query prints a traceback for a failed
 					// statement, so its shell's text stands in for it.
 					if shellError == "" {
-						shellError = runBeanqueryShellError(t, python, fixture)
+						shellError = officialShellError(t, o, fixture)
 					}
 					official.stderr = shellError
 				}
@@ -233,19 +230,18 @@ func beanqueryPython(t *testing.T) string {
 	return python
 }
 
-// runBeanqueryShellError returns what beanquery's shell prints on stderr
-// for a fixture's statement, which it fails.
-func runBeanqueryShellError(t *testing.T, python string, fixture queryFixture) string {
+// officialShellError returns what beanquery's shell prints on stderr for a
+// fixture's statement, which it fails.
+func officialShellError(t *testing.T, o *frozenOracle, fixture queryFixture) string {
 	t.Helper()
 
-	cmd := exec.Command(python, "-c", beanqueryShellError, fixture.ledger, fixture.query)
-	var stderr strings.Builder
-	cmd.Stderr = &stderr
-	err := cmd.Run()
-	var exitErr *exec.ExitError
-	assert.True(t, stdErrors.As(err, &exitErr) && exitErr.ExitCode() == shellErrorExit && strings.HasPrefix(stderr.String(), "error: "),
-		"beanquery's shell does not report an error for %s: %v\n%s", fixture.name, err, stderr.String())
-	return stderr.String()
+	call := oracleCall{tool: "bean-query", args: []string{beanqueryShellError, fixture.ledger, fixture.query}, inputs: []string{fixture.ledger}}
+	run := o.run(t, call, func() officialRun {
+		return execOfficial(t, o.python, "-c", beanqueryShellError, fixture.ledger, fixture.query)
+	})
+	assert.True(t, run.Exit == shellErrorExit && strings.HasPrefix(run.Stderr, "error: "),
+		"beanquery's shell does not report an error for %s: exit %d\n%s", fixture.name, run.Exit, run.Stderr)
+	return run.Stderr
 }
 
 // requireBeanquery skips the test when bean-query is not on PATH, and fails
