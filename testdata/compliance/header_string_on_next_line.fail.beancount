@@ -1,0 +1,36 @@
+; A string a directive's line still needs is missing when the line ends
+; before it, however many lines the string on the next line spans:
+; beancount's grammar meets the line break first and never reads the
+; string, so the error is on the line the string starts on, not the line it
+; ends on.
+option "title"
+"a string
+"another string
+
+2020-01-01 open Assets:A
+
+2020-01-02 note Assets:A
+"a
+b"
+
+2020-01-03 event "x"
+"y"
+
+2020-01-04 note Assets:A
+"a
+b"
+
+"y"
+
+2020-01-05 note Assets:A
+"a
+b
+c"
+"y"
+
+2020-01-06 note Assets:A
+"a
+b"
+
+
+"y"

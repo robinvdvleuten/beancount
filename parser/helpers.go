@@ -935,12 +935,14 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 // finishHeader ends the line of a directive, posting or undated line
 // whose first token is at offset. Like beancount's grammar, the line ends
 // at its line's end: a token continued on the next line is a syntax error
-// there. A string spanning lines ends it on the line the string closes
-// on, where a comment is the target's inline comment and anything else a
-// syntax error.
+// there, on the line it starts on even when it is a string spanning lines,
+// since the grammar fails at the line break and never reads it. A string
+// spanning lines ends it on the line the string closes on, where a comment
+// is the target's inline comment and anything else a syntax error.
 func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
 	if tok, ok := p.headerContinuation(offset); ok {
-		err := p.errorAtToken(tok, "unexpected token %s %q", tok.Type, tok.String(p.source))
+		pos := tokenPosition(tok, p.filename)
+		err := newErrorfWithSource(pos, p.calculateSourceRange(pos), "unexpected token %s %q", tok.Type, tok.String(p.source))
 		// beancount's grammar fails at the line break before the token,
 		// so it never reads what is written from there on: no account,
 		// whose name it would check, and no amount.

@@ -290,8 +290,10 @@ func (p *Parser) recover(err error) {
 	p.recoveredEnd = max(p.recoveredEnd, parseErr.Pos.Offset)
 	// A header that goes on over several lines was read past its error:
 	// to beancount each of those lines is an error of its own, so the
-	// recovery reaches to the last of them.
-	if p.pos > 0 && p.tokens[p.pos-1].Start > parseErr.Pos.Offset {
+	// recovery reaches to the last of them, the token the error is on
+	// included when it was read (a string spanning lines, whose line
+	// breaks are no EOL tokens).
+	if p.pos > 0 && p.tokens[p.pos-1].Start >= parseErr.Pos.Offset {
 		p.recoveredEnd = max(p.recoveredEnd, p.contentEnd(p.tokens[p.pos-1]))
 	}
 	p.dropRead()
