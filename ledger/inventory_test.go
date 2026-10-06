@@ -815,7 +815,7 @@ func TestLotMatching(t *testing.T) {
 	}
 }
 
-// TestLotKeyAgreesWithEqual pins the index's lot identity to lotSpec.equal:
+// TestLotKeyAgreesWithEqual pins the index's lot identity to lotSpecsEqual:
 // two specs share a key exactly when they are the same lot.
 func TestLotKeyAgreesWithEqual(t *testing.T) {
 	dec := func(s string) *decimal.Decimal { d := decimal.RequireFromString(s); return &d }
@@ -841,7 +841,7 @@ func TestLotKeyAgreesWithEqual(t *testing.T) {
 	}
 	for an, a := range specs {
 		for bn, b := range specs {
-			assert.Equal(t, a.equal(b), a.key() == b.key(), "%s vs %s", an, bn)
+			assert.Equal(t, lotSpecsEqual(a, b), a.key() == b.key(), "%s vs %s", an, bn)
 		}
 	}
 }
@@ -878,4 +878,43 @@ func TestLotOrderSurvivesEmptyingALot(t *testing.T) {
 		order = append(order, lot.String())
 	}
 	assert.Equal(t, []string{"1 AA {2 USD, 2024-01-01}", "2 AA {3 USD, 2024-01-01}", "1 AA {1 USD, 2024-01-01}"}, order)
+}
+
+// lotSpecsEqual reports whether two lot specs are the same lot, field by
+// field.
+func lotSpecsEqual(ls, other *lotSpec) bool {
+	if ls == nil && other == nil {
+		return true
+	}
+	if ls == nil || other == nil {
+		return false
+	}
+
+	// Compare cost
+	if (ls.cost == nil) != (other.cost == nil) {
+		return false
+	}
+	if ls.cost != nil && !ls.cost.Equal(*other.cost) {
+		return false
+	}
+
+	// Compare cost currency
+	if ls.costCurrency != other.costCurrency {
+		return false
+	}
+
+	// Compare date
+	if (ls.date == nil) != (other.date == nil) {
+		return false
+	}
+	if ls.date != nil && !ls.date.Equal(other.date.Time) {
+		return false
+	}
+
+	// Compare label
+	if ls.label != other.label {
+		return false
+	}
+
+	return true
 }

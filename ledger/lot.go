@@ -23,44 +23,6 @@ func (ls *lotSpec) isEmpty() bool {
 	return ls.cost == nil && ls.costCurrency == "" && ls.date == nil && ls.label == ""
 }
 
-// equal checks if two lot specs are equal
-func (ls *lotSpec) equal(other *lotSpec) bool {
-	if ls == nil && other == nil {
-		return true
-	}
-	if ls == nil || other == nil {
-		return false
-	}
-
-	// Compare cost
-	if (ls.cost == nil) != (other.cost == nil) {
-		return false
-	}
-	if ls.cost != nil && !ls.cost.Equal(*other.cost) {
-		return false
-	}
-
-	// Compare cost currency
-	if ls.costCurrency != other.costCurrency {
-		return false
-	}
-
-	// Compare date
-	if (ls.date == nil) != (other.date == nil) {
-		return false
-	}
-	if ls.date != nil && !ls.date.Equal(other.date.Time) {
-		return false
-	}
-
-	// Compare label
-	if ls.label != other.label {
-		return false
-	}
-
-	return true
-}
-
 // String returns a string representation of the lot spec
 func (ls *lotSpec) String() string {
 	if ls == nil {
