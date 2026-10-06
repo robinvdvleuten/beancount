@@ -1,0 +1,1 @@
+SELECT number, safediv(number, 3), safediv(number, 0) LIMIT 4
