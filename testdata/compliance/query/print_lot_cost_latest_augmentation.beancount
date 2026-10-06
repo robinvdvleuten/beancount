@@ -1,0 +1,58 @@
+; beancount's inventory keys a lot by its cost's value, so 100 USD and
+; 100.00 USD on one date are one lot, and each addition stores the
+; position anew with its own cost: the lot holds the number the latest
+; addition wrote, and a reduction books, prints and weighs at that number,
+; whatever its own spec states. Within one transaction a posting reduces
+; only what the account held before it, so two postings of opposite sign
+; at one cost are both additions, the last of which sets the number.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C
+2020-01-01 open Assets:D
+2020-01-01 open Assets:Cash
+2020-01-01 open Equity:O
+2020-01-01 open Income:Gains
+
+2020-01-02 * "A: 100 then 100.00"
+  Assets:A  10 HOOL {100 USD}
+  Assets:A  10 HOOL {100.00 USD}
+  Assets:Cash  -2000 USD
+
+2020-01-03 * "A: reduces at 100.00"
+  Assets:A  -5 HOOL {100 USD}
+  Income:Gains
+
+2020-01-04 * "A: augmented again, at 100.0"
+  Assets:A  1 HOOL {100.0 USD, 2020-01-02}
+  Assets:Cash  -100 USD
+
+2020-01-05 * "A: reduces at 100.0"
+  Assets:A  -5 HOOL {}
+  Income:Gains
+
+2020-01-06 * "B: 100.00 then 100"
+  Assets:B  10 HOOL {100.00 USD}
+  Assets:B  10 HOOL {100 USD}
+  Assets:Cash  -2000 USD
+
+2020-01-07 * "B: reduces at 100"
+  Assets:B  -5 HOOL {100.00 USD}
+  Income:Gains
+
+2020-01-08 * "C: in one transaction, nothing held before, neither posting reduces"
+  Assets:C  10 HOOL {100.00 USD}
+  Assets:C  -1 HOOL {100 USD}
+  Equity:O
+
+2020-01-09 * "C: reduces at 100, the last addition's number"
+  Assets:C  -1 HOOL {100 USD}
+  Income:Gains
+
+2020-01-08 * "D: the short lot first, then the long"
+  Assets:D  -1 HOOL {100 USD}
+  Assets:D  10 HOOL {100.00 USD}
+  Equity:O
+
+2020-01-09 * "D: reduces at 100.00"
+  Assets:D  -1 HOOL {100 USD}
+  Income:Gains

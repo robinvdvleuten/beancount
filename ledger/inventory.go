@@ -257,13 +257,18 @@ func (inv *inventory) clone() *inventory {
 // reduced the lot: the inventory held the lot with the opposite sign, like
 // beancount's Inventory.add_amount returning Booking.REDUCED. Like
 // add_amount, it never holds a lot of zero units: zero units added to a lot
-// it does not hold leave it unchanged.
+// it does not hold leave it unchanged. Like add_amount, which stores a new
+// Position with the cost it was given, every addition to a lot the
+// inventory holds gives the lot its cost: 10 HOOL {100.00 USD} added to a
+// lot at 100 USD leaves it at 100.00 USD, which a later reduction books at
+// (a booked reduction adds the lot's own cost back, so it changes nothing).
 func (inv *inventory) addLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
 	// Find existing lot with matching spec
 	key := spec.key()
 	if i, ok := inv.index[commodity][key]; ok {
 		lot := inv.lots[commodity][i]
 		reduced := signIndex(lot.amount) != signIndex(amount)
+		lot.spec = spec
 		inv.countLot(commodity, lot.amount, -1)
 		lot.amount = pydecimal.Add(lot.amount, amount)
 		inv.countLot(commodity, lot.amount, 1)
