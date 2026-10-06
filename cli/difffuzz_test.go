@@ -130,7 +130,7 @@ var (
 	bodyTagAfterPosting  = regexp.MustCompile(`(?m)^[ \t]+(?:[*!] +)?[A-Z].*\n[ \t]+[#^]`)
 	zeroPerUnitCompound  = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+(?:[A-Z][A-Z0-9'._-]*[ \t]+)?\{(?:\{|0(?:\.0*)?[ \t]*#)`)
 	zeroPriceNoCurrency  = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
-	zeroUnitsTotalBraces = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+0(?:\.0*)?[ \t]+[A-Z][A-Z0-9'._-]*[ \t]+\{\{`)
+	zeroUnitsTotalBraces = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+0(?:\.0*)?[ \t]*[A-Z][A-Z0-9'._-]*[ \t]+\{\{`)
 )
 
 // hasStringSpanningLines reports whether a line of src opens a string it
@@ -1020,6 +1020,7 @@ func TestKnownDivergences(t *testing.T) {
 	assert.False(t, hasStringSpanningLines("2020-01-02 * \"a \\\" quote\" \"y\"\n  Expenses:B  1.00 USD\n"))
 
 	assert.True(t, zeroUnitsTotalBraces.MatchString("2020-01-01 P \"x\"\n  Assets:Stock  0 HOOL {{USD}}\n"))
+	assert.True(t, zeroUnitsTotalBraces.MatchString("2020-01-01 P \"x\"\n  Assets:Stock  0HOOL {{USD}}\n"))
 	assert.False(t, zeroUnitsTotalBraces.MatchString("2020-01-01 P \"x\"\n  Assets:Stock  10 HOOL {{USD}}\n"))
 
 }
