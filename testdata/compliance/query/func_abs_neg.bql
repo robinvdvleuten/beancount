@@ -1,0 +1,1 @@
+SELECT abs(number), neg(number), neg(units(position)), abs(position), neg(position) WHERE currency = 'HOOL'

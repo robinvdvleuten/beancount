@@ -1,0 +1,1 @@
+SELECT account, possign(number, account), possign(units(position), account), possign(position, account) ORDER BY account, date

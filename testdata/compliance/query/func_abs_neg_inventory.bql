@@ -1,0 +1,1 @@
+SELECT account, abs(sum(position)), neg(sum(position)) GROUP BY account ORDER BY account
