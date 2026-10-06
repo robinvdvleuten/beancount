@@ -72,35 +72,39 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			continue
 		}
 
+		// A reduction weighs at the cost of the lots it booked, with the
+		// number each lot holds whatever its spec states (-5 HOOL {100 USD}
+		// against a lot at 100.00 USD weighs -500.00 USD), like beancount's,
+		// whose book_reductions gives the posting the lot's cost before
+		// interpolation. The spec's date/label (if any) narrows which lots
+		// are booked.
+		if positions, ok := reductions[posting]; ok && posting.Cost != nil {
+			var weights weightSet
+			for _, position := range positions {
+				weights = append(weights, weight{
+					amount:   pydecimal.Mul(position.Units, position.Cost.Number),
+					currency: position.Cost.Currency,
+				})
+			}
+			allWeights = append(allWeights, weights)
+			weightsOf[posting] = weights
+			reducedPositions[posting] = positions
+			continue
+		}
+
 		weights, err := calculateWeights(posting)
 		if err != nil {
 			errs = append(errs, newInvalidAmountError(txn, posting.Account, posting.Amount.Value, err))
 			continue
 		}
-
-		// Check if this is a cost spec without an amount (returns empty weights)
+		// A cost spec without a number weighs nothing here: an
+		// augmentation's, NONE's included, is inferred from the residual
+		// below.
 		if len(weights) == 0 && posting.Cost != nil && !posting.Cost.HasNumber() {
-			// Reductions resolve their weight from the booked lots' cost basis,
-			// matching beancount, which books lots before interpolation. The
-			// spec's date/label (if any) narrows which lots are booked.
-			// Augmentations, NONE's included, are handled in cost inference
-			// below.
-			if positions, ok := reductions[posting]; ok {
-				var weights weightSet
-				for _, position := range positions {
-					weights = append(weights, weight{
-						amount:   pydecimal.Mul(position.Units, position.Cost.Number),
-						currency: position.Cost.Currency,
-					})
-				}
-				allWeights = append(allWeights, weights)
-				weightsOf[posting] = weights
-				reducedPositions[posting] = positions
-			}
-		} else {
-			allWeights = append(allWeights, weights)
-			weightsOf[posting] = weights
+			continue
 		}
+		allWeights = append(allWeights, weights)
+		weightsOf[posting] = weights
 	}
 
 	if len(errs) > 0 {

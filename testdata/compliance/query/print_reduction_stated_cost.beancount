@@ -1,0 +1,34 @@
+; A reduction weighs at the cost of the lot it books, with the number the
+; lot holds, whatever its spec states: -1 HOOL {100 USD} against a lot at
+; 100.00 USD weighs -100.00 USD, so the gains interpolated beside it are
+; 100.00 USD, and against a lot at 100 USD a spec of 100.000 USD weighs
+; -100 USD. An augmentation keeps the number it states.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Other
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Gains
+
+2020-01-02 * "Buy"
+  Assets:Stock   10 HOOL {100.00 USD}
+  Assets:Other   10 HOOL {100 USD}
+  Assets:Cash  -2000 USD
+
+2020-01-03 * "a stated cost coarser than the lot's"
+  Assets:Stock  -1 HOOL {100 USD} @ 120 USD
+  Income:Gains
+
+2020-01-04 * "a stated cost finer than the lot's"
+  Assets:Other  -1 HOOL {100.000 USD} @ 120 USD
+  Income:Gains
+
+2020-01-05 * "a stated cost without a price"
+  Assets:Stock  -1 HOOL {100 USD}
+  Income:Gains
+
+2020-01-06 * "a stated cost with the lot's date"
+  Assets:Stock  -1 HOOL {100 USD, 2020-01-02}
+  Income:Gains
+
+2020-01-07 * "an augmentation keeps its stated cost"
+  Assets:Stock   1 HOOL {100 USD}
+  Income:Gains
