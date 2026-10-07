@@ -1,0 +1,1 @@
+SELECT DISTINCT account WHERE number <= 10 ORDER BY account

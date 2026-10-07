@@ -1,0 +1,1 @@
+SELECT account, -sum(number) AS n GROUP BY account ORDER BY account

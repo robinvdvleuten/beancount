@@ -1,0 +1,1 @@
+SELECT getprice("USD", "USD") LIMIT 1

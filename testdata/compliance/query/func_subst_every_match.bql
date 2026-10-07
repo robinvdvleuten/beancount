@@ -1,0 +1,1 @@
+SELECT subst("o", "0", "Foood"), subst("[aeiou]", "", "Expenses") LIMIT 1
