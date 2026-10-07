@@ -1,0 +1,7 @@
+; A date in year 9999 is a valid date.
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+9999-12-31 * "x"
+  Assets:Cash  1 USD
+  Income:Job

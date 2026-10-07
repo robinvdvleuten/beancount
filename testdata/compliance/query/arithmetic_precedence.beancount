@@ -1,0 +1,22 @@
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+2020-01-02 * "precedence"
+  Assets:Cash  10 - 2 - 3 USD
+  Income:Job
+
+2020-01-03 * "mixed"
+  Assets:Cash  2 * 3 + 4 USD
+  Income:Job
+
+2020-01-04 * "div"
+  Assets:Cash  12 / 2 / 3 USD
+  Income:Job
+
+2020-01-05 * "glued"
+  Assets:Cash  (10-3-2) USD
+  Income:Job
+
+2020-01-06 * "unary"
+  Assets:Cash  -(2 + 3) * 2 USD
+  Income:Job

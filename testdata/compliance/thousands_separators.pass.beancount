@@ -1,0 +1,26 @@
+; A number's commas group its integer part in threes, after a leading
+; group of one to three digits, and are dropped from its value.
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+2020-01-02 * "123,456"
+  Assets:Cash  123,456 USD
+  Income:Job
+
+2020-01-02 * "-123,456"
+  Assets:Cash  -123,456 USD
+  Income:Job
+
+2020-01-02 * "1,234,567.89"
+  Assets:Cash  1,234,567.89 USD
+  Income:Job
+
+2020-01-02 * "12,345"
+  Assets:Cash  12,345 USD
+  Income:Job
+
+2020-01-02 * "1,000"
+  Assets:Cash  1,000 USD
+  Income:Job
+
+2020-01-03 balance Assets:Cash 1247912.89 USD

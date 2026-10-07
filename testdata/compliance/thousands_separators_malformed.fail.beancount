@@ -1,0 +1,27 @@
+; Like beancount's lexer, a number's commas must group its integer part in
+; threes after a leading group of one to three digits; otherwise the number
+; is an invalid token, which drops its transaction.
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+2020-01-02 * "1,23"
+  Assets:Cash  1,23 USD
+  Income:Job
+
+2020-01-02 * "1234,567"
+  Assets:Cash  1234,567 USD
+  Income:Job
+
+2020-01-02 * "12,34,567"
+  Assets:Cash  12,34,567 USD
+  Income:Job
+
+2020-01-02 * "1,2345"
+  Assets:Cash  1,2345 USD
+  Income:Job
+
+2020-01-02 * "-1,23"
+  Assets:Cash  -1,23 USD
+  Income:Job
+
+2020-01-03 balance Assets:Cash 0 USD
