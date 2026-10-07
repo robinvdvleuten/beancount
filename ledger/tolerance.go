@@ -19,9 +19,6 @@ type tolerances struct {
 
 // newTolerances takes the tolerance options, the defaults when nil.
 func newTolerances(options *sharedconfig.Tolerance) tolerances {
-	if options == nil {
-		options = sharedconfig.NewTolerance()
-	}
 	return tolerances{options: options}
 }
 

@@ -78,7 +78,7 @@ func (b *booker) method(account ast.Account) bookingMethod {
 	if method, ok := b.methods[string(account)]; ok {
 		return method
 	}
-	return defaultBookingMethod(b.fallback)
+	return b.fallback
 }
 
 // book runs Booking over the sorted directives, leaving out Dropped

@@ -195,13 +195,6 @@ const (
 	bookingAVERAGE        bookingMethod = "AVERAGE"
 )
 
-func defaultBookingMethod(method bookingMethod) bookingMethod {
-	if method == "" {
-		return bookingSTRICT
-	}
-	return method
-}
-
 // newInventory creates a new inventory
 func newInventory() *inventory {
 	return &inventory{
@@ -322,7 +315,6 @@ func (inv *inventory) book(posting *ast.Posting, method bookingMethod) (position
 	if !reduces {
 		return nil, false, nil
 	}
-	method = defaultBookingMethod(method)
 
 	// Like beancount's book_reductions, the posting is matched against the
 	// lots held at cost, of either sign: units held without cost make it a
@@ -391,7 +383,7 @@ func (inv *inventory) reducedBy(posting *ast.Posting, method bookingMethod) (dec
 	if err != nil {
 		return decimal.Decimal{}, false // A malformed number drops its transaction before Booking
 	}
-	if defaultBookingMethod(method) == bookingNONE || units.IsZero() {
+	if method == bookingNONE || units.IsZero() {
 		return decimal.Decimal{}, false
 	}
 	return units, inv.holdsOtherSign(posting.Amount.Currency, units)
@@ -715,7 +707,7 @@ func (inv *inventory) applyReduction(plan *reductionPlan) {
 
 func sortedLotsForBooking(lots []*lot, bookingMethod bookingMethod) []*lot {
 	sortedLots := append([]*lot(nil), lots...)
-	method := defaultBookingMethod(bookingMethod)
+	method := bookingMethod
 	lifo := method == bookingLIFO
 
 	if method == bookingHIFO {

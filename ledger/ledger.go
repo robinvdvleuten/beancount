@@ -349,10 +349,6 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 // its delta if validate returned one.
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	handler := getHandler(directive.Kind())
-	if handler == nil {
-		// Unknown directive kind - ignore
-		return
-	}
 
 	errs, delta := handler.validate(ctx, l, directive)
 	l.errors = append(l.errors, errs...)

@@ -20,7 +20,7 @@ import (
 func interpolateLast(t *testing.T, source string) (lines, errs []string) {
 	t.Helper()
 	tree := parser.MustParseString(context.Background(), source)
-	b := newBooker(sharedconfig.New(), newTolerances(nil), tree.Directives)
+	b := newBooker(sharedconfig.New(), newTolerances(sharedconfig.NewTolerance()), tree.Directives)
 	var txns []*ast.Transaction
 	for _, directive := range tree.Directives {
 		if txn, ok := directive.(*ast.Transaction); ok {

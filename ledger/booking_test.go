@@ -158,7 +158,7 @@ func TestBookingFixesUpPricesLikeBeancountsParser(t *testing.T) {
 func bookAll(t *testing.T, source string) (*booker, map[string][]string, []error) {
 	t.Helper()
 	tree := parser.MustParseString(context.Background(), source)
-	b := newBooker(sharedconfig.New(), newTolerances(nil), tree.Directives)
+	b := newBooker(sharedconfig.New(), newTolerances(sharedconfig.NewTolerance()), tree.Directives)
 	postings := make(map[string][]string)
 	var errs []error
 	for _, directive := range tree.Directives {

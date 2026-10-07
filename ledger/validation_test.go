@@ -21,7 +21,7 @@ func newTestValidator(accounts map[string]*Account) *validator {
 // bookAndValidate books txn against empty inventories and validates the
 // result against the accounts, as Process does.
 func bookAndValidate(accounts map[string]*Account, txn *ast.Transaction) ([]error, *bookedTransaction) {
-	booked, errs := newBooker(sharedconfig.New(), newTolerances(nil), nil).book(txn)
+	booked, errs := newBooker(sharedconfig.New(), newTolerances(sharedconfig.NewTolerance()), nil).book(txn)
 	if len(errs) > 0 {
 		return errs, nil
 	}
@@ -901,7 +901,7 @@ func TestBalanceTolerance(t *testing.T) {
 			}
 
 			v := newValidator(map[string]*Account{string(account.name): account}, openIndex{first: map[string]*ast.Open{string(account.name): ast.NewOpen(date, account.name, nil, "")}}, sharedconfig.New())
-			tolerance, err := newTolerances(nil).balance(balance)
+			tolerance, err := newTolerances(sharedconfig.NewTolerance()).balance(balance)
 			assert.NoError(t, err)
 			errs := v.checkBalance(balance, account.inventory.get("USD"), tolerance)
 			assert.Equal(t, tt.wantErr, len(errs) > 0, "errors: %v", errs)
