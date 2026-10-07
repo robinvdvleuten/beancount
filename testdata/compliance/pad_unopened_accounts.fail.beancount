@@ -1,0 +1,7 @@
+; A pad from or to an account never opened is reported on the pad, and
+; the balance after it fails.
+2020-01-01 open Assets:Cash
+2020-01-02 pad Assets:Cash Equity:Nowhere
+2020-01-03 balance Assets:Cash 10 USD
+2020-01-02 pad Assets:Nowhere Assets:Cash
+2020-01-03 balance Assets:Nowhere 10 USD

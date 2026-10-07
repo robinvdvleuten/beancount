@@ -1,0 +1,91 @@
+; Each booking method reduces lots across a sale of 5 HOOL from 3 at 100 USD
+; and 4 at 110 USD, and covers part of a short position.
+2020-01-01 open Assets:Cash
+2020-01-01 open Assets:Fifo:Long "FIFO"
+2020-01-01 open Assets:Fifo:Short "FIFO"
+2020-01-01 open Assets:Lifo:Long "LIFO"
+2020-01-01 open Assets:Lifo:Short "LIFO"
+2020-01-01 open Assets:Hifo:Long "HIFO"
+2020-01-01 open Assets:Hifo:Short "HIFO"
+2020-01-01 open Assets:StrictWithSize:Long "STRICT_WITH_SIZE"
+2020-01-01 open Assets:StrictWithSize:Short "STRICT_WITH_SIZE"
+
+2020-01-02 * "buy"
+  Assets:Fifo:Long  3 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "buy"
+  Assets:Fifo:Long  4 HOOL {110 USD}
+  Assets:Cash
+
+2020-01-04 * "sell"
+  Assets:Fifo:Long  -5 HOOL {}
+  Assets:Cash
+
+2020-01-05 * "short"
+  Assets:Fifo:Short  -10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-06 * "cover part"
+  Assets:Fifo:Short  4 HOOL {}
+  Assets:Cash
+
+2020-01-02 * "buy"
+  Assets:Lifo:Long  3 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "buy"
+  Assets:Lifo:Long  4 HOOL {110 USD}
+  Assets:Cash
+
+2020-01-04 * "sell"
+  Assets:Lifo:Long  -5 HOOL {}
+  Assets:Cash
+
+2020-01-05 * "short"
+  Assets:Lifo:Short  -10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-06 * "cover part"
+  Assets:Lifo:Short  4 HOOL {}
+  Assets:Cash
+
+2020-01-02 * "buy"
+  Assets:Hifo:Long  3 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "buy"
+  Assets:Hifo:Long  4 HOOL {110 USD}
+  Assets:Cash
+
+2020-01-04 * "sell"
+  Assets:Hifo:Long  -5 HOOL {}
+  Assets:Cash
+
+2020-01-05 * "short"
+  Assets:Hifo:Short  -10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-06 * "cover part"
+  Assets:Hifo:Short  4 HOOL {}
+  Assets:Cash
+
+2020-01-02 * "buy"
+  Assets:StrictWithSize:Long  3 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-03 * "buy"
+  Assets:StrictWithSize:Long  4 HOOL {110 USD}
+  Assets:Cash
+
+2020-01-04 * "sell"
+  Assets:StrictWithSize:Long  -5 HOOL {}
+  Assets:Cash
+
+2020-01-05 * "short"
+  Assets:StrictWithSize:Short  -10 HOOL {100 USD}
+  Assets:Cash
+
+2020-01-06 * "cover part"
+  Assets:StrictWithSize:Short  4 HOOL {}
+  Assets:Cash

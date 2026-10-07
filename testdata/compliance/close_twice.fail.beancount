@@ -1,0 +1,10 @@
+; A second close of an account is an error, and the first close's date
+; still ends the account: the transaction after it is reported too.
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+2020-02-01 close Income:Job
+2020-03-01 close Income:Job
+2020-02-15 * "x"
+  Assets:Cash  1 USD
+  Income:Job
