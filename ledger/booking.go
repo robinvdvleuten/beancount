@@ -341,11 +341,6 @@ func validateCosts(txn *ast.Transaction) []error {
 			continue // No cost specification
 		}
 
-		// Empty cost {} is valid
-		if posting.Cost.IsEmpty() {
-			continue
-		}
-
 		// Validate total cost {{}} requirements; total braces without an
 		// amount ({{}}, {{*}}) are no total, and fixTotalCost makes them a
 		// per-unit cost. Missing units are interpolation's to report, and

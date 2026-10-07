@@ -777,17 +777,10 @@ func sortedLotsForBooking(lots []*lot, bookingMethod bookingMethod) []*lot {
 	return sortedLots
 }
 
+// lotMatchesReductionSpec reports whether a lot held at cost matches the
+// spec of a reduction, which a reduction always has: each part the spec
+// states must be the lot's, so an empty spec {} matches every lot.
 func lotMatchesReductionSpec(lot *lot, spec *lotSpec) bool {
-	if spec == nil {
-		return lot.spec == nil || lot.spec.isEmpty()
-	}
-	if spec.isEmpty() {
-		return true
-	}
-	if lot.spec == nil {
-		return false
-	}
-
 	if spec.cost != nil && (lot.spec.cost == nil || !lot.spec.cost.Equal(*spec.cost)) {
 		return false
 	}

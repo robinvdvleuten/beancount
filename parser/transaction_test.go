@@ -306,8 +306,7 @@ func TestParseTransactionWithEmptyCost(t *testing.T) {
 	assert.True(t, ok)
 
 	// First posting should have empty cost
-	assert.True(t, txn.Postings[0].Cost != nil)
-	assert.Equal(t, true, txn.Postings[0].Cost.IsEmpty())
+	assert.Equal(t, &ast.Cost{}, txn.Postings[0].Cost)
 }
 
 // TestParseTransactionWithFlags tests posting-level flags

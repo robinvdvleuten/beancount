@@ -119,23 +119,11 @@ func (c *Cost) Currency() string {
 	return ""
 }
 
-// IsEmpty returns true if this is an empty cost specification {}.
-// Distinguishes between nil (no cost) and empty cost (any lot selection).
-func (c *Cost) IsEmpty() bool {
-	return c != nil && !c.IsMerge && !c.IsTotal && c.Amount == nil && c.Total == nil && c.Date == nil && c.Label == ""
-}
-
 // HasNumber reports whether the cost states every number it has, as
 // {100 USD} and {100 # 5 USD} do; {}, {USD}, {# 5 USD} and {100 # USD}
 // leave one to Booking.
 func (c *Cost) HasNumber() bool {
 	return c != nil && c.Amount != nil && c.Amount.Value != "" && (c.Total == nil || c.Total.Value != "")
-}
-
-// IsMergeCost reports whether the cost holds the merge marker *, as {*} and
-// {100 USD, *} do.
-func (c *Cost) IsMergeCost() bool {
-	return c != nil && c.IsMerge
 }
 
 // Account represents a Beancount account name consisting of at least two colon-separated

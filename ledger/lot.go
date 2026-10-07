@@ -119,18 +119,8 @@ func parseLotSpec(cost *ast.Cost) (*lotSpec, error) {
 		return nil, nil
 	}
 
-	// A merge marker, which beancount reports and then ignores: {*} books
-	// like {}, {100 USD, *} like {100 USD}.
-	if cost.IsMergeCost() {
-		unmerged := *cost
-		unmerged.IsMerge = false
-		cost = &unmerged
-	}
-
-	if cost.IsEmpty() {
-		return &lotSpec{}, nil
-	}
-
+	// A merge marker, which beancount reports and then ignores, is not part
+	// of the spec: {*} books like {}, {100 USD, *} like {100 USD}.
 	spec := &lotSpec{
 		date:  cost.Date,
 		label: cost.Label,

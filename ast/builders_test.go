@@ -348,9 +348,7 @@ func TestNewCost(t *testing.T) {
 	})
 
 	t.Run("EmptyCost", func(t *testing.T) {
-		cost := NewEmptyCost()
-		assert.True(t, cost.IsEmpty())
-		assert.False(t, cost.IsMergeCost())
+		assert.Equal(t, &Cost{}, NewEmptyCost())
 	})
 
 }
