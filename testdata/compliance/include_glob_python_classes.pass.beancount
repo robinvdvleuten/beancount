@@ -1,0 +1,7 @@
+; Like Python's glob, which beancount expands includes with, "[!x]" is a
+; negated class and an unclosed "[" a literal bracket.
+include "include_glob_classes/[!x].beancount"
+include "include_glob_classes/lit[.beancount"
+
+2020-01-02 balance Assets:A 0 USD
+2020-01-02 balance Assets:Bracket 0 USD

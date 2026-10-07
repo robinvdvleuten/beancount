@@ -195,6 +195,13 @@ compare the lines errors are on:
   `-0.00 USD`, numberified too (`query/negative_dust.bql`,
   `query/numberify_negative_dust.bql`).
 
+- **An include glob with a reversed range**: beancount expands an include
+  with Python's `glob.glob`, which hands a class such as `[z-a]` to Python's
+  `re`; it rejects the range, and bean-check crashes with `re.error`. We
+  match such a pattern against no file, so it is reported as an include
+  glob with no match and the rest of the ledger is checked. Every pattern
+  `re` accepts matches as in Python (`loader/fnmatch.go`).
+
 - **Infinite and NaN option numbers** (#568): beancount's `D()` takes
   `"Infinity"` and `"NaN"` as a `tolerance_multiplier` or a CURRENCY:NUMBER
   value, and bean-check then crashes with `decimal.InvalidOperation` once a

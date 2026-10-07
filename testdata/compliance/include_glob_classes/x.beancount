@@ -1,0 +1,2 @@
+; Excluded by [!x], which Python negates where Go's Match reads a "!".
+2020-01-01 balance Assets:Missing 1 USD

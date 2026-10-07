@@ -16,9 +16,10 @@ func hasGlobMeta(segment string) bool {
 // Python's glob.glob(pattern, recursive=True): "**" as a whole path segment
 // matches zero or more directories, and wildcards skip dotfiles unless the
 // segment itself starts with a dot. A relative pattern is matched from baseDir,
-// so metacharacters in baseDir itself are never interpreted. Matches are sorted
-// for a deterministic load order.
-func globInclude(baseDir, pattern string) ([]string, error) {
+// so metacharacters in baseDir itself are never interpreted. A segment is
+// matched as Python's fnmatch matches it (fnmatch). Matches are sorted for a
+// deterministic load order.
+func globInclude(baseDir, pattern string) []string {
 	root := baseDir
 	if filepath.IsAbs(pattern) {
 		root = filepath.VolumeName(pattern) + string(filepath.Separator)
@@ -30,19 +31,13 @@ func globInclude(baseDir, pattern string) ([]string, error) {
 		if segment == "" || segment == "." {
 			continue
 		}
-		// Surface a malformed segment up front; Match only reports it while matching.
-		if hasGlobMeta(segment) {
-			if _, err := filepath.Match(segment, ""); err != nil {
-				return nil, err
-			}
-		}
 		segments = append(segments, segment)
 	}
 
 	var matches []string
 	globSegments(root, segments, &matches)
 	slices.Sort(matches)
-	return slices.Compact(matches), nil
+	return slices.Compact(matches)
 }
 
 func globSegments(dir string, segments []string, matches *[]string) {
@@ -67,12 +62,13 @@ func globSegments(dir string, segments []string, matches *[]string) {
 			globSegments(path, rest, matches)
 		}
 	default:
+		match := fnmatch(segment)
 		for _, entry := range readDir(dir) {
 			name := entry.Name()
 			if strings.HasPrefix(name, ".") && !strings.HasPrefix(segment, ".") {
 				continue
 			}
-			if ok, _ := filepath.Match(segment, name); ok {
+			if match(name) {
 				globSegments(filepath.Join(dir, name), rest, matches)
 			}
 		}

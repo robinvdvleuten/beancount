@@ -1,0 +1,6 @@
+; An unclosed "[" in an include glob is a literal bracket: matching no file,
+; it is reported, and the rest of the ledger is still checked.
+include "include_glob_classes/missing[.beancount"
+
+2020-01-01 open Assets:Cash
+2020-01-02 balance Assets:Cash 5 USD

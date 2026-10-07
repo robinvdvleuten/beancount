@@ -603,10 +603,13 @@ include "accounts/[.beancount"
 2024-01-01 open Assets:Checking USD
 `), 0644))
 
-	ldr := New(WithFollowIncludes())
-	_, err := ldr.Load(context.Background(), Source{Path: mainFile})
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid include pattern")
+	// Like Python's glob, the unclosed "[" is a literal bracket: the
+	// pattern matches no file, which is reported, and loading goes on.
+	result, err := New(WithFollowIncludes()).Load(context.Background(), Source{Path: mainFile})
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(result.Diagnostics))
+	var noMatch *IncludeGlobNoMatchError
+	assert.True(t, errors.As(result.Diagnostics[0], &noMatch))
 }
 
 func TestLoadWithIncludeGlobAbsolutePattern(t *testing.T) {

@@ -192,6 +192,7 @@ var lineGaps = map[string]string{
 	"documents_missing_root":        "we blame the option's line, beancount line 0",
 	"duplicate_include":             "we blame the include's line, beancount <load>:0",
 	"include_glob_no_match":         "we blame the include's line, beancount <load>:0",
+	"include_glob_unclosed_bracket": "we blame the include's line, beancount <load>:0",
 	"include_missing_file":          "we blame the include's line, beancount <load>:0",
 	"plugin_auto_accounts_config":   "we blame the plugin's line, beancount <load>:0",
 	"plugin_empty_config":           "we blame the plugin's line, beancount <load>:0",

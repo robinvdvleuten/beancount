@@ -558,11 +558,7 @@ func (l *loaderState) loadRecursive(ctx context.Context, src Source) (*ast.AST, 
 		// including file's directory, so a missing plain path is a no-match
 		// load error too.
 		includePath := inc.Filename.Value
-		resolvedPaths, err := globInclude(baseDir, includePath)
-		if err != nil {
-			mergeTimer.End()
-			return nil, fmt.Errorf("invalid include pattern %q: %w", includePath, err)
-		}
+		resolvedPaths := globInclude(baseDir, includePath)
 		if len(resolvedPaths) == 0 {
 			l.diagnostics = append(l.diagnostics, &IncludeGlobNoMatchError{Include: inc})
 		}
