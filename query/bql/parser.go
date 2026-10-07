@@ -955,7 +955,7 @@ func (p *parser) parseLiteral() (Expr, error) {
 
 	case DECIMAL:
 		p.next()
-		value, err := decimal.NewFromString(numberText(tok.String(p.source)))
+		value, err := decimal.NewFromString(tok.String(p.source))
 		if err != nil {
 			return nil, p.errorf(tok, "invalid decimal %q", tok.String(p.source))
 		}
@@ -1005,16 +1005,6 @@ func (p *parser) startsExpr() bool {
 		return true
 	}
 	return false
-}
-
-// numberText rewrites a decimal token into a form decimal parses, keeping
-// its digits: 2. is 2 and .5 is 0.5.
-func numberText(text string) string {
-	text = strings.TrimSuffix(text, ".")
-	if rest, ok := strings.CutPrefix(text, "."); ok {
-		return "0." + rest
-	}
-	return text
 }
 
 // atQuotedIdent reports whether the current token starts a quoted
