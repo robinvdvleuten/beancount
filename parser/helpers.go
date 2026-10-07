@@ -714,18 +714,8 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 		return &ast.MetadataValue{Boolean: &boolVal}, nil
 
 	case IDENT:
-		// Could be Account or Currency
+		// A currency; an account is an ACCOUNT token.
 		identStr := tok.String(p.source)
-
-		// Check for Account (contains colon)
-		if strings.Contains(identStr, ":") {
-			account, err := p.parseAccount()
-			if err != nil {
-				return nil, err
-			}
-			return &ast.MetadataValue{Account: &account}, nil
-		}
-
 		if !isUppercaseMetadataIdentifier(identStr) {
 			return nil, p.errorAtToken(tok, "unsupported metadata value %q", identStr)
 		}
