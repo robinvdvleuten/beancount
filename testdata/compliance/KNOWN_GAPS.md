@@ -195,6 +195,21 @@ compare the lines errors are on:
   `-0.00 USD`, numberified too (`query/negative_dust.bql`,
   `query/numberify_negative_dust.bql`).
 
+- **Division by zero in an amount**: bean-check crashes with a segmentation
+  fault on `Assets:Cash  1 / 0 USD`, and on a cost `{1/0 USD}`. We report the
+  division by zero on the posting's line and drop the transaction, as for
+  any other amount that cannot be read. A ledger the official tools crash
+  on has no fixture.
+
+- **An interpolated number beyond 28 digits**: beancount quantizes an
+  interpolated number to its tolerance, and Python's decimal raises
+  `InvalidOperation` when that needs more than 28 significant digits
+  (`1000000000000000000000000001 USD` and `0.5 USD` leaving the rest to an
+  amount-less posting), so bean-check and bean-query crash. We book the
+  residual quantized all the same, `-1000000000000000000000000002.0 USD`
+  there. Python's half-even rounding at the 28th digit itself is held by
+  `query/round_half_even_28_digits.bql`.
+
 - **An include glob with a reversed range**: beancount expands an include
   with Python's `glob.glob`, which hands a class such as `[z-a]` to Python's
   `re`; it rejects the range, and bean-check crashes with `re.error`. We
