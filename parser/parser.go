@@ -429,16 +429,7 @@ func (p *Parser) parseComment() *ast.Comment {
 	content = strings.TrimSuffix(content, "\r\n")
 	content = strings.TrimSuffix(content, "\n")
 
-	// Determine comment type by checking if next token is a NEWLINE
-	commentType := ast.StandaloneComment
-	if !p.isAtEnd() && p.peek().Type == NEWLINE {
-		commentType = ast.SectionComment
-	}
-
-	comment := &ast.Comment{
-		Content: content,
-		Type:    commentType,
-	}
+	comment := &ast.Comment{Content: content}
 	comment.SetPosition(ast.Position{
 		Filename: p.filename,
 		Offset:   tok.Start,

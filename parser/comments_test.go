@@ -112,9 +112,7 @@ option "title" "Ledger"
 
 	assert.Equal(t, 2, len(tree.Comments))
 	assert.Equal(t, "* Options", tree.Comments[0].Content)
-	assert.Equal(t, ast.SectionComment, tree.Comments[0].Type)
 	assert.Equal(t, "* Banking", tree.Comments[1].Content)
-	assert.Equal(t, ast.SectionComment, tree.Comments[1].Type)
 	assert.Equal(t, 1, len(tree.Options))
 	assert.Equal(t, 1, len(tree.Directives))
 }
@@ -143,7 +141,6 @@ func TestParseNestedOrgStyleSectionHeaders(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(tree.Comments))
 	assert.Equal(t, "** Banking", tree.Comments[0].Content)
-	assert.Equal(t, ast.SectionComment, tree.Comments[0].Type)
 	assert.Equal(t, 1, len(tree.Directives))
 }
 

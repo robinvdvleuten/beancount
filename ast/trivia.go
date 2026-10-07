@@ -4,21 +4,10 @@ package ast
 // preserved during formatting. These are not processed by the ledger but are important
 // for maintaining the original structure and readability of the file.
 
-// CommentType represents the type of comment in a beancount file.
-type CommentType int
-
-const (
-	// StandaloneComment appears on its own line
-	StandaloneComment CommentType = iota
-	// SectionComment is a standalone comment followed by a blank line (section header)
-	SectionComment
-)
-
 // Comment represents a comment line in the source file (lines starting with ;).
 type Comment struct {
 	pos     Position
-	Content string      // Comment text including the semicolon prefix
-	Type    CommentType // Type of comment (standalone or section header)
+	Content string // Comment text including the semicolon prefix
 }
 
 func (c *Comment) Position() Position { return c.pos }
