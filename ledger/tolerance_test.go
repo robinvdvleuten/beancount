@@ -186,7 +186,7 @@ func TestTransactionTolerances(t *testing.T) {
 			// Postings that Booking leaves unchanged look the same at
 			// both stages.
 			spec := tolerances.spec(tt.postings)
-			booked := tolerances.booked(tt.postings, nil, nil, nil)
+			booked := tolerances.booked(tt.postings, nil, nil)
 			for currency, want := range tt.want {
 				assert.Equal(t, want, spec.of(currency).String(), "spec %s", currency)
 				assert.Equal(t, want, booked.of(currency).String(), "booked %s", currency)
@@ -306,7 +306,7 @@ func TestPreciseInterpolationTolerances(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			tolerances := newTolerances(toleranceOptions(tt.options))
 			spec := tolerances.spec(tt.postings)
-			booked := tolerances.booked(tt.postings, nil, nil, nil)
+			booked := tolerances.booked(tt.postings, nil, nil)
 			for currency, want := range tt.spec {
 				assert.Equal(t, want, spec.of(currency).Round(5).String(), "spec %s", currency)
 			}
@@ -364,29 +364,23 @@ func TestSpecTolerancesCurrencyDefaults(t *testing.T) {
 	}
 }
 
-// TestBookedTolerances covers what Booking changes between the stages: an
-// interpolated amount counts once booked, and a cost counts per unit, with
-// an inferred cost resolved and a reduction split per lot.
+// TestBookedTolerances covers what Booking changes between the stages: a
+// cost counts per unit, with an inferred cost resolved and a reduction split
+// per lot.
 func TestBookedTolerances(t *testing.T) {
 	d := decimal.RequireFromString
 	tolerances := newTolerances(toleranceOptions(fromCost))
 
-	auto := ast.NewPosting("Assets:Cash")
-	postings := []*ast.Posting{units("10", "USD"), auto}
-	amounts := map[*ast.Posting]*ast.Amount{auto: ast.NewAmount("-10.00", "USD")}
-	assert.Equal(t, "0", tolerances.spec(postings).of("USD").String())
-	assert.Equal(t, "0.005", tolerances.booked(postings, amounts, nil, nil).of("USD").String())
-
 	total := units("18.572", "VWELX", ast.WithCost(&ast.Cost{IsTotal: true, Amount: ast.NewAmount("575.00", "USD")}))
-	postings = []*ast.Posting{total, units("-575", "USD")}
+	postings := []*ast.Posting{total, units("-575", "USD")}
 	assert.Equal(t, "0", tolerances.spec(postings).of("USD").String(), "a total cost adds nothing: its per-unit part is zero")
-	assert.Equal(t, "0.01548", tolerances.booked(postings, nil, nil, nil).of("USD").Round(5).String(), "and per unit once booked")
+	assert.Equal(t, "0.01548", tolerances.booked(postings, nil, nil).of("USD").Round(5).String(), "and per unit once booked")
 
 	empty := units("1.5", "HOOL", ast.WithCost(&ast.Cost{}))
 	postings = []*ast.Posting{empty, units("-150", "USD")}
 	costs := map[*ast.Posting]*ast.Cost{empty: {Amount: ast.NewAmount("100", "USD"), Inferred: true}}
 	assert.Equal(t, "0", tolerances.spec(postings).of("USD").String(), "an empty cost has no currency")
-	assert.Equal(t, "0.5", tolerances.booked(postings, nil, costs, nil).of("USD").String(), "an inferred cost counts")
+	assert.Equal(t, "0.5", tolerances.booked(postings, costs, nil).of("USD").String(), "an inferred cost counts")
 
 	currencyOnly := units("1.5", "HOOL", ast.WithCost(ast.NewCost(ast.NewAmount("", "JPY"))))
 	postings = []*ast.Posting{currencyOnly, units("-150", "JPY")}
@@ -398,7 +392,7 @@ func TestBookedTolerances(t *testing.T) {
 		{Units: d("-2.0"), Cost: &BookedCost{Number: d("0.10"), Currency: "USD"}},
 		{Units: d("-0.5"), Cost: &BookedCost{Number: d("0.20"), Currency: "USD"}},
 	}}
-	assert.Equal(t, "0.015", tolerances.booked(postings, nil, nil, reduced).of("USD").String(), "each lot adds its share")
+	assert.Equal(t, "0.015", tolerances.booked(postings, nil, reduced).of("USD").String(), "each lot adds its share")
 }
 
 func TestRoundInterpolated(t *testing.T) {

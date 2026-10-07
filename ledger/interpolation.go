@@ -344,7 +344,7 @@ func interpolate(txn *ast.Transaction, group currencyGroup, reductions map[*ast.
 			stated = append(stated, posting)
 		}
 	}
-	bookedTolerances := specTolerances.tolerances.booked(stated, amounts, costs, reducedPositions)
+	bookedTolerances := specTolerances.tolerances.booked(stated, costs, reducedPositions)
 	// The booked weights sum in posting order, as beancount's balance check
 	// sums its booked postings: rounded to 28 digits at each step, so that
 	// the dust an interpolated posting leaves is dropped by a larger weight

@@ -62,11 +62,11 @@ func (t tolerances) spec(postings []*ast.Posting) transactionTolerances {
 // postings given, which are those that leave no number to interpolation,
 // and, under infer_tolerance_from_cost, costs per unit with a reduction
 // split per lot.
-// amounts and costs hold the ones interpolation completed, by posting.
-func (t tolerances) booked(postings []*ast.Posting, amounts map[*ast.Posting]*ast.Amount, costs map[*ast.Posting]*ast.Cost, reducedPositions map[*ast.Posting][]BookedPosition) transactionTolerances {
+// costs holds the ones interpolation completed, by posting.
+func (t tolerances) booked(postings []*ast.Posting, costs map[*ast.Posting]*ast.Cost, reducedPositions map[*ast.Posting][]BookedPosition) transactionTolerances {
 	return transactionTolerances{
 		tolerances: t,
-		units:      bookedUnits(postings, amounts),
+		units:      bookedUnits(postings),
 		// Every default, not only those of named currencies: once booked,
 		// a currency with a residual is named by a units, cost or price
 		// amount, so the two agree.
@@ -239,15 +239,12 @@ func statedUnits(postings []*ast.Posting) map[string][]decimal.Decimal {
 	return stated
 }
 
-// bookedUnits collects every units number per currency once booked,
-// interpolated ones included.
-func bookedUnits(postings []*ast.Posting, amounts map[*ast.Posting]*ast.Amount) map[string][]decimal.Decimal {
+// bookedUnits collects the units number per currency of postings that
+// state theirs.
+func bookedUnits(postings []*ast.Posting) map[string][]decimal.Decimal {
 	booked := make(map[string][]decimal.Decimal)
 	for _, posting := range postings {
-		amount := amounts[posting]
-		if amount == nil {
-			amount = posting.Amount
-		}
+		amount := posting.Amount
 		if amount == nil {
 			continue
 		}
