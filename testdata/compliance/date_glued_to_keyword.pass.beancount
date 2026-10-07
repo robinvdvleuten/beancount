@@ -1,0 +1,21 @@
+; Like beancount's lexer, which reads a date and a keyword as two tokens
+; whatever separates them, a directive's keyword may follow its date directly.
+2020-01-01open Assets:Cash
+2020-01-01open Income:Job
+2020-01-01commodity HOOL
+
+2020-01-02*"Paid"
+  Assets:Cash  10 USD
+  Income:Job
+
+2020-01-03txn "Paid again"
+  Assets:Cash  10 USD
+  Income:Job
+
+2020-01-04pad Assets:Cash Income:Job
+2020-01-05balance Assets:Cash 25 USD
+2020-01-05note Assets:Cash "Topped up"
+2020-01-05price HOOL 1 USD
+2020-01-05event "location" "Home"
+2020-01-05custom "budget" "x"
+2020-01-06close Income:Job

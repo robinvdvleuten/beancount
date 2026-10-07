@@ -674,12 +674,6 @@ func (p *Parser) parseDirective() (ast.Directive, error) {
 		return nil, p.errorAtEndOfPrevious("unexpected end of line after date")
 	}
 
-	// Check that next token is properly separated from date (whitespace required)
-	nextTok := p.peek()
-	if nextTok.Line == dateTok.Line && nextTok.Column == dateTok.Column+dateTok.Len() {
-		return nil, p.errorAtToken(nextTok, "whitespace required between date and directive")
-	}
-
 	// Capture position from directive keyword token
 	directiveTok := p.peek()
 	pos := p.tokenPositionFromPeek()
