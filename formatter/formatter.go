@@ -78,11 +78,6 @@ type run struct {
 	// wherever it does not realign.
 	source *sourceView
 
-	// verbatimLines tracks source lines already emitted verbatim (metadata
-	// preservation), so trivia parsed from those lines (inline comments) is
-	// not emitted a second time.
-	verbatimLines map[int]bool
-
 	// indent is the posting indent: the most frequent posting indent in the
 	// source, ties broken by the widest, as bean-format's.
 	indent int
@@ -259,9 +254,8 @@ func (f *run) copyItemLine(pos ast.Position, buf *strings.Builder) {
 // comes first: the widths read spellings from it.
 func newRun(f *Formatter, tree *ast.AST, source []byte) *run {
 	return &run{
-		Formatter:     f,
-		source:        newSourceView(source, tree),
-		verbatimLines: make(map[int]bool),
+		Formatter: f,
+		source:    newSourceView(source, tree),
 	}
 }
 
@@ -333,63 +327,43 @@ func (f *run) collectItems(tree *ast.AST) []astItem {
 	items := make([]astItem, 0, totalItems)
 
 	for _, opt := range tree.Options {
-		if opt != nil {
-			items = append(items, astItem{line: opt.Position().Line, undated: opt})
-		}
+		items = append(items, astItem{line: opt.Position().Line, undated: opt})
 	}
 
 	for _, inc := range tree.Includes {
-		if inc != nil {
-			items = append(items, astItem{line: inc.Position().Line, undated: inc})
-		}
+		items = append(items, astItem{line: inc.Position().Line, undated: inc})
 	}
 
 	for _, plugin := range tree.Plugins {
-		if plugin != nil {
-			items = append(items, astItem{line: plugin.Position().Line, undated: plugin})
-		}
+		items = append(items, astItem{line: plugin.Position().Line, undated: plugin})
 	}
 
 	for _, pushtag := range tree.Pushtags {
-		if pushtag != nil {
-			items = append(items, astItem{line: pushtag.Position().Line, undated: pushtag})
-		}
+		items = append(items, astItem{line: pushtag.Position().Line, undated: pushtag})
 	}
 
 	for _, poptag := range tree.Poptags {
-		if poptag != nil {
-			items = append(items, astItem{line: poptag.Position().Line, undated: poptag})
-		}
+		items = append(items, astItem{line: poptag.Position().Line, undated: poptag})
 	}
 
 	for _, pushmeta := range tree.Pushmetas {
-		if pushmeta != nil {
-			items = append(items, astItem{line: pushmeta.Position().Line, undated: pushmeta})
-		}
+		items = append(items, astItem{line: pushmeta.Position().Line, undated: pushmeta})
 	}
 
 	for _, popmeta := range tree.Popmetas {
-		if popmeta != nil {
-			items = append(items, astItem{line: popmeta.Position().Line, undated: popmeta})
-		}
+		items = append(items, astItem{line: popmeta.Position().Line, undated: popmeta})
 	}
 
 	for _, directive := range tree.Directives {
-		if directive != nil {
-			items = append(items, astItem{line: directive.Position().Line, directive: directive})
-		}
+		items = append(items, astItem{line: directive.Position().Line, directive: directive})
 	}
 
 	for _, comment := range tree.Comments {
-		if comment != nil {
-			items = append(items, astItem{line: comment.Position().Line, comment: comment})
-		}
+		items = append(items, astItem{line: comment.Position().Line, comment: comment})
 	}
 
 	for _, blankLine := range tree.BlankLines {
-		if blankLine != nil {
-			items = append(items, astItem{line: blankLine.Position().Line, blankLine: blankLine})
-		}
+		items = append(items, astItem{line: blankLine.Position().Line, blankLine: blankLine})
 	}
 
 	// Sort all items by their original position in the file
@@ -407,9 +381,6 @@ func (f *run) collectItems(tree *ast.AST) []astItem {
 func (f *run) formatItem(item astItem, buf *strings.Builder) {
 	switch {
 	case item.comment != nil:
-		if f.verbatimLines[item.comment.Position().Line] {
-			return // Already contained in a verbatim-preserved line.
-		}
 		f.copyItemLine(item.comment.Position(), buf)
 	case item.blankLine != nil:
 		f.copyItemLine(item.blankLine.Position(), buf)
@@ -538,7 +509,6 @@ func (f *run) formatLeadingTransactionBody(t *ast.Transaction, comments []ast.Tr
 
 func (f *run) formatTagsLinks(line *ast.TagsLinks, buf *strings.Builder) {
 	f.copyItemLine(line.Position(), buf)
-	f.verbatimLines[line.Position().Line] = true
 }
 
 // bodyItemLine returns the source line a body item starts on.
@@ -558,9 +528,7 @@ func (f *run) formatTransactionBodyItem(item ast.TransactionBodyItem, buf *strin
 	case item.Posting != nil:
 		f.formatPosting(item.Posting, buf)
 	case item.Comment != nil:
-		if !f.verbatimLines[item.Comment.Position().Line] {
-			f.copyItemLine(item.Comment.Position(), buf)
-		}
+		f.copyItemLine(item.Comment.Position(), buf)
 	case item.TagsLinks != nil:
 		f.formatTagsLinks(item.TagsLinks, buf)
 	}
@@ -578,11 +546,7 @@ func (f *run) formatPosting(p *ast.Posting, buf *strings.Builder) {
 // could.
 func (f *run) formatPostingLine(p *ast.Posting, buf *strings.Builder) bool {
 	f.writeLine(p.Position(), f.postingLayout(p), buf)
-	if f.err != nil {
-		return false
-	}
-	f.verbatimLines[p.Position().Line] = true
-	return true
+	return f.err == nil
 }
 
 // postingLayout reads a posting's line, which must hold the posting: its
@@ -606,11 +570,8 @@ func (f *run) formatMetadata(metadata []*ast.Metadata, buf *strings.Builder) {
 			continue
 		}
 		for _, c := range m.Comments {
-			if !f.verbatimLines[c.Position().Line] {
-				f.copyItemLine(c.Position(), buf)
-			}
+			f.copyItemLine(c.Position(), buf)
 		}
 		f.copyItemLine(m.Position(), buf)
-		f.verbatimLines[m.Position().Line] = true
 	}
 }
