@@ -464,7 +464,7 @@ func (inv *inventory) currencies() []string {
 }
 
 // costCurrencies returns the distinct cost currencies of the lots held at
-// cost, sorted.
+// cost.
 func (inv *inventory) costCurrencies() []string {
 	var currencies []string
 	for _, lots := range inv.lots {
@@ -474,7 +474,6 @@ func (inv *inventory) costCurrencies() []string {
 			}
 		}
 	}
-	slices.Sort(currencies)
 	return currencies
 }
 
