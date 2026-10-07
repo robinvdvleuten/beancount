@@ -13,12 +13,11 @@ func TestClassifyPostings(t *testing.T) {
 	stocks, _ := ast.NewAccount("Assets:Stocks")
 
 	tests := []struct {
-		name                 string
-		postings             []*ast.Posting
-		wantWithAmounts      int
-		wantWithoutAmounts   int
-		wantWithEmptyCosts   int
-		wantWithExplicitCost int
+		name               string
+		postings           []*ast.Posting
+		wantWithAmounts    int
+		wantWithoutAmounts int
+		wantWithEmptyCosts int
 	}{
 		{
 			name: "all postings have amounts",
@@ -26,10 +25,9 @@ func TestClassifyPostings(t *testing.T) {
 				ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
 				ast.NewPosting(checking, ast.WithAmount("-50.00", "USD")),
 			},
-			wantWithAmounts:      2,
-			wantWithoutAmounts:   0,
-			wantWithEmptyCosts:   0,
-			wantWithExplicitCost: 0,
+			wantWithAmounts:    2,
+			wantWithoutAmounts: 0,
+			wantWithEmptyCosts: 0,
 		},
 		{
 			name: "one posting without amount",
@@ -37,10 +35,9 @@ func TestClassifyPostings(t *testing.T) {
 				ast.NewPosting(expenses, ast.WithAmount("50.00", "USD")),
 				ast.NewPosting(checking),
 			},
-			wantWithAmounts:      1,
-			wantWithoutAmounts:   1,
-			wantWithEmptyCosts:   0,
-			wantWithExplicitCost: 0,
+			wantWithAmounts:    1,
+			wantWithoutAmounts: 1,
+			wantWithEmptyCosts: 0,
 		},
 		{
 			name: "posting with empty cost",
@@ -51,10 +48,9 @@ func TestClassifyPostings(t *testing.T) {
 				),
 				ast.NewPosting(checking, ast.WithAmount("-5000", "USD")),
 			},
-			wantWithAmounts:      2,
-			wantWithoutAmounts:   0,
-			wantWithEmptyCosts:   1,
-			wantWithExplicitCost: 0,
+			wantWithAmounts:    2,
+			wantWithoutAmounts: 0,
+			wantWithEmptyCosts: 1,
 		},
 		{
 			name: "posting with explicit cost",
@@ -65,10 +61,9 @@ func TestClassifyPostings(t *testing.T) {
 				),
 				ast.NewPosting(checking, ast.WithAmount("-5000", "USD")),
 			},
-			wantWithAmounts:      2,
-			wantWithoutAmounts:   0,
-			wantWithEmptyCosts:   0,
-			wantWithExplicitCost: 1,
+			wantWithAmounts:    2,
+			wantWithoutAmounts: 0,
+			wantWithEmptyCosts: 0,
 		},
 		{
 			name: "mixed posting types",
@@ -80,10 +75,9 @@ func TestClassifyPostings(t *testing.T) {
 				),
 				ast.NewPosting(checking),
 			},
-			wantWithAmounts:      2,
-			wantWithoutAmounts:   1,
-			wantWithEmptyCosts:   1,
-			wantWithExplicitCost: 0,
+			wantWithAmounts:    2,
+			wantWithoutAmounts: 1,
+			wantWithEmptyCosts: 1,
 		},
 	}
 
@@ -97,7 +91,6 @@ func TestClassifyPostings(t *testing.T) {
 
 			assert.Equal(t, tt.wantWithEmptyCosts, len(pc.withEmptyCosts))
 
-			assert.Equal(t, tt.wantWithExplicitCost, len(pc.withExplicitCost))
 		})
 	}
 }

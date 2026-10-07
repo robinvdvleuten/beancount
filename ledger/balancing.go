@@ -19,7 +19,6 @@ type postingClassification struct {
 	incompleteAmounts []*ast.Posting // amount present but missing number or currency
 	incompletePrices  []*ast.Posting // complete amount, price annotation missing number or currency
 	withEmptyCosts    []*ast.Posting
-	withExplicitCost  []*ast.Posting
 }
 
 // classifyPostings categorizes postings for different processing paths
@@ -41,12 +40,8 @@ func classifyPostings(postings []*ast.Posting) postingClassification {
 			// Cost specs without a number (empty {}, currency-only {USD}
 			// or date/label-only) need their cost resolved from booked
 			// lots or inferred.
-			if posting.Cost != nil {
-				if !posting.Cost.HasNumber() {
-					pc.withEmptyCosts = append(pc.withEmptyCosts, posting)
-				} else {
-					pc.withExplicitCost = append(pc.withExplicitCost, posting)
-				}
+			if posting.Cost != nil && !posting.Cost.HasNumber() {
+				pc.withEmptyCosts = append(pc.withEmptyCosts, posting)
 			}
 		}
 	}
