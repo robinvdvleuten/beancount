@@ -1061,10 +1061,14 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 // token: a word, a number or date it cannot convert, a quote no string
 // closes or a stray character. The rest are characters it lexes as tokens of their
 // own (an unmatched parenthesis in an expression, a lone sign or a slash),
-// which only its grammar rejects.
+// which only its grammar rejects. A sign the lexer scanned with a number
+// after it starts a number beancount's lexer, reading the sign apart, cannot
+// convert (-1,23).
 func (p *Parser) lexerRejects(tok Token) bool {
 	switch p.source[tok.Start] {
-	case '(', ')', '+', '-', '/':
+	case '+', '-':
+		return tok.End-tok.Start > 1
+	case '(', ')', '/':
 		return false
 	}
 	return true

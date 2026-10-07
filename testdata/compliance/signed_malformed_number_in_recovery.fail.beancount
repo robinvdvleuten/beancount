@@ -1,0 +1,8 @@
+; Like beancount's lexer, which reads a sign as a token of its own, a number
+; after a sign that has malformed thousands separators is reported while the
+; parser recovers from a syntax error, as any invalid token is.
+  Income:Job
+  Assets:Cash  -1,23 USD
+  Assets:Cash  +1,2345 USD
+  Assets:Cash  -1234,567 USD
+  Assets:Cash  --5 USD
