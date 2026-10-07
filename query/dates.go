@@ -20,17 +20,11 @@ type intervalValue struct {
 }
 
 // newInterval builds an interval like relativedelta's constructor, which
-// carries months beyond eleven, either way, into years.
+// carries months beyond eleven, either way, into years: Go's division
+// truncates toward zero and the remainder takes the months' sign, as
+// relativedelta's does.
 func newInterval(years, months, days int64) *intervalValue {
-	if months > 11 || months < -11 {
-		sign := int64(1)
-		if months < 0 {
-			sign = -1
-		}
-		years += months * sign / 12 * sign
-		months = months * sign % 12 * sign
-	}
-	return &intervalValue{Years: years, Months: months, Days: days}
+	return &intervalValue{Years: years + months/12, Months: months % 12, Days: days}
 }
 
 // String renders the interval like relativedelta's repr:
