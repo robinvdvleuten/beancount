@@ -1,0 +1,12 @@
+; Like beancount's lexer, which skips comment lines, comments may lead a
+; transaction's body tag line, and metadata may follow it before the postings.
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+2020-01-02 * "Paid"
+  ; a comment
+  ; another
+  #payday
+  source: "bank"
+  Assets:Cash  10 USD
+  Income:Job

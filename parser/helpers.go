@@ -584,6 +584,25 @@ func (p *Parser) parseMetadata() ([]*ast.Metadata, error) {
 // parser's position that an indented metadata line follows, with no blank
 // line between; it is 0 when none do.
 func (p *Parser) indentedCommentsBeforeMetadata() int {
+	return p.indentedCommentsBefore(func(n int) bool {
+		return p.indented(p.peekAhead(n)) && p.isMetadataKeyAt(n)
+	})
+}
+
+// indentedCommentsBeforeTagsLinks counts the indented comment lines at the
+// parser's position that an indented tag or link line follows, with no
+// blank line between; it is 0 when none do.
+func (p *Parser) indentedCommentsBeforeTagsLinks() int {
+	return p.indentedCommentsBefore(func(n int) bool {
+		tok := p.peekAhead(n)
+		return (tok.Type == TAG || tok.Type == LINK) && p.indented(tok)
+	})
+}
+
+// indentedCommentsBefore counts the indented comment lines at the parser's
+// position when starts, given the index of the token after them, accepts
+// the line they lead; it is 0 otherwise.
+func (p *Parser) indentedCommentsBefore(starts func(n int) bool) int {
 	n := 0
 	for {
 		tok := p.peekAhead(n)
@@ -592,7 +611,7 @@ func (p *Parser) indentedCommentsBeforeMetadata() int {
 		}
 		n++
 	}
-	if n == 0 || !p.indented(p.peekAhead(n)) || !p.isMetadataKeyAt(n) {
+	if n == 0 || !starts(n) {
 		return 0
 	}
 	return n

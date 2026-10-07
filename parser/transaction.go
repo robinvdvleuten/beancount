@@ -113,9 +113,14 @@ func (p *Parser) parseTransactionBody(txn *ast.Transaction) error {
 }
 
 // parseLeadingTransactionMetadata parses the indented metadata lines and
-// tag/link lines before the first posting, in any order.
+// tag/link lines before the first posting, in any order. Like beancount's
+// lexer, which skips them, comment lines may lead either; those leading a
+// tag or link line are body comments, as in the posting block.
 func (p *Parser) parseLeadingTransactionMetadata(txn *ast.Transaction) error {
 	for {
+		for range p.indentedCommentsBeforeTagsLinks() {
+			txn.BodyItems = append(txn.BodyItems, ast.TransactionBodyItem{Comment: p.parseComment()})
+		}
 		switch {
 		case p.startsIndentedMetadataLine():
 			metadata, err := p.parseMetadata()
