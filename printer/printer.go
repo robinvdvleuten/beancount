@@ -322,31 +322,24 @@ func bookedCostText(cost *ledger.BookedCost) string {
 
 // alignPositions pads position strings so that their first currency (the
 // first uppercase letter) lines up, like beancount's
-// align_position_strings. A string without one, or starting with one, is
-// padded on the right.
+// align_position_strings. A string without one, or starting with one, stays
+// as it is. beancount also pads every string on the right to one width,
+// which the right-trimmed posting line drops.
 func alignPositions(positions []string) []string {
-	maxBefore, maxAfter, maxUnknown := 0, 0, 0
-	splits := make([]int, len(positions))
-	for i, position := range positions {
-		split := strings.IndexFunc(position, func(r rune) bool { return 'A' <= r && r <= 'Z' })
-		if split > 0 {
-			before := width(position[:split])
-			maxBefore = max(maxBefore, before)
-			maxAfter = max(maxAfter, width(position)-before)
-		} else {
-			split = -1
-			maxUnknown = max(maxUnknown, width(position))
-		}
-		splits[i] = split
+	currencyAt := func(position string) int {
+		return strings.IndexFunc(position, func(r rune) bool { return 'A' <= r && r <= 'Z' })
 	}
-
-	total := max(maxBefore+maxAfter, maxUnknown)
+	maxBefore := 0
+	for _, position := range positions {
+		if split := currencyAt(position); split > 0 {
+			maxBefore = max(maxBefore, width(position[:split]))
+		}
+	}
 	aligned := make([]string, len(positions))
 	for i, position := range positions {
-		if split := splits[i]; split > 0 {
-			aligned[i] = padLeft(position[:split], maxBefore) + padRight(position[split:], total-maxBefore)
-		} else {
-			aligned[i] = padRight(position, total)
+		aligned[i] = position
+		if split := currencyAt(position); split > 0 {
+			aligned[i] = padLeft(position[:split], maxBefore) + position[split:]
 		}
 	}
 	return aligned
