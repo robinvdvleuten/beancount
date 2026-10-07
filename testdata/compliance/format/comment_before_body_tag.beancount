@@ -1,0 +1,18 @@
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+
+2020-01-02 * "Paid"
+  ; a comment
+  #payday
+  Assets:Cash  10 USD
+  Income:Job
+
+2020-01-03 * "Paid"
+  ; a comment
+  ; another
+  #payday
+  source: "bank"
+  ; before a second tag line
+  ^stmt-1
+  Assets:Cash    10 USD
+  Income:Job

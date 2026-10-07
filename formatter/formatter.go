@@ -467,7 +467,13 @@ func (f *run) writeLine(pos ast.Position, line lineLayout, buf *strings.Builder)
 
 // formatTransactionBody writes the lines after a transaction's header.
 func (f *run) formatTransactionBody(t *ast.Transaction, buf *strings.Builder) {
-	f.formatLeadingTransactionBody(t, buf)
+	// The comments before the first posting stand among the metadata and
+	// tag/link lines they are written between.
+	leading := 0
+	for leading < len(t.BodyItems) && t.BodyItems[leading].Comment != nil {
+		leading++
+	}
+	f.formatLeadingTransactionBody(t, t.BodyItems[:leading], buf)
 
 	if len(t.BodyItems) > 0 {
 		// A posting's metadata is held back until the item it comes
@@ -482,7 +488,7 @@ func (f *run) formatTransactionBody(t *ast.Transaction, buf *strings.Builder) {
 			f.formatMetadata(held[:n], buf)
 			held = held[n:]
 		}
-		for _, item := range t.BodyItems {
+		for _, item := range t.BodyItems[leading:] {
 			flush(bodyItemLine(item))
 			if item.Posting != nil {
 				f.formatPostingLine(item.Posting, buf)
@@ -502,24 +508,32 @@ func (f *run) formatTransactionBody(t *ast.Transaction, buf *strings.Builder) {
 	}
 }
 
-// formatLeadingTransactionBody writes the metadata and tag/link lines before
-// the first posting in source order. Like bean-format, tag/link lines are
-// kept as written.
-func (f *run) formatLeadingTransactionBody(t *ast.Transaction, buf *strings.Builder) {
-	// Pushed metadata (no position) comes first, and an own entry whose key
-	// was pushed takes the pushed key's place: restore source order.
-	metadata := slices.DeleteFunc(slices.Clone(t.Metadata), func(m *ast.Metadata) bool { return m.Position().Line == 0 })
-	slices.SortStableFunc(metadata, func(a, b *ast.Metadata) int { return a.Position().Line - b.Position().Line })
-	for _, line := range t.BodyTagsLinks {
-		split := 0
-		for split < len(metadata) && metadata[split].Position().Line < line.Position().Line {
-			split++
-		}
-		f.formatMetadata(metadata[:split], buf)
-		metadata = metadata[split:]
-		f.formatTagsLinks(line, buf)
+// formatLeadingTransactionBody writes the metadata, tag/link and comment
+// lines before the first posting in source order. Like bean-format, tag/link
+// lines are kept as written.
+func (f *run) formatLeadingTransactionBody(t *ast.Transaction, comments []ast.TransactionBodyItem, buf *strings.Builder) {
+	type leadingLine struct {
+		line  int
+		write func()
 	}
-	f.formatMetadata(metadata, buf)
+	var lines []leadingLine
+	for _, m := range t.Metadata {
+		// Pushed metadata (no position) is left out, and comes first in
+		// t.Metadata: sorting by line restores source order.
+		if m.Position().Line > 0 {
+			lines = append(lines, leadingLine{m.Position().Line, func() { f.formatMetadata([]*ast.Metadata{m}, buf) }})
+		}
+	}
+	for _, line := range t.BodyTagsLinks {
+		lines = append(lines, leadingLine{line.Position().Line, func() { f.formatTagsLinks(line, buf) }})
+	}
+	for _, item := range comments {
+		lines = append(lines, leadingLine{bodyItemLine(item), func() { f.formatTransactionBodyItem(item, buf) }})
+	}
+	slices.SortStableFunc(lines, func(a, b leadingLine) int { return a.line - b.line })
+	for _, line := range lines {
+		line.write()
+	}
 }
 
 func (f *run) formatTagsLinks(line *ast.TagsLinks, buf *strings.Builder) {
