@@ -424,9 +424,6 @@ func TestParseCustomStopsAtInlineComment(t *testing.T) {
 	assert.NotEqual(t, (*string)(nil), custom.Values[0].Number)
 	assert.Equal(t, "42", *custom.Values[0].Number)
 
-	// The inline comment should be captured by finishDirective
-	assert.NotEqual(t, (*ast.Comment)(nil), custom.GetComment())
-	assert.Contains(t, custom.GetComment().Content, "inline comment")
 }
 
 // Option tests

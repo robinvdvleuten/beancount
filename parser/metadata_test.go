@@ -595,5 +595,4 @@ func TestParsePushmetaEmptyValue(t *testing.T) {
 		assert.Equal(t, "", pm.Value)
 		assert.True(t, pm.Null, "an empty value pushes None")
 	}
-	assert.NotZero(t, result.Pushmetas[1].GetComment())
 }

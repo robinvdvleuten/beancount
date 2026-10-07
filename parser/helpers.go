@@ -923,7 +923,7 @@ func (p *Parser) internIdent(tok Token) string {
 // inline comment, and parses its metadata lines. It is the common
 // end-of-directive logic of every directive parser but the transaction's.
 func (p *Parser) finishDirective(d ast.Directive) error {
-	if err := p.finishHeader(d, d.Position().Offset); err != nil {
+	if err := p.finishHeader(d.Position().Offset); err != nil {
 		return err
 	}
 	metadata, err := p.parseMetadata()
@@ -957,8 +957,8 @@ func (p *Parser) headerContinuation(offset int) (Token, bool) {
 // there, on the line it starts on even when it is a string spanning lines,
 // since the grammar fails at the line break and never reads it. A string
 // spanning lines ends it on the line the string closes on, where a comment
-// is the target's inline comment and anything else a syntax error.
-func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
+// may follow and anything else is a syntax error.
+func (p *Parser) finishHeader(offset int) error {
 	if tok, ok := p.headerContinuation(offset); ok {
 		pos := tokenPosition(tok, p.filename)
 		err := newErrorfWithSource(pos, p.calculateSourceRange(pos), "unexpected token %s %q", tok.Type, tok.String(p.source))
@@ -976,21 +976,10 @@ func (p *Parser) finishHeader(target ast.WithComment, offset int) error {
 		return err
 	}
 	line := p.lineAfterPrevious() - 1
-	p.attachInlineComment(target, line)
+	if !p.isAtEnd() && p.peek().Line == line && p.peek().Type == COMMENT {
+		p.advance() // The line's inline comment.
+	}
 	return p.expectLineEnd(line)
-}
-
-func (p *Parser) consumeInlineComment(line int) *ast.Comment {
-	if p.isAtEnd() || p.peek().Line != line || p.peek().Type != COMMENT {
-		return nil
-	}
-	return p.parseComment()
-}
-
-func (p *Parser) attachInlineComment(target ast.WithComment, line int) {
-	if comment := p.consumeInlineComment(line); comment != nil {
-		target.SetComment(comment)
-	}
 }
 
 func (p *Parser) expectLineEnd(line int) error {

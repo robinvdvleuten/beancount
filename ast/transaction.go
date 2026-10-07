@@ -25,7 +25,6 @@ type Transaction struct {
 	Links     []Link
 	Tags      []Tag
 
-	withComment
 	withMetadata
 
 	Postings  []*Posting
@@ -128,7 +127,6 @@ type Posting struct {
 	// with its __automatic__ metadata.
 	Automatic bool
 
-	withComment
 	withMetadata
 }
 

@@ -108,12 +108,6 @@ type WithMetadata interface {
 	GetMetadata() []*Metadata
 }
 
-// WithComment is an interface for AST nodes that can have an inline comment attached.
-type WithComment interface {
-	GetComment() *Comment
-	SetComment(*Comment)
-}
-
 // withMetadata is an embeddable struct that implements WithMetadata.
 type withMetadata struct {
 	Metadata []*Metadata
@@ -132,23 +126,9 @@ func (w *withMetadata) HasMetadata() bool {
 	return len(w.Metadata) > 0
 }
 
-// withComment is an embeddable struct that implements WithComment.
-type withComment struct {
-	InlineComment *Comment // Attached inline comment at end of directive line
-}
-
-func (w *withComment) GetComment() *Comment {
-	return w.InlineComment
-}
-
-func (w *withComment) SetComment(c *Comment) {
-	w.InlineComment = c
-}
-
 // Directive is the interface implemented by all Beancount directive types.
 type Directive interface {
 	WithMetadata
-	WithComment
 	Positioned
 
 	Date() *Date

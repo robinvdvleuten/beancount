@@ -40,12 +40,8 @@ func TestParseTransactionWithInlineCommentOnHeader(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(tree.Directives), 2)
 
-	txn, ok := tree.Directives[1].(*ast.Transaction)
+	_, ok := tree.Directives[1].(*ast.Transaction)
 	assert.True(t, ok, "directive should be a transaction")
-
-	// Check inline comment on transaction header
-	assert.True(t, txn.GetComment() != nil, "transaction should have inline comment")
-	assert.Equal(t, txn.GetComment().Content, "; header comment")
 }
 
 func TestParseTransactionWithInlineCommentOnPostings(t *testing.T) {
@@ -64,42 +60,6 @@ func TestParseTransactionWithInlineCommentOnPostings(t *testing.T) {
 	assert.True(t, ok)
 
 	assert.Equal(t, len(txn.Postings), 2)
-
-	// Check inline comments on postings
-	p1 := txn.Postings[0]
-	assert.True(t, p1.GetComment() != nil, "first posting should have inline comment")
-	assert.Equal(t, p1.GetComment().Content, "; posting 1 comment")
-
-	p2 := txn.Postings[1]
-	assert.True(t, p2.GetComment() != nil, "second posting should have inline comment")
-	assert.Equal(t, p2.GetComment().Content, "; posting 2 comment")
-}
-
-func TestParseTransactionWithBothHeaderAndPostingComments(t *testing.T) {
-	source := `2024-01-01 open Assets:Checking
-2024-01-01 open Expenses:Food
-
-2024-01-15 * "Test" ; header comment
-  Assets:Checking   100.00 USD  ; posting comment
-  Expenses:Food    -100.00 USD
-`
-
-	tree, err := ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
-
-	txn, ok := tree.Directives[2].(*ast.Transaction)
-	assert.True(t, ok)
-
-	// Check header comment
-	assert.True(t, txn.GetComment() != nil, "transaction should have header comment")
-	assert.Equal(t, txn.GetComment().Content, "; header comment")
-
-	// Check posting comments
-	assert.True(t, txn.Postings[0].GetComment() != nil, "first posting should have comment")
-	assert.Equal(t, txn.Postings[0].GetComment().Content, "; posting comment")
-
-	// Second posting has no comment
-	assert.True(t, txn.Postings[1].GetComment() == nil, "second posting should not have comment")
 }
 
 func TestParseDirectivesWithInlineComments(t *testing.T) {
@@ -110,36 +70,10 @@ func TestParseDirectivesWithInlineComments(t *testing.T) {
 	tree, err := ParseBytes(context.Background(), []byte(source))
 	assert.NoError(t, err)
 
-	// Check open directive comment
-	open, ok := tree.Directives[0].(*ast.Open)
+	_, ok := tree.Directives[0].(*ast.Open)
 	assert.True(t, ok)
-	assert.True(t, open.GetComment() != nil, "open should have inline comment")
-	assert.Equal(t, open.GetComment().Content, "; open comment")
-
-	// Check close directive comment
-	close, ok := tree.Directives[1].(*ast.Close)
+	_, ok = tree.Directives[1].(*ast.Close)
 	assert.True(t, ok)
-	assert.True(t, close.GetComment() != nil, "close should have inline comment")
-	assert.Equal(t, close.GetComment().Content, "; close comment")
-}
-
-func TestParseWithNoInlineComments(t *testing.T) {
-	source := `2024-01-01 open Assets:Checking
-2024-01-15 * "Test"
-  Assets:Checking   100.00 USD
-  Expenses:Food    -100.00 USD
-`
-
-	tree, err := ParseBytes(context.Background(), []byte(source))
-	assert.NoError(t, err)
-
-	txn, ok := tree.Directives[1].(*ast.Transaction)
-	assert.True(t, ok)
-
-	// No comments should be present
-	assert.True(t, txn.GetComment() == nil, "transaction should not have comment")
-	assert.True(t, txn.Postings[0].GetComment() == nil, "first posting should not have comment")
-	assert.True(t, txn.Postings[1].GetComment() == nil, "second posting should not have comment")
 }
 
 func TestParseCommentCRLFDoesNotKeepCarriageReturn(t *testing.T) {
@@ -225,13 +159,7 @@ popmeta location: ; popmeta comment
 	tree, err := ParseBytes(context.Background(), []byte(source))
 	assert.NoError(t, err)
 
-	assert.Equal(t, "; option comment", tree.Options[0].GetComment().Content)
-	assert.Equal(t, "; plugin comment", tree.Plugins[0].GetComment().Content)
-	assert.Equal(t, "; pushtag comment", tree.Pushtags[0].GetComment().Content)
-	assert.Equal(t, "; poptag comment", tree.Poptags[0].GetComment().Content)
 	assert.Equal(t, `"`+"NYC"+`"`, tree.Pushmetas[0].Value)
-	assert.Equal(t, "; pushmeta comment", tree.Pushmetas[0].GetComment().Content)
-	assert.Equal(t, "; popmeta comment", tree.Popmetas[0].GetComment().Content)
 }
 
 // Integration tests for comment handling with transactions
@@ -435,11 +363,7 @@ func TestParseInlineCommentAfterStringSpanningLines(t *testing.T) {
 			assert.NoError(t, err)
 			assert.Equal(t, 2, len(tree.Directives))
 
-			d, ok := tree.Directives[1].(ast.WithComment)
-			assert.True(t, ok)
-			assert.NotZero(t, d.GetComment())
-			assert.Equal(t, "; c", d.GetComment().Content)
-			if txn, ok := d.(*ast.Transaction); ok {
+			if txn, ok := tree.Directives[1].(*ast.Transaction); ok {
 				assert.Equal(t, 0, len(txn.BodyItems)-len(txn.Postings), "the comment is not a body comment")
 			}
 		})

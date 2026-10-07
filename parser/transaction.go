@@ -90,7 +90,7 @@ func (p *Parser) parseTransaction(pos ast.Position, date *ast.Date) (*ast.Transa
 	txn.Tags = tags
 	txn.Links = links
 
-	if err := p.finishHeader(txn, txn.Position().Offset); err != nil {
+	if err := p.finishHeader(txn.Position().Offset); err != nil {
 		return nil, err
 	}
 
@@ -344,7 +344,7 @@ func (p *Parser) parsePosting() (*ast.Posting, error) {
 		posting.Price = price
 	}
 
-	if err := p.finishHeader(posting, postingTok.Start); err != nil {
+	if err := p.finishHeader(postingTok.Start); err != nil {
 		return nil, err
 	}
 	p.reportPrice(posting)

@@ -35,7 +35,6 @@ type Commodity struct {
 	date     *Date
 	Currency string
 
-	withComment
 	withMetadata
 }
 
@@ -67,7 +66,6 @@ type Open struct {
 	ConstraintCurrencies []string
 	BookingMethod        string
 
-	withComment
 	withMetadata
 }
 
@@ -99,7 +97,6 @@ type Close struct {
 	date    *Date
 	Account Account
 
-	withComment
 	withMetadata
 }
 
@@ -137,7 +134,6 @@ type Balance struct {
 	// as the asserted balance amount.
 	Tolerance *Amount
 
-	withComment
 	withMetadata
 }
 
@@ -171,7 +167,6 @@ type Pad struct {
 	Account    Account
 	AccountPad Account
 
-	withComment
 	withMetadata
 }
 
@@ -208,7 +203,6 @@ type Note struct {
 	Tags        []Tag
 	Links       []Link
 
-	withComment
 	withMetadata
 }
 
@@ -250,7 +244,6 @@ type Document struct {
 	Tags           []Tag
 	Links          []Link
 
-	withComment
 	withMetadata
 }
 
@@ -307,7 +300,6 @@ type Price struct {
 	Commodity string
 	Amount    *Amount
 
-	withComment
 	withMetadata
 }
 
@@ -338,7 +330,6 @@ type Event struct {
 	Name  RawString
 	Value RawString
 
-	withComment
 	withMetadata
 }
 
@@ -366,7 +357,6 @@ type Query struct {
 	Name        RawString
 	QueryString RawString
 
-	withComment
 	withMetadata
 }
 
@@ -397,7 +387,6 @@ type Custom struct {
 	Type   RawString
 	Values []*CustomValue
 
-	withComment
 	withMetadata
 }
 
