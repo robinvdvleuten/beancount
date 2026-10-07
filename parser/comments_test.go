@@ -159,7 +159,7 @@ popmeta location: ; popmeta comment
 	tree, err := ParseBytes(context.Background(), []byte(source))
 	assert.NoError(t, err)
 
-	assert.Equal(t, `"`+"NYC"+`"`, tree.Pushmetas[0].Value)
+	assert.Equal(t, "NYC", tree.Pushmetas[0].MetaValue.StringValue.Value)
 }
 
 // Integration tests for comment handling with transactions

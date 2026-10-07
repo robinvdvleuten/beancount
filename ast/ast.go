@@ -314,7 +314,7 @@ func ApplyPushPopDirectives(ast *AST) []error {
 		}
 		values := make([]string, len(stack))
 		for i, pushed := range stack {
-			values[i] = pushed.metadataValue().String()
+			values[i] = pushed.MetaValue.String()
 		}
 		errs = append(errs, &PushPopError{
 			Pos: stack[0].Position(),
@@ -439,7 +439,7 @@ func withPushedMetadata(own []*Metadata, keys []string, active map[string][]*Pus
 			continue
 		}
 		stack := active[key]
-		merged = append(merged, &Metadata{Key: key, Value: stack[len(stack)-1].metadataValue()})
+		merged = append(merged, &Metadata{Key: key, Value: stack[len(stack)-1].MetaValue})
 	}
 	return append(merged, rest...)
 }

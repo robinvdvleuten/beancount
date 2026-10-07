@@ -112,25 +112,11 @@ func (p *Poptag) SetPosition(pos Position) { p.pos = pos }
 //	  Liabilities:CreditCard
 //	popmeta location:
 type Pushmeta struct {
-	pos   Position
-	Key   string
-	Value string // Source text of the value, as the formatter prints it
-	// MetaValue is the parsed value applied to transactions; nil when the
-	// source text is not a single metadata value.
+	pos Position
+	Key string
+	// MetaValue is the value pushed transactions receive; nil for NULL or
+	// no value, which beancount pushes as None.
 	MetaValue *MetadataValue
-	// Null reports a NULL value, which pushed transactions receive as
-	// beancount's None, a nil value.
-	Null bool
-}
-
-// metadataValue returns the value pushed transactions receive: the parsed
-// value, nil for NULL, or else the source text as a string.
-func (p *Pushmeta) metadataValue() *MetadataValue {
-	if p.MetaValue != nil || p.Null {
-		return p.MetaValue
-	}
-	raw := NewRawString(p.Value)
-	return &MetadataValue{StringValue: &raw}
 }
 
 func (p *Pushmeta) Position() Position { return p.pos }

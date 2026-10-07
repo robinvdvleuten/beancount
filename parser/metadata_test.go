@@ -487,8 +487,7 @@ func TestParseMetadataAllowsOmittedValueBeforeInlineComment(t *testing.T) {
 	assert.Equal(t, (*ast.MetadataValue)(nil), commodity.Metadata[0].Value)
 }
 
-func TestParseRestOfLineOptimization(t *testing.T) {
-	// pushmeta keeps its value's source text with parseRestOfLine.
+func TestParsePushmetaAmount(t *testing.T) {
 	source := `pushmeta key: 1.50 USD
 2024-01-01 open Assets:Checking
 popmeta key:
@@ -496,19 +495,7 @@ popmeta key:
 	result, err := ParseString(context.Background(), source)
 	assert.NoError(t, err)
 	assert.Equal(t, 1, len(result.Pushmetas))
-	assert.Equal(t, "1.50 USD", result.Pushmetas[0].Value)
-}
-
-func BenchmarkParseRestOfLine(b *testing.B) {
-	source := `pushmeta key: some value with multiple tokens here
-2024-01-01 open Assets:Checking
-popmeta key:
-`
-	ctx := context.Background()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		_, _ = ParseString(ctx, source)
-	}
+	assert.Equal(t, "1.50 USD", result.Pushmetas[0].MetaValue.String())
 }
 
 func TestParseMetadataWithPrecision(t *testing.T) {
@@ -549,7 +536,6 @@ pushmeta two: "a" "b"
 
 	// The source text is kept for the formatter; the parsed value is what
 	// transactions receive.
-	assert.Equal(t, `"bank"`, result.Pushmetas[0].Value)
 	assert.Equal(t, "bank", result.Pushmetas[0].MetaValue.StringValue.Value)
 	assert.Equal(t, "42", *result.Pushmetas[1].MetaValue.Number)
 }
@@ -572,9 +558,8 @@ func TestParsePushmetaNull(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, 2, len(result.Pushmetas))
 
-	assert.Equal(t, "NULL", result.Pushmetas[0].Value)
-	assert.True(t, result.Pushmetas[0].Null)
-	assert.False(t, result.Pushmetas[1].Null)
+	assert.Equal(t, (*ast.MetadataValue)(nil), result.Pushmetas[0].MetaValue)
+	assert.Equal(t, "NULL", result.Pushmetas[1].MetaValue.StringValue.Value)
 }
 
 func TestParseCustomRejectsNull(t *testing.T) {
@@ -592,7 +577,6 @@ func TestParsePushmetaEmptyValue(t *testing.T) {
 	assert.Equal(t, 1, len(result.Directives))
 
 	for _, pm := range result.Pushmetas {
-		assert.Equal(t, "", pm.Value)
-		assert.True(t, pm.Null, "an empty value pushes None")
+		assert.Equal(t, (*ast.MetadataValue)(nil), pm.MetaValue, "an empty value pushes None")
 	}
 }

@@ -809,24 +809,6 @@ func (p *Parser) isKeyword(typ TokenType) bool {
 	}
 }
 
-// parseRestOfLineUntilComment reads the tokens left on line, up to an inline
-// comment; none when the next token is on a later line.
-func (p *Parser) parseRestOfLineUntilComment(currentLine int) string {
-	var buf strings.Builder
-	for !p.isAtEnd() && p.peek().Line == currentLine {
-		if p.peek().Type == COMMENT {
-			break
-		}
-		if buf.Len() > 0 {
-			buf.WriteByte(' ')
-		}
-		tok := p.advance()
-		buf.WriteString(tok.String(p.source))
-	}
-
-	return strings.TrimSpace(buf.String())
-}
-
 // Helper methods for token navigation
 
 func (p *Parser) peek() Token {

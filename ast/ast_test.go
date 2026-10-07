@@ -102,7 +102,8 @@ func newPoptagForTest(line int, tag Tag) *Poptag {
 
 // newPushmetaForTest creates a Pushmeta for testing.
 func newPushmetaForTest(line int, key, value string) *Pushmeta {
-	pm := &Pushmeta{Key: key, Value: value}
+	raw := NewRawString(value)
+	pm := &Pushmeta{Key: key, MetaValue: &MetadataValue{StringValue: &raw}}
 	pm.SetPosition(Position{Line: line})
 	return pm
 }
@@ -429,7 +430,8 @@ func TestApplyPushPopDirectivesReportsImbalance(t *testing.T) {
 	pushtag := func(line int, tag Tag) *Pushtag { p := &Pushtag{Tag: tag}; p.SetPosition(at(line)); return p }
 	poptag := func(line int, tag Tag) *Poptag { p := &Poptag{Tag: tag}; p.SetPosition(at(line)); return p }
 	pushmeta := func(line int, key, value string) *Pushmeta {
-		p := &Pushmeta{Key: key, Value: value}
+		raw := NewRawString(value)
+		p := &Pushmeta{Key: key, MetaValue: &MetadataValue{StringValue: &raw}}
 		p.SetPosition(at(line))
 		return p
 	}

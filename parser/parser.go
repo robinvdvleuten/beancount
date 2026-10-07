@@ -600,12 +600,9 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 		return nil, err
 	}
 
-	// Parse the value like any metadata value, then rewind: the source text
-	// is kept for the formatter.
 	// Like beancount's grammar, the value is one metadata value and the
 	// line ends after it: anything more is a syntax error, which drops
 	// the pushmeta.
-	start := p.pos
 	value, err := p.parseMetadataValue(pos.Line)
 	if err != nil {
 		return nil, err
@@ -613,15 +610,8 @@ func (p *Parser) parsePushmeta() (*ast.Pushmeta, error) {
 	if next := p.peek(); next.Type != EOF && next.Type != COMMENT && next.Line == pos.Line {
 		return nil, p.errorAtToken(next, "unexpected token %s %q", next.Type, next.String(p.source))
 	}
-	p.pos = start
 
-	pm := &ast.Pushmeta{
-		Key:       key,
-		Value:     p.parseRestOfLineUntilComment(pos.Line),
-		MetaValue: value,
-		// NULL, or no value at all, which beancount pushes as None too.
-		Null: value == nil,
-	}
+	pm := &ast.Pushmeta{Key: key, MetaValue: value}
 	pm.SetPosition(pos)
 	if err := p.finishHeader(pos.Offset); err != nil {
 		return nil, err
