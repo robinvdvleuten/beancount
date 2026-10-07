@@ -481,9 +481,7 @@ func newAmountRenderer(ctx *renderContext) *amountRenderer {
 }
 
 func (r *amountRenderer) observe(number decimal.Decimal, currency string) {
-	if r.display != nil {
-		number = r.display.Quantize(number, currency)
-	}
+	number = r.display.Quantize(number, currency)
 	exponent := int(number.Exponent())
 	r.integral = max(r.integral, coefficientDigits(number)+exponent)
 

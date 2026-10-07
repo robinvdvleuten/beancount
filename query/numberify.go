@@ -135,7 +135,7 @@ var numberifiers = map[dtype]numberifier{
 					total = pydecimal.Add(total, p.Units.Number)
 				}
 			}
-			if total = quantize(display, total, currency); total.IsZero() {
+			if total = display.Quantize(total, currency); total.IsZero() {
 				return nil
 			}
 			return total
@@ -151,18 +151,9 @@ type negativeZero struct{ decimal.Decimal }
 // quantizedCell is number quantized to currency's display precision, a
 // negativeZero when a negative number rounds to zero.
 func quantizedCell(display *ledger.DisplayContext, number decimal.Decimal, currency string) any {
-	quantized := quantize(display, number, currency)
+	quantized := display.Quantize(number, currency)
 	if quantized.IsZero() && number.Sign() < 0 {
 		return negativeZero{quantized}
 	}
 	return quantized
-}
-
-// quantize rounds number to currency's display precision, when there is a
-// display context.
-func quantize(display *ledger.DisplayContext, number decimal.Decimal, currency string) decimal.Decimal {
-	if display == nil {
-		return number
-	}
-	return display.Quantize(number, currency)
 }

@@ -57,7 +57,7 @@ func openTransform(qctx *Context, entries []ast.Directive, openDate *ast.Date) [
 		}
 	}
 
-	earnings, opening, conversions := qctx.config().PreviousAccounts()
+	earnings, opening, conversions := qctx.Config.PreviousAccounts()
 	openingDate := &ast.Date{Time: openDate.AddDate(0, 0, -1)}
 	if conversion := conversionTransaction(qctx, before, openingDate, conversions); conversion != nil {
 		bookTransaction(qctx, accounts, conversion)
@@ -177,7 +177,7 @@ func closeTransform(qctx *Context, entries []ast.Directive, closeDate *ast.Date)
 	if closeDate != nil {
 		date = &ast.Date{Time: closeDate.AddDate(0, 0, -1)}
 	}
-	_, conversions := qctx.config().CurrentAccounts()
+	_, conversions := qctx.Config.CurrentAccounts()
 	if conversion := conversionTransaction(qctx, kept, date, conversions); conversion != nil {
 		kept = append(kept[:len(kept):len(kept)], conversion)
 	}
@@ -248,7 +248,7 @@ func clearTransform(qctx *Context, entries []ast.Directive) []ast.Directive {
 		}
 	}
 
-	earnings, _ := qctx.config().CurrentAccounts()
+	earnings, _ := qctx.Config.CurrentAccounts()
 	transferDate := &ast.Date{Time: lastDate}
 	result := entries
 	for _, account := range sortedAccounts(accounts) {

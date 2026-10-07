@@ -646,33 +646,19 @@ func getPrice(row *evalRow, from, to string, date *ast.Date) any {
 	return nil
 }
 
-// valuer returns the ledger that values positions, or nil without one, when
-// every position keeps its units.
-func valuer(row *evalRow) *ledger.Ledger {
-	if row.Ctx == nil {
-		return nil
-	}
-	return row.Ctx.Ledger
-}
-
 // convertAmount converts an amount to the given currency, returning it
 // unmodified when no conversion rate is available (ledger.ConvertAmount).
 func convertAmount(row *evalRow, a *amountValue, currency string, date *ast.Date) any {
-	l := valuer(row)
-	if l == nil || a.Currency == currency {
+	if a.Currency == currency {
 		return a
 	}
-	return fromLedgerAmount(l.ConvertAmount(a.Number, a.Currency, currency, priceDate(date)))
+	return fromLedgerAmount(row.Ctx.Ledger.ConvertAmount(a.Number, a.Currency, currency, priceDate(date)))
 }
 
 // convertPosition converts a position like beancount's convert_position
 // (ledger.Convert).
 func convertPosition(row *evalRow, p *positionValue, currency string, date *ast.Date) any {
-	l := valuer(row)
-	if l == nil {
-		return &p.Units
-	}
-	return fromLedgerAmount(l.Convert(ledgerPosition(p), currency, priceDate(date)))
+	return fromLedgerAmount(row.Ctx.Ledger.Convert(ledgerPosition(p), currency, priceDate(date)))
 }
 
 func convertInventory(row *evalRow, inv *inventoryValue, currency string, date *ast.Date) any {
@@ -687,11 +673,7 @@ func convertInventory(row *evalRow, inv *inventoryValue, currency string, date *
 // (ledger.MarketValue). Positions without a cost basis are returned as
 // their units.
 func marketValue(row *evalRow, p *positionValue, date *ast.Date) any {
-	l := valuer(row)
-	if l == nil {
-		return &amountValue{Number: p.Units.Number, Currency: p.Units.Currency}
-	}
-	return fromLedgerAmount(l.MarketValue(ledgerPosition(p), priceDate(date)))
+	return fromLedgerAmount(row.Ctx.Ledger.MarketValue(ledgerPosition(p), priceDate(date)))
 }
 
 func inventoryMarketValue(row *evalRow, inv *inventoryValue, date *ast.Date) any {

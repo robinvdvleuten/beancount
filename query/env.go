@@ -26,15 +26,6 @@ type Context struct {
 	summarized map[*ast.Posting]*positionValue
 }
 
-// config returns the ledger's options, beancount's defaults when the
-// Context has none.
-func (qctx *Context) config() *config.Config {
-	if qctx == nil || qctx.Config == nil {
-		return config.New()
-	}
-	return qctx.Config
-}
-
 // evalRow is the evaluation context for one data row. In the FROM (entry)
 // environment only Entry is set; in the posting environment Txn and Posting
 // identify the flattened posting row. running is the inventory the
@@ -412,8 +403,5 @@ func postingWeight(posting *ast.Posting, position *positionValue) any {
 
 // priceLookup fetches a conversion rate from the ledger's prices.
 func priceLookup(ctx *Context, date *ast.Date, from, to string) (decimal.Decimal, bool) {
-	if ctx == nil || ctx.Ledger == nil {
-		return decimal.Decimal{}, false
-	}
 	return ctx.Ledger.GetPrice(date, from, to)
 }
