@@ -711,19 +711,8 @@ func sortedLotsForBooking(lots []*lot, bookingMethod bookingMethod) []*lot {
 	lifo := method == bookingLIFO
 
 	if method == bookingHIFO {
-		// Highest cost basis first; lots without a cost sort last.
+		// Highest cost basis first; a reduction matches lots held at cost only.
 		slices.SortStableFunc(sortedLots, func(a, b *lot) int {
-			aHasCost := a.spec != nil && a.spec.cost != nil
-			bHasCost := b.spec != nil && b.spec.cost != nil
-			if aHasCost != bHasCost {
-				if aHasCost {
-					return -1
-				}
-				return 1
-			}
-			if !aHasCost {
-				return 0
-			}
 			return b.spec.cost.Cmp(*a.spec.cost)
 		})
 		return sortedLots
