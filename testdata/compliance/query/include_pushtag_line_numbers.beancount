@@ -1,0 +1,13 @@
+include "include/pushtag_txns.beancount"
+2020-01-01 open Assets:Cash
+2020-01-01 open Income:Job
+pushtag #main
+2020-01-05 * "main"
+  Assets:Cash  1 USD
+  Income:Job
+poptag #main
+pushmeta source: "main"
+2020-01-06 * "main meta"
+  Assets:Cash  1 USD
+  Income:Job
+popmeta source:

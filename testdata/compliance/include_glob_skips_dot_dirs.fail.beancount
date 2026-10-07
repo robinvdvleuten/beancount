@@ -1,0 +1,6 @@
+; Like Python's glob, "**" does not descend into a directory whose name
+; starts with a dot, so Assets:Hidden is never opened.
+include "include_glob_dotdirs/**/*.beancount"
+
+2020-01-02 balance Assets:Visible 0 USD
+2020-01-02 balance Assets:Hidden 0 USD

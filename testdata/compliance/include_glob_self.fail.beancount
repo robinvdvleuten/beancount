@@ -1,0 +1,5 @@
+; A glob that matches the including file reports it as a duplicate and still
+; loads its other matches: include_glob_self_z.beancount opens Assets:Z.
+include "include_glob_s[e]lf*.beancount"
+
+2020-01-02 balance Assets:Z 0 USD
