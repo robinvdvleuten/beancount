@@ -16,6 +16,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/alecthomas/assert/v2"
 )
@@ -257,6 +258,13 @@ func (o *frozenOracle) key(t *testing.T, call oracleCall) string {
 
 	h := sha256.New()
 	digestField(h, call.tool)
+	if call.tool == "bean-query" {
+		// bean-query pads a column to the paths it prints, so its answer
+		// holds only under roots as long as those it was recorded under.
+		for _, root := range o.roots {
+			digestField(h, fmt.Sprintf("root length %d", utf8.RuneCountInString(root)))
+		}
+	}
 	for _, arg := range call.args {
 		digestField(h, o.tokenizePath(o.absolute(t, arg)))
 	}
@@ -469,5 +477,20 @@ func TestFrozenOracle(t *testing.T) {
 		ledger = filepath.Join(b, "main.beancount")
 		run := other.run(t, oracleCall{tool: "tool", args: []string{ledger}, inputs: []string{ledger}}, nil)
 		assert.Equal(t, ledger+":1: error\n", run.Stdout)
+	})
+
+	t.Run("KeysBeanQueryByTheLengthOfItsRoots", func(t *testing.T) {
+		dir := t.TempDir()
+		call := func(root string) oracleCall {
+			ledger := filepath.Join(root, "main.beancount")
+			write(t, ledger, "")
+			return oracleCall{tool: "bean-query", args: []string{ledger}, inputs: []string{ledger}}
+		}
+		key := func(root string) string {
+			return (&frozenOracle{roots: []string{root}}).key(t, call(root))
+		}
+		a, b, longer := filepath.Join(dir, "a"), filepath.Join(dir, "b"), filepath.Join(dir, "longer")
+		assert.Equal(t, key(a), key(b))
+		assert.NotEqual(t, key(a), key(longer))
 	})
 }
