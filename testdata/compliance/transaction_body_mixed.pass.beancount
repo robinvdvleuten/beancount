@@ -1,0 +1,14 @@
+; Before its first posting a transaction's body may hold comments, tag lines
+; and metadata in any order; metadata keys may hold digits and underscores.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  ; note
+  #tag
+  key: "v"
+  zone: "x"
+  invoice_no: "1"
+  ref2: "x"
+  Assets:A  1 USD
+  Assets:B

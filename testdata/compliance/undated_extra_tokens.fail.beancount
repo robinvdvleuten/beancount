@@ -1,0 +1,15 @@
+; An include, pushtag or popmeta followed by another word is a syntax error,
+; and the line is dropped: the file is not included, the tag not pushed and
+; the metadata not popped, so the popmeta after it still has a key to pop.
+2020-01-01 open Assets:A
+
+include "other.beancount" "extra"
+2020-01-02 open Assets:B
+
+pushtag #t extra
+2020-01-03 open Assets:C
+
+pushmeta kk: "1"
+popmeta kk: extra
+2020-01-04 open Assets:D
+popmeta kk:

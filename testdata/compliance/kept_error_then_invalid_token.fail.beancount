@@ -1,0 +1,5 @@
+; An open with a string after its booking method is a syntax error, and the
+; invalid token on the line right after it is reported too.
+2020-01-01 open Assets:A USD "STRICT" "x"
+~x
+2020-01-03 open Assets:C

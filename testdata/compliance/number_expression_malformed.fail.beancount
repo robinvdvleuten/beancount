@@ -1,0 +1,14 @@
+; An arithmetic expression missing an operand, or a parenthesis never closed,
+; is a syntax error that drops its transaction.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  10 + USD
+  Assets:B
+
+2020-01-03 *
+  Assets:A  2 * (3 + 4 USD
+  Assets:B
+
+2020-01-04 balance Assets:A 0 USD

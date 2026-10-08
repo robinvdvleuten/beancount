@@ -1,0 +1,19 @@
+; A cost spec beancount's grammar cannot read drops its transaction: an
+; operator other than `#` between its numbers, braces never closed, and a
+; compound `#` with no currency.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  1 HOOL {10 & 5 USD}
+  Assets:B
+
+2020-01-03 *
+  Assets:A  1 HOOL {10 USD
+  Assets:B
+
+2020-01-04 *
+  Assets:A  1 HOOL {1 # 2}
+  Assets:B
+
+2020-01-05 balance Assets:A 0 HOOL

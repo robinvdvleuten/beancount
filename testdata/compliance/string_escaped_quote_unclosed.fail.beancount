@@ -1,0 +1,5 @@
+; A string whose only closing quote is escaped is no string: the quote starts
+; an invalid token, which drops the note.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A "a\"
+2020-01-03 open Assets:C

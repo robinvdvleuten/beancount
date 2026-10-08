@@ -1,0 +1,19 @@
+; A transaction is dropped when its flag is a currency, when a body line
+; starts with tags then a posting, and when a posting has a flag but no
+; account; so the balance assertion sees none of them.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 USD "x"
+  Assets:A  1 USD
+  Assets:B
+
+2020-01-03 *
+  #tag Assets:A  10 USD
+  Assets:B
+
+2020-01-04 *
+  ! 10 USD
+  Assets:B
+
+2020-01-05 balance Assets:A 0 USD

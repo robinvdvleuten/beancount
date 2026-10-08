@@ -1,0 +1,8 @@
+; A ledger whose last line is posting metadata with no newline: metadata after
+; the postings is a syntax error.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 *
+  Assets:A  1 USD
+  Assets:B
+  n: 5

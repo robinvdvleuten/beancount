@@ -1,0 +1,3 @@
+; A ledger ending in a string never closed before its last byte.
+2020-01-01 open Assets:A
+2020-01-02 note Assets:A "x\

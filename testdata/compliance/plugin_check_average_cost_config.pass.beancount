@@ -1,0 +1,4 @@
+; The check_average_cost plugin takes its tolerance as a config string.
+plugin "beancount.plugins.check_average_cost" "0.01"
+
+2020-01-01 open Assets:A

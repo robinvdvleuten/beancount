@@ -1,0 +1,30 @@
+; A directive missing an argument it cannot do without is a syntax error on
+; its line, and the directive is dropped: a balance without its account or
+; with a tolerance but no number, a custom without its type, a document or a
+; note without its account, a price without its commodity or its number, and
+; a query with a word after its strings.
+2020-01-01 open Assets:A
+
+2020-01-02 balance 100.00 USD
+2020-01-02 open Assets:B
+
+2020-01-03 balance Assets:A 1 ~ USD
+2020-01-03 open Assets:C
+
+2020-01-04 custom 1 USD
+2020-01-04 open Assets:D
+
+2020-01-05 document "/tmp/x.pdf"
+2020-01-05 open Assets:E
+
+2020-01-06 note "text"
+2020-01-06 open Assets:F
+
+2020-01-07 price 1.10 USD
+2020-01-07 open Assets:G
+
+2020-01-08 price EUR USD
+2020-01-08 open Assets:H
+
+2020-01-09 query "a" "b" junk
+2020-01-09 open Assets:I

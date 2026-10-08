@@ -1,0 +1,7 @@
+; An invalid token is always reported, but a grammar error is not when fewer
+; than three tokens were read since the last error: the bare option between
+; the two invalid tokens is not reported.
+junk
+option
+~bad
+2020-01-03 open Assets:C

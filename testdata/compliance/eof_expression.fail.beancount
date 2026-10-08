@@ -1,0 +1,7 @@
+; A ledger whose last posting ends in an expression and no newline has no
+; currency: a syntax error.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 *
+  Assets:B
+  Assets:A  1 + 2

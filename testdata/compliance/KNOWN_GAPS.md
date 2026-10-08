@@ -196,10 +196,15 @@ compare the lines errors are on:
   `query/numberify_negative_dust.bql`).
 
 - **Division by zero in an amount**: bean-check crashes with a segmentation
-  fault on `Assets:Cash  1 / 0 USD`, and on a cost `{1/0 USD}`. We report the
-  division by zero on the posting's line and drop the transaction, as for
-  any other amount that cannot be read. A ledger the official tools crash
-  on has no fixture.
+  fault on `Assets:Cash  1 / 0 USD`, on a cost `{1/0 USD}` and on a custom
+  value `custom "x" 1/0`. We report the division by zero on its line and
+  drop the directive, as for any other amount that cannot be read. A ledger
+  the official tools crash on has no fixture.
+
+- **An unbalanced pushmeta with a value that is not a string**: beancount
+  joins the leftover values as strings, so `pushmeta k: 1` never popped
+  makes bean-check crash with a `TypeError`. We report the unbalanced key on
+  the pushmeta's line, as for a string value (`unbalanced_pushmeta`).
 
 - **An interpolated number beyond 28 digits**: beancount quantizes an
   interpolated number to its tolerance, and Python's decimal raises

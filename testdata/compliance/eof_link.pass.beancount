@@ -1,0 +1,4 @@
+; A ledger whose last line ends in a link and no newline.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 * "x" ^link
