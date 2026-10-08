@@ -1,0 +1,1 @@
+SELECT round(1.5, 27) AS a, round(1.23456789, 3) AS b, round(-1.5) AS c, round(2.5) AS d, round(1.05, 1) AS e, round(12345, -2) AS f, round(1.5, -30) AS g FROM #

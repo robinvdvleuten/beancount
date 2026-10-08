@@ -1,0 +1,1 @@
+SELECT grep('x*', 'abc') AS a, grep('', 'abc') AS b, grepn('(a)', 'abc', 1) AS c, grepn('(a)', 'xyz', 1) AS d, grepn('(a)|(b)', 'b', 1) AS e FROM #

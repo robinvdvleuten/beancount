@@ -1,0 +1,1 @@
+SELECT account, close_date(account), open_date(account) GROUP BY 1, 2, 3 ORDER BY 1

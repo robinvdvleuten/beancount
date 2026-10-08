@@ -1,0 +1,1 @@
+SELECT only('USD', sum(position)), only('HOOL', sum(position)), only('EUR', sum(position)) WHERE account = 'Assets:A'

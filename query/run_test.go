@@ -140,10 +140,27 @@ var errorFixtures = map[string]string{
 	"err_table_quoted_doubled_quote": `error: table "post"ings" does not exist
 | SELECT 1 FROM "post""ings"
 |               ^^^^^^^^^^^^`,
-	"err_date_bin_zero_interval":           `error: float modulo`,
-	"err_interval_year_overflow":           `error: year 10000 is out of range`,
-	"err_interval_year_zero":               `error: year 0 is out of range`,
-	"err_parse_date_year_zero":             `error: year 0 is out of range`,
+	"err_date_bin_zero_interval":        `error: float modulo`,
+	"err_interval_year_overflow":        `error: year 10000 is out of range`,
+	"err_interval_year_zero":            `error: year 0 is out of range`,
+	"err_parse_date_year_zero":          `error: year 0 is out of range`,
+	"err_round_digits_beyond_precision": `error: [<class 'decimal.InvalidOperation'>]`,
+	"err_splitcomp_negative_index":      `error: list index out of range`,
+	"err_report_first_of_two_lines": `error: column "bogus" not found in table "postings"
+| SELECT bogus,
+|        ^^^^^`,
+	"err_report_tab_before_node": `error: column "bogus" not found in table "postings"
+| SELECT account,  bogus
+|                  ^^^^^`,
+	"err_command_word": `error: syntax error
+| zzz
+| ^`,
+	"err_command_digit": `error: syntax error
+| 9
+| ^`,
+	"err_command_keyword_prefix": `error: syntax error
+| selectx 1
+| ^`,
 	"err_date_literal_month":               `error: month must be in 1..12`,
 	"err_date_literal_day":                 `error: day is out of range for month`,
 	"err_date_literal_year_zero":           `error: year 0 is out of range`,

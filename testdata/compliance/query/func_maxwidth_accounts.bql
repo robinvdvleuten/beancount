@@ -1,0 +1,1 @@
+SELECT narration, maxwidth(narration, 16), maxwidth(narration, 9) WHERE account = 'Assets:A'

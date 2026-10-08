@@ -1,0 +1,16 @@
+; Shared by the func_*_accounts and table_accounts_closed fixtures: a
+; closed account, a labelled lot and narrations of several lengths.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:Old
+2020-01-01 open Income:C
+2020-03-01 close Assets:Old
+
+2020-01-02 * "Shop" "abcdefghij klmnopqrst"
+  flagged: FALSE
+  Assets:A  10 HOOL {1.00 USD, "lot1"}
+  Assets:B
+
+2020-01-03 * "one two three four five six"
+  Assets:A  2.00 USD
+  Income:C

@@ -1,0 +1,1 @@
+SELECT str(position), repr(position), str(position.cost), entry_meta('flagged') WHERE currency = 'HOOL'

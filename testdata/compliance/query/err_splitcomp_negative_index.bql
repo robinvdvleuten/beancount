@@ -1,0 +1,1 @@
+SELECT splitcomp('a:b', ':', -3) FROM #
