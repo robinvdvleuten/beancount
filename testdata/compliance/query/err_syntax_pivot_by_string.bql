@@ -1,0 +1,1 @@
+SELECT account, year GROUP BY 1,2 PIVOT BY 'account', 2

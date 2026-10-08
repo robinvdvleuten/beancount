@@ -45,25 +45,101 @@ var errorFixtures = map[string]string{
 	"err_round_null": `error: no function matches "round(nonetype)" name and argument types
 | SELECT round(NULL)
 |        ^^^^^^^^^^^`,
-	"err_regex_invalid":                    `error: invalid regular expression '[': missing closing ]`,
-	"err_regex_invalid_grep":               `error: invalid regular expression '[': missing closing ]`,
-	"err_regex_lookahead":                  `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
-	"err_integer_overflow":                 `error: integer overflow`,
-	"err_in_list_set":                      `error: unhashable type: 'list'`,
-	"err_not_in_list_set":                  `error: unhashable type: 'list'`,
-	"err_grepn_no_such_group":              `error: no such group`,
-	"err_grepn_negative_group":             `error: no such group`,
-	"err_subst_invalid_group_reference":    `error: invalid group reference 2 at position 2`,
-	"err_subst_unknown_group_name":         `error: unknown group name 'part'`,
-	"err_subst_bad_escape":                 `error: bad escape \q at position 1`,
-	"err_subst_negative_group":             `error: bad character in group name '-1' at position 4`,
-	"err_subst_group_name_not_identifier":  `error: bad character in group name '1_' at position 4`,
-	"err_subst_group_name_dash":            `error: bad character in group name 'a-b' at position 4`,
-	"err_subst_trailing_backslash":         `error: bad escape (end of pattern) at position 1`,
-	"err_subst_group_unterminated":         `error: missing >, unterminated name at position 4`,
-	"err_subst_group_name_empty":           `error: missing group name at position 4`,
-	"err_subst_group_no_bracket":           `error: missing < at position 3`,
-	"err_subst_octal_out_of_range":         `error: octal escape value \400 outside of range 0-0o377 at position 1`,
+	"err_regex_invalid":                   `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_invalid_grep":              `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_lookahead":                 `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
+	"err_integer_overflow":                `error: integer overflow`,
+	"err_in_list_set":                     `error: unhashable type: 'list'`,
+	"err_not_in_list_set":                 `error: unhashable type: 'list'`,
+	"err_grepn_no_such_group":             `error: no such group`,
+	"err_grepn_negative_group":            `error: no such group`,
+	"err_subst_invalid_group_reference":   `error: invalid group reference 2 at position 2`,
+	"err_subst_unknown_group_name":        `error: unknown group name 'part'`,
+	"err_subst_bad_escape":                `error: bad escape \q at position 1`,
+	"err_subst_negative_group":            `error: bad character in group name '-1' at position 4`,
+	"err_subst_group_name_not_identifier": `error: bad character in group name '1_' at position 4`,
+	"err_subst_group_name_dash":           `error: bad character in group name 'a-b' at position 4`,
+	"err_subst_trailing_backslash":        `error: bad escape (end of pattern) at position 1`,
+	"err_subst_group_unterminated":        `error: missing >, unterminated name at position 4`,
+	"err_subst_group_name_empty":          `error: missing group name at position 4`,
+	"err_subst_group_no_bracket":          `error: missing < at position 3`,
+	"err_subst_octal_out_of_range":        `error: octal escape value \400 outside of range 0-0o377 at position 1`,
+	"err_syntax_operator_at_end": `error: syntax error
+| SELECT 1 >
+|           ^`,
+	"err_syntax_bang": `error: syntax error
+| SELECT 1 !
+|          ^`,
+	"err_syntax_semicolon_then_statement": `error: syntax error
+| SELECT 1;
+| SELECT 2
+| ^`,
+	"err_syntax_table_digit": `error: syntax error
+| SELECT date FROM #1x
+|                   ^`,
+	"err_table_unknown_underscore": `error: table "entries_2" does not exist
+| SELECT date FROM #entries_2
+|                  ^^^^^^^^^^`,
+	"err_syntax_unclosed_in_and": `error: syntax error
+| SELECT 1 WHERE TRUE AND (FALSE
+|                               ^`,
+	"err_syntax_balances_at_number": `error: syntax error
+| BALANCES AT 1
+|             ^`,
+	"err_syntax_balances_where_unclosed": `error: syntax error
+| BALANCES WHERE (account
+|                        ^`,
+	"err_length_no_arguments": `error: no function matches "length()" name and argument types
+| SELECT length()
+|        ^^^^^^^^`,
+	"err_syntax_count_star_extra": `error: syntax error
+| SELECT count(* 1)
+|              ^`,
+	"err_syntax_between_unclosed": `error: syntax error
+| SELECT 1 BETWEEN (1 AND 2
+|                          ^`,
+	"err_syntax_is_not_number": `error: syntax error
+| SELECT 1 IS NOT 5
+|                 ^`,
+	"err_syntax_identifier_after_expression": `error: syntax error
+| SELECT number foo
+|               ^`,
+	"err_syntax_close_on_name": `error: syntax error
+| SELECT 1 FROM CLOSE ON x
+|                     ^`,
+	"err_syntax_trailing_comma_argument": `error: syntax error
+| SELECT length('a',)
+|                   ^`,
+	"err_syntax_open_without_on": `error: syntax error
+| SELECT 1 FROM OPEN 2020-01-01
+|                    ^`,
+	"err_syntax_pivot_by_string": `error: syntax error
+| SELECT account, year GROUP BY 1,2 PIVOT BY 'account', 2
+|                                            ^`,
+	"err_syntax_subscript_unclosed": `error: syntax error
+| SELECT meta['x'
+|                ^`,
+	"err_syntax_attribute_empty_quoted": `error: syntax error
+| SELECT position.""
+|                 ^`,
+	"err_syntax_print_from_unclosed": `error: syntax error
+| PRINT FROM (year = 2014
+|                        ^`,
+	"err_syntax_limit_name": `error: syntax error
+| SELECT account LIMIT x
+|                ^`,
+	"err_syntax_alias_number": `error: syntax error
+| SELECT 1 AS 2
+|             ^`,
+	"err_syntax_unary_plus": `error: syntax error
+| SELECT +(1 + 2)
+|            ^`,
+	"err_syntax_empty_quoted_call": `error: syntax error
+| SELECT ""(1)
+|          ^`,
+	"err_table_quoted_doubled_quote": `error: table "post"ings" does not exist
+| SELECT 1 FROM "post""ings"
+|               ^^^^^^^^^^^^`,
 	"err_date_literal_month":               `error: month must be in 1..12`,
 	"err_date_literal_day":                 `error: day is out of range for month`,
 	"err_date_literal_year_zero":           `error: year 0 is out of range`,
