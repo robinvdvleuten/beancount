@@ -429,7 +429,10 @@ func (l *Ledger) subtree(account ast.Account, currency string) decimal.Decimal {
 				keys = append(keys, lot.key)
 			}
 			if sum = pydecimal.Add(sum, lot.amount); sum.IsZero() {
+				// Like a key leaving a Python dict, a lot summing to zero
+				// gives up its place; one of its key coming back goes last.
 				delete(merged, lot.key)
+				keys = slices.DeleteFunc(keys, func(key lotKey) bool { return key == lot.key })
 			} else {
 				merged[lot.key] = sum
 			}
@@ -437,9 +440,7 @@ func (l *Ledger) subtree(account ast.Account, currency string) decimal.Decimal {
 	}
 	held := pydecimal.Zero
 	for _, key := range keys {
-		if sum, ok := merged[key]; ok {
-			held = pydecimal.Add(held, sum)
-		}
+		held = pydecimal.Add(held, merged[key])
 	}
 	return held
 }

@@ -1,0 +1,19 @@
+; A balance assertion sums its account's subtree lot by lot: Checking's and
+; Savings' USD cancel out, then Z9's comes back once, so the subtree holds
+; -10.00 USD.
+2020-01-01 open Assets:Bank
+2020-01-01 open Assets:Bank:Checking
+2020-01-01 open Assets:Bank:Savings
+2020-01-01 open Assets:Bank:Z9
+2020-01-01 open Equity:Opening
+
+2020-01-02 *
+  Assets:Bank:Checking   60.00 USD
+  Assets:Bank:Savings    40.00 USD
+  Assets:Bank:Checking  -100.00 USD
+
+2020-01-02 *
+  Assets:Bank:Z9  -10.00 USD
+  Equity:Opening
+
+2020-01-03 balance Assets:Bank  -10.00 USD
