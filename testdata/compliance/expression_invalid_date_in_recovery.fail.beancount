@@ -1,0 +1,5 @@
+; A date naming no day inside an arithmetic expression is reported even while
+; the parser recovers from the syntax error before it, as beancount's lexer
+; reports every invalid token.
+  Assets:B
+  Assets:A  (3 - 12020-1-2) USD

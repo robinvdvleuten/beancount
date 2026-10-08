@@ -431,6 +431,13 @@ func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
 		if l.lineBreakLenAt(l.pos) > 0 {
 			return Token{ILLEGAL, start, l.pos, line, col}
 		}
+		// A date starting a word, (2020-1-2), is a date to beancount's
+		// lexer, which reports one naming no day even as its parser
+		// recovers: the parenthesis is a token of its own, as below.
+		if prev := l.source[l.pos-1]; !isDigit(prev) && prev != '.' && prev != ',' && ast.DateLiteralLen(l.source[l.pos:]) > 0 {
+			l.pos, l.column = start+1, col+1
+			return Token{ILLEGAL, start, l.pos, line, col}
+		}
 
 		ch := l.advance()
 		switch {
