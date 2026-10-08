@@ -1,0 +1,12 @@
+; A transaction's repeated metadata key is reported when its values differ,
+; though booleans and one-letter tags are each one cached Python object.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  bb: TRUE
+  bb: FALSE
+  tt: #a
+  tt: #b
+  Assets:A  1 USD
+  Assets:B
