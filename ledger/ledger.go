@@ -35,6 +35,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -424,27 +425,33 @@ func (l *Ledger) subtree(account ast.Account, currency string) decimal.Decimal {
 		}
 	}
 	slices.Sort(names)
-	merged := make(map[lotKey]decimal.Decimal)
-	var keys []lotKey
+	// Each merged lot keeps the order it entered the inventory in. Like a
+	// key leaving a Python dict, a lot summing to zero gives up its place,
+	// and one of its key coming back enters last.
+	type mergedLot struct {
+		sum   decimal.Decimal
+		order int
+	}
+	merged := make(map[lotKey]mergedLot)
+	order := 0
 	for _, name := range slices.Compact(names) {
 		for _, lot := range l.inventory(ast.Account(name)).lots[currency] {
-			sum, held := merged[lot.key]
+			m, held := merged[lot.key]
 			if !held {
-				keys = append(keys, lot.key)
+				m.order = order
+				order++
 			}
-			if sum = pydecimal.Add(sum, lot.amount); sum.IsZero() {
-				// Like a key leaving a Python dict, a lot summing to zero
-				// gives up its place; one of its key coming back goes last.
+			if m.sum = pydecimal.Add(m.sum, lot.amount); m.sum.IsZero() {
 				delete(merged, lot.key)
-				keys = slices.DeleteFunc(keys, func(key lotKey) bool { return key == lot.key })
 			} else {
-				merged[lot.key] = sum
+				merged[lot.key] = m
 			}
 		}
 	}
+	lots := slices.SortedFunc(maps.Values(merged), func(a, b mergedLot) int { return a.order - b.order })
 	held := pydecimal.Zero
-	for _, key := range keys {
-		held = pydecimal.Add(held, merged[key])
+	for _, m := range lots {
+		held = pydecimal.Add(held, m.sum)
 	}
 	return held
 }
