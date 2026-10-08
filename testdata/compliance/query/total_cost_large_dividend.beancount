@@ -1,0 +1,10 @@
+; A total cost whose per-unit quotient runs past 28 digits, with a dividend
+; of 31 digits and a repeating one.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 *
+  Assets:A  1 HOOL {{1234567890123456789012345678901 USD}}
+  Assets:B
+2020-01-03 *
+  Assets:A  3 HOOL {{1 USD}}
+  Assets:B

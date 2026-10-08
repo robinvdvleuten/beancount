@@ -1,0 +1,9 @@
+; A balance whose amount continues on the next line is a syntax error after
+; an earlier error that keeps its directive (an invalid booking method):
+; both are reported.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:C USD "BOGUS"
+2020-01-05 balance Assets:A
+  0 USD
+2020-01-06 open Assets:D

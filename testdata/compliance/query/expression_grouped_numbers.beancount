@@ -1,0 +1,11 @@
+; Numbers grouped by thousands inside an expression, and subtraction and
+; division read left to right.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 *
+  Assets:A  10 - 2 - 3 USD
+  Assets:A  2 * 3 + 4 USD
+  Assets:A  12 / 2 / 3 USD
+  Assets:A  (1,000.00 + 5) USD
+  Assets:A  (2 - (3 - 1)) USD
+  Assets:B

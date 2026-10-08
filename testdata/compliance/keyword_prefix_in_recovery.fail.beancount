@@ -1,0 +1,6 @@
+; After a syntax error, a lowercase word starting with a keyword (optionx) is
+; that keyword then an invalid token, on the line the error dropped.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 open Assets:Z junk optionx "a" "b"
+2020-01-03 open Assets:C

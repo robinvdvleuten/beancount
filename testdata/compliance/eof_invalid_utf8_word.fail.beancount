@@ -1,0 +1,5 @@
+; A ledger ending without a newline in a word of invalid UTF-8: an invalid
+; token on its line.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+ÿþ

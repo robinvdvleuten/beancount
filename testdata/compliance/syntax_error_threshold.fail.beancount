@@ -1,0 +1,51 @@
+; Like Bison, a grammar error is reported only once three tokens were read
+; since the last one: a line break, an indent and each sign count, a comment
+; does not. Each case below follows an open that resets the count.
+2020-01-01 open Assets:A
+
+2020-01-02 open "x"
+"y"
+2020-01-02 open "x"
+2020-01-02 open Assets:Sep1
+
+2020-01-03 open "x"
+2020-01-03 "y"
+2020-01-03 open Assets:Sep2
+
+2020-01-04 open "x"
+  "y"
+2020-01-04 open Assets:Sep3
+
+2020-01-05 open "x"
+  -5 "y"
+2020-01-05 open Assets:Sep4
+
+2020-01-06 open "x"
+  ; c
+  "y"
+2020-01-06 open Assets:Sep5
+
+2020-01-07 open "x"
+
+"y"
+2020-01-07 open Assets:Sep6
+
+2020-01-08 open "x"
+2020-01-08 open "y"
+2020-01-08 open Assets:Sep7
+
+2020-01-09 open "x"
+  Assets:A Assets:B "y"
+2020-01-09 open Assets:Sep8
+
+2020-01-10 open "x"
+- - "y"
+2020-01-10 open Assets:Sep9
+
+2020-01-11 open "x"
+2020-01-11 open "x"
+2020-01-11 open Assets:Sep10
+
+2020-01-12 * "a" "b" "c"
+  Assets:A  1 USD
+2020-01-12 open "x"

@@ -1,0 +1,9 @@
+; A metadata string holding invalid UTF-8 drops its transaction, so the
+; balance assertion after it holds.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-02 *
+  kk: "aÿ"
+  Assets:A  1 USD
+  Assets:B
+2020-01-03 balance Assets:A 0 USD
