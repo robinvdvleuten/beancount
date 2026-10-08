@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1](https://github.com/robinvdvleuten/beancount/compare/v0.17.0...v0.17.1) (2026-10-08)
+
+
+### Bug Fixes
+
+* **formatter:** keep comments before a body tag line in place ([a8085d0](https://github.com/robinvdvleuten/beancount/commit/a8085d03a1c2fe42f88f6c5daf86b8d8bcd8c2e4))
+* **loader:** match include globs as Python's fnmatch does ([f9d4a40](https://github.com/robinvdvleuten/beancount/commit/f9d4a406b3692fd0ccc4d84af16560087073d79f))
+* **parser:** accept a directive's keyword right after its date ([017cc55](https://github.com/robinvdvleuten/beancount/commit/017cc55de04a5a8abed01b193f6ebcb0df9d11cd))
+* **parser:** read metadata after comments and a tag line in a body ([4bcfb67](https://github.com/robinvdvleuten/beancount/commit/4bcfb670465aee0b61f7b94b0d7c76096a212490))
+* **parser:** report a signed malformed number while recovering ([90aed34](https://github.com/robinvdvleuten/beancount/commit/90aed340f5997d8a33434ec606d5def616fcbf60))
+* **query:** negate possign for an account under no account type ([d57b449](https://github.com/robinvdvleuten/beancount/commit/d57b449d0a2e567f376c73014d7ba724142f52d1))
+
 ## [0.17.0](https://github.com/robinvdvleuten/beancount/compare/v0.16.0...v0.17.0) (2026-10-06)
 
 
