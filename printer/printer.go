@@ -471,13 +471,15 @@ func (p *printer) custom(c *ast.Custom, buf *strings.Builder) {
 
 // writeMetadata writes metadata lines, like beancount's write_metadata: a
 // string, account, currency, tag or link value is a quoted string, and a
-// missing value is left empty after "key: "; a key starting with "__" is
-// left out.
+// missing value is left empty after "key: "; filename, lineno and a key
+// starting with "__" are left out.
 func writeMetadata(metadata []*ast.Metadata, indent string, buf *strings.Builder) {
 	for _, m := range metadata {
-		// Like beancount v3's printer, a key starting with "__" is
-		// internal (__implicit_prices__) and does not print.
-		if strings.HasPrefix(m.Key, "__") {
+		// Like beancount v3's printer, which holds a directive's position
+		// in filename and lineno, those keys do not print, whatever a
+		// directive writes under them, and neither does an internal key
+		// starting with "__" (__implicit_prices__).
+		if m.Key == "filename" || m.Key == "lineno" || strings.HasPrefix(m.Key, "__") {
 			continue
 		}
 		buf.WriteString(indent)

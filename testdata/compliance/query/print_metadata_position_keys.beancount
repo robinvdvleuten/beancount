@@ -1,0 +1,15 @@
+; beancount's printer leaves a directive's filename and lineno out of its
+; metadata, as it holds its position there, whatever a directive writes
+; under those keys. Each directive is alone on its date, as beancount sorts
+; a directive among those of its date by the lineno it writes.
+2020-01-01 open Assets:A
+  filename: "accounts.beancount"
+  note: "kept"
+2020-01-02 open Assets:B
+
+2020-01-03 * "a transaction's own filename and lineno"
+  filename: "statement.pdf"
+  lineno: 7
+  source: "bank"
+  Assets:A  1 USD
+  Assets:B
