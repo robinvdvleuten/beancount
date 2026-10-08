@@ -106,12 +106,36 @@ func (p *numberExpressionParser) parseNumber() (decimal.Decimal, error) {
 		return decimal.Zero, fmt.Errorf("expected number at position %d", start)
 	}
 	p.consumedEnd = p.pos
-	raw := strings.ReplaceAll(string(p.source[start:p.pos]), ",", "")
+	written := string(p.source[start:p.pos])
+	if !validDigitGroups(written) {
+		return decimal.Zero, fmt.Errorf("invalid number format: %q", written)
+	}
+	raw := strings.ReplaceAll(written, ",", "")
 	value, err := decimal.NewFromString(raw)
 	if err != nil {
 		return decimal.Zero, fmt.Errorf("invalid number %q: %w", raw, err)
 	}
 	return value, nil
+}
+
+// validDigitGroups reports whether a number's commas group its integer part
+// as the lexer's scanNumber requires: one to three digits, then groups of
+// exactly three.
+func validDigitGroups(number string) bool {
+	integer, _, _ := strings.Cut(number, ".")
+	groups := strings.Split(integer, ",")
+	if len(groups) == 1 {
+		return true
+	}
+	if len(groups[0]) > 3 {
+		return false
+	}
+	for _, group := range groups[1:] {
+		if len(group) != 3 {
+			return false
+		}
+	}
+	return true
 }
 
 func (p *numberExpressionParser) parseExpr(minPrecedence int) (decimal.Decimal, error) {
