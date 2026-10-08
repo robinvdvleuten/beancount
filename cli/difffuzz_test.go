@@ -132,6 +132,7 @@ var knownDivergences = []struct {
 	{"", "#708, deliberate: zero units in total braces are rejected, where bean-check passes them and beanquery fails on them", zeroUnitsTotalBraces.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
 	{"", "#704, deliberate: a one-letter currency before a \\r is read, where beancount's lexer rejects it", oneLetterBeforeCR.MatchString},
+	{"", "KNOWN_GAPS.md, deliberate: a directive's own filename or lineno, which beancount sorts it and reports it by", directivePositionKey.MatchString},
 }
 
 var (
@@ -142,6 +143,9 @@ var (
 	zeroPerUnitCompound  = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+(?:[A-Z][A-Z0-9'._-]*[ \t]+)?\{(?:\{|0(?:\.0*)?[ \t]*#)`)
 	zeroPriceNoCurrency  = regexp.MustCompile(`(?m)@@?[ \t]*0(?:\.0*)?[ \t\r]*$`)
 	zeroUnitsTotalBraces = regexp.MustCompile(`(?m)^[ \t]+[A-Z][^ \t]*[ \t]+0(?:\.0*)?[ \t]*[A-Z][A-Z0-9'._-]*[ \t]+\{\{`)
+	// A dated header, its metadata lines, then its own filename or lineno:
+	// a posting's own are a duplicate key, held like any other decision.
+	directivePositionKey = regexp.MustCompile(`(?m)^[0-9]{4}[-/][^\n]*\n(?:[ \t]+[a-z][A-Za-z0-9_-]*:[^\n]*\n)*[ \t]+(?:filename|lineno):`)
 )
 
 // hasStringSpanningLines reports whether a line of src opens a string it

@@ -37,11 +37,13 @@ parser.parse = functools.lru_cache(maxsize=None)(parser.parse)
 
 
 def check(path):
-    # scripts/check.py's main, with --json.
+    # scripts/check.py's main, with --json, which raises encoding an error on
+    # a transaction that writes its own lineno (a Decimal): encoded here, so
+    # such a ledger is skipped as one beancount raises on.
     _, errors, _ = loader.load_file(
         path, extra_validations=validation.HARDCORE_VALIDATIONS
     )
-    return {
+    return json.loads(json.dumps({
         "errors": [
             {
                 "message": error.message,
@@ -50,7 +52,7 @@ def check(path):
             }
             for error in errors
         ]
-    }
+    }))
 
 
 def bean_format(path):

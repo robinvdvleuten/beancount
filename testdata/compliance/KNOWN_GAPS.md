@@ -205,8 +205,10 @@ compare the lines errors are on:
   transaction's metadata in the dict that holds its position, so a
   transaction writing `lineno: 99` is sorted among the directives of its
   date by 99, and an error on it, bean-check's included, is reported at the
-  `filename` and `lineno` it writes. Like beancount, we give the
-  transaction's `entry_meta('filename')` and `entry_meta('lineno')` the
+  `filename` and `lineno` it writes; `bean-check --json` then crashes with
+  a `TypeError`, as the `lineno` written is a Decimal it cannot encode.
+  Like beancount, we give the transaction's `entry_meta('filename')` and
+  `entry_meta('lineno')` the
   values written, but sort it and report its errors where it is. A
   posting's own `filename` or `lineno` is beancount's decision, which we
   follow: a duplicate key, its position kept
