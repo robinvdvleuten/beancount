@@ -1,0 +1,1 @@
+SELECT max(units(position)), min(units(position)) WHERE account = 'Assets:B'

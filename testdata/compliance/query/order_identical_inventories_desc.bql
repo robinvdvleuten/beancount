@@ -1,0 +1,1 @@
+SELECT account, sum(position) WHERE account ~ 'Assets:[AT]' AND date = 2020-01-03 GROUP BY account ORDER BY 2 DESC, 1 DESC

@@ -1,0 +1,1 @@
+SELECT 'USD' IN NULL AS a, int('٩') AS b, decimal('١٩') AS c, -1 * 3 AS d FROM #

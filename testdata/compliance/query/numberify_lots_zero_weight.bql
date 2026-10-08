@@ -1,0 +1,1 @@
+SELECT account, units(position), weight, sum(position) GROUP BY account, units(position), weight ORDER BY account

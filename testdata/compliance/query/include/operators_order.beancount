@@ -1,0 +1,34 @@
+; Shared by the operators_*, order_* and numberify_lots_* fixtures: lots with
+; and without cost, lots differing only in label, units of one number in two
+; currencies, a zero-weight transaction, and a number on a BETWEEN bound.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:S
+2020-01-01 open Assets:T
+2020-01-01 open Assets:C
+
+2020-01-02 * "lots"
+  dd: "0001-01-01"
+  Assets:S  10 HOOL {1 USD}
+  Assets:S  10 HOOL {2 USD}
+  Assets:S  10 HOOL
+  Assets:C
+
+2020-01-03 * "same units, other dates and labels"
+  Assets:T  5 HOOL {1 USD, "x"}
+  Assets:A  5 HOOL {1 USD}
+  Assets:C
+
+2020-01-04 * "two currencies, same largest number"
+  Assets:B  10 USD
+  Assets:B  10 EUR @ 1.10 USD
+  Assets:B  0 CAD
+  Assets:C
+
+2020-01-05 * "zero weight"
+  Assets:A  0.00 USD
+  Assets:C  0.00 USD
+
+2020-01-06 * "between bounds"
+  Assets:A  10.00 USD
+  Assets:C  -10.00 USD

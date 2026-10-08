@@ -1,0 +1,1 @@
+SELECT number, number BETWEEN 1 AND 10 AS within, date BETWEEN close_date(account) AND 2020-01-05 AS null_bound, year * -1 AS negated WHERE account = 'Assets:A'
