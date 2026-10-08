@@ -1,0 +1,5 @@
+; A ledger ending without a newline in a metadata value of digits alone: a
+; number.
+2020-01-01 open Assets:A
+2020-01-02 event "e" "x"
+  nn: 2020

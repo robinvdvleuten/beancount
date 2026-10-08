@@ -1,0 +1,9 @@
+; With name_assets renamed, accounts under the new root are valid.
+option "name_assets" "A"
+
+2020-01-01 open A:Cash
+2020-01-01 open Equity:E
+
+2020-01-02 *
+  A:Cash  1 USD
+  Equity:E

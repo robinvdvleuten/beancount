@@ -1,0 +1,6 @@
+; Document discovery skips a file whose name starts with no date and a
+; directory naming no opened account; a document dated before its account
+; opens is reported as an inactive account.
+option "documents" "docs_skipped"
+
+2020-01-01 open Assets:Checking
