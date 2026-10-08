@@ -90,7 +90,7 @@ func loadQueryContext(ctx context.Context, stderr io.Writer, file *FileOrStdin) 
 			_, _ = fmt.Fprintf(stderr, "%s\n\n", renderer.Render(validationErr))
 		}
 	}
-	qctx := &query.Context{Ledger: result.Ledger, Config: result.Ledger.Config(), AST: result.AST}
+	qctx := &query.Context{Ledger: result.Ledger, AST: result.AST}
 	return qctx, result, nil
 }
 

@@ -7,7 +7,6 @@ import (
 
 	"github.com/alecthomas/assert/v2"
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/shopspring/decimal"
@@ -380,7 +379,7 @@ func TestPrintShowsAFailedBalancesDifference(t *testing.T) {
 	tree, err = l.Process(context.Background(), tree)
 	assert.NoError(t, err)
 	assert.NotEqual(t, 0, len(l.Diagnostics()))
-	ctx := &Context{Ledger: l, Config: config.New(), AST: tree}
+	ctx := &Context{Ledger: l, AST: tree}
 
 	out := run(t, ctx, "PRINT FROM type = 'balance'", FormatText, false)
 	lines := strings.Split(strings.TrimSpace(out), "\n")

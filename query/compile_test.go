@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"github.com/alecthomas/assert/v2"
-	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/robinvdvleuten/beancount/parser"
 	"github.com/robinvdvleuten/beancount/query/bql"
@@ -54,10 +53,7 @@ func newContextFromSource(t *testing.T, source string) *Context {
 	l := ledger.New()
 	processed := l.MustProcess(context.Background(), tree)
 
-	cfg, err := config.FromAST(tree)
-	assert.NoError(t, err)
-
-	return &Context{Ledger: l, Config: cfg, AST: processed}
+	return &Context{Ledger: l, AST: processed}
 }
 
 func mustCompile(t *testing.T, ctx *Context, query string) *compiledSelect {

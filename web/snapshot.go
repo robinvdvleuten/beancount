@@ -138,7 +138,7 @@ func (snap *snapshot) queryContext() *query.Context {
 	if snap.tree == nil {
 		return nil
 	}
-	return &query.Context{Ledger: snap.ledger, Config: snap.ledger.Config(), AST: snap.tree}
+	return &query.Context{Ledger: snap.ledger, AST: snap.tree}
 }
 
 // files returns the ledger's files: its root, then its includes.

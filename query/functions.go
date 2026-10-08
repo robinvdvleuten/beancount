@@ -734,10 +734,7 @@ func accountType(ctx *Context, account string) (ast.AccountType, bool) {
 	if idx := strings.Index(account, ":"); idx >= 0 {
 		root = account[:idx]
 	}
-	if ctx != nil && ctx.Config != nil {
-		return ctx.Config.GetAccountTypeFromName(root)
-	}
-	return 0, false
+	return ctx.Ledger.Config().GetAccountTypeFromName(root)
 }
 
 // accountSortKey renders a sortable key placing accounts in canonical type

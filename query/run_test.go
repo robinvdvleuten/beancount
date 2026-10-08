@@ -493,7 +493,7 @@ func loadFixture(t *testing.T, name string) (string, *Context) {
 	result, err := ledgerload.Load(context.Background(), loader.Source{Path: ledgerPath})
 	assert.NoError(t, err)
 
-	return strings.TrimSpace(string(source)), &Context{Ledger: result.Ledger, Config: result.Ledger.Config(), AST: result.AST}
+	return strings.TrimSpace(string(source)), &Context{Ledger: result.Ledger, AST: result.AST}
 }
 
 func run(t *testing.T, qctx *Context, text string, format Format, numberify bool) string {
@@ -649,6 +649,16 @@ func TestRunWithoutAST(t *testing.T) {
 	qctx.AST = nil
 	var out strings.Builder
 	assert.EqualError(t, Run(context.Background(), qctx, "PRINT", FormatText, false, &out), "query context has no AST")
+	assert.Equal(t, "", out.String())
+}
+
+// TestRunWithoutLedger checks that a Context without the Ledger, which
+// values positions and holds the options, is an error, not a panic.
+func TestRunWithoutLedger(t *testing.T) {
+	qctx := newTestContext(t)
+	qctx.Ledger = nil
+	var out strings.Builder
+	assert.EqualError(t, Run(context.Background(), qctx, "SELECT convert(position, 'USD')", FormatText, false, &out), "query context has no ledger")
 	assert.Equal(t, "", out.String())
 }
 

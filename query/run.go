@@ -56,6 +56,9 @@ func Run(ctx context.Context, qctx *Context, text string, format Format, numberi
 	if _, ok := renderers[format]; !ok {
 		return fmt.Errorf("unknown output format %q", format)
 	}
+	if qctx.Ledger == nil {
+		return errors.New("query context has no ledger")
+	}
 	if qctx.AST == nil {
 		return errors.New("query context has no AST")
 	}

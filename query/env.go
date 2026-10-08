@@ -7,17 +7,16 @@ import (
 	"fmt"
 
 	"github.com/robinvdvleuten/beancount/ast"
-	"github.com/robinvdvleuten/beancount/config"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/robinvdvleuten/beancount/ledger"
 	"github.com/shopspring/decimal"
 )
 
 // Context carries the processed ledger data a query executes against: the
-// Ledger, the options, and the AST the Ledger processed.
+// Ledger, whose options the query reads, and the AST it processed. Run
+// requires both.
 type Context struct {
 	Ledger *ledger.Ledger
-	Config *config.Config
 	// AST holds the directives as the Ledger left them, with postings
 	// booked and interpolated.
 	AST *ast.AST
