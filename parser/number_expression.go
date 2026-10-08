@@ -27,7 +27,7 @@ func (p *Parser) numberStart() bool {
 func (p *Parser) parseNumberExpr() (Token, string, error) {
 	first, start := p.peek(), p.pos
 	if !p.numberStart() {
-		return Token{}, "", p.errorAtToken(first, "expected number or expression")
+		return Token{}, "", numberExpr{p: p, line: p.previous().Line}.expected("number or expression")
 	}
 	e := numberExpr{p: p, line: first.Line}
 	result, err := e.parse(0)

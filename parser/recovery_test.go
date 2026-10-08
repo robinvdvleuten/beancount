@@ -333,6 +333,10 @@ func TestSyntaxErrorsCloseTogetherAreReportedOnce(t *testing.T) {
 		{"three tokens in", "\"a\"\n2020-01-01 open \"b\"\n", []int{1, 2}},
 		{"an indented line", "\"a\"\n  Assets:A\n\n\n\"b\"\n", []int{1, 5}},
 		{"invalid token in the window", "\"a\"\n\"b\" ^\n", []int{1, 2}},
+		// A number missing at its line's end fails at that end, so the
+		// line breaks after it count.
+		{"a missing number, a blank line", "2020-01-03 balance Assets:A\n\n  0 USD\n", []int{1}},
+		{"a missing number, two blank lines", "2020-01-03 balance Assets:A\n\n\n  0 USD\n", []int{1, 4}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ParseString(context.Background(), tc.source)
