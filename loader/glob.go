@@ -26,12 +26,16 @@ func globInclude(baseDir, pattern string) []string {
 		pattern = pattern[len(filepath.VolumeName(pattern)):]
 	}
 
-	var segments []string
+	var segments []globSegment
 	for _, segment := range strings.Split(filepath.ToSlash(pattern), "/") {
 		if segment == "" || segment == "." {
 			continue
 		}
-		segments = append(segments, segment)
+		var match func(string) bool
+		if segment != "**" && hasGlobMeta(segment) {
+			match = fnmatch(segment)
+		}
+		segments = append(segments, globSegment{text: segment, match: match})
 	}
 
 	var matches []string
@@ -40,7 +44,15 @@ func globInclude(baseDir, pattern string) []string {
 	return slices.Compact(matches)
 }
 
-func globSegments(dir string, segments []string, matches *[]string) {
+// globSegment is one segment of an include pattern, with the matcher a
+// wildcard segment is compiled to once, however many directories it is
+// matched in.
+type globSegment struct {
+	text  string
+	match func(name string) bool
+}
+
+func globSegments(dir string, segments []globSegment, matches *[]string) {
 	if len(segments) == 0 {
 		*matches = append(*matches, dir)
 		return
@@ -48,7 +60,7 @@ func globSegments(dir string, segments []string, matches *[]string) {
 	segment, rest := segments[0], segments[1:]
 
 	switch {
-	case segment == "**":
+	case segment.text == "**":
 		globSegments(dir, rest, matches)
 		for _, entry := range readDir(dir) {
 			// Symlinked directories are not followed, which rules out cycles.
@@ -56,19 +68,18 @@ func globSegments(dir string, segments []string, matches *[]string) {
 				globSegments(filepath.Join(dir, entry.Name()), segments, matches)
 			}
 		}
-	case !hasGlobMeta(segment):
-		path := filepath.Join(dir, segment)
+	case segment.match == nil:
+		path := filepath.Join(dir, segment.text)
 		if _, err := os.Lstat(path); err == nil {
 			globSegments(path, rest, matches)
 		}
 	default:
-		match := fnmatch(segment)
 		for _, entry := range readDir(dir) {
 			name := entry.Name()
-			if strings.HasPrefix(name, ".") && !strings.HasPrefix(segment, ".") {
+			if strings.HasPrefix(name, ".") && !strings.HasPrefix(segment.text, ".") {
 				continue
 			}
-			if match(name) {
+			if segment.match(name) {
 				globSegments(filepath.Join(dir, name), rest, matches)
 			}
 		}
