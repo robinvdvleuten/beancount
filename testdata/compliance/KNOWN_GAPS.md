@@ -201,6 +201,17 @@ compare the lines errors are on:
   drop the directive, as for any other amount that cannot be read. A ledger
   the official tools crash on has no fixture.
 
+- **A transaction's own `filename` or `lineno`**: beancount keeps a
+  transaction's metadata in the dict that holds its position, so a
+  transaction writing `lineno: 99` is sorted among the directives of its
+  date by 99, and an error on it, bean-check's included, is reported at the
+  `filename` and `lineno` it writes. Like beancount, we give the
+  transaction's `entry_meta('filename')` and `entry_meta('lineno')` the
+  values written, but sort it and report its errors where it is. A
+  posting's own `filename` or `lineno` is beancount's decision, which we
+  follow: a duplicate key, its position kept
+  (`metadata_posting_position_keys`).
+
 - **An unbalanced pushmeta with a value that is not a string**: beancount
   joins the leftover values as strings, so `pushmeta k: 1` never popped
   makes bean-check crash with a `TypeError`. We report the unbalanced key on

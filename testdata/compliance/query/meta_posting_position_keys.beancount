@@ -1,0 +1,18 @@
+; beancount gives every posting's metadata its filename and lineno before the
+; keys written under it, so a posting's own filename or lineno is a
+; duplicate key, reported on its transaction, and the position kept. A
+; transaction's own keys are its to write.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "position keys"
+  source: "bank"
+  Assets:A  1 USD
+    filename: "x"
+    lineno: 7
+  Assets:B
+
+2020-01-03 * "a transaction's own filename"
+  filename: "statement.pdf"
+  Assets:A  1 USD
+  Assets:B

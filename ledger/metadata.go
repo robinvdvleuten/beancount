@@ -10,10 +10,11 @@ import (
 // posting of the tree, as beancount's parser builds its meta dicts. A
 // transaction and each of its postings keep a key's first value, and every
 // later one that is not the same Python object is reported, as beancount's
-// grammar checks them (sameObject); any other directive keeps a key's last
-// value, in the key's first place, as a dict update does, with no error. A
-// directive other than a transaction is replaced by a copy, since the tree
-// shares it with the parsed one.
+// grammar checks them (sameObject), a posting's meta starting with its
+// filename and lineno (postingPositionKeys); any other directive keeps a
+// key's last value, in the key's first place, as a dict update does, with no
+// error. A directive other than a transaction is replaced by a copy, since
+// the tree shares it with the parsed one.
 func resolveMetadataKeys(tree *ast.AST) []error {
 	var errs []error
 	// An amount whose key is dropped was still read: like the amounts of a
@@ -29,10 +30,10 @@ func resolveMetadataKeys(tree *ast.AST) []error {
 	for i, directive := range tree.Directives {
 		if txn, ok := directive.(*ast.Transaction); ok {
 			var kept []*ast.Metadata
-			kept, errs = keepFirstMetadata(txn, "", txn.Metadata, errs)
+			kept, errs = keepFirstMetadata(txn, "", txn.Metadata, nil, errs)
 			txn.Metadata = drop(txn.Metadata, kept)
 			for _, posting := range txn.Postings {
-				kept, errs = keepFirstMetadata(txn, posting.Account, posting.Metadata, errs)
+				kept, errs = keepFirstMetadata(txn, posting.Account, posting.Metadata, postingPositionKeys, errs)
 				posting.Metadata = drop(posting.Metadata, kept)
 			}
 			continue
@@ -57,14 +58,25 @@ func repeatsKey(metadata []*ast.Metadata) bool {
 	return false
 }
 
+// postingPositionKeys are the keys beancount's parser gives a posting's
+// meta before the ones written under it: a posting's own filename or lineno
+// is a duplicate, and its position is kept.
+var postingPositionKeys = []string{"filename", "lineno"}
+
 // keepFirstMetadata drops every repeated key after its first, reporting
 // on the transaction each whose value is not the same object as the first.
-func keepFirstMetadata(txn *ast.Transaction, account ast.Account, metadata []*ast.Metadata, errs []error) ([]*ast.Metadata, []error) {
-	if !repeatsKey(metadata) {
+// Each of the preset keys counts as written first, with a value no written
+// one is the same object as.
+func keepFirstMetadata(txn *ast.Transaction, account ast.Account, metadata []*ast.Metadata, preset []string, errs []error) ([]*ast.Metadata, []error) {
+	presetKey := func(md *ast.Metadata) bool { return slices.Contains(preset, md.Key) }
+	if !repeatsKey(metadata) && !slices.ContainsFunc(metadata, presetKey) {
 		return metadata, errs
 	}
 	kept := make([]*ast.Metadata, 0, len(metadata))
-	first := make(map[string]*ast.MetadataValue, len(metadata))
+	first := make(map[string]*ast.MetadataValue, len(metadata)+len(preset))
+	for _, key := range preset {
+		first[key] = &ast.MetadataValue{}
+	}
 	for _, md := range metadata {
 		if value, ok := first[md.Key]; ok {
 			if !sameObject(value, md.Value) {
