@@ -1,0 +1,6 @@
+; A date naming no day, year 0 or a five-digit year is rejected on its line,
+; and its directive dropped.
+2021-02-29 open Assets:A
+0000-01-01 open Assets:B
+10000-01-01 open Assets:C
+2020-01-01 open Assets:D

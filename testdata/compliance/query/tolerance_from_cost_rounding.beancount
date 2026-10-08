@@ -1,0 +1,15 @@
+; With infer_tolerance_from_cost, a cost's number widens the tolerance that
+; rounds the interpolated cash leg.
+option "inferred_tolerance_default" "*:0.01"
+option "infer_tolerance_from_cost" "TRUE"
+
+2020-01-01 open Assets:S
+2020-01-01 open Assets:C
+
+2020-01-02 *
+  Assets:S  10 HOOL {1.005 USD}
+  Assets:C
+
+2020-01-03 *
+  Assets:C
+  Assets:S  1.5 HOOL {10.123 USD}

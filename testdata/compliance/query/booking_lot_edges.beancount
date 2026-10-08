@@ -1,0 +1,48 @@
+; Lots booked at the edges of their matching rules, one account each:
+; a short opened in the transaction that closes the only lot (Assets:Short),
+; a lot at cost after a units-only position went back to zero (Assets:Zeroed),
+; a {} reduction beside a position without cost (Assets:Mixed), a {}
+; reduction of the one lot a reduction at cost left (Assets:Left), a
+; reduction by date (Assets:Dated), lots at one number in two currencies
+; (Assets:Currencies), and a {} reduction of a lot written with more
+; decimals (Assets:Decimals).
+2020-01-01 open Assets:Short
+2020-01-01 open Assets:Zeroed
+2020-01-01 open Assets:Mixed
+2020-01-01 open Assets:Left
+2020-01-01 open Assets:Dated
+2020-01-01 open Assets:Currencies
+2020-01-01 open Assets:Decimals
+2020-01-01 open Assets:C
+
+2020-01-01 *
+  Assets:Dated  5 HOOL {100 USD}
+  Assets:C
+
+2020-01-02 *
+  Assets:Short  10 HOOL {100 USD}
+  Assets:Zeroed  10 HOOL
+  Assets:Mixed  10 HOOL
+  Assets:Mixed  5 HOOL {100 USD}
+  Assets:Left  10 HOOL {100 USD}
+  Assets:Left  10 HOOL {110 USD}
+  Assets:Dated  5 HOOL {100 USD}
+  Assets:Currencies  1 HOOL {100 USD}
+  Assets:Currencies  1 HOOL {100 EUR}
+  Assets:Decimals  1.00 HOOL {10 USD}
+  Assets:C
+
+2020-01-03 *
+  Assets:Short  -10 HOOL {}
+  Assets:Short  -5 HOOL {100 USD}
+  Assets:Zeroed  -10 HOOL
+  Assets:Mixed  -5 HOOL {}
+  Assets:Left  -10 HOOL {100 USD}
+  Assets:Dated  -5 HOOL {2020-01-01}
+  Assets:Decimals  -1 HOOL {}
+  Assets:C
+
+2020-01-04 *
+  Assets:Zeroed  -2 HOOL {1 USD}
+  Assets:Left  -10 HOOL {}
+  Assets:C

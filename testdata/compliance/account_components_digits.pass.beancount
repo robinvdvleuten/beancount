@@ -1,0 +1,7 @@
+; An account component may start with a digit and hold digits after letters.
+2020-01-01 open Assets:Zurich9z:9Zz
+2020-01-01 open Assets:Bank:Z9
+
+2020-01-02 *
+  Assets:Zurich9z:9Zz  1 USD
+  Assets:Bank:Z9

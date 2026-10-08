@@ -1,0 +1,11 @@
+; tolerance_multiplier is read as Python's Decimal reads it: a tab, then "9E-1",
+; then a space is 0.9, so a residual of 0.008 USD on two-decimal numbers is
+; tolerated.
+option "tolerance_multiplier" "	9E-1 "
+
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  1.008 USD
+  Assets:B  -1.00 USD

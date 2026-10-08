@@ -1,0 +1,15 @@
+; An amount-less posting spanning two currency groups becomes one posting per
+; group, each marked __automatic__, and so is a posting whose price number
+; is interpolated.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Equity:X
+
+2020-01-02 *
+  Assets:A  10 USD
+  Assets:B  10 EUR
+  Equity:X
+
+2020-01-03 *
+  Assets:A  10 EUR @ USD
+  Assets:B  -11 USD
