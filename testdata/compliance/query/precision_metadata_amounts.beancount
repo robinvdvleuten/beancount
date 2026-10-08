@@ -1,0 +1,13 @@
+; Amounts in metadata and custom directives count towards USD's precision,
+; so the sum of the postings prints with three decimals.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  xx: 1.234 USD
+  Assets:A  1.00 USD
+    yy: 2.345 USD
+  Assets:B
+
+2020-01-03 custom "budget" 3.456 USD
+2020-01-04 custom "budget" 4.567 USD

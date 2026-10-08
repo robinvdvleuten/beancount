@@ -1,0 +1,1 @@
+SELECT round(12.345, -1), round(12.345, 0), round(12.345), round(-12.5), round(13.5, -1)

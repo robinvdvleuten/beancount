@@ -45,17 +45,34 @@ var errorFixtures = map[string]string{
 	"err_round_null": `error: no function matches "round(nonetype)" name and argument types
 | SELECT round(NULL)
 |        ^^^^^^^^^^^`,
-	"err_regex_invalid":                 `error: invalid regular expression '[': missing closing ]`,
-	"err_regex_invalid_grep":            `error: invalid regular expression '[': missing closing ]`,
-	"err_regex_lookahead":               `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
-	"err_integer_overflow":              `error: integer overflow`,
-	"err_in_list_set":                   `error: unhashable type: 'list'`,
-	"err_not_in_list_set":               `error: unhashable type: 'list'`,
-	"err_grepn_no_such_group":           `error: no such group`,
-	"err_grepn_negative_group":          `error: no such group`,
-	"err_subst_invalid_group_reference": `error: invalid group reference 2 at position 2`,
-	"err_subst_unknown_group_name":      `error: unknown group name 'part'`,
-	"err_subst_bad_escape":              `error: bad escape \q at position 1`,
+	"err_regex_invalid":                   `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_invalid_grep":              `error: invalid regular expression '[': missing closing ]`,
+	"err_regex_lookahead":                 `error: invalid regular expression 'Cash(?=)': invalid or unsupported Perl syntax`,
+	"err_integer_overflow":                `error: integer overflow`,
+	"err_in_list_set":                     `error: unhashable type: 'list'`,
+	"err_not_in_list_set":                 `error: unhashable type: 'list'`,
+	"err_grepn_no_such_group":             `error: no such group`,
+	"err_grepn_negative_group":            `error: no such group`,
+	"err_subst_invalid_group_reference":   `error: invalid group reference 2 at position 2`,
+	"err_subst_unknown_group_name":        `error: unknown group name 'part'`,
+	"err_subst_bad_escape":                `error: bad escape \q at position 1`,
+	"err_subst_negative_group":            `error: bad character in group name '-1' at position 4`,
+	"err_subst_group_name_not_identifier": `error: bad character in group name '1_' at position 4`,
+	"err_subst_group_name_dash":           `error: bad character in group name 'a-b' at position 4`,
+	"err_subst_trailing_backslash":        `error: bad escape (end of pattern) at position 1`,
+	"err_subst_group_unterminated":        `error: missing >, unterminated name at position 4`,
+	"err_subst_group_name_empty":          `error: missing group name at position 4`,
+	"err_subst_group_no_bracket":          `error: missing < at position 3`,
+	"err_subst_octal_out_of_range":        `error: octal escape value \400 outside of range 0-0o377 at position 1`,
+	"err_bogus_column_in_operand": `error: column "bogus" not found in table "postings"
+| SELECT 1 + bogus
+|            ^^^^^`,
+	"err_bogus_column_in_aggregate_operand": `error: column "bogus" not found in table "postings"
+| SELECT sum(bogus) + 1
+|            ^^^^^`,
+	"err_operator_types_in_argument": `error: operator "add(int, str)" not supported
+| SELECT length(1 + 'a')
+|               ^^^^^^^`,
 	"err_between_types": `error: operator "int BETWEEN str AND int" not supported
 | SELECT 1 BETWEEN 'a' AND 2
 |        ^^^^^^^^^^^^^^^^^^^`,

@@ -1,0 +1,1 @@
+SELECT subst('(F)(o)(o)(d)(:)(C)(o)(f)(f)(e)(e)(s)', '[\12]', 'Food:Coffees') AS two_digits, subst('(Food)', '[\g< 1 >]', account) AS spaced, subst('(Food)', '[\g<+1>]', account) AS plus, subst('(Food)', '[\g<01>]', account) AS zero_led, subst('(Food)', '[\g<١>]', account) AS arabic_indic, subst('(Food)', '[\101\1]', account) AS octal WHERE account = 'Expenses:Food:Coffee'

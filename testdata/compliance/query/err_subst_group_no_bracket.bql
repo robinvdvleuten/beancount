@@ -1,0 +1,1 @@
+SELECT subst('(Food)', '[\gx]', account) WHERE account = 'Expenses:Food:Coffee'

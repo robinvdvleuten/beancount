@@ -1,0 +1,12 @@
+; USD is written once with two decimals and once with three: on that tie the
+; sum prints with three.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  1.00 USD
+  Assets:B
+
+2020-01-03 *
+  Assets:A  1.000 USD
+  Assets:B

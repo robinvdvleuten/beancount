@@ -1,0 +1,10 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 * "Shop" "with payee"
+  Assets:A  1 USD
+  Assets:B
+
+2020-01-03 * "no payee"
+  Assets:A  1 USD
+  Assets:B

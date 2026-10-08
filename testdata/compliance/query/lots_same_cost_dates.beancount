@@ -1,0 +1,18 @@
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  10 HOOL {100 USD}
+  Assets:B
+
+2020-01-03 *
+  Assets:A  10 HOOL {100 USD}
+  Assets:B
+
+2020-01-04 *
+  Assets:A  5 HOOL {100 USD, "lab"}
+  Assets:B
+
+2020-01-05 *
+  Assets:A  5 HOOL {100 USD, 2020-01-02}
+  Assets:B
