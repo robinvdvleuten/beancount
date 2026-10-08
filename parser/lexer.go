@@ -9,7 +9,6 @@ package parser
 // - Pre-allocated token buffer
 
 import (
-	"strings"
 	"unicode/utf8"
 
 	"github.com/robinvdvleuten/beancount/ast"
@@ -24,12 +23,6 @@ type Lexer struct {
 	column   int       // Current column (1-indexed)
 	tokens   []Token   // Token buffer (pre-allocated)
 	interner *Interner // String interning pool
-
-	// signRun caches signedValueAhead's last scan, a run of signs and
-	// spaces from signRunStart up to signRunEnd, so a long run is scanned
-	// once rather than again from each of its signs.
-	signRunStart, signRunEnd int
-	signRunValue             bool // a digit or '(' ends the run
 }
 
 // NewLexer creates a new lexer for the given source.
@@ -170,25 +163,17 @@ func (l *Lexer) scanToken() Token {
 		} else {
 			tok = l.scanNumber(start, startLine, startCol)
 		}
+	// Like beancount's lexer, a sign, a parenthesis and an operator are
+	// tokens of their own, and a number is unsigned: the parser reads a
+	// number expression from them (number_expression.go).
 	case ch == '(':
-		tok = l.scanExpression(start, startLine, startCol, ch)
-	case (ch == '+' || ch == '-') && ast.DateLiteralLen(l.source[l.pos:]) > 0:
-		// A sign before a date is a token of its own, as every sign is to
-		// beancount's lexer: the date after it is still a date, where a
-		// directive may start.
-		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
-	case ch == '+' && l.peekIsDigit():
-		tok = l.scanNumber(start, startLine, startCol)
-	case ch == '+' && l.peek() == '(':
-		tok = l.scanExpression(start, startLine, startCol, ch)
-	case ch == '-' && l.peekIsDigit():
-		tok = l.scanNumber(start, startLine, startCol)
-	case ch == '-' && l.peek() == '(':
-		tok = l.scanExpression(start, startLine, startCol, ch)
-	case (ch == '+' || ch == '-') && l.signedValueAhead():
-		// A sign followed by more signs or spaces (--1, +-1, - 1): the
-		// parser evaluates the whole expression from here.
-		tok = Token{EXPRESSION, start, l.pos, startLine, startCol}
+		tok = Token{LPAREN, start, l.pos, startLine, startCol}
+	case ch == ')':
+		tok = Token{RPAREN, start, l.pos, startLine, startCol}
+	case ch == '+':
+		tok = Token{PLUS, start, l.pos, startLine, startCol}
+	case ch == '-':
+		tok = Token{MINUS, start, l.pos, startLine, startCol}
 
 	// Strings: "..."
 	case ch == '"':
@@ -263,16 +248,11 @@ func (l *Lexer) scanToken() Token {
 			l.column = startCol + n
 			tok = Token{IDENT, start, l.pos, startLine, startCol}
 		} else {
-			tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
+			tok = Token{SLASH, start, l.pos, startLine, startCol}
 		}
 
 	case ch == '|':
 		tok = Token{PIPE, start, l.pos, startLine, startCol}
-
-	// A sign and a closing parenthesis are tokens of beancount's own,
-	// which only its grammar rejects.
-	case ch == '+' || ch == '-' || ch == ')':
-		tok = Token{ILLEGAL, start, l.pos, startLine, startCol}
 
 	default:
 		tok = l.invalidToken(start, startLine, startCol)
@@ -324,21 +304,16 @@ func (l *Lexer) scanDate(start, line, col int) Token {
 	return Token{DATE, start, l.pos, line, col}
 }
 
-// scanNumber scans a number: [-+]?[0-9]+(,[0-9]{3})*(\.[0-9]*)?
+// scanNumber scans a number: [0-9]+(,[0-9]{3})*(\.[0-9]*)?
 // Commas are allowed as thousands separators within the integer part, and,
 // like beancount, a trailing dot without fraction digits ("5.").
 func (l *Lexer) scanNumber(start, line, col int) Token {
-	digitStart := start
-	if l.source[start] == '+' || l.source[start] == '-' {
-		digitStart = start + 1
-	}
-
 	for l.pos < len(l.source) && isDigit(l.source[l.pos]) {
 		l.advance()
 	}
 
 	if l.groupSeparatorAhead() {
-		if l.pos-digitStart > 3 {
+		if l.pos-start > 3 {
 			l.consumeNumberRemainder()
 			return Token{ILLEGAL, start, l.pos, line, col}
 		}
@@ -382,27 +357,6 @@ func (l *Lexer) groupSeparatorAhead() bool {
 	return isDigit(next) || next == ','
 }
 
-// signedValueAhead reports whether the sign just consumed starts a number
-// expression through further signs or spaces: after them comes a digit or an
-// opening parenthesis on the same line.
-func (l *Lexer) signedValueAhead() bool {
-	if l.pos < l.signRunStart || l.pos > l.signRunEnd {
-		end := l.pos
-		for end < len(l.source) && isSignOrBlank(l.source[end]) {
-			end++
-		}
-		l.signRunStart, l.signRunEnd = l.pos, end
-		l.signRunValue = end < len(l.source) && (isDigit(l.source[end]) || l.source[end] == '(')
-	}
-	// A sign or a space must come between the sign just consumed and
-	// what ends the run.
-	return l.signRunValue && l.signRunEnd > l.pos
-}
-
-func isSignOrBlank(ch byte) bool {
-	return ch == '+' || ch == '-' || isBlank(ch)
-}
-
 func (l *Lexer) consumeNumberRemainder() {
 	for l.pos < len(l.source) {
 		ch := l.source[l.pos]
@@ -412,71 +366,6 @@ func (l *Lexer) consumeNumberRemainder() {
 		}
 		break
 	}
-}
-
-// scanExpression scans a signed or unsigned parenthesized amount expression.
-func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
-	depth := 0
-	if first == '(' {
-		depth = 1
-	} else {
-		if l.pos >= len(l.source) || l.source[l.pos] != '(' {
-			return Token{ILLEGAL, start, l.pos, line, col}
-		}
-		l.advance() // consume opening '(' after leading sign
-		depth = 1
-	}
-
-	for l.pos < len(l.source) {
-		if l.lineBreakLenAt(l.pos) > 0 {
-			return Token{ILLEGAL, start, l.pos, line, col}
-		}
-		// A date or an invalid number starting a word, (2020-1-2) or
-		// (1,20), is lexed on its own by beancount's lexer, which reports
-		// either even as its parser recovers: the parenthesis is a token
-		// of its own, as below.
-		if prev := l.source[l.pos-1]; !isDigit(prev) && prev != '.' && prev != ',' &&
-			(ast.DateLiteralLen(l.source[l.pos:]) > 0 || l.invalidNumberAhead()) {
-			l.pos, l.column = start+1, col+1
-			return Token{ILLEGAL, start, l.pos, line, col}
-		}
-
-		ch := l.advance()
-		switch {
-		case ch == '(':
-			depth++
-		case ch == ')':
-			depth--
-			if depth == 0 {
-				return Token{EXPRESSION, start, l.pos, line, col}
-			}
-		case !isExpressionByte(ch):
-			// No number expression: to beancount's lexer the parenthesis
-			// is a token of its own and what follows is lexed as usual,
-			// a string included. Only the first byte is the bad token.
-			l.pos, l.column = start+1, col+1
-			return Token{ILLEGAL, start, l.pos, line, col}
-		}
-	}
-
-	return Token{ILLEGAL, start, l.pos, line, col}
-}
-
-// invalidNumberAhead reports whether a number starts at the current
-// position that scanNumber rejects, such as 1,20.
-func (l *Lexer) invalidNumberAhead() bool {
-	if !isDigit(l.source[l.pos]) {
-		return false
-	}
-	probe := *l
-	return probe.scanNumber(l.pos, l.line, l.column).Type == ILLEGAL
-}
-
-// isExpressionByte reports whether b may stand inside a parenthesized
-// number expression: a digit, a number's punctuation, an operator or a
-// blank.
-func isExpressionByte(b byte) bool {
-	return isDigit(b) || strings.IndexByte(".,+-*/ \t", b) >= 0
 }
 
 // scanString scans a quoted string: "..."
@@ -730,13 +619,6 @@ func (l *Lexer) peek() byte {
 		return 0
 	}
 	return l.source[l.pos]
-}
-
-func (l *Lexer) peekIsDigit() bool {
-	if l.pos >= len(l.source) {
-		return false
-	}
-	return isDigit(l.source[l.pos])
 }
 
 func (l *Lexer) advance() byte {

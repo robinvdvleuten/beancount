@@ -311,7 +311,7 @@ func (p *Parser) recover(err error) {
 		if tok.Start > parseErr.Pos.Offset {
 			var skipped *ParseError
 			switch {
-			case tok.Type == ILLEGAL && p.lexerRejects(tok):
+			case tok.Type == ILLEGAL:
 				errors.As(p.errorAtToken(tok, ""), &skipped)
 			case tok.Type == STRING && !utf8.Valid(tok.Bytes(p.source)):
 				errors.As(p.invalidStringError(tok), &skipped)
@@ -357,7 +357,7 @@ func (p *Parser) lexerErrorAt(offset int) bool {
 		return false
 	}
 	tok := p.tokens[i]
-	return tok.Type == ILLEGAL && p.lexerRejects(tok)
+	return tok.Type == ILLEGAL
 }
 
 // shiftedSince counts the tokens beancount's grammar shifts after the last
@@ -366,7 +366,7 @@ func (p *Parser) lexerErrorAt(offset int) bool {
 // the rest of the erroneous line and shifts its line break (an indented
 // line after it is an error of its own, so recovery skips it too). From
 // there each line break counts, as does an indented line's INDENT and
-// every token but a comment, a signed number counting its sign.
+// every token but a comment.
 func (p *Parser) shiftedSince(end int) int {
 	start, line := p.resumedAt, 0
 	if p.resumedMidLine {
@@ -396,9 +396,6 @@ func (p *Parser) shiftedSince(end int) int {
 			continue
 		}
 		n++
-		if tok.Type == NUMBER && (p.source[tok.Start] == '-' || p.source[tok.Start] == '+') {
-			n++
-		}
 	}
 	return n
 }

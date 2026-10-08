@@ -64,11 +64,9 @@ func (p *Parser) invalidAccountName(tok Token, reason string) *ParseError {
 	return newErrorfWithSource(pos, p.calculateSourceRange(pos), "invalid account name %s: %s", tok.String(p.source), reason).kept()
 }
 
-// parseAmount parses an amount: NUMBER CURRENCY or (EXPRESSION) CURRENCY
-// Expressions are captured as-is (not evaluated) and stored in Amount.Value.
-// The ledger phase evaluates expressions when computing balances.
+// parseAmount parses an amount: a number expression and a currency.
 func (p *Parser) parseAmount() (*ast.Amount, error) {
-	valueTok, isExpression, value, err := p.parseAmountValueToken()
+	valueTok, value, err := p.parseNumberExpr()
 	if err != nil {
 		return nil, err
 	}
@@ -78,12 +76,12 @@ func (p *Parser) parseAmount() (*ast.Amount, error) {
 	}
 	currTok := p.advance()
 
-	return p.amountFromValueToken(valueTok, currTok, isExpression, value), nil
+	return p.amountFromValueToken(valueTok, currTok, value), nil
 }
 
 // amountFromValueToken builds an amount the parser read, which it records
 // as beancount's grammar feeds its display context with each one.
-func (p *Parser) amountFromValueToken(valueTok, currTok Token, isExpression bool, value string) *ast.Amount {
+func (p *Parser) amountFromValueToken(valueTok, currTok Token, value string) *ast.Amount {
 	amount := p.unrecordedAmount(valueTok, currTok, value)
 	p.recordRead(amount)
 	return amount
@@ -151,13 +149,13 @@ func (p *Parser) continuesPreviousLine() bool {
 // when neither part is present on the given line.
 func (p *Parser) parseIncompleteAmount(line int) (*ast.Amount, error) {
 	// Like its currency, a posting's number must be on the posting's line.
-	if p.peek().Line == line && (p.check(NUMBER) || p.check(EXPRESSION) || p.isExpressionStartToken(p.peek())) {
-		valueTok, isExpression, value, err := p.parseAmountValueToken()
+	if p.peek().Line == line && p.numberStart() {
+		valueTok, value, err := p.parseNumberExpr()
 		if err != nil {
 			return nil, err
 		}
 		if p.check(IDENT) && p.peek().Line == line {
-			return p.amountFromValueToken(valueTok, p.advance(), isExpression, value), nil
+			return p.amountFromValueToken(valueTok, p.advance(), value), nil
 		}
 		return ast.NewAmountWithRaw(valueTok.String(p.source), value, ""), nil
 	}
@@ -167,34 +165,6 @@ func (p *Parser) parseIncompleteAmount(line int) (*ast.Amount, error) {
 	}
 
 	return nil, nil
-}
-
-func (p *Parser) parseAmountValueToken() (Token, bool, string, error) {
-	tok := p.peek()
-	if tok.Type == ILLEGAL && p.isExpressionStartToken(tok) {
-		return Token{}, false, "", p.errorAtToken(tok, "unmatched parentheses in expression")
-	}
-	if !p.check(NUMBER) && !p.check(EXPRESSION) {
-		return Token{}, false, "", p.errorAtToken(p.peek(), "expected number or expression")
-	}
-	result, end, err := evaluateNumberExpression(p.source, tok.Start)
-	if err != nil {
-		return Token{}, false, "", p.errorAtToken(tok, "invalid number expression: %v", err)
-	}
-	isExpression := tok.Type == EXPRESSION || end > tok.End
-	valueTok := tok
-	valueTok.End = end
-	valueTok.Type = NUMBER
-	// A trailing dot states no fraction digits: "5." is 5.
-	value := strings.TrimSuffix(strings.ReplaceAll(tok.String(p.source), ",", ""), ".")
-	if isExpression {
-		valueTok.Type = EXPRESSION
-		value = canonicalExpressionValue(result)
-	}
-	for !p.isAtEnd() && p.peek().Start < end {
-		p.advance()
-	}
-	return valueTok, isExpression, value, nil
 }
 
 // parseCost parses a cost specification: {} or a comma-separated list of
@@ -243,7 +213,7 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 			}
 		}
 		switch {
-		case p.check(NUMBER) || p.check(EXPRESSION) || p.checkHash():
+		case p.numberStart() || p.checkHash():
 			duplicate(cost.Amount != nil || cost.Total != nil)
 			if err := p.parseCostAmount(target); err != nil {
 				return nil, err
@@ -309,10 +279,10 @@ func (p *Parser) parseCost() (*ast.Cost, error) {
 // braces is reported by reportCost.
 func (p *Parser) parseCostAmount(cost *ast.Cost) error {
 	number := func() (*ast.Amount, error) {
-		if !p.check(NUMBER) && !p.check(EXPRESSION) {
+		if !p.numberStart() {
 			return &ast.Amount{}, nil
 		}
-		valueTok, _, value, err := p.parseAmountValueToken()
+		valueTok, value, err := p.parseNumberExpr()
 		if err != nil {
 			return nil, err
 		}
@@ -693,14 +663,14 @@ func (p *Parser) parseMetadataValue(line int) (*ast.MetadataValue, error) {
 		}
 		return &ast.MetadataValue{Account: &account}, nil
 
-	case NUMBER, EXPRESSION:
-		valueTok, isExpression, value, err := p.parseAmountValueToken()
+	case NUMBER, PLUS, MINUS, LPAREN:
+		valueTok, value, err := p.parseNumberExpr()
 		if err != nil {
 			return nil, err
 		}
 		if p.check(IDENT) && p.peek().Line == tok.Line {
 			currTok := p.advance()
-			return &ast.MetadataValue{Amount: p.amountFromValueToken(valueTok, currTok, isExpression, value)}, nil
+			return &ast.MetadataValue{Amount: p.amountFromValueToken(valueTok, currTok, value)}, nil
 		}
 		return &ast.MetadataValue{Number: &value}, nil
 
@@ -772,14 +742,14 @@ func (p *Parser) parseCustomValue(line int) (*ast.CustomValue, error) {
 		}
 		return &ast.CustomValue{Account: &account}, nil
 
-	case NUMBER, EXPRESSION:
-		valueTok, isExpression, value, err := p.parseAmountValueToken()
+	case NUMBER, PLUS, MINUS, LPAREN:
+		valueTok, value, err := p.parseNumberExpr()
 		if err != nil {
 			return nil, err
 		}
 		if p.check(IDENT) && p.peek().Line == line {
 			currTok := p.advance()
-			return &ast.CustomValue{Amount: p.amountFromValueToken(valueTok, currTok, isExpression, value)}, nil
+			return &ast.CustomValue{Amount: p.amountFromValueToken(valueTok, currTok, value)}, nil
 		}
 		return &ast.CustomValue{Number: &value}, nil
 	}
@@ -962,21 +932,6 @@ func (p *Parser) expectLineEnd(line int) error {
 	return nil
 }
 
-func (p *Parser) isExpressionStartToken(tok Token) bool {
-	if tok.Start >= len(p.source) {
-		return false
-	}
-	if p.source[tok.Start] == '(' {
-		return true
-	}
-	if (p.source[tok.Start] == '+' || p.source[tok.Start] == '-') &&
-		tok.Start+1 < len(p.source) &&
-		p.source[tok.Start+1] == '(' {
-		return true
-	}
-	return false
-}
-
 // Error helpers
 
 func (p *Parser) errorAtToken(tok Token, format string, args ...any) error {
@@ -1011,28 +966,9 @@ func (p *Parser) illegalTokenMessage(tok Token) string {
 	switch {
 	case len(bytes) > 0 && ast.DateLiteralLen(bytes) == len(bytes):
 		return fmt.Sprintf("invalid date %q", text)
-	case p.isExpressionStartToken(tok):
-		return "unmatched parentheses in expression"
 	default:
 		return fmt.Sprintf("invalid token %q", text)
 	}
-}
-
-// lexerRejects reports whether beancount's lexer, too, rejects an invalid
-// token: a word, a number or date it cannot convert, a quote no string
-// closes or a stray character. The rest are characters it lexes as tokens of their
-// own (an unmatched parenthesis in an expression, a lone sign or a slash),
-// which only its grammar rejects. A sign the lexer scanned with a number
-// after it starts a number beancount's lexer, reading the sign apart, cannot
-// convert (-1,23).
-func (p *Parser) lexerRejects(tok Token) bool {
-	switch p.source[tok.Start] {
-	case '+', '-':
-		return tok.End-tok.Start > 1
-	case '(', ')', '/':
-		return false
-	}
-	return true
 }
 
 func (p *Parser) error(format string, args ...any) error {

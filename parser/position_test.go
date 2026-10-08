@@ -354,14 +354,6 @@ func TestIllegalTokenDiagnostics(t *testing.T) {
 			message: `invalid token "\"missing"`,
 		},
 		{
-			name: "unmatched expression",
-			source: `2024-01-01 * "Bad"
-  Assets:Checking  (1 + 2 USD
-  Expenses:Food
-`,
-			message: "unmatched parentheses in expression",
-		},
-		{
 			name:    "unknown byte",
 			source:  "$",
 			message: `invalid token "$"`,

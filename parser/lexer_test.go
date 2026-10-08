@@ -1,7 +1,6 @@
 package parser
 
 import (
-	"strconv"
 	"strings"
 	"testing"
 
@@ -91,17 +90,12 @@ func TestLexerNumbers(t *testing.T) {
 	}{
 		{"123", "123"},
 		{"123.45", "123.45"},
-		{"-123", "-123"},
-		{"-123.45", "-123.45"},
 		{"0.50", "0.50"},
 		{"1000000", "1000000"},
 		// Comma-separated thousands (like 1,000 USD)
 		{"1,000", "1,000"},
 		{"1,000,000", "1,000,000"},
-		{"+1,000", "+1,000"},
-		{"-1,000", "-1,000"},
 		{"1,000.00", "1,000.00"},
-		{"-1,000.50", "-1,000.50"},
 		{"1,234,567.89", "1,234,567.89"},
 		// A comma that no digit follows ends the number, as in a cost
 		// spec's {10, 2020-01-01}: v2's number pattern never ends on one.
@@ -135,7 +129,6 @@ func TestLexerRejectsMalformedCommaNumbers(t *testing.T) {
 		{"DoubleCommaIntentionalDivergence", "1,,000"},
 		{"UngroupedPrefixBeforeComma", "1234,567"},
 		{"LongDecimalAdjacentGroup", "1,2345.67"},
-		{"NegativeLongGroup", "-1,0000"},
 	}
 
 	for _, tt := range tests {
@@ -377,29 +370,31 @@ func TestLexerComments(t *testing.T) {
 	}
 }
 
-func TestLexerPlusPrefixedNumbers(t *testing.T) {
-	lexer := NewLexer([]byte("+123.45"), "test")
-	tokens, err := lexer.ScanAll()
-	assert.NoError(t, err)
-	assert.True(t, len(tokens) >= 1)
-	assert.Equal(t, NUMBER, tokens[0].Type)
-	assert.Equal(t, "+123.45", tokens[0].String(lexer.source))
-}
-
-func TestLexerParenthesizedExpressions(t *testing.T) {
-	tests := []string{
-		"(100 + 50)",
-		"-(100 + 50)",
-		"+((100 + 50) / 2)",
+// TestLexerNumberExpressions pins that, like beancount's lexer, a number is
+// unsigned and a sign, a parenthesis and an operator are tokens of their
+// own, which the parser reads a number expression from.
+func TestLexerNumberExpressions(t *testing.T) {
+	tests := map[string][]TokenType{
+		"-123.45":           {MINUS, NUMBER, EOF},
+		"+1,000":            {PLUS, NUMBER, EOF},
+		"--1":               {MINUS, MINUS, NUMBER, EOF},
+		"- - 1":             {MINUS, MINUS, NUMBER, EOF},
+		"-- x":              {MINUS, MINUS, ILLEGAL, EOF},
+		"/---":              {SLASH, MINUS, MINUS, MINUS, EOF},
+		"(100 + 50)":        {LPAREN, NUMBER, PLUS, NUMBER, RPAREN, EOF},
+		"-((100 + 50) / 2)": {MINUS, LPAREN, LPAREN, NUMBER, PLUS, NUMBER, RPAREN, SLASH, NUMBER, RPAREN, EOF},
+		"2 * 3":             {NUMBER, ASTERISK, NUMBER, EOF},
+		"(2020-1-2)":        {LPAREN, DATE, RPAREN, EOF},
+		"(1,20 + 1)":        {LPAREN, ILLEGAL, PLUS, NUMBER, RPAREN, EOF},
+		"-2020-01-01":       {MINUS, DATE, EOF},
+		"10-3-2":            {NUMBER, MINUS, NUMBER, MINUS, NUMBER, EOF},
 	}
-
-	for _, input := range tests {
-		lexer := NewLexer([]byte(input), "test")
-		tokens, err := lexer.ScanAll()
-		assert.NoError(t, err)
-		assert.True(t, len(tokens) >= 1)
-		assert.Equal(t, EXPRESSION, tokens[0].Type)
-		assert.Equal(t, input, tokens[0].String(lexer.source))
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			tokens, err := NewLexer([]byte(input+"\n"), "test").ScanAll()
+			assert.NoError(t, err)
+			assert.Equal(t, want, tokenTypes(tokens))
+		})
 	}
 }
 
@@ -871,8 +866,8 @@ func TestLexerCurrencies(t *testing.T) {
 		{long, []TokenType{IDENT, EOF}, ""},
 		{"A'._-B'._-C'._-D'._-E'._-F'._-G9", []TokenType{IDENT, EOF}, ""},
 		{"ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF.", []TokenType{IDENT, ILLEGAL, EOF}, "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF"},
-		{"BA-", []TokenType{IDENT, ILLEGAL, EOF}, "BA"},
-		{"BA- 1", []TokenType{IDENT, EXPRESSION, NUMBER, EOF}, "BA"},
+		{"BA-", []TokenType{IDENT, MINUS, EOF}, "BA"},
+		{"BA- 1", []TokenType{IDENT, MINUS, NUMBER, EOF}, "BA"},
 		{"BA_", []TokenType{IDENT, ILLEGAL, EOF}, "BA"},
 		{"B-", []TokenType{ILLEGAL, EOF}, "B-"},
 
@@ -881,7 +876,7 @@ func TestLexerCurrencies(t *testing.T) {
 		{"TRUE", []TokenType{BOOL, EOF}, ""},
 		{"FALSE", []TokenType{BOOL, EOF}, ""},
 		{"NULL", []TokenType{NONE, EOF}, ""},
-		{"NULL-", []TokenType{NONE, ILLEGAL, EOF}, "NULL"},
+		{"NULL-", []TokenType{NONE, MINUS, EOF}, "NULL"},
 		{"TRUEX", []TokenType{IDENT, EOF}, ""},
 		{"NULL.X", []TokenType{IDENT, EOF}, ""},
 		{"/NULL", []TokenType{IDENT, EOF}, ""},
@@ -896,28 +891,28 @@ func TestLexerCurrencies(t *testing.T) {
 		{"/" + long, []TokenType{IDENT, EOF}, ""},
 		{"/ESZ24 USD", []TokenType{IDENT, IDENT, EOF}, "/ESZ24"},
 		{"/ESZ24.", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
-		{"/ESZ24-", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
+		{"/ESZ24-", []TokenType{IDENT, MINUS, EOF}, "/ESZ24"},
 		{"/ESZ24_", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
 		{"/ESZ24'", []TokenType{IDENT, ILLEGAL, EOF}, "/ESZ24"},
 		{"/ES/Z24", []TokenType{IDENT, IDENT, EOF}, "/ES"},
 		{"/ESz24", []TokenType{IDENT, ILLEGAL, EOF}, "/ES"},
 
 		// Without a letter the slash is division.
-		{"/", []TokenType{ILLEGAL, EOF}, "/"},
-		{"/63", []TokenType{ILLEGAL, NUMBER, EOF}, "/"},
-		{"/6.3", []TokenType{ILLEGAL, NUMBER, EOF}, "/"},
-		{"/ USD", []TokenType{ILLEGAL, IDENT, EOF}, "/"},
-		{"//ES", []TokenType{ILLEGAL, IDENT, EOF}, "/"},
-		{"/esz24", []TokenType{ILLEGAL, ILLEGAL, EOF}, "/"},
+		{"/", []TokenType{SLASH, EOF}, "/"},
+		{"/63", []TokenType{SLASH, NUMBER, EOF}, "/"},
+		{"/6.3", []TokenType{SLASH, NUMBER, EOF}, "/"},
+		{"/ USD", []TokenType{SLASH, IDENT, EOF}, "/"},
+		{"//ES", []TokenType{SLASH, IDENT, EOF}, "/"},
+		{"/esz24", []TokenType{SLASH, ILLEGAL, EOF}, "/"},
 
-		{"1 / 2 USD", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
-		{"1 /2 USD", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
-		{"1/2 USD", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
+		{"1 / 2 USD", []TokenType{NUMBER, SLASH, NUMBER, IDENT, EOF}, ""},
+		{"1 /2 USD", []TokenType{NUMBER, SLASH, NUMBER, IDENT, EOF}, ""},
+		{"1/2 USD", []TokenType{NUMBER, SLASH, NUMBER, IDENT, EOF}, ""},
 		{"10 /ESZ24", []TokenType{NUMBER, IDENT, EOF}, ""},
 		{"10/ESZ24", []TokenType{NUMBER, IDENT, EOF}, ""},
 		{"10 /6J", []TokenType{NUMBER, IDENT, EOF}, ""},
-		{"2 / 3 /ESZ24", []TokenType{NUMBER, ILLEGAL, NUMBER, IDENT, EOF}, ""},
-		{"(1 + 2)/ESZ24", []TokenType{EXPRESSION, IDENT, EOF}, ""},
+		{"2 / 3 /ESZ24", []TokenType{NUMBER, SLASH, NUMBER, IDENT, EOF}, ""},
+		{"(1 + 2)/ESZ24", []TokenType{LPAREN, NUMBER, PLUS, NUMBER, RPAREN, IDENT, EOF}, ""},
 	}
 
 	for _, tt := range tests {
@@ -950,40 +945,4 @@ func TestColumnOneLongCurrency(t *testing.T) {
 	tokens, err := NewLexer([]byte(line), "test").ScanAll()
 	assert.NoError(t, err)
 	assert.Equal(t, []TokenType{IDENT, ILLEGAL, EOF}, tokenTypes(tokens))
-}
-
-// TestLexerSignRuns pins how runs of signs and spaces lex: a sign starts an
-// expression only when a digit or a parenthesis ends the run after at least
-// one more sign or space, whichever sign of the run it is.
-func TestLexerSignRuns(t *testing.T) {
-	tests := map[string][]TokenType{
-		"/---":     {ILLEGAL, ILLEGAL, ILLEGAL, ILLEGAL, EOF},
-		"--1":      {EXPRESSION, NUMBER, EOF},
-		"- - 1":    {EXPRESSION, EXPRESSION, NUMBER, EOF},
-		"-- x":     {ILLEGAL, ILLEGAL, ILLEGAL, EOF},
-		"+-(1)":    {EXPRESSION, EXPRESSION, EOF},
-		"-- 1 --x": {EXPRESSION, EXPRESSION, NUMBER, ILLEGAL, ILLEGAL, ILLEGAL, EOF},
-	}
-	for input, want := range tests {
-		t.Run(input, func(t *testing.T) {
-			tokens, err := NewLexer([]byte(input+"\n"), "test").ScanAll()
-			assert.NoError(t, err)
-			assert.Equal(t, want, tokenTypes(tokens))
-		})
-	}
-}
-
-// BenchmarkLexerSignRun lexes a slash and a run of dashes, which no digit
-// ends: the time per run doubles as the run does, rather than quadrupling.
-func BenchmarkLexerSignRun(b *testing.B) {
-	for _, n := range []int{20000, 40000, 80000} {
-		input := []byte("2020-01-01 open Assets:A\n/" + strings.Repeat("-", n) + "\n")
-		b.Run(strconv.Itoa(n), func(b *testing.B) {
-			for b.Loop() {
-				if _, err := NewLexer(input, "test").ScanAll(); err != nil {
-					b.Fatal(err)
-				}
-			}
-		})
-	}
 }

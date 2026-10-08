@@ -1,185 +1,148 @@
 package parser
 
 import (
-	"fmt"
 	"strings"
 
-	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
 
-type numberExpressionParser struct {
-	source      []byte
-	pos         int
-	lineEnd     int
-	consumedEnd int
-}
-
-func evaluateNumberExpression(source []byte, start int) (decimal.Decimal, int, error) {
-	lineEnd := start
-	for lineEnd < len(source) && source[lineEnd] != '\n' {
-		lineEnd++
-	}
-	p := &numberExpressionParser{source: source, pos: start, lineEnd: lineEnd, consumedEnd: start}
-	value, err := p.parseExpr(0)
-	if err != nil {
-		return decimal.Zero, start, err
-	}
-	return value, p.consumedEnd, nil
-}
-
-func (p *numberExpressionParser) skipWhitespace() {
-	for p.pos < p.lineEnd && isBlank(p.source[p.pos]) {
-		p.pos++
-	}
-}
-
-func (p *numberExpressionParser) peek() byte {
-	p.skipWhitespace()
-	if p.pos >= p.lineEnd {
-		return 0
-	}
-	return p.source[p.pos]
-}
-
-func (p *numberExpressionParser) consume() byte {
-	ch := p.source[p.pos]
-	p.pos++
-	p.consumedEnd = p.pos
-	return ch
-}
-
-func (p *numberExpressionParser) parsePrimary() (decimal.Decimal, error) {
-	switch p.peek() {
-	case '+':
-		p.consume()
-		return p.parsePrimary()
-	case '-':
-		p.consume()
-		value, err := p.parsePrimary()
-		return value.Neg(), err
-	case '(':
-		p.consume()
-		value, err := p.parseExpr(0)
-		if err != nil {
-			return decimal.Zero, err
-		}
-		if p.peek() != ')' {
-			return decimal.Zero, fmt.Errorf("expected ')' at position %d", p.pos)
-		}
-		p.consume()
-		return value, nil
-	default:
-		return p.parseNumber()
-	}
-}
-
-func (p *numberExpressionParser) parseNumber() (decimal.Decimal, error) {
-	p.skipWhitespace()
-	start := p.pos
-	// Like beancount's lexer, which reads a date wherever a word starts,
-	// a date where a number should start is no number: (2020-1-2) is a
-	// syntax error, not 2017.
-	if ast.DateLiteralLen(p.source[start:p.lineEnd]) > 0 {
-		return decimal.Zero, fmt.Errorf("unexpected date at position %d", start)
-	}
-	foundDigit, seenDot := false, false
-	for p.pos < p.lineEnd {
-		ch := p.source[p.pos]
-		// Like v2's number pattern, a comma is a digit group separator
-		// only with a digit after it: {10, 2020-01-01} ends at "10".
-		if isDigit(ch) || (ch == ',' && p.pos+1 < p.lineEnd && isDigit(p.source[p.pos+1])) {
-			foundDigit = true
-			p.pos++
-			continue
-		}
-		if ch == '.' && !seenDot && foundDigit {
-			// A fraction, or like beancount a bare trailing dot ("5.")
-			seenDot = true
-			p.pos++
-			continue
-		}
-		break
-	}
-	if !foundDigit {
-		return decimal.Zero, fmt.Errorf("expected number at position %d", start)
-	}
-	p.consumedEnd = p.pos
-	written := string(p.source[start:p.pos])
-	if !validDigitGroups(written) {
-		return decimal.Zero, fmt.Errorf("invalid number format: %q", written)
-	}
-	raw := strings.ReplaceAll(written, ",", "")
-	value, err := decimal.NewFromString(raw)
-	if err != nil {
-		return decimal.Zero, fmt.Errorf("invalid number %q: %w", raw, err)
-	}
-	return value, nil
-}
-
-// validDigitGroups reports whether a number's commas group its integer part
-// as the lexer's scanNumber requires: one to three digits, then groups of
-// exactly three.
-func validDigitGroups(number string) bool {
-	integer, _, _ := strings.Cut(number, ".")
-	groups := strings.Split(integer, ",")
-	if len(groups) == 1 {
+// numberStart reports whether the next token starts beancount's
+// number_expr: a number, a sign or an opening parenthesis.
+func (p *Parser) numberStart() bool {
+	switch p.peek().Type {
+	case NUMBER, PLUS, MINUS, LPAREN:
 		return true
 	}
-	if len(groups[0]) > 3 {
-		return false
-	}
-	for _, group := range groups[1:] {
-		if len(group) != 3 {
-			return false
-		}
-	}
-	return true
+	return false
 }
 
-func (p *numberExpressionParser) parseExpr(minPrecedence int) (decimal.Decimal, error) {
-	left, err := p.parsePrimary()
+// parseNumberExpr parses beancount's number_expr from the tokens on the
+// line it starts on: numbers joined by + - * /, unary signs and
+// parentheses, evaluated as beancount's grammar does, in Python's decimal
+// arithmetic. It returns a token spanning the expression and its value: a
+// number with at most one sign written right before it as written, without
+// its commas or a trailing dot, so -0.00 keeps its sign; anything else
+// evaluated, keeping its exponent (canonicalExpressionValue).
+func (p *Parser) parseNumberExpr() (Token, string, error) {
+	first, start := p.peek(), p.pos
+	if !p.numberStart() {
+		return Token{}, "", p.errorAtToken(first, "expected number or expression")
+	}
+	e := numberExpr{p: p, line: first.Line}
+	result, err := e.parse(0)
+	if err != nil {
+		return Token{}, "", err
+	}
+	last := p.previous()
+	span := Token{Type: NUMBER, Start: first.Start, End: last.End, Line: first.Line, Column: first.Column}
+	signed := first.Type == PLUS || first.Type == MINUS
+	literal := p.pos-start == 1 || (p.pos-start == 2 && signed && first.End == last.Start)
+	if literal {
+		return span, strings.TrimSuffix(strings.ReplaceAll(span.String(p.source), ",", ""), "."), nil
+	}
+	return span, canonicalExpressionValue(result), nil
+}
+
+// numberExpr evaluates one number_expr, reading the parser's tokens on its
+// line.
+type numberExpr struct {
+	p    *Parser
+	line int
+}
+
+// next returns the next token when it is on the expression's line.
+func (e numberExpr) next() (Token, bool) {
+	tok := e.p.peek()
+	return tok, !e.p.isAtEnd() && tok.Line == e.line
+}
+
+// expected is the error for a token the expression cannot go on with, or,
+// at its line's end, for the missing one.
+func (e numberExpr) expected(what string) error {
+	if _, ok := e.next(); ok {
+		return e.p.error("expected %s", what)
+	}
+	return e.p.errorAtEndOfPrevious("expected %s", what)
+}
+
+// parse reads operands joined by operators of at least minPrecedence, each
+// operator binding to the left as beancount's %left does.
+func (e numberExpr) parse(minPrecedence int) (decimal.Decimal, error) {
+	left, err := e.operand()
 	if err != nil {
 		return decimal.Zero, err
 	}
 	for {
-		op := p.peek()
-		precedence := numberOperatorPrecedence(op)
-		if precedence < minPrecedence {
-			break
+		op, ok := e.next()
+		precedence := numberOperatorPrecedence(op.Type)
+		if !ok || precedence < minPrecedence {
+			return left, nil
 		}
-		// A slash that starts a currency (/ESZ24) is no division.
-		if op == '/' && slashCurrencyLen(p.source[p.pos:p.lineEnd]) > 0 {
-			break
-		}
-		p.consume()
-		right, err := p.parseExpr(precedence + 1)
+		e.p.advance()
+		right, err := e.parse(precedence + 1)
 		if err != nil {
 			return decimal.Zero, err
 		}
-		switch op {
-		case '+':
+		switch op.Type {
+		case PLUS:
 			left = pydecimal.Add(left, right)
-		case '-':
+		case MINUS:
 			left = pydecimal.Sub(left, right)
-		case '*':
+		case ASTERISK:
 			left = pydecimal.Mul(left, right)
-		case '/':
+		case SLASH:
 			if right.IsZero() {
-				return decimal.Zero, fmt.Errorf("division by zero")
+				return decimal.Zero, e.p.errorAtToken(op, "division by zero")
 			}
 			left = pydecimal.Quo(left, right)
 		}
 	}
-	return left, nil
 }
 
-func numberOperatorPrecedence(operator byte) int {
+// operand reads a number, a signed operand, which binds tighter than any
+// operator (beancount's %prec NEGATIVE), or a parenthesised expression.
+func (e numberExpr) operand() (decimal.Decimal, error) {
+	tok, ok := e.next()
+	if !ok {
+		return decimal.Zero, e.expected("number")
+	}
+	switch tok.Type {
+	case PLUS:
+		e.p.advance()
+		return e.operand()
+	case MINUS:
+		e.p.advance()
+		value, err := e.operand()
+		return value.Neg(), err
+	case LPAREN:
+		e.p.advance()
+		value, err := e.parse(0)
+		if err != nil {
+			return decimal.Zero, err
+		}
+		if closing, ok := e.next(); !ok || closing.Type != RPAREN {
+			return decimal.Zero, e.expected("')'")
+		}
+		e.p.advance()
+		return value, nil
+	case NUMBER:
+		e.p.advance()
+		text := strings.ReplaceAll(tok.String(e.p.source), ",", "")
+		value, err := decimal.NewFromString(strings.TrimSuffix(text, "."))
+		if err != nil {
+			return decimal.Zero, e.p.errorAtToken(tok, "invalid number %q", text)
+		}
+		return value, nil
+	}
+	return decimal.Zero, e.expected("number")
+}
+
+func numberOperatorPrecedence(operator TokenType) int {
 	switch operator {
-	case '+', '-':
+	case PLUS, MINUS:
 		return 1
-	case '*', '/':
+	case ASTERISK, SLASH:
 		return 2
 	default:
 		return -1

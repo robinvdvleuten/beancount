@@ -35,11 +35,10 @@ const (
 	DATE    // YYYY-MM-DD
 	ACCOUNT // Assets:Bank:Checking
 	STRING  // "quoted string"
-	NUMBER  // 123.45 or -123.45
-	EXPRESSION
-	IDENT // USD, currency codes, a capital letter (V) that may be a flag
-	BOOL  // TRUE or FALSE, a keyword as in beancount v3's lexer, never a currency
-	NONE  // NULL, a keyword as in beancount v3's lexer, never a currency
+	NUMBER  // 123.45, unsigned as in beancount's lexer
+	IDENT   // USD, currency codes, a capital letter (V) that may be a flag
+	BOOL    // TRUE or FALSE, a keyword as in beancount v3's lexer, never a currency
+	NONE    // NULL, a keyword as in beancount v3's lexer, never a currency
 
 	// Special literals
 	TAG  // #tag
@@ -58,7 +57,11 @@ const (
 	RBRACE   // }
 	LDBRACE  // {{
 	RDBRACE  // }}
-	MINUS    // - (for negative numbers)
+	PLUS     // +
+	MINUS    // -
+	SLASH    // /, a division; a currency may start with one (/ESZ24)
+	LPAREN   // (
+	RPAREN   // )
 	PIPE     // |, the deprecated separator of a payee and a narration
 )
 
@@ -88,14 +91,13 @@ var tokenNames = map[TokenType]string{
 	PUSHMETA:  "PUSHMETA",
 	POPMETA:   "POPMETA",
 
-	DATE:       "DATE",
-	ACCOUNT:    "ACCOUNT",
-	STRING:     "STRING",
-	NUMBER:     "NUMBER",
-	EXPRESSION: "EXPRESSION",
-	IDENT:      "IDENT",
-	BOOL:       "BOOL",
-	NONE:       "NONE",
+	DATE:    "DATE",
+	ACCOUNT: "ACCOUNT",
+	STRING:  "STRING",
+	NUMBER:  "NUMBER",
+	IDENT:   "IDENT",
+	BOOL:    "BOOL",
+	NONE:    "NONE",
 
 	TAG:  "TAG",
 	LINK: "LINK",
@@ -112,7 +114,11 @@ var tokenNames = map[TokenType]string{
 	RBRACE:   "}",
 	LDBRACE:  "{{",
 	RDBRACE:  "}}",
+	PLUS:     "+",
 	MINUS:    "-",
+	SLASH:    "/",
+	LPAREN:   "(",
+	RPAREN:   ")",
 	PIPE:     "|",
 }
 

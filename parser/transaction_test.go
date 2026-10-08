@@ -516,7 +516,8 @@ func TestParseUnmatchedParenthesisInExpression(t *testing.T) {
 `
 	_, err := ParseString(context.Background(), source)
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "unmatched parentheses")
+	// The currency is where the closing parenthesis was expected.
+	assert.Contains(t, err.Error(), "2:31: expected ')'")
 }
 
 func TestParseTransactionRejectsMalformedCost(t *testing.T) {
