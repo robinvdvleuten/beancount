@@ -1,0 +1,12 @@
+; Two transactions, one indented by two spaces and one by four: on that tie
+; the postings are indented by four.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  1.00 USD
+  Assets:B  -1.00 USD
+
+2020-01-03 *
+    Assets:A  2.00 USD
+    Assets:B  -2.00 USD

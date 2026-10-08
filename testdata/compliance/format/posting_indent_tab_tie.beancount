@@ -1,0 +1,7 @@
+; Postings indented by a tab, two spaces and three spaces, once each: they
+; are indented by three.
+2020-01-01 open Assets:A
+2020-01-02 *
+	Assets:A  1.00 USD
+  Assets:B  -1 USD
+   Assets:C  0 USD
