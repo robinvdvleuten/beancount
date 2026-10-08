@@ -1,0 +1,24 @@
+include "include/same_date_order.beancount"
+; Directives of one date sort by line number whatever file they are in, the
+; balance assertion first; at the same line, the including file comes first.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+;
+2020-01-02 * "main 19"
+  Assets:A  1 USD
+  Assets:B
+2020-01-02 * "main 22"
+  Assets:A  1 USD
+  Assets:B
