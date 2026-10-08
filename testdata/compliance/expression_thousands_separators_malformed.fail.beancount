@@ -17,7 +17,15 @@
   Assets:B
 
 2020-01-05 *
+  Assets:A  1 + 1,20 USD
+  Assets:B
+
+2020-01-06 *
+  Assets:A  2 * (3 + 1,23) USD
+  Assets:B
+
+2020-01-07 *
   Assets:A  (1,234 + 1,000.50) USD
   Assets:B
 
-2020-01-06 balance Assets:A  2234.50 USD
+2020-01-08 balance Assets:A  2234.50 USD

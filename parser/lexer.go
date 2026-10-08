@@ -431,10 +431,12 @@ func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
 		if l.lineBreakLenAt(l.pos) > 0 {
 			return Token{ILLEGAL, start, l.pos, line, col}
 		}
-		// A date starting a word, (2020-1-2), is a date to beancount's
-		// lexer, which reports one naming no day even as its parser
-		// recovers: the parenthesis is a token of its own, as below.
-		if prev := l.source[l.pos-1]; !isDigit(prev) && prev != '.' && prev != ',' && ast.DateLiteralLen(l.source[l.pos:]) > 0 {
+		// A date or an invalid number starting a word, (2020-1-2) or
+		// (1,20), is lexed on its own by beancount's lexer, which reports
+		// either even as its parser recovers: the parenthesis is a token
+		// of its own, as below.
+		if prev := l.source[l.pos-1]; !isDigit(prev) && prev != '.' && prev != ',' &&
+			(ast.DateLiteralLen(l.source[l.pos:]) > 0 || l.invalidNumberAhead()) {
 			l.pos, l.column = start+1, col+1
 			return Token{ILLEGAL, start, l.pos, line, col}
 		}
@@ -458,6 +460,16 @@ func (l *Lexer) scanExpression(start, line, col int, first byte) Token {
 	}
 
 	return Token{ILLEGAL, start, l.pos, line, col}
+}
+
+// invalidNumberAhead reports whether a number starts at the current
+// position that scanNumber rejects, such as 1,20.
+func (l *Lexer) invalidNumberAhead() bool {
+	if !isDigit(l.source[l.pos]) {
+		return false
+	}
+	probe := *l
+	return probe.scanNumber(l.pos, l.line, l.column).Type == ILLEGAL
 }
 
 // isExpressionByte reports whether b may stand inside a parenthesized

@@ -1,0 +1,5 @@
+; A malformed grouped number inside an arithmetic expression is reported even
+; while the parser recovers from the syntax error before it, as beancount's
+; lexer reports every invalid token.
+  Assets:B
+  Assets:A  (1,20 + 1) USD
