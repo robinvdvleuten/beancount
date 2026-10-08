@@ -1778,3 +1778,18 @@ func TestNotBalancedResidualOrder(t *testing.T) {
 		"Transaction does not balance: (1 BBBB, 1 AAAA)",
 	}, messages)
 }
+
+// otherKindDirective is a directive of a kind no handler takes, which
+// ast.Directive, an open interface, allows.
+type otherKindDirective struct{ *ast.Event }
+
+func (otherKindDirective) Kind() ast.DirectiveKind { return "other" }
+
+// TestProcessSkipsAnUnknownKind pins that Process skips a directive of a
+// kind no handler takes rather than panicking.
+func TestProcessSkipsAnUnknownKind(t *testing.T) {
+	tree := parser.MustParseString(context.Background(), "2020-01-01 open Assets:A\n2020-01-02 event \"location\" \"home\"\n")
+	tree.Directives[1] = otherKindDirective{tree.Directives[1].(*ast.Event)}
+	_, err := processErr(context.Background(), New(), tree)
+	assert.NoError(t, err)
+}

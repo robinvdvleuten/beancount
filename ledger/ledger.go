@@ -346,9 +346,13 @@ func (l *Ledger) GetPrice(date *ast.Date, fromCurrency, toCurrency string) (deci
 }
 
 // processDirective validates a directive, records its errors, and applies
-// its delta if validate returned one.
+// its delta if validate returned one. A directive of a kind no handler
+// takes, which ast.Directive, an open interface, allows, is skipped.
 func (l *Ledger) processDirective(ctx context.Context, directive ast.Directive) {
 	handler := getHandler(directive.Kind())
+	if handler == nil {
+		return
+	}
 
 	errs, delta := handler.validate(ctx, l, directive)
 	l.errors = append(l.errors, errs...)
