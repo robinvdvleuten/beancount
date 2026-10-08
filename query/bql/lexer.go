@@ -145,8 +145,7 @@ func (l *Lexer) scanTable(start, line, col int) Token {
 }
 
 // scanNumberOrDate scans an INTEGER, DECIMAL, or DATE token. Date literals
-// are detected by shape (YYYY-MM-DD); value validation happens in the parser
-// so invalid dates report a positioned parse error, not a lexer error.
+// are detected by shape (YYYY-MM-DD); the parser checks the date exists.
 func (l *Lexer) scanNumberOrDate(start, line, col int) Token {
 	if start+10 <= len(l.source) &&
 		ast.IsDateLiteralShape(l.source[start:start+10]) &&

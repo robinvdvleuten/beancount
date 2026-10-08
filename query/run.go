@@ -73,6 +73,10 @@ func Run(ctx context.Context, qctx *Context, text string, format Format, numberi
 
 	parsed, err := bql.Parse(text)
 	if err != nil {
+		var valueErr *bql.ValueError
+		if errors.As(err, &valueErr) {
+			return &Error{message: valueErr.Message, text: text}
+		}
 		var parseErr *bql.ParseError
 		if !errors.As(err, &parseErr) {
 			return err

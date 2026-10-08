@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/shopspring/decimal"
@@ -962,10 +963,9 @@ func (p *parser) parseLiteral() (Expr, error) {
 		return &Dec{position: p.node(tok.Start), Value: value}, nil
 
 	case DATE:
-		p.next()
-		date := &ast.Date{}
-		if err := date.Capture([]string{tok.String(p.source)}); err != nil {
-			return nil, p.errorf(tok, "invalid date %q", tok.String(p.source))
+		date, err := p.parseDate()
+		if err != nil {
+			return nil, err
 		}
 		return &DateLit{position: p.node(tok.Start), Value: date}, nil
 
@@ -980,17 +980,29 @@ func (p *parser) parseLiteral() (Expr, error) {
 	return nil, p.errorf(tok, "expected a literal, found %s", p.describe(tok))
 }
 
-// parseDate parses a DATE token into an ast.Date, validating its value.
+// parseDate parses a DATE token into an ast.Date. Like beanquery's parser,
+// which builds it with Python's datetime.date, it fails with a ValueError
+// in Python's words on a date that does not exist.
 func (p *parser) parseDate() (*ast.Date, error) {
 	tok, err := p.expect(DATE, "date")
 	if err != nil {
 		return nil, err
 	}
-	date := &ast.Date{}
-	if err := date.Capture([]string{tok.String(p.source)}); err != nil {
-		return nil, p.errorf(tok, "invalid date %q", tok.String(p.source))
+	text := tok.String(p.source)
+	year, _ := strconv.Atoi(text[0:4])
+	month, _ := strconv.Atoi(text[5:7])
+	day, _ := strconv.Atoi(text[8:10])
+	switch {
+	case year < 1:
+		return nil, &ValueError{Message: fmt.Sprintf("year %d is out of range", year)}
+	case month < 1 || month > 12:
+		return nil, &ValueError{Message: "month must be in 1..12"}
 	}
-	return date, nil
+	t := time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+	if day < 1 || t.Day() != day {
+		return nil, &ValueError{Message: "day is out of range for month"}
+	}
+	return &ast.Date{Time: t}, nil
 }
 
 // startsExpr reports whether the current token can begin an expression. Used

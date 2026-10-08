@@ -23,3 +23,14 @@ func (e *ParseError) Error() string {
 func (e *ParseError) GetPosition() ast.Position {
 	return e.Pos
 }
+
+// ValueError is a statement beanquery's parser rejects with a Python
+// exception rather than a syntax error: a date literal naming no date. It
+// names no place in the statement.
+type ValueError struct {
+	Message string
+}
+
+func (e *ValueError) Error() string {
+	return e.Message
+}
