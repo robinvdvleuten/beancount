@@ -1,0 +1,30 @@
+; Inside an arithmetic expression, four or more digits then twice a dash or a
+; slash and digits are a date, as at the start of any word, so each
+; transaction is dropped; three digits before the dash are a subtraction,
+; and two dashes in a row a subtraction of a negative number.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+
+2020-01-02 *
+  Assets:A  (2020-1-2) USD
+  Assets:B
+
+2020-01-03 *
+  Assets:A  (1 + 2020/01/02) USD
+  Assets:B
+
+2020-01-04 *
+  Assets:A  -(2020-01-02) USD
+  Assets:B
+
+2020-01-05 *
+  Assets:A  (3 - 12020-1-2) USD
+  Assets:B
+
+2020-01-06 *
+  Assets:A  (999-1-2) USD
+  Assets:A  (2020--5) USD
+  Assets:A  (1000.5*2) USD
+  Assets:B
+
+2020-01-07 balance Assets:A  5022.0 USD

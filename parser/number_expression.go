@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/robinvdvleuten/beancount/ast"
 	"github.com/robinvdvleuten/beancount/internal/pydecimal"
 	"github.com/shopspring/decimal"
 )
@@ -77,6 +78,12 @@ func (p *numberExpressionParser) parsePrimary() (decimal.Decimal, error) {
 func (p *numberExpressionParser) parseNumber() (decimal.Decimal, error) {
 	p.skipWhitespace()
 	start := p.pos
+	// Like beancount's lexer, which reads a date wherever a word starts,
+	// a date where a number should start is no number: (2020-1-2) is a
+	// syntax error, not 2017.
+	if ast.DateLiteralLen(p.source[start:p.lineEnd]) > 0 {
+		return decimal.Zero, fmt.Errorf("unexpected date at position %d", start)
+	}
 	foundDigit, seenDot := false, false
 	for p.pos < p.lineEnd {
 		ch := p.source[p.pos]
