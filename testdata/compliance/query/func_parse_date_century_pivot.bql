@@ -1,0 +1,1 @@
+SELECT parse_date('69-01-01', '%y-%m-%d') AS a, parse_date('68-12-31', '%y-%m-%d') AS b, parse_date('2020 01 02', '%Y  %m  %d') AS c, parse_date('2020-1-2', '%Y-%m-%d') AS d, parse_date('2020-060', '%Y-%j') AS e FROM #

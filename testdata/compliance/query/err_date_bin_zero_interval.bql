@@ -1,0 +1,1 @@
+SELECT date_bin(interval('0 days'), 2020-01-15, 2020-06-01) FROM #

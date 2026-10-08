@@ -1,0 +1,1 @@
+SELECT 0001-01-15 - interval('1 month') FROM #

@@ -1,0 +1,1 @@
+SELECT date_bin(interval('1 month'), 2020-01-15, 2020-06-01) AS a, date_bin(interval('-1 day'), 2020-01-15, 2020-06-01) AS b, date_bin(interval('1 year'), 2020-01-15, 2019-06-30) AS c, date_bin(interval('2 weeks'), 2020-01-15, 2019-12-31) AS d FROM #

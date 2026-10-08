@@ -1,0 +1,1 @@
+SELECT payee, narration, count(*) GROUP BY 1, 2 ORDER BY 1, 2

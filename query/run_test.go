@@ -140,6 +140,10 @@ var errorFixtures = map[string]string{
 	"err_table_quoted_doubled_quote": `error: table "post"ings" does not exist
 | SELECT 1 FROM "post""ings"
 |               ^^^^^^^^^^^^`,
+	"err_date_bin_zero_interval":           `error: float modulo`,
+	"err_interval_year_overflow":           `error: year 10000 is out of range`,
+	"err_interval_year_zero":               `error: year 0 is out of range`,
+	"err_parse_date_year_zero":             `error: year 0 is out of range`,
 	"err_date_literal_month":               `error: month must be in 1..12`,
 	"err_date_literal_day":                 `error: day is out of range for month`,
 	"err_date_literal_year_zero":           `error: year 0 is out of range`,

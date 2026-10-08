@@ -1,0 +1,40 @@
+; Shared by the exec_* and summarize_* fixtures: payees and narrations whose
+; concatenations collide, an expense that nets to zero, a labelled lot bought
+; with a conversion, a transaction of one posting, and a later year.
+option "operating_currency" "USD"
+2014-01-01 open Assets:Cash
+2014-01-01 open Assets:Invest
+2014-01-01 open Expenses:Food
+2014-01-01 open Expenses:Zero
+2014-01-01 open Income:Job
+2014-01-01 open Equity:Opening
+
+2014-02-01 * "ab" "c"
+  Assets:Cash  10.00 USD
+  Income:Job
+
+2014-02-02 * "a" "bc"
+  Assets:Cash  20.00 USD
+  Income:Job
+
+2014-02-03 * "food"
+  Expenses:Food  5.00 USD
+  Assets:Cash
+
+2014-02-04 * "refund"
+  Expenses:Zero  3.00 USD
+  Assets:Cash
+2014-02-05 * "refund back"
+  Expenses:Zero  -3.00 USD
+  Assets:Cash
+
+2014-03-01 * "buy"
+  Assets:Invest  10 HOOL {10 USD, "lot1"}
+  Assets:Cash  -100 EUR @ 1 USD
+
+2014-03-02 * "single"
+  Assets:Cash  0 USD
+
+2015-06-01 * "later"
+  Assets:Cash  1.00 USD
+  Income:Job

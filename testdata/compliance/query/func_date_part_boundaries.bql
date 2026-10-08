@@ -1,0 +1,1 @@
+SELECT date_part('millennium', 2000-01-01) AS a, date_part('millennium', 2001-01-01) AS b, date_part('century', 2000-12-31) AS c, date_part('century', 2001-01-01) AS d, date_part('decade', 2019-01-01) AS e, date_part('doy', 2020-12-31) AS f, date_part('isoyear', 2021-01-01) AS g, date_part('week', 2021-01-01) AS h FROM #

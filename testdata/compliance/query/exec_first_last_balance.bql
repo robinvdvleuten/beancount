@@ -1,0 +1,1 @@
+SELECT account, first(balance), last(balance) GROUP BY account ORDER BY account

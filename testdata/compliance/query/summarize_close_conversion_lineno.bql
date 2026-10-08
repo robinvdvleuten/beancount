@@ -1,0 +1,1 @@
+SELECT filename, lineno, narration, account, position FROM CLOSE ON 2016-01-01 WHERE flag = 'C'
