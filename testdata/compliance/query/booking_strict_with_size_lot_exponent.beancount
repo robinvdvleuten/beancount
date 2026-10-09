@@ -1,0 +1,18 @@
+; An interpolated -10.00 HOOL opens a short lot beside the 10 HOOL held at
+; the same cost. STRICT_WITH_SIZE cannot choose between the two by cost and
+; takes the lot of the reduction's size; like beancount, it books the lot's
+; own units, so the reduction is 10.00 HOOL.
+option "inferred_tolerance_default" "*:0.01"
+
+2020-01-01 open Assets:Size "STRICT_WITH_SIZE"
+2020-01-01 open Assets:Cash
+
+2020-01-02 *
+  Assets:Size  10 HOOL {10 USD}
+
+2020-02-01 *
+  Assets:Cash  100 USD
+  Assets:Size  HOOL {10 USD}
+
+2020-03-03 *
+  Assets:Size  10 HOOL {10 USD}

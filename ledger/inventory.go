@@ -637,11 +637,12 @@ func planStrictReductionWithSize(commodity string, matches []*lot, units decimal
 		return nil, err
 	}
 	// The first of the oldest, as beancount's stable sort on the cost date
-	// leaves it.
+	// leaves it, booked at the lot's own units (-match.units), so with the
+	// lot's exponent: 10.00 for 10 against a lot of -10.00.
 	oldest := slices.MinFunc(sized, func(a, b *lot) int { return compareLotDates(a, b) })
 	return &reductionPlan{
 		commodity:  commodity,
-		reductions: []lotReduction{{lot: oldest, amount: units}},
+		reductions: []lotReduction{{lot: oldest, amount: oldest.amount.Neg()}},
 	}, nil
 }
 
