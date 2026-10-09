@@ -224,13 +224,13 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 	var completed []interpolatedPosting
 	var residuals []residual
 	autoBooked := false
-	// Like beancount, a transaction changes the inventories only through
-	// the groups it books: each group reduces lots in scratch copies, which
-	// are staged once the group is booked.
-	staged := make(map[string]*inventory)
+	// Like beancount's book_reductions, each group books its reductions
+	// against the inventories as they stood before the transaction, in
+	// scratch copies of its own; the inventories change only once every
+	// group is booked.
 	reductions := make(map[*ast.Posting][]BookedPosition)
 	for _, group := range groups {
-		scratch := &scratchInventories{booker: b, staged: staged, own: make(map[string]*inventory)}
+		scratch := &scratchInventories{booker: b, own: make(map[string]*inventory)}
 		groupReductions, groupErrs := b.bookReductions(txn, group, scratch)
 		var interpolated *interpolatedGroup
 		if len(groupErrs) == 0 {
@@ -241,7 +241,6 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 			continue
 		}
 		errs = append(errs, interpolated.errs...)
-		maps.Copy(staged, scratch.own)
 		maps.Copy(reductions, groupReductions)
 
 		// The amount-less posting belongs to every group: it is booked once
@@ -294,18 +293,20 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 		}
 	}
 	commitBooking(txn, postings, completed)
-	maps.Copy(b.inventories, staged)
 
-	// The booked postings other than the reductions, their numbers now
-	// complete, join their accounts' inventories, like beancount's
-	// add_position once a transaction is booked. Like it, which stores a
-	// lot again with the cost of each posting it adds, in posting order, a
-	// reduction leaves the lot it reduced the cost it was booked at.
+	// The booked postings, their numbers now complete, join their accounts'
+	// inventories in posting order, like beancount's add_position once a
+	// transaction is booked: a reduction as the lots it booked, each of
+	// which, stored again with the cost of the posting it adds, keeps the
+	// cost of the posting that touched it last.
 	booked := &bookedTransaction{residuals: residuals}
 	for _, posting := range txn.Postings {
 		positions, reduced := reductions[posting]
 		if reduced {
-			b.inventory(posting.Account).restamp(posting.Amount.Currency, positions)
+			inv := b.inventory(posting.Account)
+			for _, position := range positions {
+				inv.addLot(posting.Amount.Currency, position.Units, position.lotSpec())
+			}
 		} else {
 			date := txn.Date()
 			if undated[posting] {
@@ -455,11 +456,10 @@ func isIncompleteAmount(a *ast.Amount) bool {
 }
 
 // scratchInventories are the inventories one Currency group books against:
-// copies, made on first use, of the inventories staged by the transaction's
-// earlier groups or else of the booker's.
+// copies, made on first use, of the booker's as they stood before the
+// transaction.
 type scratchInventories struct {
 	booker *booker
-	staged map[string]*inventory
 	own    map[string]*inventory
 }
 
@@ -467,9 +467,6 @@ type scratchInventories struct {
 // its own copy once made, or else the one it would copy.
 func (s *scratchInventories) view(account ast.Account) *inventory {
 	if inv, ok := s.own[string(account)]; ok {
-		return inv
-	}
-	if inv, ok := s.staged[string(account)]; ok {
 		return inv
 	}
 	return s.booker.inventory(account)

@@ -255,18 +255,6 @@ func (inv *inventory) clone() *inventory {
 // inventory holds gives the lot its cost: 10 HOOL {100.00 USD} added to a
 // lot at 100 USD leaves it at 100.00 USD, which a later reduction books at
 // (a booked reduction adds the lot's own cost back, so it changes nothing).
-// restamp gives each lot a reduction booked against, if it still holds
-// units, the cost spec the reduction was booked at, as beancount's add_amount
-// stores the lot again with the cost of the posting it adds.
-func (inv *inventory) restamp(commodity string, positions []BookedPosition) {
-	for _, position := range positions {
-		spec := position.lotSpec()
-		if i, ok := inv.index[commodity][spec.key()]; ok {
-			inv.lots[commodity][i].spec = spec
-		}
-	}
-}
-
 func (inv *inventory) addLot(commodity string, amount decimal.Decimal, spec *lotSpec) bool {
 	// Find existing lot with matching spec
 	key := spec.key()

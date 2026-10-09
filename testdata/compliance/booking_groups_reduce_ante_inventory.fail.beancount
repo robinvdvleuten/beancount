@@ -1,0 +1,18 @@
+; Like beancount's book_reductions, each currency group books its reductions
+; against the inventory as it stood before the transaction: the HOOL group's
+; -1 HOOL {1 HOOL} is a reduction of the lot the USD group also reduces, at
+; another cost currency, so it matches no position and its group is dropped,
+; and the balance after it holds.
+2020-01-01 open Assets:Stock
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "Buy"
+  Assets:Stock  1 HOOL {1 USD}
+  Assets:Cash  -1 USD
+
+2020-01-03 * "Sell, and a reduction at another cost currency"
+  Assets:Stock  -1 HOOL {1 USD}
+  Assets:Stock  -1 HOOL {1 HOOL}
+  Assets:Cash  1 USD
+
+2020-01-04 balance Assets:Stock 0 HOOL
