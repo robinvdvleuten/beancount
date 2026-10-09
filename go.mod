@@ -1,6 +1,8 @@
 module github.com/robinvdvleuten/beancount
 
-go 1.26.9
+go 1.26.0
+
+toolchain go1.26.9
 
 ignore ./assets/node_modules
 
