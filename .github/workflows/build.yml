@@ -30,10 +30,15 @@ jobs:
         with:
           go-version: ${{ matrix.go }}
       # The compliance suites run against the official tools when they are on PATH.
-      # beancount 3 ships no bean-query; beanquery's goes into its environment.
+      # beancount 3 ships no bean-query; beanquery's goes into its environment,
+      # on the Python AGENTS.md pins, as what beanquery prints depends on it (#709).
+      - if: matrix.compliance-check
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
       - if: matrix.compliance-check
         run: |
-          pipx install beancount==3.2.3
+          pipx install --python python3.12 beancount==3.2.3
           pipx inject beancount beanquery==0.2.0 --include-apps
       - run: go test -tags=dev ./...
 
