@@ -347,11 +347,10 @@ compare the lines errors are on:
   more than RE2 gives; failing tells the user, where matching nothing
   would mislead. `subst()`'s replacement is not a pattern: it is
   read as Python's `re.sub` reads it (`\1`, `\g<name>`, a literal `$`),
-  with Python's messages for an invalid one. Python 3.9 reads a group
-  reference that Python 3.12 rejects (`\g< 1 >`, `\g<+1>`, a group
-  number of non-ASCII digits) as the group; we read it as 3.9 does, and
-  beanquery's answer depends on the Python it runs on (#709), so no
-  fixture holds one. Like RE2's, `subst()` skips
+  with Python's messages for an invalid one, as Python 3.12 reads it, the
+  Python the suites run beanquery on (#709): a group number is ASCII digits
+  alone, so `\g< 1 >`, `\g<+1>` and `\g<١>`, which Python 3.9 reads as
+  group 1, fail. Like RE2's, `subst()` skips
   an empty match adjacent to the previous match, which Python's `re.sub`
   replaces (#625): `subst('o*', '-', 'Foood')` is `-F-d-` here and
   `-F--d-` there (`query/func_subst_empty_after_match.bql`). Matching

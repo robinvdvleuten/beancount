@@ -194,20 +194,24 @@ func parseTemplate(re *regexp.Regexp, template string) []templatePart {
 			name := t.getuntil('>', "group name")
 			length := len([]rune(name))
 			var index int64
-			if isPyIdentifier(name) {
-				index = int64(re.SubexpIndex(name))
-				if index < 0 {
-					fail("unknown group name %s", pyrepr.String(name))
-				}
-			} else {
-				n, ok := pyInt(name)
-				if !ok || n.Sign() < 0 {
-					t.error(fmt.Sprintf("bad character in group name %s", pyrepr.String(name)), length+1)
-				}
+			// Like Python 3.12's re, a name of ASCII digits alone is a
+			// group number, and any other a group's name, which must be
+			// an identifier: \g< 1 >, \g<+1> and \g<١> are no group
+			// references, as Python 3.9 still read them.
+			if isASCIIDigits(name) {
+				n, _ := new(big.Int).SetString(name, 10)
 				if n.Cmp(big.NewInt(pyMaxGroups)) >= 0 {
 					t.error(fmt.Sprintf("invalid group reference %s", n), length+1)
 				}
 				index = n.Int64()
+			} else {
+				if !isPyIdentifier(name) {
+					t.error(fmt.Sprintf("bad character in group name %s", pyrepr.String(name)), length+1)
+				}
+				index = int64(re.SubexpIndex(name))
+				if index < 0 {
+					fail("unknown group name %s", pyrepr.String(name))
+				}
 			}
 			addgroup(index, length+1)
 		case c == '0':
@@ -284,39 +288,8 @@ func isPyIdentifier(s string) bool {
 	return true
 }
 
-// pyInt reads s as Python's int(s) does: surrounding whitespace, an
-// optional sign, and decimal digits of any script, single underscores
-// allowed between them.
-func pyInt(s string) (*big.Int, bool) {
-	s = strings.TrimFunc(s, unicode.IsSpace)
-	negative := false
-	if s != "" && (s[0] == '+' || s[0] == '-') {
-		negative = s[0] == '-'
-		s = s[1:]
-	}
-	n := new(big.Int)
-	ten := big.NewInt(10)
-	sawDigit, lastUnderscore := false, false
-	for _, r := range s {
-		if r == '_' {
-			if !sawDigit || lastUnderscore {
-				return nil, false
-			}
-			lastUnderscore = true
-			continue
-		}
-		d, ok := digitValue(r)
-		if !ok {
-			return nil, false
-		}
-		n.Mul(n, ten).Add(n, big.NewInt(int64(d)))
-		sawDigit, lastUnderscore = true, false
-	}
-	if !sawDigit || lastUnderscore {
-		return nil, false
-	}
-	if negative {
-		n.Neg(n)
-	}
-	return n, true
+// isASCIIDigits reports whether s is ASCII decimal digits alone, as
+// Python's str.isdecimal() and str.isascii() both hold.
+func isASCIIDigits(s string) bool {
+	return s != "" && strings.Trim(s, "0123456789") == ""
 }

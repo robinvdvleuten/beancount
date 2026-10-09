@@ -1,0 +1,1 @@
+SELECT subst('(Food)', '[\g< 1 >]', account) AS spaced WHERE account = 'Expenses:Food:Coffee'

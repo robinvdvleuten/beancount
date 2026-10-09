@@ -63,6 +63,8 @@ var errorFixtures = map[string]string{
 	"err_subst_group_unterminated":        `error: missing >, unterminated name at position 4`,
 	"err_subst_group_name_empty":          `error: missing group name at position 4`,
 	"err_subst_group_no_bracket":          `error: missing < at position 3`,
+	"err_subst_group_number_spaced":       `error: bad character in group name ' 1 ' at position 4`,
+	"err_subst_group_number_non_ascii":    `error: bad character in group name '١' at position 4`,
 	"err_subst_octal_out_of_range":        `error: octal escape value \400 outside of range 0-0o377 at position 1`,
 	"err_syntax_operator_at_end": `error: syntax error
 | SELECT 1 >
