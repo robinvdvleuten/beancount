@@ -1,0 +1,29 @@
+; A seed for the differential fuzzer: one lot written at 100, 100.0 and
+; 100.00, augmented and reduced in one transaction in either order, total
+; and compound costs, and {} reductions after each.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:B
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "one lot, three spellings"
+  Assets:A  10 HOOL {100 USD}
+  Assets:A  2 HOOL {100.0 USD, 2020-01-02}
+  Assets:B  4 HOOL {{400.00 USD}}
+  Assets:Cash
+
+2020-01-03 * "reduce then augment"
+  Assets:A  -3 HOOL {100.00 USD}
+  Assets:A  1 HOOL {100.000 USD, 2020-01-02}
+  Assets:B  -1 HOOL {}
+  Assets:B  2 HOOL {100 # 0.50 USD}
+  Assets:Cash
+
+2020-01-04 * "augment then reduce"
+  Assets:A  1 HOOL {100 USD, 2020-01-02}
+  Assets:A  -2 HOOL {}
+  Assets:Cash
+
+2020-01-05 * "reduce at the lot's cost"
+  Assets:A  -1 HOOL {}
+  Assets:B  -1 HOOL {100.25 USD}
+  Assets:Cash

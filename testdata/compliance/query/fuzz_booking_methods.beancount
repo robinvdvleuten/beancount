@@ -1,0 +1,45 @@
+; A seed for the differential fuzzer: every booking method on lots that
+; differ by cost, date and label, reduced by cost, date, label, {} and size.
+option "inferred_tolerance_default" "*:0.01"
+
+2020-01-01 open Assets:Strict
+2020-01-01 open Assets:Size "STRICT_WITH_SIZE"
+2020-01-01 open Assets:Fifo "FIFO"
+2020-01-01 open Assets:Lifo "LIFO"
+2020-01-01 open Assets:Hifo "HIFO"
+2020-01-01 open Assets:None "NONE"
+2020-01-01 open Assets:Avg "AVERAGE"
+2020-01-01 open Assets:Cash
+
+2020-01-02 * "lots"
+  Assets:Strict  10 HOOL {100 USD}
+  Assets:Strict  5 HOOL {110 USD, "b"}
+  Assets:Size  4 HOOL {100 USD}
+  Assets:Size  6 HOOL {100 USD, 2020-01-01}
+  Assets:Fifo  3 HOOL {90 USD, 2019-12-01}
+  Assets:Fifo  3 HOOL {95.00 USD}
+  Assets:Lifo  2 HOOL {80 USD}
+  Assets:Lifo  2 HOOL {85 USD, 2020-01-03}
+  Assets:Hifo  1 HOOL {120 USD}
+  Assets:Hifo  1 HOOL {125.0 USD}
+  Assets:None  7 HOOL {100 USD}
+  Assets:Avg  2 HOOL {100 USD}
+  Assets:Cash
+
+2020-02-01 * "reductions"
+  Assets:Strict  -5 HOOL {"b"}
+  Assets:Strict  -3 HOOL {100 USD}
+  Assets:Size  -6 HOOL {100 USD}
+  Assets:Fifo  -4 HOOL {}
+  Assets:Lifo  -3 HOOL {}
+  Assets:Hifo  -1 HOOL {}
+  Assets:None  -9 HOOL {100 USD}
+  Assets:Cash
+
+2020-02-02 * "by date"
+  Assets:Fifo  -2 HOOL {2020-01-02}
+  Assets:Lifo  -1 HOOL {2020-01-02}
+  Assets:Cash
+
+2020-03-01 balance Assets:Strict 7 HOOL
+2020-03-01 balance Assets:Hifo 1 HOOL

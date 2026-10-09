@@ -1,0 +1,20 @@
+; A seed for the differential fuzzer: one commodity held at costs in two
+; currencies, a reduction naming neither, and a cost currency taken from
+; the group.
+2020-01-01 open Assets:A
+2020-01-01 open Assets:Usd
+2020-01-01 open Assets:Eur
+
+2020-01-02 * "two cost currencies"
+  Assets:A  2 HOOL {100 USD}
+  Assets:A  2 HOOL {90 EUR}
+  Assets:Usd  -200 USD
+  Assets:Eur  -180 EUR
+
+2020-01-03 * "reduce in USD"
+  Assets:A  -1 HOOL {}
+  Assets:Usd  100 USD
+
+2020-01-04 * "cost currency from the group"
+  Assets:A  -1 HOOL {90}
+  Assets:Eur  90 EUR
