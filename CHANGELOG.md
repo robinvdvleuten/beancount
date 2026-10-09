@@ -2,6 +2,32 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1](https://github.com/robinvdvleuten/beancount/compare/v0.17.0...v0.17.1) (2026-10-09)
+
+
+### Bug Fixes
+
+* **deps:** require Go 1.26.0 again, with toolchain go1.26.9 ([3ade309](https://github.com/robinvdvleuten/beancount/commit/3ade309ac4ea9fa25b8f501f74e93d0023f6eb4a))
+* **deps:** require Go 1.26.9 and golang.org/x/net v0.60.0 ([2fe5374](https://github.com/robinvdvleuten/beancount/commit/2fe5374982128e9768993f03b7036fd1bd251599))
+* **formatter:** keep comments before a body tag line in place ([a8085d0](https://github.com/robinvdvleuten/beancount/commit/a8085d03a1c2fe42f88f6c5daf86b8d8bcd8c2e4))
+* **ledger:** count a subtree lot once after it sums to zero and comes back ([da9e9c3](https://github.com/robinvdvleuten/beancount/commit/da9e9c3434c6dcbb10ed8a4df47110062c8d13ac))
+* **ledger:** report a posting's own filename or lineno as a duplicate key ([3ed1882](https://github.com/robinvdvleuten/beancount/commit/3ed1882cf78d687a4ac2ea33cb99a8cfe5294373))
+* **ledger:** skip a directive of a kind no handler takes ([009d82b](https://github.com/robinvdvleuten/beancount/commit/009d82b24ad173760eb586d20492e301455ba7ee))
+* **loader:** match include globs as Python's fnmatch does ([f9d4a40](https://github.com/robinvdvleuten/beancount/commit/f9d4a406b3692fd0ccc4d84af16560087073d79f))
+* **parser:** accept a directive's keyword right after its date ([017cc55](https://github.com/robinvdvleuten/beancount/commit/017cc55de04a5a8abed01b193f6ebcb0df9d11cd))
+* **parser:** lex a date starting a word inside parentheses as a date ([fc18c1e](https://github.com/robinvdvleuten/beancount/commit/fc18c1e59f775e6d9a6c91fc9456dd6b151e0ee9))
+* **parser:** lex a malformed number inside parentheses on its own ([805d09c](https://github.com/robinvdvleuten/beancount/commit/805d09c1c013d6b31a123d0f1af7dff3ca815d79))
+* **parser:** read a date inside an arithmetic expression as a date ([3e287d6](https://github.com/robinvdvleuten/beancount/commit/3e287d6cb8226fa09c582eba2a62890c9e2ca082))
+* **parser:** read metadata after comments and a tag line in a body ([4bcfb67](https://github.com/robinvdvleuten/beancount/commit/4bcfb670465aee0b61f7b94b0d7c76096a212490))
+* **parser:** reject malformed thousands separators inside parentheses ([22a659c](https://github.com/robinvdvleuten/beancount/commit/22a659cec2e1d55a9d23874943e60c4703a3a39a))
+* **parser:** report a number missing at a line's end at that end ([da92bf5](https://github.com/robinvdvleuten/beancount/commit/da92bf5482f0f3d196415f74a28692f57bb8d82a))
+* **parser:** report a signed malformed number while recovering ([90aed34](https://github.com/robinvdvleuten/beancount/commit/90aed340f5997d8a33434ec606d5def616fcbf60))
+* print no filename or lineno metadata a directive writes ([f29dead](https://github.com/robinvdvleuten/beancount/commit/f29deade53931c54e1e787236a0f51ece357b85f))
+* **query:** fail a date literal naming no date as beanquery does ([2aa2356](https://github.com/robinvdvleuten/beancount/commit/2aa23565a6ad83b3f2beada35ea72cde424d6951))
+* **query:** negate possign for an account under no account type ([d57b449](https://github.com/robinvdvleuten/beancount/commit/d57b449d0a2e567f376c73014d7ba724142f52d1))
+* **query:** read subst() group references as Python 3.12 does ([ed4d88c](https://github.com/robinvdvleuten/beancount/commit/ed4d88c378107f0bef10d1a54fd0b535e8cf335f))
+* **query:** require a ledger in a query Context, and read options from it ([7f83cf9](https://github.com/robinvdvleuten/beancount/commit/7f83cf9e6c90e5b4a0e43fca3683000303e3bec8))
+
 ## [0.17.0](https://github.com/robinvdvleuten/beancount/compare/v0.16.0...v0.17.0) (2026-10-06)
 
 
