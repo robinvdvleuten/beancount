@@ -34,6 +34,7 @@ var (
 	fuzzSeed = flag.Uint64("difffuzz.seed", 0, "seed of TestDiffFuzz's mutations (0 picks one)")
 	fuzzOut  = flag.String("difffuzz.out", "../.difffuzz", "directory TestDiffFuzz writes minimized divergences to")
 	fuzzN    = flag.Int("difffuzz.ledgers", 0, "how many mutations TestDiffFuzz runs instead of -difffuzz.time (0 runs for that long)")
+	fuzzOnly = flag.String("difffuzz.seeds", "", "a regular expression the paths of the seeds TestDiffFuzz starts from must match, to fuzz one area (empty takes every seed)")
 )
 
 // fuzzQueries are the statements TestDiffFuzz runs on every ledger. They
@@ -127,7 +128,7 @@ var knownDivergences = []struct {
 	{"format", "#664: bean-format realigns a line inside a string spanning lines; we copy the string", hasStringSpanningLines},
 	{"check-lines", "KNOWN_GAPS.md, deliberate: a tag or link after a posting is a syntax error on its own line", bodyTagAfterPosting.MatchString},
 	{"", "KNOWN_GAPS.md, a non-goal: a Built-in Plugin other than auto_accounts and implicit_prices does not run", hasIgnoredPlugin},
-	{"query", "KNOWN_GAPS.md, deliberate: units missing at a zero per-unit cost are left out, where beancount keeps a posting without units", zeroPerUnitCompound.MatchString},
+	{"", "KNOWN_GAPS.md, deliberate: units missing at a zero per-unit cost are left out, where beancount keeps a posting without units", zeroPerUnitCompound.MatchString},
 	{"query", "KNOWN_GAPS.md, deliberate: a zero price without a currency takes its group's, where beancount leaves it unset", zeroPriceNoCurrency.MatchString},
 	{"", "#708, deliberate: zero units in total braces are rejected, where bean-check passes them and beanquery fails on them", zeroUnitsTotalBraces.MatchString},
 	{"query-4", "KNOWN_GAPS.md: PRINT ignores render_commas", func(src string) bool { return strings.Contains(src, `"render_commas"`) }},
@@ -689,13 +690,16 @@ func (o *oracle) stop() string {
 // loadFuzzSeeds returns the ledgers the fuzzer starts from: every
 // compliance fixture, but those lineGaps and formatGaps list (queryGaps'
 // are about their statements), and the parser's and the formatter's fuzz
-// corpora.
+// corpora; with -difffuzz.seeds, only those whose path matches it, so
+// mutations, which splice lines from other seeds, stay in one area.
 func loadFuzzSeeds(t *testing.T) [][]byte {
 	t.Helper()
 
+	only, err := regexp.Compile(*fuzzOnly)
+	assert.NoError(t, err)
 	var seeds [][]byte
-	err := filepath.WalkDir(complianceDir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil || entry.IsDir() || filepath.Ext(path) != ".beancount" {
+	err = filepath.WalkDir(complianceDir, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil || entry.IsDir() || filepath.Ext(path) != ".beancount" || !only.MatchString(path) {
 			return err
 		}
 		name := strings.TrimSuffix(filepath.Base(path), ".beancount")
@@ -715,10 +719,16 @@ func loadFuzzSeeds(t *testing.T) [][]byte {
 		paths, err := filepath.Glob(filepath.Join(corpus, "*"))
 		assert.NoError(t, err)
 		for _, path := range paths {
+			if !only.MatchString(path) {
+				continue
+			}
 			entry, err := os.ReadFile(path)
 			assert.NoError(t, err)
 			seeds = append(seeds, decodeFuzzCorpus(string(entry))...)
 		}
+	}
+	if len(seeds) == 0 {
+		t.Fatalf("no seed's path matches -difffuzz.seeds %q", *fuzzOnly)
 	}
 	return seeds
 }

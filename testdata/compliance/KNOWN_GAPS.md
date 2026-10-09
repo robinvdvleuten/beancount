@@ -258,7 +258,11 @@ compare the lines errors are on:
   keeps the posting with its units missing, reports `Transaction has
   incomplete elements` on the transaction's line too, and fails with a
   `TypeError` when a later posting to the account is weighed against it; we
-  leave the posting out of the booked transaction. The lines agree. Where
+  leave the posting out of the booked transaction. The lines agree. Its
+  position without units counts there as a currency the account holds, so a
+  later posting leaving its units currency to the account's balance
+  (`{{100 USD}}` alone, beside the account's USD) is `Could not resolve
+  units currency` there, and its transaction dropped, where it resolves here. Where
   the posting is its transaction's only one, or the group's residual is
   weighed against it (`HOOL {{15 USD}}` alone, or beside `-15 USD`),
   beancount fails with that `TypeError` at once, checking the residual; we
