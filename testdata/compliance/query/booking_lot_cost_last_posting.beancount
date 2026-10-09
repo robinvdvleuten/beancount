@@ -1,0 +1,16 @@
+; Like beancount's inventory, which stores a lot again with the cost of each
+; posting it adds, in posting order, a lot keeps the cost number of the last
+; posting that touched it: the augmentation at 100.0, then the reduction
+; booked at the lot's 100, so the lot is held at 100 and the {} reduction
+; after it books at 100, not 100.0.
+2020-01-01 open Assets:A
+
+2020-01-02 * "bought at 100"
+  Assets:A  10 HOOL {100 USD}
+
+2020-01-04 * "augmented at 100.0, then reduced"
+  Assets:A  1 HOOL {100.0 USD, 2020-01-02}
+  Assets:A  -5 HOOL {100 USD}
+
+2020-01-05 * "reduced at the lot's cost"
+  Assets:A  -5 HOOL {}

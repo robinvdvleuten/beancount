@@ -298,11 +298,15 @@ func (b *booker) book(txn *ast.Transaction) (*bookedTransaction, []error) {
 
 	// The booked postings other than the reductions, their numbers now
 	// complete, join their accounts' inventories, like beancount's
-	// add_position once a transaction is booked.
+	// add_position once a transaction is booked. Like it, which stores a
+	// lot again with the cost of each posting it adds, in posting order, a
+	// reduction leaves the lot it reduced the cost it was booked at.
 	booked := &bookedTransaction{residuals: residuals}
 	for _, posting := range txn.Postings {
 		positions, reduced := reductions[posting]
-		if !reduced {
+		if reduced {
+			b.inventory(posting.Account).restamp(posting.Amount.Currency, positions)
+		} else {
 			date := txn.Date()
 			if undated[posting] {
 				date = nil
