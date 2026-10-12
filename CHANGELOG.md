@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.2](https://github.com/robinvdvleuten/beancount/compare/v0.17.1...v0.17.2) (2026-10-09)
+
+
+### Bug Fixes
+
+* **ledger:** book each currency group against the inventory before the transaction ([e4578a2](https://github.com/robinvdvleuten/beancount/commit/e4578a295218bc9b070bf7d24804e7b49227c997))
+* **ledger:** book STRICT_WITH_SIZE's lot of the reduction's size at its units ([2b8ae31](https://github.com/robinvdvleuten/beancount/commit/2b8ae3155e01ebd1b4d458618c60c9f4de3d589e))
+* **ledger:** leave a reduced lot the cost it was booked at, in posting order ([b57c9c9](https://github.com/robinvdvleuten/beancount/commit/b57c9c9a9fdb1a5b92185fba2365ae3d8aa598bb))
+
 ## [0.17.1](https://github.com/robinvdvleuten/beancount/compare/v0.17.0...v0.17.1) (2026-10-09)
 
 
