@@ -52,9 +52,17 @@ jobs:
       - run: go generate ./importer/...
       - run: git diff --exit-code
 
-  build:
+  # Run after a failed matrix so branch protection sees a failure, not a skip.
+  test-status:
     runs-on: ubuntu-latest
     needs: [test]
+    if: ${{ always() }}
+    steps:
+      - run: test "${{ needs.test.result }}" = success
+
+  build:
+    runs-on: ubuntu-latest
+    needs: [test-status, importer]
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
