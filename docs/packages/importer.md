@@ -1,0 +1,3 @@
+# `importer`
+
+Importer protocol over go-plugin ([ADR 0001](../adr/0001-importers-use-go-plugin.md)): `Serve` for Importer authors, `Open` for the host, both speaking `ast` values. The host validates every message it decodes. A new optional field stays in protocol v1; a new directive kind needs v2. `testdata/fixture` is a test Importer whose `FIXTURE_MODE` picks how it misbehaves. `internal/pb` holds `importer.proto` and its committed generated code; regenerate with `go generate ./importer/...`, which runs buf from the separate `tools.mod` so codegen dependencies stay out of `go.mod`. CI fails when the generated code drifts.

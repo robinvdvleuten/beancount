@@ -9,7 +9,7 @@ to hold one shared validator on the `Ledger`.
 
 ## Why this is out of scope
 
-Thin handlers are the point of the design. AGENTS.md makes registry dispatch a
+Thin handlers are the point of the design. CODING_STANDARDS.md makes registry dispatch a
 convention: a handler routes a directive kind to the functions that validate
 and apply it, and the logic lives in those functions (validation, the Pad
 state in `l.pads`, `applyTransaction`). A handler that is one or two calls

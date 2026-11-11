@@ -1,0 +1,3 @@
+# `internal/pydecimal`
+
+Python `decimal` behaviour beancount depends on and shopspring lacks (arithmetic rounded to 28 significant digits, division with exact-quotient exponents, a zero quotient's included, `normalize`, `str()`, reading a string as `Decimal(str)` does, and `Zero`, the `Decimal()` beancount's plain ZERO is, pinned at exponent 0 rather than left to shopspring's `decimal.Zero`). Add, subtract, multiply and divide only with `Add`, `Sub`, `Mul` and `Quo`; `forbidigo` rejects shopspring's `Add`/`Sub`/`Mul`/`Div`/`DivRound` elsewhere. Use it wherever a number must keep beancount's precision.

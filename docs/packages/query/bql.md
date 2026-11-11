@@ -1,0 +1,3 @@
+# `query/bql`
+
+BQL lexer + recursive-descent parser, syntax only, held to the parser's rules: zero-copy tokens, positioned errors, fuzz test. Every node records its `Span`, the byte offsets of its source text, which names an unaliased target (`Target.Text`) as in beanquery. Like beanquery's grammar, SELECT's FROM tries a Table reference (`bql.Table`: `#name`, `#` alone, or a quoted name) before a FROM filter, and only the clauses after FROM may follow one; PRINT's, BALANCES' and JOURNAL's FROM take a FROM filter only. A date literal naming no date fails as beanquery's parser fails it, with Python's `datetime.date` message and no node (`bql.ValueError`).
