@@ -50,9 +50,8 @@ func TestQuoInexact(t *testing.T) {
 }
 
 func TestZero(t *testing.T) {
-	// Python's Decimal() has exponent 0; shopspring's Zero has 1.
+	// Python's Decimal() has exponent 0.
 	assert.Equal(t, int32(0), Zero.Exponent())
-	assert.Equal(t, int32(1), decimal.Zero.Exponent())
 	assert.Equal(t, "0", String(Mul(decimal.RequireFromString("8.00"), Quo(Zero, decimal.RequireFromString("8.00")))))
 }
 

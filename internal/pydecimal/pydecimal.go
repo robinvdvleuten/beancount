@@ -95,9 +95,10 @@ func round(d decimal.Decimal) decimal.Decimal {
 // precision is Python's default decimal context precision.
 const precision = 28
 
-// Zero is Python's Decimal(): a zero with exponent 0, where shopspring's
-// decimal.Zero has exponent 1. The exponent of a zero shows in what it
-// gives: 0 over 8.00 is 0E+2, and 8.00 times that is 0.
+// Zero is Python's Decimal(): a zero with exponent 0, pinned here rather
+// than left to shopspring's decimal.Zero, whose exponent was 1 before
+// v1.5.0. The exponent of a zero shows in what it gives: 0 over 8.00 is
+// 0E+2, and 8.00 times that is 0.
 var Zero = decimal.New(0, 0)
 
 // roundHalfEven rounds a non-negative coefficient to precision digits.
