@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.3](https://github.com/robinvdvleuten/beancount/compare/v0.17.2...v0.17.3) (2026-11-11)
+
+
+### Bug Fixes
+
+* **deps:** bump golang.org/x/net to v0.62.0 for GO-2026-6860 and GO-2026-6866 ([3087ecd](https://github.com/robinvdvleuten/beancount/commit/3087ecd6c602311634e25558fabe900646bf69aa))
+* **deps:** update seroval to 1.6.12 for GHSA-9wx9-5pv9-3349 and GHSA-f86p-h4j2-7qgj ([08b6e9f](https://github.com/robinvdvleuten/beancount/commit/08b6e9fbd58a0557e5d8b9fe14b6e4a96c5189d2))
+
 ## [0.17.2](https://github.com/robinvdvleuten/beancount/compare/v0.17.1...v0.17.2) (2026-10-09)
 
 
