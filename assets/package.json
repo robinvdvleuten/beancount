@@ -37,9 +37,5 @@
     "vite": "^8.3.5",
     "vite-plugin-solid": "^2.11.14",
     "vite-plugin-solid-svg": "^0.8.1"
-  },
-  "overrides": {
-    "seroval": "^1.6.3",
-    "seroval-plugins": "^1.6.3"
   }
 }
