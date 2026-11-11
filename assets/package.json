@@ -32,7 +32,7 @@
     "oxfmt": "^0.74.0",
     "oxlint": "^1.89.0",
     "oxlint-tsgolint": "^7.0.2004",
-    "tailwindcss": "^4.3.3",
+    "tailwindcss": "^4.3.4",
     "typescript": "~7.0.2",
     "vite": "^8.3.5",
     "vite-plugin-solid": "^2.11.14",
